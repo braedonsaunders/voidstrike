@@ -359,3 +359,101 @@ See `src/engine/network/types.ts` for:
 - `GameCommand` - Lockstep game commands
 - `GameMessage` - WebRTC data channel messages
 - `SignalingMessage` - WebRTC signaling messages
+
+## Naval System Types
+
+### Movement Domain (Unit.ts)
+```typescript
+export type MovementDomain = 'ground' | 'water' | 'amphibious' | 'air';
+```
+
+### Damage Types (combat.ts)
+```typescript
+// Added torpedo damage type for anti-ship weapons
+export type DamageType = 'normal' | 'explosive' | 'concussive' | 'psionic' | 'torpedo';
+```
+
+### Armor Types (combat.ts)
+```typescript
+// Added naval armor type for ships
+export type ArmorType = 'light' | 'armored' | 'massive' | 'structure' | 'naval';
+```
+
+### Naval Unit Properties (UnitDefinition)
+```typescript
+interface UnitDefinition {
+  // ... existing properties ...
+
+  // Movement domain - determines which terrain/navmesh the unit uses
+  // ground: land only, water: naval only, amphibious: both, air: ignores terrain
+  movementDomain?: MovementDomain;
+
+  // Can attack naval units (ships, submarines)
+  canAttackNaval?: boolean;
+
+  // Is this a naval unit (for targeting purposes)
+  isNaval?: boolean;
+
+  // Submarine-specific mechanics
+  isSubmarine?: boolean;
+  canSubmerge?: boolean;
+  submergedSpeed?: number; // Speed when submerged (typically slower)
+}
+```
+
+### Naval Building Properties (BuildingDefinition)
+```typescript
+interface BuildingDefinition {
+  // ... existing properties ...
+
+  // Naval placement requirements
+  requiresWaterAdjacent?: boolean; // Must be placed on coastline
+  requiresDeepWater?: boolean; // Must be placed in deep water
+}
+```
+
+### Unit Runtime State (Unit class)
+```typescript
+class Unit {
+  // ... existing properties ...
+
+  // Movement domain for naval units
+  public movementDomain: MovementDomain;
+  public isNaval: boolean;
+  public canAttackNaval: boolean;
+
+  // Submarine mechanics
+  public isSubmarine: boolean;
+  public canSubmerge: boolean;
+  public isSubmerged: boolean;
+  public submergedSpeed: number;
+}
+```
+
+### Naval Unit Categories (categories.ts)
+```typescript
+// New category
+naval: {
+  id: 'naval',
+  name: 'Naval',
+  description: 'Water-based vessels and submarines.',
+  displayOrder: 4,
+  upgradeGroup: 'naval',
+  defaultTargetPriority: 75,
+  isCombatUnit: true,
+}
+
+// New subcategories
+patrol_boat, frigate, battleship, submarine, amphibious
+```
+
+### Torpedo Damage Multipliers
+```typescript
+torpedo: {
+  light: 0.5,      // Reduced vs infantry
+  armored: 0.75,   // Reduced vs vehicles
+  massive: 1.0,    // Normal vs capital
+  structure: 1.25, // Bonus vs buildings
+  naval: 1.5,      // Bonus vs ships
+}
+```

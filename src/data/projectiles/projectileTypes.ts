@@ -152,6 +152,30 @@ export const PROJECTILE_TYPES: Record<string, ProjectileDefinition> = {
   },
 
   // ============================================
+  // NAVAL PROJECTILES
+  // ============================================
+
+  torpedo: {
+    id: 'torpedo',
+    behavior: 'homing',
+    speed: 20, // Slow but deadly
+    turnRate: 3, // Can track but slowly
+    arcHeight: 0,
+    trailType: 'missile', // Uses missile trail effect
+    scale: 0.8,
+  },
+
+  depth_charge: {
+    id: 'depth_charge',
+    behavior: 'ballistic',
+    speed: 15,
+    turnRate: 0,
+    arcHeight: 2,
+    trailType: 'none',
+    scale: 0.6,
+  },
+
+  // ============================================
   // BUILDING / TURRET PROJECTILES
   // ============================================
 

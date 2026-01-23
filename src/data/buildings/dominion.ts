@@ -338,6 +338,73 @@ export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
     isAddon: true,
     addonFor: ['infantry_bay', 'forge', 'hangar'],
   },
+
+  // ==================== NAVAL BUILDINGS ====================
+
+  drydock: {
+    id: 'drydock',
+    name: 'Drydock',
+    description: 'Naval production facility. Must be placed on coastline. Produces naval units.',
+    faction: 'dominion',
+    mineralCost: 200,
+    vespeneCost: 100,
+    buildTime: 50,
+    width: 4,
+    height: 4,
+    maxHealth: 1500,
+    armor: 1,
+    sightRange: 11,
+    canProduce: ['mariner', 'stingray'],
+    canResearch: ['naval_weapons_1', 'naval_armor_1', 'naval_weapons_2', 'naval_armor_2', 'naval_weapons_3', 'naval_armor_3', 'advanced_sonar', 'reinforced_hull'],
+    requirements: ['forge'],
+    canHaveAddon: true,
+    requiresWaterAdjacent: true, // Must be placed on coastline
+  },
+
+  offshore_platform: {
+    id: 'offshore_platform',
+    name: 'Offshore Platform',
+    description: 'Naval expansion point. Must be placed in deep water. Provides supply and acts as a resource transfer point.',
+    faction: 'dominion',
+    mineralCost: 150,
+    vespeneCost: 0,
+    buildTime: 40,
+    width: 3,
+    height: 3,
+    maxHealth: 800,
+    armor: 0,
+    sightRange: 10,
+    supplyProvided: 6,
+    canProduce: [],
+    canResearch: [],
+    requirements: ['drydock'],
+    canUpgradeTo: ['offshore_platform_armed'],
+    requiresDeepWater: true, // Must be placed in deep water
+  },
+
+  offshore_platform_armed: {
+    id: 'offshore_platform_armed',
+    name: 'Armed Platform',
+    description: 'Upgraded offshore platform with defensive weapons.',
+    faction: 'dominion',
+    mineralCost: 100,
+    vespeneCost: 50,
+    buildTime: 25,
+    width: 3,
+    height: 3,
+    maxHealth: 1000,
+    armor: 1,
+    sightRange: 12,
+    supplyProvided: 6,
+    canProduce: [],
+    canResearch: [],
+    attackRange: 8,
+    attackDamage: 15,
+    attackSpeed: 0.7,
+    isDetector: true,
+    detectionRange: 10,
+    requiresDeepWater: true,
+  },
 };
 
 // Units that require Research Module
@@ -345,6 +412,7 @@ export const RESEARCH_MODULE_UNITS: Record<string, string[]> = {
   infantry_bay: ['breacher', 'operative'],
   forge: ['devastator', 'colossus'],
   hangar: ['overseer', 'specter', 'dreadnought'],
+  drydock: ['corsair', 'leviathan', 'hunter', 'kraken'],
 };
 
 // Units that can be double-produced with Production Module
@@ -352,6 +420,7 @@ export const PRODUCTION_MODULE_UNITS: Record<string, string[]> = {
   infantry_bay: ['trooper', 'vanguard'],
   forge: ['scorcher'],
   hangar: ['lifter', 'valkyrie'],
+  drydock: ['mariner', 'stingray'],
 };
 
 export const DOMINION_BUILDINGS = Object.values(BUILDING_DEFINITIONS);

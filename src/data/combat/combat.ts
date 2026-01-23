@@ -45,6 +45,12 @@ export const DAMAGE_TYPES: Record<string, DamageTypeDefinition> = {
     description: 'Mental damage that bypasses physical armor.',
     color: '#cc66ff',
   },
+  torpedo: {
+    id: 'torpedo',
+    name: 'Torpedo',
+    description: 'Anti-ship weapon. Devastating against naval targets, reduced against land units.',
+    color: '#00cccc',
+  },
 };
 
 // ==================== ARMOR TYPES ====================
@@ -77,6 +83,11 @@ export const ARMOR_TYPES: Record<string, ArmorTypeDefinition> = {
     name: 'Structure',
     description: 'Building armor, vulnerable to siege/explosive damage.',
   },
+  naval: {
+    id: 'naval',
+    name: 'Naval',
+    description: 'Ship armor, vulnerable to torpedo damage.',
+  },
 };
 
 // ==================== DAMAGE MULTIPLIERS ====================
@@ -97,24 +108,35 @@ export const DAMAGE_MULTIPLIERS: Record<string, Record<string, number>> = {
     armored: 1.0,
     massive: 1.0,
     structure: 1.0,
+    naval: 1.0,
   },
   explosive: {
     light: 0.5,
     armored: 1.5,
     massive: 1.25,
     structure: 1.5,
+    naval: 1.25,
   },
   concussive: {
     light: 1.5,
     armored: 0.5,
     massive: 0.25,
     structure: 0.5,
+    naval: 0.5,
   },
   psionic: {
     light: 1.0,
     armored: 1.0,
     massive: 1.0,
     structure: 0.5,
+    naval: 1.0,
+  },
+  torpedo: {
+    light: 0.5,
+    armored: 0.75,
+    massive: 1.0,
+    structure: 1.25,
+    naval: 1.5,
   },
 };
 
@@ -129,13 +151,18 @@ export const DAMAGE_MULTIPLIERS: Record<string, Record<string, number>> = {
 export const DEFAULT_TARGET_PRIORITIES: Record<string, number> = {
   // Combat categories
   capital_ship: 95,
+  battleship: 92,
   heavy_vehicle: 90,
   artillery: 85,
+  submarine: 82,
   elite_infantry: 80,
+  frigate: 78,
   standard_vehicle: 70,
+  patrol_boat: 65,
   standard_infantry: 60,
   light_vehicle: 55,
   light_infantry: 50,
+  amphibious: 48,
   support: 45,
   scout: 40,
   // Non-combat

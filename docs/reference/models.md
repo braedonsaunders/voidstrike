@@ -35,6 +35,9 @@ This document lists all 3D models required for VOIDSTRIKE, with AI generation pr
 | Mechs (Colossus) | 6,000 - 10,000 |
 | Aircraft (Valkyrie, Specter, Lifter) | 4,000 - 8,000 |
 | Capital Ships (Dreadnought) | 8,000 - 15,000 |
+| Naval - Small (Mariner, Stingray) | 2,000 - 4,000 |
+| Naval - Medium (Corsair, Hunter, Kraken) | 4,000 - 8,000 |
+| Naval - Capital (Leviathan) | 10,000 - 18,000 |
 
 **Buildings (static):**
 | Building Type | Triangle Budget |
@@ -440,6 +443,250 @@ game-ready low poly, PBR materials, white background
 - Detection/radar equipment
 - Turret deployment bays
 - Unmanned/autonomous appearance
+
+---
+
+## NAVAL UNITS
+
+### 14. Mariner (Naval Worker)
+**File:** `/public/models/units/mariner.glb`
+
+**Dimensions:** 1.0m wide × 0.5m tall × 1.5m long
+
+**Description:** Small utility boat for naval construction and ship repair.
+
+**AI Prompt:**
+```
+Small futuristic utility boat, compact naval work vessel,
+industrial yellow-orange markings, mechanical repair arms,
+enclosed pilot cabin, welding/cutting tools mounted,
+water propulsion jets, utilitarian maritime design,
+game-ready low poly, PBR materials, white background
+```
+
+**Key Features:**
+- Compact boat hull
+- Mechanical repair arms
+- Tool mounts for construction
+- Water jets for propulsion
+
+---
+
+### 15. Stingray (Fast Attack Boat)
+**File:** `/public/models/units/stingray.glb`
+
+**Dimensions:** 1.5m wide × 0.6m tall × 2.5m long
+
+**Description:** Fast patrol boat with machine guns. Excellent for scouting and harassment.
+
+**AI Prompt:**
+```
+Futuristic military patrol boat, sleek fast attack craft,
+twin machine gun turrets, aggressive streamlined hull,
+water jet propulsion, radar array, military blue-gray,
+racing boat aesthetic, enclosed cockpit, wake cutters,
+game-ready low poly, PBR materials, white background
+```
+
+**Key Features:**
+- Streamlined attack hull
+- Twin gun turrets (accent color)
+- Radar/sensor array
+- High-speed water jets
+
+---
+
+### 16. Corsair (Missile Frigate)
+**File:** `/public/models/units/corsair.glb`
+
+**Dimensions:** 2.0m wide × 1.0m tall × 4.0m long
+
+**Description:** Anti-air frigate with surface-to-air missiles and light torpedoes.
+
+**AI Prompt:**
+```
+Futuristic missile frigate warship, medium naval vessel,
+vertical launch missile cells, radar dome, anti-air sensors,
+torpedo tubes on sides, command bridge, military hull,
+blue-gray armor plating with accent panels, naval destroyer,
+game-ready low poly, PBR materials, white background
+```
+
+**Key Features:**
+- Vertical missile launch cells (accent color)
+- Radar dome
+- Side-mounted torpedo tubes
+- Command bridge structure
+
+---
+
+### 17. Leviathan (Battlecruiser)
+**File:** `/public/models/units/leviathan.glb`
+
+**Dimensions:** 4.0m wide × 2.0m tall × 8.0m long
+
+**Description:** Massive naval battlecruiser with devastating shore bombardment capability.
+
+**AI Prompt:**
+```
+Massive futuristic battleship, heavy naval capital ship,
+multiple large gun turrets along deck, massive main cannon,
+command superstructure, heavy armor plating, antenna arrays,
+imposing dreadnought warship, blue-gray military colors,
+smoke stacks, radar equipment, game-ready low poly,
+PBR materials, white background
+```
+
+**Key Features:**
+- Huge elongated hull (largest naval unit)
+- Multiple gun turrets
+- Large main cannon (Yamato weapon - accent color)
+- Command superstructure
+- Heavy armor appearance
+
+**Animations:**
+- Standard: idle, move, attack
+- Special: yamato_cannon (charging and firing sequence)
+- Special: shore_bombardment (rapid artillery fire)
+
+---
+
+### 18. Hunter (Submarine)
+**File:** `/public/models/units/hunter.glb`
+
+**Dimensions:** 1.5m wide × 0.8m tall × 4.0m long
+
+**Description:** Attack submarine with torpedoes. Invisible when submerged.
+
+**AI Prompt:**
+```
+Futuristic attack submarine, sleek underwater vessel,
+torpedo tubes in bow, conning tower with periscope,
+hydrodynamic hull, dive planes, propeller shroud,
+dark stealth coating, minimal profile, submarine aesthetic,
+game-ready low poly, PBR materials, white background
+```
+
+**Key Features:**
+- Torpedo tubes (front)
+- Conning tower
+- Stealth hull design
+- Dive planes and rudder
+
+**Animations:**
+- Standard: idle, move, attack
+- Special: surface (rising from underwater)
+- Special: submerge (diving underwater)
+
+---
+
+### 19. Kraken (Amphibious Assault)
+**File:** `/public/models/units/kraken.glb`
+
+**Dimensions:** 2.5m wide × 1.5m tall × 5.0m long
+
+**Description:** Amphibious assault ship that transports troops and operates on water and land.
+
+**AI Prompt:**
+```
+Futuristic amphibious assault vehicle, landing craft,
+tank treads and water jets hybrid propulsion,
+front loading ramp, twin cannons on sides,
+troop compartment, armored hull, beach assault design,
+military blue-gray with orange hazard markings,
+game-ready low poly, PBR materials, white background
+```
+
+**Key Features:**
+- Hybrid treads/water jets
+- Front loading ramp
+- Twin side cannons (accent color)
+- Troop bay
+- Amphibious hull design
+
+**Animations:**
+- Standard: idle, move (water), attack
+- Special: move_ground (tank tread movement)
+- Special: beach_transition (water to land)
+- Special: load/unload (ramp operation)
+
+---
+
+## NAVAL BUILDINGS
+
+### Drydock
+**File:** `/public/models/buildings/drydock.glb`
+
+**Dimensions:** 4m × 4m footprint, 3m tall
+
+**Description:** Naval production facility. Must be placed on coastline. Produces all naval units.
+
+**AI Prompt:**
+```
+Futuristic naval drydock facility, shipyard building,
+large covered slip for ship construction, crane arm,
+half on water half on land design, industrial maritime,
+ship launch rails, control tower, blue-gray metal,
+heavy construction facility, game-ready low poly,
+PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Large covered construction bay (4x4 footprint)
+- Crane arm (accent color)
+- Water/land interface design
+- Ship launch rails
+- Control tower
+
+---
+
+### Offshore Platform
+**File:** `/public/models/buildings/offshore_platform.glb`
+
+**Dimensions:** 3m × 3m footprint, 2m tall
+
+**Description:** Naval expansion point. Must be placed in deep water. Provides supply.
+
+**AI Prompt:**
+```
+Futuristic offshore platform, ocean supply station,
+hexagonal platform on stilts/pontoons, helipad on top,
+supply containers, communication antenna, landing lights,
+industrial maritime structure, blue-gray with orange markings,
+floating base design, game-ready low poly,
+PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Hexagonal platform design
+- Support structure (stilts or pontoons)
+- Supply containers
+- Communications array
+- Landing pad
+
+---
+
+### Armed Platform (Offshore Platform Upgrade)
+**File:** `/public/models/buildings/offshore_platform_armed.glb`
+
+**Dimensions:** 3m × 3m footprint, 2.5m tall
+
+**Description:** Upgraded offshore platform with defensive weapons.
+
+**AI Prompt:**
+```
+Futuristic armed offshore platform, defensive naval station,
+turret weapon system on top, radar dome, reinforced structure,
+anti-ship/anti-air capabilities, military fortification,
+heavier armor plating, targeting sensors, warning lights,
+game-ready low poly, PBR materials, isometric view, white background
+```
+
+**Key Features:**
+- Weapon turret (accent color)
+- Radar dome
+- Reinforced armor
+- Sensor arrays
 
 ---
 
@@ -1529,7 +1776,7 @@ The AssetManager will automatically use custom models when available, falling ba
 > **Note:** This checklist reflects VOIDSTRIKE's actual unit/building names.
 > The AI prompts above use military sci-fi descriptions as reference for visual style.
 
-### Units (13 total) - 13 complete
+### Units (19 total) - 13 complete
 - [x] Fabricator *(worker unit)* `fabricator.glb`
 - [x] Trooper *(basic infantry)* `trooper.glb`
 - [x] Breacher *(heavy infantry)* `breacher.glb`
@@ -1543,8 +1790,14 @@ The AssetManager will automatically use custom models when available, falling ba
 - [x] Specter *(stealth aircraft)* `specter.glb`
 - [x] Dreadnought *(capital battleship)* `dreadnought.glb`
 - [x] Overseer *(support drone)* `overseer.glb`
+- [ ] Mariner *(naval worker)* `mariner.glb`
+- [ ] Stingray *(fast attack boat)* `stingray.glb`
+- [ ] Corsair *(missile frigate)* `corsair.glb`
+- [ ] Leviathan *(naval battlecruiser)* `leviathan.glb`
+- [ ] Hunter *(submarine)* `hunter.glb`
+- [ ] Kraken *(amphibious assault)* `kraken.glb`
 
-### Buildings (17 total) - 17 complete
+### Buildings (20 total) - 17 complete
 - [x] Headquarters *(main base)* `headquarters.glb`
 - [x] Orbital Station *(HQ upgrade)* `orbital_station.glb`
 - [x] Bastion *(HQ defensive upgrade)* `bastion.glb`
@@ -1562,6 +1815,9 @@ The AssetManager will automatically use custom models when available, falling ba
 - [x] Defense Turret *(anti-air turret)* `defense_turret.glb`
 - [x] Research Module *(addon)* `research_module.glb`
 - [x] Production Module *(addon)* `production_module.glb`
+- [ ] Drydock *(naval production)* `drydock.glb`
+- [ ] Offshore Platform *(naval supply)* `offshore_platform.glb`
+- [ ] Armed Platform *(naval defense)* `offshore_platform_armed.glb`
 
 ### Walls (13 total) - 0 complete
 - [ ] Wall None *(standalone pillar)* `wall_none.glb`
@@ -1611,19 +1867,34 @@ The AssetManager will automatically use custom models when available, falling ba
 
 | Category | Complete | Total | Progress |
 |----------|----------|-------|----------|
-| Units | 13 | 13 | 100% |
-| Buildings | 17 | 17 | 100% |
+| Units | 13 | 19 | 68% |
+| Buildings | 17 | 20 | 85% |
 | Walls | 0 | 13 | 0% |
 | Resources | 2 | 2 | 100% |
 | Projectiles | 0 | 3 | 0% |
 | Decorations | 16 | 16 | 100% |
-| **Total** | **48** | **64** | **75%** |
+| **Total** | **48** | **73** | **66%** |
 
 ---
 
 ## Missing Models Priority
 
-### Walls (13 remaining) - HIGH PRIORITY
+### Naval Units (6 remaining) - HIGH PRIORITY
+Naval units are needed for the new naval combat system.
+
+1. **Mariner** - Naval worker boat
+2. **Stingray** - Fast patrol boat
+3. **Corsair** - Anti-air frigate
+4. **Leviathan** - Naval battlecruiser (capital ship)
+5. **Hunter** - Submarine (needs surface/submerge animations)
+6. **Kraken** - Amphibious assault craft (needs beach transition animation)
+
+### Naval Buildings (3 remaining) - HIGH PRIORITY
+1. **Drydock** - Naval production facility (half on land, half on water)
+2. **Offshore Platform** - Supply platform in deep water
+3. **Armed Platform** - Upgraded platform with weapons
+
+### Walls (13 remaining) - MEDIUM PRIORITY
 Wall segments are needed for the fortification system. Consider creating a single modular wall asset with variants, or use procedural geometry as fallback.
 
 1. **Wall None** - Standalone pillar (no neighbors)

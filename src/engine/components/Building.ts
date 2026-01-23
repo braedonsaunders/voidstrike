@@ -39,6 +39,9 @@ export interface BuildingDefinition {
   attackSpeed?: number;
   // Building upgrades (e.g., CC -> Orbital/Planetary)
   canUpgradeTo?: string[];
+  // Naval placement requirements
+  requiresWaterAdjacent?: boolean; // Must be placed on coastline (half on land, half on water)
+  requiresDeepWater?: boolean; // Must be placed in deep water
 }
 
 export interface ProductionQueueItem {
@@ -124,6 +127,10 @@ export class Building extends Component {
   // Building upgrades (e.g., CC -> Orbital/Planetary)
   public canUpgradeTo: string[];
 
+  // Naval placement requirements
+  public requiresWaterAdjacent: boolean;
+  public requiresDeepWater: boolean;
+
   // PERF: For extractors - stores the linked resource entity ID for O(1) lookup
   // instead of O(n) scan through all resources when destroyed
   public linkedResourceId: number | null;
@@ -190,6 +197,10 @@ export class Building extends Component {
 
     // Building upgrades
     this.canUpgradeTo = definition.canUpgradeTo ?? [];
+
+    // Naval placement requirements
+    this.requiresWaterAdjacent = definition.requiresWaterAdjacent ?? false;
+    this.requiresDeepWater = definition.requiresDeepWater ?? false;
 
     // Extractor reverse lookup
     this.linkedResourceId = null;

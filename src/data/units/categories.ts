@@ -75,11 +75,21 @@ export const UNIT_CATEGORIES: Record<string, UnitCategoryDefinition> = {
     defaultTargetPriority: 80,
     isCombatUnit: true,
   },
+  naval: {
+    id: 'naval',
+    name: 'Naval',
+    description: 'Water-based vessels and submarines.',
+    displayOrder: 4,
+    color: '#3399cc',
+    upgradeGroup: 'naval',
+    defaultTargetPriority: 75,
+    isCombatUnit: true,
+  },
   support: {
     id: 'support',
     name: 'Support',
     description: 'Non-combat support units.',
-    displayOrder: 4,
+    displayOrder: 5,
     color: '#cc99ff',
     upgradeGroup: 'none',
     defaultTargetPriority: 45,
@@ -89,7 +99,7 @@ export const UNIT_CATEGORIES: Record<string, UnitCategoryDefinition> = {
     id: 'hero',
     name: 'Hero',
     description: 'Powerful unique units.',
-    displayOrder: 5,
+    displayOrder: 6,
     color: '#ffff00',
     upgradeGroup: 'hero',
     defaultTargetPriority: 95,
@@ -106,6 +116,7 @@ export const UNIT_CATEGORIES: Record<string, UnitCategoryDefinition> = {
 export const UNIT_CATEGORY_ASSIGNMENTS: Record<string, string> = {
   // Workers
   fabricator: 'worker',
+  mariner: 'worker',
 
   // Infantry
   trooper: 'infantry',
@@ -118,12 +129,19 @@ export const UNIT_CATEGORY_ASSIGNMENTS: Record<string, string> = {
   devastator: 'vehicle',
   colossus: 'vehicle',
 
-  // Ships
+  // Ships (Air)
   lifter: 'support',
   valkyrie: 'ship',
   specter: 'ship',
   overseer: 'support',
   dreadnought: 'ship',
+
+  // Naval
+  stingray: 'naval',
+  corsair: 'naval',
+  leviathan: 'naval',
+  hunter: 'naval',
+  kraken: 'naval',
 };
 
 // ==================== SUBCATEGORIES ====================
@@ -176,6 +194,37 @@ export const UNIT_SUBCATEGORIES: Record<string, SubcategoryDefinition> = {
     parentCategory: 'ship',
     description: 'Large, powerful warships.',
   },
+  // Naval subcategories
+  patrol_boat: {
+    id: 'patrol_boat',
+    name: 'Patrol Boat',
+    parentCategory: 'naval',
+    description: 'Fast, light naval craft.',
+  },
+  frigate: {
+    id: 'frigate',
+    name: 'Frigate',
+    parentCategory: 'naval',
+    description: 'Medium escort vessels.',
+  },
+  battleship: {
+    id: 'battleship',
+    name: 'Battleship',
+    parentCategory: 'naval',
+    description: 'Heavy naval capital ships.',
+  },
+  submarine: {
+    id: 'submarine',
+    name: 'Submarine',
+    parentCategory: 'naval',
+    description: 'Stealth underwater vessels.',
+  },
+  amphibious: {
+    id: 'amphibious',
+    name: 'Amphibious',
+    parentCategory: 'naval',
+    description: 'Vessels that operate on water and land.',
+  },
 };
 
 /**
@@ -192,6 +241,12 @@ export const UNIT_SUBCATEGORY_ASSIGNMENTS: Record<string, string> = {
   valkyrie: 'fighter',
   specter: 'fighter',
   dreadnought: 'capital_ship',
+  // Naval subcategories
+  stingray: 'patrol_boat',
+  corsair: 'frigate',
+  leviathan: 'battleship',
+  hunter: 'submarine',
+  kraken: 'amphibious',
 };
 
 // ==================== HELPER FUNCTIONS ====================
