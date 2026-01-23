@@ -1984,8 +1984,11 @@ export class Terrain {
           vertexHeights[vy * (width + 1) + vx] =
             (totalElevation / waterCount) * ELEVATION_TO_HEIGHT_FACTOR + WATER_SURFACE_OFFSET;
         } else {
-          // Non-water vertex - use terrain height
-          vertexHeights[vy * (width + 1) + vx] = this.getVertexHeight(vx, vy);
+          // Non-water vertex - use terrain height from heightMap
+          // Clamp coordinates to valid heightMap range
+          const hx = Math.min(vx, this.gridWidth - 1);
+          const hy = Math.min(vy, this.gridHeight - 1);
+          vertexHeights[vy * (width + 1) + vx] = this.heightMap[hy * this.gridWidth + hx];
         }
       }
     }
