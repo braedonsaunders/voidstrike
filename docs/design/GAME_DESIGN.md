@@ -161,7 +161,86 @@ Units have restrictions on what they can attack based on air/ground targeting:
 - **Light** - Infantry, workers
 - **Armored** - Vehicles, heavy units
 - **Massive** - Capital ships, structures
+- **Naval** - Ships and submarines
 - **Shields** - Synthesis units (regenerates)
+
+## Naval Combat
+
+### Movement Domains
+
+Units have a movement domain that determines where they can move:
+
+| Domain | Land | Shallow Water | Deep Water | Air |
+|--------|------|---------------|------------|-----|
+| **Ground** | ✅ | ✅ (0.6x speed) | ❌ | ❌ |
+| **Water** | ❌ | ✅ | ✅ | ❌ |
+| **Amphibious** | ✅ | ✅ | ✅ | ❌ |
+| **Air** | ✅ | ✅ | ✅ | ✅ |
+
+### Naval Targeting
+
+| Unit Type | Can Attack Ground | Can Attack Air | Can Attack Naval |
+|-----------|-------------------|----------------|------------------|
+| **Ground Units** | ✅ (varies) | ✅ (varies) | ❌ (most) |
+| **Naval Units** | ✅ (varies) | ✅ (varies) | ✅ |
+| **Air Units** | ✅ (varies) | ✅ (varies) | ✅ (most) |
+
+### Torpedo Damage Type
+
+New damage type for anti-ship weapons:
+
+| Torpedo vs | Multiplier |
+|-----------|------------|
+| Light | 0.5x |
+| Armored | 0.75x |
+| Massive | 1.0x |
+| Naval | 1.5x |
+| Structure | 1.25x |
+
+### Submarine Mechanics
+
+Submarines (Hunter) have special submerge mechanics:
+- **Surfaced**: Normal speed, can use deck gun, visible
+- **Submerged**: Reduced speed (67%), cloaked, torpedo attacks only
+- Detected by: Radar Array, Overseer, other submarines (sonar)
+
+### Shore Bombardment
+
+Naval capital ships (Leviathan) can attack land targets:
+- Normal attack range applies to coastal targets
+- Shore Bombardment ability: Long-range artillery strike (75 energy)
+- Yamato Cannon: 150 damage single target (100 energy)
+
+### Dominion Naval Units
+
+| Unit | Cost | Supply | HP | Armor | Speed | Range | DPS | Role |
+|------|------|--------|-----|-------|-------|-------|-----|------|
+| **Mariner** | 75m | 1 | 60 | 0 (Light) | 4.5 | 1 | 3.5 | Naval worker |
+| **Stingray** | 100m | 2 | 120 | 0 (Light) | 6.5 | 6 | 7.2 | Fast patrol |
+| **Corsair** | 150m/75v | 3 | 200 | 1 (Armored) | 3.5 | 8 | 16.8 | Anti-air frigate |
+| **Leviathan** | 350m/250v | 6 | 500 | 3 (Massive) | 2.25 | 10 | 12.5 | Battlecruiser |
+| **Hunter** | 200m/150v | 4 | 175 | 1 (Armored) | 3.0 | 7 | 14 | Submarine |
+| **Kraken** | 200m/100v | 3 | 250 | 2 (Armored) | 3.5 | 6 | 24 | Amphibious transport |
+
+### Dominion Naval Buildings
+
+| Building | Cost | Size | HP | Requirements | Description |
+|----------|------|------|-----|--------------|-------------|
+| **Drydock** | 200m/100v | 4×4 | 1500 | Forge | Naval production (coastline) |
+| **Offshore Platform** | 150m | 3×3 | 800 | Drydock | Naval supply point (deep water) |
+| **Armed Platform** | +100m/50v | 3×3 | 1000 | Offshore Platform | Defensive upgrade |
+
+### Naval Tech Tree
+
+**Drydock produces:**
+- Basic: Mariner, Stingray
+- With Research Module: Corsair, Leviathan, Hunter, Kraken
+
+**Drydock researches:**
+- Naval Weapons 1/2/3
+- Naval Armor 1/2/3
+- Advanced Sonar (submarines detected at closer range)
+- Reinforced Hull (+25 HP to all naval units)
 
 ## UI/UX Design
 

@@ -3,7 +3,8 @@ import { AssetManager } from '@/assets/AssetManager';
 import { collisionConfig } from '@/data/collisionConfig';
 
 export type UnitState = 'idle' | 'moving' | 'attackmoving' | 'attacking' | 'gathering' | 'building' | 'dead' | 'patrolling' | 'transforming' | 'loaded';
-export type DamageType = 'normal' | 'explosive' | 'concussive' | 'psionic';
+export type DamageType = 'normal' | 'explosive' | 'concussive' | 'psionic' | 'torpedo';
+export type MovementDomain = 'ground' | 'water' | 'amphibious' | 'air';
 
 // Transform mode definitions for units that can transform
 export interface TransformMode {
@@ -107,6 +108,19 @@ export interface UnitDefinition {
   // Can attack while moving (like capital ships with tracking turrets)
   // If not set, defaults to false
   canAttackWhileMoving?: boolean;
+  // Movement domain - determines which terrain/navmesh the unit uses
+  // ground: land only, water: naval only, amphibious: both, air: ignores terrain
+  // If not set, defaults to 'ground' (or 'air' if isFlying is true)
+  movementDomain?: MovementDomain;
+  // Can attack naval units (ships, submarines)
+  // If not set, defaults to true for naval units, false otherwise
+  canAttackNaval?: boolean;
+  // Is this a naval unit (for targeting purposes)
+  isNaval?: boolean;
+  // Submarine-specific mechanics
+  isSubmarine?: boolean;
+  canSubmerge?: boolean;
+  submergedSpeed?: number; // Speed when submerged (typically slower)
 }
 
 // Command queue entry for shift-click queuing
@@ -190,7 +204,18 @@ export class Unit extends Component {
   // Targeting restrictions - which types of units this unit can attack
   public canAttackGround: boolean;
   public canAttackAir: boolean;
+  public canAttackNaval: boolean;
   public canAttackWhileMoving: boolean;
+
+  // Movement domain for naval units
+  public movementDomain: MovementDomain;
+  public isNaval: boolean;
+
+  // Submarine mechanics
+  public isSubmarine: boolean;
+  public canSubmerge: boolean;
+  public isSubmerged: boolean;
+  public submergedSpeed: number;
 
   // Collision radius for avoidance
   public collisionRadius: number;
@@ -299,6 +324,27 @@ export class Unit extends Component {
     this.canAttackGround = definition.canAttackGround ?? hasDamage;
     this.canAttackAir = definition.canAttackAir ?? false;
     this.canAttackWhileMoving = definition.canAttackWhileMoving ?? false;
+
+    // Movement domain - air units use 'air', naval use 'water', otherwise 'ground'
+    this.isNaval = definition.isNaval ?? false;
+    if (definition.movementDomain) {
+      this.movementDomain = definition.movementDomain;
+    } else if (definition.isFlying) {
+      this.movementDomain = 'air';
+    } else if (this.isNaval) {
+      this.movementDomain = 'water';
+    } else {
+      this.movementDomain = 'ground';
+    }
+
+    // Naval targeting - naval units can attack naval by default
+    this.canAttackNaval = definition.canAttackNaval ?? this.isNaval;
+
+    // Submarine mechanics
+    this.isSubmarine = definition.isSubmarine ?? false;
+    this.canSubmerge = definition.canSubmerge ?? this.isSubmarine;
+    this.isSubmerged = false;
+    this.submergedSpeed = definition.submergedSpeed ?? (this.speed * 0.67);
 
     // Collision radius from assets.json, fallback to config defaults
     const assetCollisionRadius = AssetManager.getCollisionRadius(definition.id);
@@ -425,13 +471,17 @@ export class Unit extends Component {
   }
 
   /**
-   * Check if this unit can attack a target based on air/ground restrictions
+   * Check if this unit can attack a target based on air/ground/naval restrictions
    * @param targetIsFlying Whether the target is a flying unit
+   * @param targetIsNaval Whether the target is a naval unit
    * @returns True if this unit can attack the target type
    */
-  public canAttackTarget(targetIsFlying: boolean): boolean {
+  public canAttackTarget(targetIsFlying: boolean, targetIsNaval: boolean = false): boolean {
     if (targetIsFlying) {
       return this.canAttackAir;
+    }
+    if (targetIsNaval) {
+      return this.canAttackNaval;
     }
     return this.canAttackGround;
   }
@@ -641,6 +691,34 @@ export class Unit extends Component {
     if (this.canCloak) {
       this.isCloaked = cloaked;
     }
+  }
+
+  // ==================== SUBMARINE MECHANICS ====================
+
+  public toggleSubmerge(): boolean {
+    if (!this.canSubmerge) return false;
+    this.isSubmerged = !this.isSubmerged;
+    // Submerged subs are cloaked
+    if (this.canCloak) {
+      this.isCloaked = this.isSubmerged;
+    }
+    return true;
+  }
+
+  public setSubmerged(submerged: boolean): void {
+    if (this.canSubmerge) {
+      this.isSubmerged = submerged;
+      if (this.canCloak) {
+        this.isCloaked = submerged;
+      }
+    }
+  }
+
+  public getEffectiveSpeedForDomain(): number {
+    if (this.isSubmarine && this.isSubmerged) {
+      return this.submergedSpeed * (1 + this.getBuffEffect('moveSpeedBonus'));
+    }
+    return this.getEffectiveSpeed();
   }
 
   // ==================== TRANSPORT MECHANICS ====================
