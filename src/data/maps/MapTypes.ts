@@ -236,6 +236,9 @@ export interface MapData {
   // Set to true for custom/editor maps to prevent auto-generated clutter
   skipProceduralDecorations?: boolean;
 
+  // Special mode maps (e.g., battle simulator) - hidden from lobby selection
+  isSpecialMode?: boolean;
+
   // Legacy visual settings (deprecated - use biome instead)
   skyboxColor?: string;
   ambientColor?: string;

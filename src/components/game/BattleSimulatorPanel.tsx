@@ -12,9 +12,9 @@ type SpawnQuantity = 1 | 5 | 10 | 20;
 
 const SPAWN_QUANTITIES: SpawnQuantity[] = [1, 5, 10, 20];
 
-// Arena dimensions (must match BattleArena.ts)
-const ARENA_WIDTH = 128;
-const ARENA_HEIGHT = 48;
+// Arena dimensions (must match battle_arena.json)
+const ARENA_WIDTH = 256;
+const ARENA_HEIGHT = 64;
 
 export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
@@ -305,7 +305,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
             >
               <div className="font-medium truncate">{unit.name}</div>
               <div className="text-[10px] text-void-500">
-                {unit.isFlying ? 'Air' : 'Ground'} • {unit.maxHealth}HP
+                {unit.isNaval ? 'Naval' : unit.isFlying ? 'Air' : 'Ground'} • {unit.maxHealth}HP
               </div>
             </button>
           ))}

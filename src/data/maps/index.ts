@@ -114,6 +114,7 @@ export {
 // Just drop a new .json file in that folder to add a map
 export {
   ALL_MAPS,
+  LOBBY_MAPS,
   MAPS_BY_PLAYER_COUNT,
   RANKED_MAPS,
   getMapById,
