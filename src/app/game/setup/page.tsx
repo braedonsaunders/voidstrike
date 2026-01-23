@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useCallback } from 'react';
-import { ALL_MAPS, LOBBY_MAPS, MapData } from '@/data/maps';
+import { ALL_MAPS, MapData } from '@/data/maps';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';
 import { BIOMES } from '@/rendering/Biomes';
@@ -535,13 +535,13 @@ export default function GameSetupPage() {
   }, [isHost, onGameStart, receivedLobbyState, mySlotId, startGame, router]);
 
   const [mapSearch, setMapSearch] = useState('');
-  // Use LOBBY_MAPS for selection grid (excludes special mode maps like battle simulator)
-  const lobbyMaps = Object.values(LOBBY_MAPS);
+  // Filter out special mode maps (like battle simulator) for lobby selection
+  const allMaps = Object.values(ALL_MAPS);
+  const lobbyMaps = allMaps.filter(map => !map.isSpecialMode);
   const maps = lobbyMaps.filter(map =>
     map.name.toLowerCase().includes(mapSearch.toLowerCase()) ||
     map.biome?.toLowerCase().includes(mapSearch.toLowerCase())
   );
-  // Use ALL_MAPS for lookup (includes special mode maps)
   const selectedMap = ALL_MAPS[selectedMapId] || lobbyMaps[0];
 
   // Get used colors for duplicate prevention
