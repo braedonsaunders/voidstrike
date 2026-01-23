@@ -2368,6 +2368,36 @@ The game uses **recast-navigation-js**, a WASM port of the industry-standard Rec
 - **O(1) pathfinding** via NavMeshQuery with string-pulling
 - **Crowd simulation** with ORCA collision avoidance
 - **Dynamic obstacles** via TileCache for buildings
+- **Dual navmesh support** for ground and water navigation
+
+### Movement Domains
+
+Units have a `movementDomain` that determines which navmesh they use:
+
+| Domain | Description | Navmesh |
+|--------|-------------|---------|
+| `ground` | Standard land units | Ground navmesh (walkable terrain) |
+| `water` | Naval units (ships, submarines) | Water navmesh (water cells) |
+| `amphibious` | Can use both land and water | Tries water first, falls back to ground |
+| `air` | Flying units | No navmesh (direct paths) |
+
+### Water Navmesh
+
+Naval units use a separate water navmesh where:
+- **water_deep** and **water_shallow** terrain features are walkable
+- Land cells are blocked with barrier walls
+- Generated via `Terrain.generateWaterGeometry()`
+
+```typescript
+// Initialize water navmesh (if map has water)
+const waterGeometry = terrain.generateWaterGeometry();
+if (waterGeometry.positions.length > 0) {
+  await game.initializeWaterNavMesh(waterGeometry.positions, waterGeometry.indices);
+}
+
+// Find path with domain awareness
+const path = recast.findPathForDomain(startX, startY, endX, endY, 'water');
+```
 
 ### RecastNavigation (`RecastNavigation.ts`)
 

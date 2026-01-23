@@ -1286,6 +1286,95 @@ VOIDSTRIKE features a world-class battle effects system with:
 └────────────────────────────────────────────────────────┘
 ```
 
+---
+
+## Water Rendering System
+
+### Overview
+
+VOIDSTRIKE features a two-layer water rendering system for both game rendering and map editor:
+
+1. **OceanWater (Global)** - TSL-based animated ocean shader for biomes with water
+2. **WaterMesh (Localized)** - Per-cell water surfaces for water features (lakes, rivers)
+
+### OceanWater (TSL Ocean Shader)
+
+**File:** `src/rendering/tsl/OceanWater.ts`
+
+World-class animated water shader with industry-standard techniques:
+
+| Feature | Description |
+|---------|-------------|
+| **Gerstner Waves** | 4 overlapping wave frequencies for realistic wave motion |
+| **Fresnel Reflections** | Angle-dependent reflectivity (more reflective at grazing angles) |
+| **Depth-based Color** | Deeper water appears darker with less transparency |
+| **Subsurface Scattering** | Light penetration effect for translucent quality |
+| **Animated Foam** | White foam at wave peaks with procedural animation |
+| **Flow Animation** | Directional current/wind with configurable speed |
+| **Normal Perturbation** | Multi-octave surface detail noise |
+| **Lava Support** | Volcanic biomes render as animated lava with glow |
+
+**Gerstner Wave Implementation:**
+```typescript
+// 4 overlapping waves with different directions and wavelengths
+const waves = [
+  { direction: (1.0, 0.0), steepness: 0.25, wavelength: 60.0 },
+  { direction: (0.7, 0.7), steepness: 0.20, wavelength: 31.0 },
+  { direction: (0.3, 0.9), steepness: 0.15, wavelength: 18.0 },
+  { direction: (-0.5, 0.5), steepness: 0.10, wavelength: 8.0 },
+];
+```
+
+**Configurable Parameters:**
+- Wave height and speed
+- Water colors (shallow/deep/foam)
+- Flow direction and speed
+- Fresnel power
+- Subsurface strength
+- Foam threshold
+
+### WaterMesh (Localized Water)
+
+**File:** `src/rendering/WaterMesh.ts`
+
+TSL-animated water surfaces for water terrain features:
+
+| Feature | Description |
+|---------|-------------|
+| **Flood-Fill Regions** | Groups connected water cells into efficient batched meshes |
+| **Depth-Aware Materials** | Separate materials for shallow vs deep water |
+| **Animated Waves** | Multi-layer sine wave animation |
+| **Fresnel Effect** | Angle-dependent reflectivity |
+| **Caustic Highlights** | Light pattern simulation on water surface |
+| **Ripple Effects** | High-frequency surface detail animation |
+
+**Terrain Integration:**
+- Renders at `elevation * HEIGHT_SCALE + 0.15` (offset above terrain)
+- Distinguishes `water_shallow` (0.65 opacity) and `water_deep` (0.8 opacity)
+- Supports both game and editor coordinate systems
+
+### Editor Integration
+
+**File:** `src/editor/rendering3d/EditorTerrain.ts`
+
+The map editor renders water with proper orientation:
+- WaterMesh added as child of terrain mesh
+- Counter-rotation applied to compensate for terrain rotation: `waterMesh.group.rotation.x = Math.PI / 2`
+
+### Biome Water Configuration
+
+| Biome | hasWater | Water Level | Water Color | Notes |
+|-------|----------|-------------|-------------|-------|
+| Grassland | ✓ | -0.5 | 0x3080c0 | Standard ocean |
+| Desert | ✗ | -1 | - | Disabled |
+| Frozen | ✗ | -1 | - | Disabled (artifact issues) |
+| Volcanic | ✓ | -0.3 | 0xff4010 | Renders as lava |
+| Void | ✗ | -1 | - | Disabled |
+| Jungle | ✗ | -1 | - | Disabled |
+| Ocean | ✓ | 0.5 | 0x1060a0 | Deep ocean for naval |
+
+---
+
 ### Render Order
 
 | Order | Layer | Description |

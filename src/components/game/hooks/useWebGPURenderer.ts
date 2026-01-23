@@ -299,6 +299,19 @@ export function useWebGPURenderer({
         debugInitialization.error('[useWebGPURenderer] NavMesh initialization failed!');
       }
 
+      // Generate water navmesh for naval units (if map has water)
+      debugInitialization.log('[useWebGPURenderer] Generating water geometry...');
+      const waterGeometry = terrain.generateWaterGeometry();
+      if (waterGeometry.positions.length > 0) {
+        const waterNavMeshSuccess = await game.initializeWaterNavMesh(
+          waterGeometry.positions,
+          waterGeometry.indices
+        );
+        if (waterNavMeshSuccess) {
+          debugInitialization.log('[useWebGPURenderer] Water navmesh initialized for naval units');
+        }
+      }
+
       const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
       const localPlayerId = getLocalPlayerId();
 

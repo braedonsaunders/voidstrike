@@ -9,6 +9,7 @@ import { clamp } from '@/utils/math';
 // Import from central pathfinding config - SINGLE SOURCE OF TRUTH
 import {
   elevationToHeight,
+  ELEVATION_TO_HEIGHT_FACTOR,
   CLIFF_WALL_THRESHOLD_ELEVATION,
   RAMP_BOUNDARY_ELEVATION_THRESHOLD,
   WALKABLE_CLIMB_ELEVATION,
@@ -1921,6 +1922,201 @@ export class Terrain {
     if (maxRampBoundaryGap > 0) {
       debugTerrain.log(`[Terrain] Max ramp boundary height gap: ${maxRampBoundaryGap.toFixed(3)} at (${rampBoundaryGapLocation.x}, ${rampBoundaryGapLocation.y})`);
     }
+
+    return {
+      positions: new Float32Array(vertices),
+      indices: new Uint32Array(indices),
+    };
+  }
+
+  /**
+   * Generate water geometry for naval navmesh generation.
+   * Returns triangles from water cells (water_deep and water_shallow features).
+   * Used by recast-navigation for water navmesh generation.
+   *
+   * NAVAL PATHFINDING:
+   * - Water cells are walkable for naval units
+   * - Land cells are unwalkable (barriers)
+   * - Water surface is at a constant level per cell
+   */
+  public generateWaterGeometry(): { positions: Float32Array; indices: Uint32Array } {
+    const terrain = this.mapData.terrain;
+    const width = this.mapData.width;
+    const height = this.mapData.height;
+
+    const vertices: number[] = [];
+    const indices: number[] = [];
+    let vertexIndex = 0;
+
+    // Water surface height offset
+    const WATER_SURFACE_OFFSET = 0.15;
+
+    // Helper: Check if a cell is water (navigable by naval units)
+    const isCellWater = (cx: number, cy: number): boolean => {
+      if (cx < 0 || cx >= width || cy < 0 || cy >= height) return false;
+      const cell = terrain[cy][cx];
+      const feature = cell.feature || 'none';
+      return feature === 'water_deep' || feature === 'water_shallow';
+    };
+
+    // Pre-compute vertex heights for water surface
+    // Use average elevation of adjacent water cells
+    const vertexHeights = new Float32Array((width + 1) * (height + 1));
+    for (let vy = 0; vy <= height; vy++) {
+      for (let vx = 0; vx <= width; vx++) {
+        // Check all 4 adjacent cells
+        let totalElevation = 0;
+        let waterCount = 0;
+
+        for (let dy = -1; dy <= 0; dy++) {
+          for (let dx = -1; dx <= 0; dx++) {
+            const cx = vx + dx;
+            const cy = vy + dy;
+            if (isCellWater(cx, cy)) {
+              totalElevation += terrain[cy][cx].elevation;
+              waterCount++;
+            }
+          }
+        }
+
+        if (waterCount > 0) {
+          // Average elevation for water surface
+          vertexHeights[vy * (width + 1) + vx] =
+            (totalElevation / waterCount) * ELEVATION_TO_HEIGHT_FACTOR + WATER_SURFACE_OFFSET;
+        } else {
+          // Non-water vertex - use terrain height from heightMap
+          // Clamp coordinates to valid heightMap range
+          const hx = Math.min(vx, this.gridWidth - 1);
+          const hy = Math.min(vy, this.gridHeight - 1);
+          vertexHeights[vy * (width + 1) + vx] = this.heightMap[hy * this.gridWidth + hx];
+        }
+      }
+    }
+
+    // Generate floor geometry for water cells
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (!isCellWater(x, y)) continue;
+
+        // Get vertex heights for this cell's corners
+        const h00 = vertexHeights[y * (width + 1) + x];
+        const h10 = vertexHeights[y * (width + 1) + (x + 1)];
+        const h01 = vertexHeights[(y + 1) * (width + 1) + x];
+        const h11 = vertexHeights[(y + 1) * (width + 1) + (x + 1)];
+
+        // World coordinates
+        const x0 = x;
+        const x1 = x + 1;
+        const z0 = y;
+        const z1 = y + 1;
+
+        // Add quad vertices (2 triangles)
+        // Triangle 1: TL, BL, TR
+        vertices.push(x0, h00, z0); // TL
+        vertices.push(x0, h01, z1); // BL
+        vertices.push(x1, h10, z0); // TR
+
+        // Triangle 2: TR, BL, BR
+        vertices.push(x1, h10, z0); // TR
+        vertices.push(x0, h01, z1); // BL
+        vertices.push(x1, h11, z1); // BR
+
+        // Add indices
+        indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+        indices.push(vertexIndex + 3, vertexIndex + 4, vertexIndex + 5);
+        vertexIndex += 6;
+      }
+    }
+
+    // Add barrier walls at water-land boundaries
+    // This prevents naval units from going onto land
+    const WALL_HEIGHT = 3.0;
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (!isCellWater(x, y)) continue;
+
+        const cell = terrain[y][x];
+        const waterHeight = cell.elevation * ELEVATION_TO_HEIGHT_FACTOR + WATER_SURFACE_OFFSET;
+
+        // Check each edge for water-land boundary
+        // North edge (y - 1)
+        if (y > 0 && !isCellWater(x, y - 1)) {
+          const x0 = x;
+          const x1 = x + 1;
+          const z = y;
+          const hTop = waterHeight + WALL_HEIGHT;
+          const hBottom = waterHeight - 0.5;
+
+          vertices.push(x0, hBottom, z);
+          vertices.push(x1, hBottom, z);
+          vertices.push(x0, hTop, z);
+          vertices.push(x1, hTop, z);
+
+          indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+          indices.push(vertexIndex + 2, vertexIndex + 1, vertexIndex + 3);
+          vertexIndex += 4;
+        }
+
+        // South edge (y + 1)
+        if (y < height - 1 && !isCellWater(x, y + 1)) {
+          const x0 = x;
+          const x1 = x + 1;
+          const z = y + 1;
+          const hTop = waterHeight + WALL_HEIGHT;
+          const hBottom = waterHeight - 0.5;
+
+          vertices.push(x1, hBottom, z);
+          vertices.push(x0, hBottom, z);
+          vertices.push(x1, hTop, z);
+          vertices.push(x0, hTop, z);
+
+          indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+          indices.push(vertexIndex + 2, vertexIndex + 1, vertexIndex + 3);
+          vertexIndex += 4;
+        }
+
+        // West edge (x - 1)
+        if (x > 0 && !isCellWater(x - 1, y)) {
+          const xPos = x;
+          const z0 = y;
+          const z1 = y + 1;
+          const hTop = waterHeight + WALL_HEIGHT;
+          const hBottom = waterHeight - 0.5;
+
+          vertices.push(xPos, hBottom, z1);
+          vertices.push(xPos, hBottom, z0);
+          vertices.push(xPos, hTop, z1);
+          vertices.push(xPos, hTop, z0);
+
+          indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+          indices.push(vertexIndex + 2, vertexIndex + 1, vertexIndex + 3);
+          vertexIndex += 4;
+        }
+
+        // East edge (x + 1)
+        if (x < width - 1 && !isCellWater(x + 1, y)) {
+          const xPos = x + 1;
+          const z0 = y;
+          const z1 = y + 1;
+          const hTop = waterHeight + WALL_HEIGHT;
+          const hBottom = waterHeight - 0.5;
+
+          vertices.push(xPos, hBottom, z0);
+          vertices.push(xPos, hBottom, z1);
+          vertices.push(xPos, hTop, z0);
+          vertices.push(xPos, hTop, z1);
+
+          indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
+          indices.push(vertexIndex + 2, vertexIndex + 1, vertexIndex + 3);
+          vertexIndex += 4;
+        }
+      }
+    }
+
+    debugTerrain.log(
+      `[Terrain] Generated water geometry: ${vertices.length / 3} vertices, ${indices.length / 3} triangles`
+    );
 
     return {
       positions: new Float32Array(vertices),
