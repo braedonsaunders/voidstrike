@@ -9,6 +9,7 @@ import { clamp } from '@/utils/math';
 // Import from central pathfinding config - SINGLE SOURCE OF TRUTH
 import {
   elevationToHeight,
+  ELEVATION_TO_HEIGHT_FACTOR,
   CLIFF_WALL_THRESHOLD_ELEVATION,
   RAMP_BOUNDARY_ELEVATION_THRESHOLD,
   WALKABLE_CLIMB_ELEVATION,
@@ -1981,7 +1982,7 @@ export class Terrain {
         if (waterCount > 0) {
           // Average elevation for water surface
           vertexHeights[vy * (width + 1) + vx] =
-            (totalElevation / waterCount) * HEIGHT_SCALE + WATER_SURFACE_OFFSET;
+            (totalElevation / waterCount) * ELEVATION_TO_HEIGHT_FACTOR + WATER_SURFACE_OFFSET;
         } else {
           // Non-water vertex - use terrain height
           vertexHeights[vy * (width + 1) + vx] = this.getVertexHeight(vx, vy);
@@ -2033,7 +2034,7 @@ export class Terrain {
         if (!isCellWater(x, y)) continue;
 
         const cell = terrain[y][x];
-        const waterHeight = cell.elevation * HEIGHT_SCALE + WATER_SURFACE_OFFSET;
+        const waterHeight = cell.elevation * ELEVATION_TO_HEIGHT_FACTOR + WATER_SURFACE_OFFSET;
 
         // Check each edge for water-land boundary
         // North edge (y - 1)
