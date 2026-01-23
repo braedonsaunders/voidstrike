@@ -160,8 +160,14 @@ export class EditorObjects {
         geometry = new THREE.CylinderGeometry(radius * 0.3, radius * 0.4, visual.height, 12);
     }
 
+    // Parse color - ensure we have a valid string before calling replace
+    const colorStr = objType?.color;
+    const colorValue = typeof colorStr === 'string' && colorStr.length > 0
+      ? parseInt(colorStr.replace('#', ''), 16)
+      : visual.color;
+
     const material = new THREE.MeshLambertMaterial({
-      color: objType?.color ? parseInt(objType.color.replace('#', ''), 16) : visual.color,
+      color: colorValue,
       transparent: true,
       opacity: 0.85,
     });

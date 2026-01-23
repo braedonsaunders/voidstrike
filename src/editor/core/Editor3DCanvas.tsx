@@ -279,7 +279,7 @@ export function Editor3DCanvas({
       width: mapData.width,
       height: mapData.height,
       cellSize: 1,
-      color: parseInt(config.theme.primary.replace('#', ''), 16),
+      color: parseInt((config.theme.primary || '#843dff').replace('#', ''), 16),
       opacity: 0.08,
     });
     gridRef.current = grid;
