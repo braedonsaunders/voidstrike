@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import type { EditorMapData, EditorCell } from '../config/EditorConfig';
 import { CliffMesh } from './CliffMesh';
 import { GuardrailMesh } from './GuardrailMesh';
+import { WaterMesh } from '@/rendering/WaterMesh';
 import { clamp } from '@/utils/math';
 
 // Height scale factor (matches game terrain)
@@ -69,6 +70,7 @@ export class EditorTerrain {
   // Platform terrain rendering
   private cliffMesh: CliffMesh;
   private guardrailMesh: GuardrailMesh;
+  private waterMesh: WaterMesh;
   private showGuardrails: boolean = true;
 
   private cellSize: number;
@@ -115,10 +117,12 @@ export class EditorTerrain {
     // Create platform terrain meshes (cliff faces and guardrails)
     this.cliffMesh = new CliffMesh({ cellSize: this.cellSize });
     this.guardrailMesh = new GuardrailMesh({ cellSize: this.cellSize });
+    this.waterMesh = new WaterMesh();
 
     // Add as children (inherits rotation)
     this.mesh.add(this.cliffMesh.mesh);
     this.mesh.add(this.guardrailMesh.mesh);
+    this.mesh.add(this.waterMesh.group);
   }
 
   /**
@@ -172,6 +176,9 @@ export class EditorTerrain {
     this.cliffMesh.buildFromMapData(mapData);
     this.guardrailMesh.buildFromMapData(mapData);
     this.guardrailMesh.setVisible(this.showGuardrails);
+
+    // Build water meshes
+    this.waterMesh.buildFromEditorData(mapData.terrain, mapData.width, mapData.height);
   }
 
   /**
@@ -249,6 +256,8 @@ export class EditorTerrain {
         this.dirtyMaxX,
         this.dirtyMaxY
       );
+      // Rebuild water meshes (water regions can span large areas, so full rebuild)
+      this.waterMesh.buildFromEditorData(this.mapData.terrain, this.mapData.width, this.mapData.height);
     }
 
     // Reset dirty tracking
@@ -267,7 +276,15 @@ export class EditorTerrain {
       this.rebuildAllVertices();
       this.cliffMesh.buildFromMapData(this.mapData);
       this.guardrailMesh.buildFromMapData(this.mapData);
+      this.waterMesh.buildFromEditorData(this.mapData.terrain, this.mapData.width, this.mapData.height);
     }
+  }
+
+  /**
+   * Update water animation
+   */
+  public update(deltaTime: number): void {
+    this.waterMesh.update(deltaTime);
   }
 
   /**
@@ -333,6 +350,7 @@ export class EditorTerrain {
     this.material.dispose();
     this.cliffMesh.dispose();
     this.guardrailMesh.dispose();
+    this.waterMesh.dispose();
     this.positions = null;
     this.colors = null;
     this.normals = null;

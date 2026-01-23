@@ -232,6 +232,9 @@ export function Editor3DCanvas({
       // Update camera (handles smooth zoom interpolation)
       rtsCamera.update(deltaTime);
 
+      // Update terrain (water animation)
+      terrainRef.current?.update(deltaTime / 1000);
+
       // Update zoom display
       const zoom = rtsCamera.getZoom();
       if (Math.abs(zoom - currentZoom) > 0.5) {
