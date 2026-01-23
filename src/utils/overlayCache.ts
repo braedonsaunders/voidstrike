@@ -152,6 +152,20 @@ export async function getOverlayCache(
 }
 
 /**
+ * Check if an error is a QuotaExceededError
+ */
+function isQuotaExceededError(error: unknown): boolean {
+  if (error instanceof DOMException) {
+    return (
+      error.name === 'QuotaExceededError' ||
+      error.code === 22 ||
+      error.code === 1014
+    );
+  }
+  return false;
+}
+
+/**
  * Store overlay data in cache
  */
 export async function setOverlayCache(
@@ -176,12 +190,35 @@ export async function setOverlayCache(
       version: CACHE_VERSION,
     };
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const transaction = database.transaction(STORE_NAME, 'readwrite');
       const store = transaction.objectStore(STORE_NAME);
       const request = store.put(entry);
 
-      request.onerror = () => reject(request.error);
+      request.onerror = async () => {
+        const error = request.error;
+        if (isQuotaExceededError(error)) {
+          // Try to free space by cleaning up old entries
+          console.warn('[OverlayCache] Quota exceeded, cleaning up old entries...');
+          try {
+            await cleanupOldCacheEntries();
+            // Retry the operation once
+            const retryTransaction = database.transaction(STORE_NAME, 'readwrite');
+            const retryStore = retryTransaction.objectStore(STORE_NAME);
+            const retryRequest = retryStore.put(entry);
+            retryRequest.onerror = () => {
+              console.warn('[OverlayCache] Failed to cache after cleanup:', retryRequest.error);
+              resolve();
+            };
+            retryRequest.onsuccess = () => resolve();
+          } catch {
+            resolve();
+          }
+        } else {
+          console.warn('[OverlayCache] Error setting cache:', error);
+          resolve();
+        }
+      };
       request.onsuccess = () => resolve();
     });
   } catch (error) {

@@ -2,6 +2,12 @@ import { create } from 'zustand';
 import { debugInitialization } from '@/utils/debugLogger';
 import type { MapData } from '@/data/maps/MapTypes';
 import type { EditorMapData } from '@/editor/config/EditorConfig';
+import {
+  safeSessionStorageRemove,
+  setLargeData,
+  getLargeData,
+  removeLargeData,
+} from '@/utils/storage';
 
 export type StartingResources = 'normal' | 'high' | 'insane';
 export type GameSpeed = 'slower' | 'normal' | 'faster' | 'fastest';
@@ -187,12 +193,18 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   setSelectedMap: (mapId) => set({ selectedMapId: mapId, customMapData: null, editorMapData: null, isEditorPreview: false }),
   setCustomMap: (mapData) => set({ customMapData: mapData }),
   setEditorMapData: (mapData) => {
-    // Persist to sessionStorage so it survives page reload (when navigating back from preview)
+    // Persist to IndexedDB so it survives page navigation (when navigating back from preview)
+    // IndexedDB has much higher storage limits than sessionStorage (~5MB vs hundreds of MB)
     if (typeof window !== 'undefined') {
       if (mapData) {
-        sessionStorage.setItem('voidstrike_editor_map_data', JSON.stringify(mapData));
+        // Fire-and-forget async storage - the state is set synchronously below
+        setLargeData('voidstrike_editor_map_data', mapData).then(result => {
+          if (!result.success) {
+            console.warn('[gameSetupStore] Failed to persist editor map data:', result.message);
+          }
+        });
       } else {
-        sessionStorage.removeItem('voidstrike_editor_map_data');
+        removeLargeData('voidstrike_editor_map_data');
       }
     }
     set({ editorMapData: mapData });
@@ -390,9 +402,11 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   endGame: () => set({ gameStarted: false, isBattleSimulator: false, customMapData: null, isEditorPreview: false }),
   reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots], localPlayerId: 'player1', customMapData: null, isEditorPreview: false }),
   clearEditorPreviewState: () => {
-    // Clear sessionStorage as well
+    // Clear IndexedDB storage as well
     if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('voidstrike_editor_map_data');
+      removeLargeData('voidstrike_editor_map_data');
+      // Also clear legacy sessionStorage key for backwards compatibility
+      safeSessionStorageRemove('voidstrike_editor_map_data');
     }
     set({ editorMapData: null, isEditorPreview: false });
   },
@@ -455,20 +469,30 @@ export function getCustomMapData(): MapData | null {
   return useGameSetupStore.getState().customMapData;
 }
 
+/**
+ * Get editor map data synchronously (in-memory only).
+ * Use getEditorMapDataAsync for persisted data.
+ */
 export function getEditorMapData(): EditorMapData | null {
+  return useGameSetupStore.getState().editorMapData;
+}
+
+/**
+ * Load editor map data from IndexedDB storage.
+ * Call this on page load to restore editor state after navigation.
+ */
+export async function loadEditorMapDataFromStorage(): Promise<EditorMapData | null> {
   // First check in-memory state
   const inMemory = useGameSetupStore.getState().editorMapData;
   if (inMemory) return inMemory;
 
-  // Fall back to sessionStorage (for page reload case)
+  // Load from IndexedDB (for page navigation case)
   if (typeof window !== 'undefined') {
-    const stored = sessionStorage.getItem('voidstrike_editor_map_data');
-    if (stored) {
-      try {
-        return JSON.parse(stored) as EditorMapData;
-      } catch {
-        return null;
-      }
+    const result = await getLargeData<EditorMapData>('voidstrike_editor_map_data');
+    if (result.success && result.data) {
+      // Restore to in-memory state
+      useGameSetupStore.setState({ editorMapData: result.data });
+      return result.data;
     }
   }
   return null;
