@@ -7,7 +7,7 @@
  */
 
 import * as THREE from 'three';
-import type { MapData, MapCell, TerrainFeature } from '@/data/maps/MapTypes';
+import type { MapData, MapCell } from '@/data/maps/MapTypes';
 
 // Height scale factor (matches Terrain.ts)
 const HEIGHT_SCALE = 0.04;
@@ -98,7 +98,7 @@ export class WaterMesh {
    * Build water meshes from editor map data format
    */
   public buildFromEditorData(
-    terrain: Array<Array<{ elevation: number; feature: TerrainFeature }>>,
+    terrain: Array<Array<{ elevation: number; feature: string }>>,
     width: number,
     height: number
   ): void {
@@ -188,7 +188,7 @@ export class WaterMesh {
   }
 
   private floodFillEditorRegion(
-    terrain: Array<Array<{ elevation: number; feature: TerrainFeature }>>,
+    terrain: Array<Array<{ elevation: number; feature: string }>>,
     startX: number,
     startY: number,
     width: number,
