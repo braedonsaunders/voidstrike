@@ -723,6 +723,14 @@ export class RecastNavigation {
         // This is CRITICAL - requestMoveTarget needs a navmesh position to compute path corridor
         const projected = this.projectToNavMesh(targetX, targetY);
         if (projected) {
+          // Check height difference for ramp traversal debugging
+          const heightDiff = Math.abs(agentPos.y - projected.y);
+          if (heightDiff > 0.5) {
+            debugPathfinding.log(
+              `[RecastNavigation] Cross-height target: agent at h=${agentPos.y.toFixed(2)}, ` +
+              `target at h=${projected.y.toFixed(2)}, diff=${heightDiff.toFixed(2)}`
+            );
+          }
           // Use the projected navmesh position (already has correct x, y, z)
           agent.requestMoveTarget(projected);
           return true;
@@ -840,6 +848,9 @@ export class RecastNavigation {
     }
   }
 
+  // Track agents that have logged zero velocity to avoid spam
+  private zeroVelocityLoggedAgents = new Set<number>();
+
   /**
    * Get agent computed position and velocity
    */
@@ -860,6 +871,29 @@ export class RecastNavigation {
       if (agent) {
         const pos = agent.position();
         const vel = agent.velocity();
+        const target = agent.target();
+
+        // Debug: Log zero velocity for agents with targets (indicates path corridor failure)
+        const velMag = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+        if (velMag < 0.001 && target) {
+          const distToTarget = Math.sqrt(
+            (pos.x - target.x) ** 2 + (pos.z - target.z) ** 2
+          );
+          // Only log if far from target and haven't logged this agent yet
+          if (distToTarget > 2 && !this.zeroVelocityLoggedAgents.has(entityId)) {
+            const heightDiff = Math.abs(pos.y - target.y);
+            debugPathfinding.warn(
+              `[RecastNavigation] Agent ${entityId} zero velocity: ` +
+              `pos=(${pos.x.toFixed(1)}, h=${pos.y.toFixed(2)}, ${pos.z.toFixed(1)}), ` +
+              `target=(${target.x.toFixed(1)}, h=${target.y.toFixed(2)}, ${target.z.toFixed(1)}), ` +
+              `dist=${distToTarget.toFixed(1)}, heightDiff=${heightDiff.toFixed(2)}`
+            );
+            this.zeroVelocityLoggedAgents.add(entityId);
+          }
+        } else if (velMag > 0.1) {
+          // Clear log flag when agent starts moving
+          this.zeroVelocityLoggedAgents.delete(entityId);
+        }
 
         return {
           x: pos.x,
@@ -912,6 +946,70 @@ export class RecastNavigation {
       this.crowd.update(deltaTime);
     } catch {
       // Ignore
+    }
+  }
+
+  // ==================== DEBUG: CROSS-HEIGHT PATHFINDING ====================
+
+  /**
+   * Debug method to test if a path exists between two points.
+   * Use this to diagnose ramp/multi-level navmesh connectivity issues.
+   */
+  public debugTestPath(
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number
+  ): void {
+    if (!this.navMeshQuery) {
+      console.log('[DEBUG] NavMeshQuery not initialized');
+      return;
+    }
+
+    const startHeight = this.getTerrainHeight(startX, startY);
+    const endHeight = this.getTerrainHeight(endX, endY);
+
+    console.log(`[DEBUG] Testing path from (${startX.toFixed(1)}, ${startY.toFixed(1)}, h=${startHeight.toFixed(2)}) ` +
+      `to (${endX.toFixed(1)}, ${endY.toFixed(1)}, h=${endHeight.toFixed(2)})`);
+
+    // Find closest points on navmesh
+    const halfExtents = { x: 2, y: 10, z: 2 };
+    const startResult = this.navMeshQuery.findClosestPoint(
+      { x: startX, y: startHeight, z: startY },
+      { halfExtents }
+    );
+    const endResult = this.navMeshQuery.findClosestPoint(
+      { x: endX, y: endHeight, z: endY },
+      { halfExtents }
+    );
+
+    console.log(`[DEBUG] Start closest point: success=${startResult.success}, ` +
+      (startResult.point ? `point=(${startResult.point.x.toFixed(1)}, h=${startResult.point.y.toFixed(2)}, ${startResult.point.z.toFixed(1)})` : 'null'));
+    console.log(`[DEBUG] End closest point: success=${endResult.success}, ` +
+      (endResult.point ? `point=(${endResult.point.x.toFixed(1)}, h=${endResult.point.y.toFixed(2)}, ${endResult.point.z.toFixed(1)})` : 'null'));
+
+    if (!startResult.success || !startResult.point || !endResult.success || !endResult.point) {
+      console.log('[DEBUG] Cannot find start/end on navmesh');
+      return;
+    }
+
+    // Try to compute path
+    const pathResult = this.navMeshQuery.computePath(startResult.point, endResult.point, { halfExtents });
+
+    console.log(`[DEBUG] Path computation: success=${pathResult.success}, ` +
+      `pathLength=${pathResult.path?.length ?? 0}`);
+
+    if (pathResult.success && pathResult.path && pathResult.path.length > 0) {
+      console.log('[DEBUG] Path waypoints:');
+      for (let i = 0; i < Math.min(pathResult.path.length, 10); i++) {
+        const p = pathResult.path[i];
+        console.log(`  [${i}] (${p.x.toFixed(1)}, h=${p.y.toFixed(2)}, ${p.z.toFixed(1)})`);
+      }
+      if (pathResult.path.length > 10) {
+        console.log(`  ... and ${pathResult.path.length - 10} more waypoints`);
+      }
+    } else {
+      console.log('[DEBUG] PATH NOT FOUND - navmesh regions may be disconnected!');
     }
   }
 

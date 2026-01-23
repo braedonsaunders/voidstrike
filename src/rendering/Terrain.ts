@@ -1657,33 +1657,59 @@ export class Terrain {
     // ========================================
     // PASS 1: Generate walkable floor geometry
     // ========================================
+    //
+    // CRITICAL FIX: Create SHARED vertices for floor geometry.
+    // Recast Navigation requires triangles to share vertex INDICES (not just positions)
+    // to recognize them as connected polygons. Previously, each triangle created its
+    // own vertices, causing adjacent cells to be treated as disconnected navmesh regions
+    // even when their vertices were at the same positions.
+
+    // Step 1: Create shared floor vertices (one per grid vertex position)
+    // We use a Map to track which vertices have been created and their indices
+    const floorVertexIndexMap = new Map<string, number>();
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         if (!isCellWalkable(x, y)) continue;
 
-        // Get heights for cell corners using pre-computed consistent vertex heights
-        // This ensures adjacent cells share the same vertex height, preventing gaps
-        const h00 = getVertexHeight(x, y);
-        const h10 = getVertexHeight(x + 1, y);
-        const h01 = getVertexHeight(x, y + 1);
-        const h11 = getVertexHeight(x + 1, y + 1);
+        // Add vertices for all 4 corners of this cell if not already added
+        const corners = [
+          { vx: x, vy: y },
+          { vx: x + 1, vy: y },
+          { vx: x, vy: y + 1 },
+          { vx: x + 1, vy: y + 1 },
+        ];
 
-        // Create two triangles for floor
-        // Using original winding order that worked with Recast
+        for (const { vx, vy } of corners) {
+          const key = `${vx},${vy}`;
+          if (!floorVertexIndexMap.has(key)) {
+            const h = getVertexHeight(vx, vy);
+            vertices.push(vx, h, vy);
+            floorVertexIndexMap.set(key, vertexIndex);
+            vertexIndex++;
+          }
+        }
+      }
+    }
+
+    // Step 2: Create triangles using shared vertex indices
+    // Adjacent cells now share the same vertex indices, enabling Recast polygon connectivity
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (!isCellWalkable(x, y)) continue;
+
+        // Get vertex indices for cell corners
+        const i00 = floorVertexIndexMap.get(`${x},${y}`)!;
+        const i10 = floorVertexIndexMap.get(`${x + 1},${y}`)!;
+        const i01 = floorVertexIndexMap.get(`${x},${y + 1}`)!;
+        const i11 = floorVertexIndexMap.get(`${x + 1},${y + 1}`)!;
+
         // Triangle 1: NW(x,y) -> SW(x,y+1) -> NE(x+1,y)
-        vertices.push(x, h00, y);           // NW corner
-        vertices.push(x, h01, y + 1);       // SW corner
-        vertices.push(x + 1, h10, y);       // NE corner
-        indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
-        vertexIndex += 3;
+        // Using original winding order that worked with Recast
+        indices.push(i00, i01, i10);
 
         // Triangle 2: NE(x+1,y) -> SW(x,y+1) -> SE(x+1,y+1)
-        vertices.push(x + 1, h10, y);       // NE corner
-        vertices.push(x, h01, y + 1);       // SW corner
-        vertices.push(x + 1, h11, y + 1);   // SE corner
-        indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
-        vertexIndex += 3;
+        indices.push(i10, i01, i11);
       }
     }
 
