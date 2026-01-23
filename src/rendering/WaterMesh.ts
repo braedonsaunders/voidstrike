@@ -53,15 +53,15 @@ const WATER_DEEP_COLOR = new THREE.Color(0x1a5577);
 const WATER_SCATTER_COLOR = new THREE.Color(0x66ddbb);
 const WATER_FOAM_COLOR = new THREE.Color(0xe8f0f4);
 
-// RTS wave configuration - subtle, not distracting
-// Steepness: 0.006-0.04, Wavelength: 0.7-12 units
+// RTS wave configuration - larger wavelengths with irrational ratios to prevent tiling
+// Using prime-based wavelengths and varied directions
 const RTS_WAVES = {
-  wave0: new THREE.Vector4(1.0, 0.0, 0.035, 10.0),    // Primary swell
-  wave1: new THREE.Vector4(0.0, 1.0, 0.028, 6.0),     // Secondary perpendicular
-  wave2: new THREE.Vector4(0.7, 0.7, 0.020, 3.5),     // Detail diagonal
-  wave3: new THREE.Vector4(-0.7, 0.7, 0.015, 2.0),    // Cross detail
-  wave4: new THREE.Vector4(0.5, -0.8, 0.010, 1.2),    // Fine shimmer
-  wave5: new THREE.Vector4(-0.3, -0.9, 0.006, 0.7),   // Micro ripples
+  wave0: new THREE.Vector4(1.0, 0.15, 0.04, 47.0),    // Primary long swell
+  wave1: new THREE.Vector4(0.2, 1.0, 0.032, 31.0),    // Secondary perpendicular
+  wave2: new THREE.Vector4(0.7, 0.7, 0.025, 19.0),    // Detail diagonal
+  wave3: new THREE.Vector4(-0.6, 0.8, 0.018, 13.0),   // Cross detail
+  wave4: new THREE.Vector4(0.5, -0.85, 0.012, 7.0),   // Medium detail
+  wave5: new THREE.Vector4(-0.4, -0.9, 0.008, 4.3),   // Fine shimmer
 };
 
 export interface WaterRegion {
@@ -89,7 +89,7 @@ export class WaterMesh {
   private uFoamColor = uniform(WATER_FOAM_COLOR.clone());
 
   // RTS-appropriate wave parameters
-  private uWaveHeight = uniform(0.08);  // Much lower than ocean (was 1.0)
+  private uWaveHeight = uniform(0.12);  // Slightly increased for visibility
   private uWaveSpeed = uniform(0.6);    // Slower, calmer
 
   // RTS wave uniforms (subtle parameters)
@@ -192,8 +192,9 @@ export class WaterMesh {
       ));
 
       // Scrolling normal map simulation (two perpendicular directions)
-      const normalScale1 = float(8.0);
-      const normalScale2 = float(12.0);
+      // Using low frequencies with irrational ratios to prevent visible tiling
+      const normalScale1 = float(0.7);   // Large wavelength pattern
+      const normalScale2 = float(1.13);  // Irrational ratio to scale1
       const normalSpeed1 = float(0.03);
       const normalSpeed2 = float(0.025);
 
@@ -247,13 +248,14 @@ export class WaterMesh {
       waterColor = waterColor.add(sssColor);
 
       // Caustic patterns (subtle, RTS-appropriate)
-      const causticScale1 = float(6.0);
-      const causticScale2 = float(9.0);
+      // Low frequencies with irrational ratios prevent visible tiling
+      const causticScale1 = float(0.47);  // Large wavelength
+      const causticScale2 = float(0.73);  // Irrational ratio
       const caustic1 = sin(posX.mul(causticScale1).add(time.mul(0.8)))
         .mul(sin(posZ.mul(causticScale1.mul(0.85)).add(time.mul(0.6))));
       const caustic2 = sin(posX.mul(causticScale2).sub(time.mul(0.5)))
         .mul(sin(posZ.mul(causticScale2.mul(0.9)).add(time.mul(0.7))));
-      const caustics = max(caustic1.mul(caustic2), float(0.0)).mul(0.08);
+      const caustics = max(caustic1.mul(caustic2), float(0.0)).mul(0.12);
       waterColor = waterColor.add(caustics.mul(vec3(0.5, 0.7, 0.9)));
 
       // Sky reflection (moderate for RTS)
@@ -261,11 +263,11 @@ export class WaterMesh {
       waterColor = mix(waterColor, skyColor, fresnel.mul(this.uReflectivity));
 
       // Wave crest foam (very subtle at RTS scale)
-      const crestFoam = smoothstep(float(0.015), float(0.04), totalDispY);
-      const foamNoise = sin(posX.mul(18.0).add(time.mul(1.5)))
-        .mul(sin(posZ.mul(15.0).add(time.mul(1.2))))
+      const crestFoam = smoothstep(float(0.02), float(0.06), totalDispY);
+      const foamNoise = sin(posX.mul(1.7).add(time.mul(1.5)))
+        .mul(sin(posZ.mul(2.3).add(time.mul(1.2))))
         .mul(0.3).add(0.7);
-      const foam = crestFoam.mul(foamNoise).mul(0.3);
+      const foam = crestFoam.mul(foamNoise).mul(0.35);
       waterColor = mix(waterColor, vec3(this.uFoamColor), foam);
 
       // Specular highlights (softer for RTS)

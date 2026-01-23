@@ -42,15 +42,15 @@ import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { MapData } from '@/data/maps';
 import { BiomeConfig } from '../Biomes';
 
-// RTS wave configuration - subtle, not distracting
-// Steepness: 0.006-0.04, Wavelength: 0.7-12 units
+// RTS wave configuration - larger wavelengths with irrational ratios to prevent tiling
+// Using prime-based wavelengths and varied directions
 const RTS_WAVES = {
-  wave0: new THREE.Vector4(1.0, 0.0, 0.035, 10.0),    // Primary swell
-  wave1: new THREE.Vector4(0.0, 1.0, 0.028, 6.0),     // Secondary perpendicular
-  wave2: new THREE.Vector4(0.7, 0.7, 0.020, 3.5),     // Detail diagonal
-  wave3: new THREE.Vector4(-0.7, 0.7, 0.015, 2.0),    // Cross detail
-  wave4: new THREE.Vector4(0.5, -0.8, 0.010, 1.2),    // Fine shimmer
-  wave5: new THREE.Vector4(-0.3, -0.9, 0.006, 0.7),   // Micro ripples
+  wave0: new THREE.Vector4(1.0, 0.15, 0.04, 47.0),    // Primary long swell
+  wave1: new THREE.Vector4(0.2, 1.0, 0.032, 31.0),    // Secondary perpendicular
+  wave2: new THREE.Vector4(0.7, 0.7, 0.025, 19.0),    // Detail diagonal
+  wave3: new THREE.Vector4(-0.6, 0.8, 0.018, 13.0),   // Cross detail
+  wave4: new THREE.Vector4(0.5, -0.85, 0.012, 7.0),   // Medium detail
+  wave5: new THREE.Vector4(-0.4, -0.9, 0.008, 4.3),   // Fine shimmer
 };
 
 export class OceanWater {
@@ -66,7 +66,7 @@ export class OceanWater {
   private uFoamColor = uniform(new THREE.Color(0xe8f0f4));
 
   // RTS-appropriate wave parameters
-  private uWaveHeight = uniform(0.08);  // Much lower than ocean (was 1.0)
+  private uWaveHeight = uniform(0.12);  // Slightly increased for visibility
   private uWaveSpeed = uniform(0.6);    // Slower, calmer
 
   // Physical parameters tuned for RTS
@@ -224,8 +224,9 @@ export class OceanWater {
       ));
 
       // Scrolling normal map simulation for detail
-      const normalScale1 = float(8.0);
-      const normalScale2 = float(12.0);
+      // Using low frequencies with irrational ratios to prevent visible tiling
+      const normalScale1 = float(0.7);   // Large wavelength pattern
+      const normalScale2 = float(1.13);  // Irrational ratio to scale1
       const normalSpeed1 = float(0.03);
       const normalSpeed2 = float(0.025);
 
@@ -248,10 +249,10 @@ export class OceanWater {
 
       // Foam at wave crests (very subtle for RTS)
       const crestFoam = smoothstep(this.uFoamThreshold, this.uFoamThreshold.mul(2.5), totalDispY);
-      const foamNoise = sin(posX.mul(18.0).add(time.mul(1.5)))
-        .mul(sin(posY.mul(15.0).add(time.mul(1.2))))
+      const foamNoise = sin(posX.mul(1.7).add(time.mul(1.5)))
+        .mul(sin(posY.mul(2.3).add(time.mul(1.2))))
         .mul(0.3).add(0.7);
-      const foam = crestFoam.mul(foamNoise).mul(0.3);
+      const foam = crestFoam.mul(foamNoise).mul(0.35);
 
       // Flow animation
       const flowDir = this.uFlowDirection.normalize();
@@ -289,11 +290,12 @@ export class OceanWater {
       waterColor = waterColor.add(sssContrib);
 
       // Caustics (subtle for RTS)
-      const caustic1 = sin(posX.mul(6.0).add(time.mul(0.8)))
-        .mul(sin(posY.mul(5.0).add(time.mul(0.6))));
-      const caustic2 = sin(posX.mul(9.0).sub(time.mul(0.5)))
-        .mul(sin(posY.mul(8.0).add(time.mul(0.7))));
-      const caustics = max(caustic1.mul(caustic2), float(0.0)).mul(0.08);
+      // Low frequencies with irrational ratios prevent visible tiling
+      const caustic1 = sin(posX.mul(0.47).add(time.mul(0.8)))
+        .mul(sin(posY.mul(0.39).add(time.mul(0.6))));
+      const caustic2 = sin(posX.mul(0.73).sub(time.mul(0.5)))
+        .mul(sin(posY.mul(0.61).add(time.mul(0.7))));
+      const caustics = max(caustic1.mul(caustic2), float(0.0)).mul(0.12);
       waterColor = waterColor.add(caustics.mul(vec3(0.5, 0.7, 0.9)));
 
       // Sky reflection (moderate for RTS)
