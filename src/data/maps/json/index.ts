@@ -46,15 +46,13 @@ for (const key of mapContext.keys()) {
   }
 }
 
-// Log any load errors in development
-if (loadErrors.length > 0 && process.env.NODE_ENV === 'development') {
-  debugTerrain.warn('Map loading errors:', loadErrors);
+// Log any load errors (always log in production too to diagnose issues)
+if (loadErrors.length > 0) {
+  console.warn('[Maps] Load errors:', loadErrors);
 }
 
-// Log loaded maps in development
-if (process.env.NODE_ENV === 'development') {
-  debugTerrain.log(`Loaded ${loadedMaps.length} maps:`, loadedMaps.map(m => m.id));
-}
+// Log loaded maps (always log to diagnose production issues)
+console.log(`[Maps] Loaded ${loadedMaps.length} maps:`, loadedMaps.map(m => m.id).join(', '));
 
 // All maps registry (by ID) - includes special mode maps
 export const ALL_MAPS: Record<string, MapData> = {};
