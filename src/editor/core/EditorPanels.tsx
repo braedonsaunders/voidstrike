@@ -16,6 +16,16 @@ import type {
   ToolConfig,
 } from '../config/EditorConfig';
 import type { DetailedValidationResult } from './EditorCore';
+import type { MapData } from '@/data/maps/MapTypes';
+import { AIGeneratePanel } from '../panels/AIGeneratePanel';
+import {
+  generateBorderDecorations,
+  clearBorderDecorations,
+  countBorderDecorations,
+  type BorderDecorationStyle,
+  type BorderDecorationSettings,
+  DEFAULT_BORDER_SETTINGS,
+} from '../utils/borderDecorations';
 
 export interface EditorPanelsProps {
   config: EditorConfig;
@@ -44,6 +54,8 @@ export interface EditorPanelsProps {
   onToggleCategory: (category: string) => void;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
+  onAIMapGenerated?: (mapData: MapData) => void;
+  onUpdateObjects?: (objects: EditorObject[]) => void;
 }
 
 // Tool categories for paint panel
@@ -56,6 +68,7 @@ const TOOL_CATEGORIES = {
 
 // Panel icons
 const PANEL_ICONS: Record<string, string> = {
+  ai: '🪄',
   paint: '🎨',
   bases: '🏰',
   objects: '📦',
@@ -791,6 +804,7 @@ function SettingsPanel({
   onToggleLabels,
   onToggleGrid,
   onToggleCategory,
+  onUpdateObjects,
 }: {
   config: EditorConfig;
   state: EditorState;
@@ -800,11 +814,40 @@ function SettingsPanel({
   onToggleLabels: () => void;
   onToggleGrid: () => void;
   onToggleCategory: (category: string) => void;
+  onUpdateObjects?: (objects: EditorObject[]) => void;
 }) {
   const theme = config.theme;
+
+  // Border decoration state
+  const [borderStyle, setBorderStyle] = useState<BorderDecorationStyle>('rocks');
+  const [borderDensity, setBorderDensity] = useState(0.7);
+  const [isGenerating, setIsGenerating] = useState(false);
+
   if (!state.mapData) return null;
 
   const categories = Array.from(new Set(config.objectTypes.map((t) => t.category)));
+  const borderDecorationCount = countBorderDecorations(state.mapData.objects);
+
+  const handleGenerateBorderDecorations = () => {
+    if (!state.mapData || !onUpdateObjects) return;
+    setIsGenerating(true);
+
+    const settings: BorderDecorationSettings = {
+      ...DEFAULT_BORDER_SETTINGS,
+      style: borderStyle,
+      density: borderDensity,
+    };
+
+    const newObjects = generateBorderDecorations(state.mapData, settings);
+    onUpdateObjects(newObjects);
+    setIsGenerating(false);
+  };
+
+  const handleClearBorderDecorations = () => {
+    if (!state.mapData || !onUpdateObjects) return;
+    const newObjects = clearBorderDecorations(state.mapData.objects);
+    onUpdateObjects(newObjects);
+  };
 
   return (
     <div className="space-y-3">
@@ -920,6 +963,90 @@ function SettingsPanel({
           ))}
         </div>
       </Section>
+
+      {/* Border Decorations */}
+      {onUpdateObjects && (
+        <Section title="Border Decorations" icon="🪨" theme={theme}>
+          <div className="space-y-3">
+            <div>
+              <label className="text-[10px] uppercase tracking-wider block mb-1.5" style={{ color: theme.text.muted }}>
+                Style
+              </label>
+              <div className="grid grid-cols-3 gap-1">
+                {(['rocks', 'crystals', 'trees', 'mixed', 'alien', 'dead_trees'] as BorderDecorationStyle[]).map((style) => (
+                  <button
+                    key={style}
+                    onClick={() => setBorderStyle(style)}
+                    className={`
+                      px-2 py-1.5 rounded text-[11px] transition-all capitalize
+                      ${borderStyle === style ? 'ring-1' : 'hover:bg-white/5'}
+                    `}
+                    style={{
+                      backgroundColor: borderStyle === style ? `${theme.primary}20` : theme.surface,
+                      color: borderStyle === style ? theme.text.primary : theme.text.muted,
+                      '--tw-ring-color': theme.primary,
+                    } as React.CSSProperties}
+                  >
+                    {style.replace('_', ' ')}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-[10px] uppercase tracking-wider" style={{ color: theme.text.muted }}>
+                  Density
+                </label>
+                <span className="text-[10px] font-mono" style={{ color: theme.text.secondary }}>
+                  {Math.round(borderDensity * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.1"
+                value={borderDensity}
+                onChange={(e) => setBorderDensity(parseFloat(e.target.value))}
+                className="w-full"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleGenerateBorderDecorations}
+                disabled={isGenerating}
+                className="flex-1 py-2 rounded-lg text-xs font-medium transition-all hover:scale-[1.02] active:scale-[0.98]"
+                style={{
+                  backgroundColor: theme.primary,
+                  color: '#fff',
+                  opacity: isGenerating ? 0.7 : 1,
+                }}
+              >
+                {isGenerating ? 'Generating...' : 'Generate'}
+              </button>
+              {borderDecorationCount > 0 && (
+                <button
+                  onClick={handleClearBorderDecorations}
+                  className="px-3 py-2 rounded-lg text-xs transition-colors hover:bg-white/10"
+                  style={{
+                    backgroundColor: theme.surface,
+                    color: theme.error,
+                    border: `1px solid ${theme.error}40`,
+                  }}
+                >
+                  Clear ({borderDecorationCount})
+                </button>
+              )}
+            </div>
+
+            <div className="text-[10px]" style={{ color: theme.text.muted }}>
+              Places decorative {borderStyle} around the map edges to create an imposing boundary wall.
+            </div>
+          </div>
+        </Section>
+      )}
     </div>
   );
 }
@@ -1402,6 +1529,8 @@ export function EditorPanels({
   onToggleCategory,
   onMouseEnter,
   onMouseLeave,
+  onAIMapGenerated,
+  onUpdateObjects,
 }: EditorPanelsProps) {
   const theme = config.theme;
 
@@ -1433,6 +1562,14 @@ export function EditorPanels({
 
       {/* Panel content with animated transitions */}
       <div className="flex-1 overflow-y-auto p-3 relative">
+        <AnimatedPanelContent isActive={state.activePanel === 'ai'}>
+          {onAIMapGenerated && (
+            <AIGeneratePanel
+              config={config}
+              onMapGenerated={onAIMapGenerated}
+            />
+          )}
+        </AnimatedPanelContent>
         <AnimatedPanelContent isActive={state.activePanel === 'paint'}>
           <PaintPanel
             config={config}
@@ -1481,6 +1618,7 @@ export function EditorPanels({
             onToggleLabels={onToggleLabels}
             onToggleGrid={onToggleGrid}
             onToggleCategory={onToggleCategory}
+            onUpdateObjects={onUpdateObjects}
           />
         </AnimatedPanelContent>
         <AnimatedPanelContent isActive={state.activePanel === 'validate'}>

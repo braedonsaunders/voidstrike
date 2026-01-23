@@ -636,6 +636,7 @@ export const VOIDSTRIKE_THEME: UIThemeConfig = {
 // ============================================
 
 export const VOIDSTRIKE_PANELS: PanelConfig[] = [
+  { id: 'ai', name: 'AI', icon: '🪄', type: 'ai' },
   { id: 'paint', name: 'Paint', icon: '🖌', type: 'paint' },
   { id: 'bases', name: 'Bases', icon: '🏠', type: 'objects' },
   { id: 'objects', name: 'Objects', icon: '🪨', type: 'objects' },
