@@ -1,40 +1,53 @@
 /**
- * JSON Map Auto-Discovery
+ * JSON Map Registry
+ *
+ * Maps are explicitly imported to ensure reliable bundling across all bundlers
+ * (webpack, Turbopack, etc.). require.context is webpack-specific and may not
+ * work consistently with Next.js 16+ Turbopack.
  *
  * To add a new map:
- * Simply drop your .json map file into this folder (src/data/maps/json/)
- * It will be automatically discovered and loaded at build time.
- *
- * Requirements for map JSON:
- * - Must have a valid "id" field (string)
- * - Must have "playerCount" field (2, 4, 6, or 8)
- * - Must follow the MapJson schema (see schema/MapJsonSchema.ts)
+ * 1. Add your .json map file to this folder (src/data/maps/json/)
+ * 2. Add an import statement below
+ * 3. Add it to the MAP_JSON_FILES array
  */
 
 import type { MapData } from '../MapTypes';
 import type { MapJson } from '../schema/MapJsonSchema';
 import { jsonToMapData } from '../serialization/deserialize';
-import { debugTerrain } from '@/utils/debugLogger';
 
-// Webpack require.context to auto-discover all JSON files in this folder
-// This runs at build time and bundles all matching files
-const mapContext = require.context('./', false, /^\.\/(?!registry).*\.json$/);
+// Explicit imports for reliable bundling
+import battleArenaJson from './battle_arena.json';
+import contestedFrontierJson from './contested_frontier.json';
+import crystalCavernsJson from './crystal_caverns.json';
+import scorchedBasinJson from './scorched_basin.json';
+import test6pFlatJson from './test_6p_flat.json';
+import titansColosseumJson from './titans_colosseum.json';
+import voidAssaultJson from './void_assault.json';
 
-// Load all discovered maps
+// All map JSON files - add new maps here
+const MAP_JSON_FILES: MapJson[] = [
+  battleArenaJson as MapJson,
+  contestedFrontierJson as MapJson,
+  crystalCavernsJson as MapJson,
+  scorchedBasinJson as MapJson,
+  test6pFlatJson as MapJson,
+  titansColosseumJson as MapJson,
+  voidAssaultJson as MapJson,
+];
+
+// Load all maps
 const loadedMaps: MapData[] = [];
 const loadErrors: string[] = [];
 
-for (const key of mapContext.keys()) {
+for (const json of MAP_JSON_FILES) {
   try {
-    const json = mapContext(key) as MapJson;
-
     // Validate required fields exist
     if (!json.id || typeof json.id !== 'string') {
-      loadErrors.push(`${key}: Missing or invalid 'id' field`);
+      loadErrors.push(`Map missing or invalid 'id' field`);
       continue;
     }
     if (!json.playerCount || ![2, 4, 6, 8].includes(json.playerCount)) {
-      loadErrors.push(`${key}: Missing or invalid 'playerCount' (must be 2, 4, 6, or 8)`);
+      loadErrors.push(`${json.id}: Missing or invalid 'playerCount' (must be 2, 4, 6, or 8)`);
       continue;
     }
 
@@ -42,19 +55,18 @@ for (const key of mapContext.keys()) {
     loadedMaps.push(mapData);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    loadErrors.push(`${key}: ${message}`);
+    const mapId = json?.id || 'unknown';
+    loadErrors.push(`${mapId}: ${message}`);
   }
 }
 
-// Log any load errors in development
-if (loadErrors.length > 0 && process.env.NODE_ENV === 'development') {
-  debugTerrain.warn('Map loading errors:', loadErrors);
+// Log any load errors
+if (loadErrors.length > 0) {
+  console.warn('[Maps] Load errors:', loadErrors);
 }
 
-// Log loaded maps in development
-if (process.env.NODE_ENV === 'development') {
-  debugTerrain.log(`Loaded ${loadedMaps.length} maps:`, loadedMaps.map(m => m.id));
-}
+// Log loaded maps
+console.log(`[Maps] Loaded ${loadedMaps.length} maps:`, loadedMaps.map(m => m.id).join(', '));
 
 // All maps registry (by ID) - includes special mode maps
 export const ALL_MAPS: Record<string, MapData> = {};

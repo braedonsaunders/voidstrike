@@ -35,7 +35,7 @@ import { LoadingScreen } from './LoadingScreen';
 import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
 import { DebugMenuPanel } from './DebugMenuPanel';
 import { spawnInitialEntities } from '@/utils/gameSetup';
-import { DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
+import { ALL_MAPS, DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { OverlayScene } from '@/phaser/scenes/OverlayScene';
 import { debugInitialization, debugNetworking } from '@/utils/debugLogger';
 import AssetManager from '@/assets/AssetManager';
@@ -179,11 +179,12 @@ export function WebGPUGameCanvas() {
           const requestedMap = getMapById(selectedMapId);
           if (requestedMap) {
             CURRENT_MAP = requestedMap;
-            debugInitialization.log(`[WebGPUGameCanvas] Loading map: ${CURRENT_MAP.name}`);
+            console.log(`[WebGPUGameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.width}x${CURRENT_MAP.height})`);
           } else {
-            console.warn(`[WebGPUGameCanvas] Map '${selectedMapId}' not found, falling back to default`);
+            console.warn(`[WebGPUGameCanvas] Map '${selectedMapId}' not found in registry, falling back to default`);
+            console.log(`[WebGPUGameCanvas] Available maps:`, Object.keys(ALL_MAPS).join(', '));
             CURRENT_MAP = DEFAULT_MAP;
-            debugInitialization.log(`[WebGPUGameCanvas] Fallback to map: ${CURRENT_MAP.name}`);
+            console.log(`[WebGPUGameCanvas] Fallback to map: ${CURRENT_MAP.name} (${CURRENT_MAP.width}x${CURRENT_MAP.height})`);
           }
         }
 
