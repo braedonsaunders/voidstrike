@@ -25,74 +25,79 @@ const WATER_SURFACE_OFFSET = 0.15;
 
 // Cached water normals texture (shared across all instances)
 let waterNormalsTexture: THREE.Texture | null = null;
-let textureLoadPromise: Promise<THREE.Texture> | null = null;
 
 /**
- * Load the water normals texture
+ * Generate a high-quality water normals texture procedurally
+ * This creates wave-like patterns similar to Three.js waternormals.jpg
  */
-async function loadWaterNormals(): Promise<THREE.Texture> {
-  if (waterNormalsTexture) {
-    return waterNormalsTexture;
-  }
-
-  if (textureLoadPromise) {
-    return textureLoadPromise;
-  }
-
-  textureLoadPromise = new Promise((resolve) => {
-    const loader = new THREE.TextureLoader();
-    loader.load(
-      '/textures/waternormals.jpg',
-      (texture) => {
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        waterNormalsTexture = texture;
-        resolve(texture);
-      },
-      undefined,
-      () => {
-        // Fallback to flat normal map
-        const fallback = createFallbackNormalMap();
-        waterNormalsTexture = fallback;
-        resolve(fallback);
-      }
-    );
-  });
-
-  return textureLoadPromise;
-}
-
-/**
- * Get cached texture synchronously
- */
-function getWaterNormalsSync(): THREE.Texture {
-  if (waterNormalsTexture) {
-    return waterNormalsTexture;
-  }
-  loadWaterNormals();
-  return createFallbackNormalMap();
-}
-
-/**
- * Create fallback normal map
- */
-function createFallbackNormalMap(): THREE.DataTexture {
-  const size = 64;
+function generateWaterNormals(): THREE.DataTexture {
+  const size = 512;
   const data = new Uint8Array(size * size * 4);
 
-  for (let i = 0; i < size * size; i++) {
-    const idx = i * 4;
-    data[idx] = 128;
-    data[idx + 1] = 128;
-    data[idx + 2] = 255;
-    data[idx + 3] = 255;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = (y * size + x) * 4;
+
+      // Normalized coordinates (0-1)
+      const u = x / size;
+      const v = y / size;
+
+      // Multiple octaves of Perlin-like noise for realistic waves
+      // Using sine waves at different frequencies and phases
+      let nx = 0;
+      let ny = 0;
+
+      // Large slow waves
+      nx += Math.sin(u * 4 * Math.PI + v * 2 * Math.PI) * 0.4;
+      ny += Math.cos(u * 3 * Math.PI + v * 4 * Math.PI) * 0.4;
+
+      // Medium waves
+      nx += Math.sin(u * 8 * Math.PI - v * 6 * Math.PI + 1.3) * 0.25;
+      ny += Math.cos(u * 7 * Math.PI + v * 9 * Math.PI + 0.7) * 0.25;
+
+      // Small ripples
+      nx += Math.sin(u * 17 * Math.PI + v * 13 * Math.PI + 2.1) * 0.15;
+      ny += Math.cos(u * 19 * Math.PI - v * 15 * Math.PI + 1.1) * 0.15;
+
+      // Fine detail
+      nx += Math.sin(u * 31 * Math.PI + v * 29 * Math.PI + 0.5) * 0.1;
+      ny += Math.cos(u * 37 * Math.PI + v * 33 * Math.PI + 1.9) * 0.1;
+
+      // Very fine shimmer
+      nx += Math.sin(u * 53 * Math.PI - v * 47 * Math.PI + 3.2) * 0.05;
+      ny += Math.cos(u * 59 * Math.PI + v * 51 * Math.PI + 2.4) * 0.05;
+
+      // Normalize the normal vector
+      const nz = 1.0; // Keep Z pointing up
+      const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+
+      // Encode as RGB (0-255 range, where 128 = 0)
+      data[idx] = Math.floor(((nx / len) * 0.5 + 0.5) * 255);     // R = X
+      data[idx + 1] = Math.floor(((ny / len) * 0.5 + 0.5) * 255); // G = Y
+      data[idx + 2] = Math.floor(((nz / len) * 0.5 + 0.5) * 255); // B = Z
+      data[idx + 3] = 255;
+    }
   }
 
   const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
   texture.needsUpdate = true;
+
   return texture;
+}
+
+/**
+ * Get the water normals texture (generates once, caches for reuse)
+ */
+function getWaterNormals(): THREE.Texture {
+  if (!waterNormalsTexture) {
+    waterNormalsTexture = generateWaterNormals();
+  }
+  return waterNormalsTexture;
 }
 
 export interface WaterRegion {
@@ -121,7 +126,7 @@ export class WaterMesh {
   public buildFullMapWater(mapData: MapData, biome: BiomeConfig): void {
     if (!biome.hasWater) return;
 
-    const waterNormals = getWaterNormalsSync();
+    const waterNormals = getWaterNormals();
 
     // Create full-map water plane
     const geometry = new THREE.PlaneGeometry(mapData.width, mapData.height);
@@ -333,7 +338,7 @@ export class WaterMesh {
   private createRegionMesh(region: WaterRegion): void {
     if (region.cells.length === 0) return;
 
-    const waterNormals = getWaterNormalsSync();
+    const waterNormals = getWaterNormals();
 
     // Calculate region dimensions
     const regionWidth = region.maxX - region.minX + 1;
@@ -405,11 +410,4 @@ export class WaterMesh {
   public dispose(): void {
     this.clear();
   }
-}
-
-/**
- * Preload water normals texture
- */
-export async function preloadWaterNormals(): Promise<void> {
-  await loadWaterNormals();
 }
