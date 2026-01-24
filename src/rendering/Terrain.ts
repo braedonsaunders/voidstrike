@@ -13,6 +13,7 @@ import {
   CLIFF_WALL_THRESHOLD_ELEVATION,
   RAMP_BOUNDARY_ELEVATION_THRESHOLD,
   WALKABLE_CLIMB_ELEVATION,
+  WALKABLE_CLIMB,
 } from '@/data/pathfinding.config';
 
 // Import from central rendering config
@@ -1503,20 +1504,26 @@ export class Terrain {
     }
 
     // =================================================================
-    // CRITICAL FIX: Enforce maximum slope constraint at ramp boundaries
+    // CRITICAL FIX: Enforce walkableClimb constraint at ramp boundaries
     //
-    // Problem: Even with smooth heightMap values, adjacent vertices near ramp
-    // boundaries can have height differences that create slopes > 50 degrees.
-    // Recast rejects these triangles, leaving gaps in the navmesh.
+    // Problem: Adjacent vertices near ramp boundaries can have height differences
+    // that exceed Recast's walkableClimb (0.8), causing navmesh polygons to be
+    // treated as DISCONNECTED even when they share edges.
     //
     // Solution: Multi-pass smoothing that propagates heights from ramp cells
-    // outward, capping the height change per cell to stay under walkableSlopeAngle.
+    // outward, capping the height change per cell to stay UNDER walkableClimb.
     //
-    // Max height change per cell = tan(50°) * cellSize ≈ 1.19 * 1 = 1.19
-    // We use a slightly smaller value (1.0) for safety margin.
+    // IMPORTANT: The constraint is walkableClimb (0.8), NOT walkableSlopeAngle.
+    // walkableSlopeAngle (50°, tan≈1.19) rejects steep surfaces during voxelization.
+    // walkableClimb (0.8) determines polygon CONNECTIVITY during navmesh building.
+    // Both must be satisfied, but walkableClimb is the stricter constraint for
+    // adjacent floor vertices (1-cell apart).
+    //
+    // For diagonals (√2 distance apart), max height change = walkableClimb * √2 ≈ 1.13
     // =================================================================
-    const MAX_HEIGHT_CHANGE_PER_CELL = 1.0; // tan(45°) = 1.0, giving 45° max slope
-    const SMOOTHING_PASSES = 15; // Number of passes to propagate heights outward
+    const MAX_HEIGHT_CHANGE_CARDINAL = WALKABLE_CLIMB; // 0.8 for 4-connected neighbors
+    const MAX_HEIGHT_CHANGE_DIAGONAL = WALKABLE_CLIMB * Math.SQRT2; // ~1.13 for 8-connected
+    const SMOOTHING_PASSES = 25; // Increased passes to propagate constraint further
 
     // Find all vertices that are definitely on ramps (not just near ramps)
     // These are our "anchor" heights that we propagate from
@@ -1546,7 +1553,7 @@ export class Terrain {
 
     // Multi-pass smoothing: propagate from ramp vertices outward
     // Each pass, for vertices adjacent to already-processed vertices,
-    // cap the height difference to MAX_HEIGHT_CHANGE_PER_CELL
+    // cap the height difference to stay within walkableClimb
     let smoothedCount = 0;
     for (let pass = 0; pass < SMOOTHING_PASSES; pass++) {
       let changesThisPass = 0;
@@ -1577,11 +1584,27 @@ export class Terrain {
           }
           if (!nearRamp) continue;
 
-          // Check 4-connected neighbors and enforce slope constraint
+          // Check 8-connected neighbors and enforce walkableClimb constraint
+          // Cardinal neighbors (4-connected) use MAX_HEIGHT_CHANGE_CARDINAL
+          // Diagonal neighbors use MAX_HEIGHT_CHANGE_DIAGONAL (scaled by √2 distance)
           const currentHeight = vertexHeights[idx];
           let targetHeight = currentHeight;
 
-          for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
+          // 8-connected neighbor offsets with their max height change values
+          const neighbors: Array<[number, number, number]> = [
+            // Cardinal (distance 1): max change = WALKABLE_CLIMB
+            [0, -1, MAX_HEIGHT_CHANGE_CARDINAL],
+            [0, 1, MAX_HEIGHT_CHANGE_CARDINAL],
+            [-1, 0, MAX_HEIGHT_CHANGE_CARDINAL],
+            [1, 0, MAX_HEIGHT_CHANGE_CARDINAL],
+            // Diagonal (distance √2): max change = WALKABLE_CLIMB * √2
+            [-1, -1, MAX_HEIGHT_CHANGE_DIAGONAL],
+            [1, -1, MAX_HEIGHT_CHANGE_DIAGONAL],
+            [-1, 1, MAX_HEIGHT_CHANGE_DIAGONAL],
+            [1, 1, MAX_HEIGHT_CHANGE_DIAGONAL],
+          ];
+
+          for (const [dx, dy, maxChange] of neighbors) {
             const nx = vx + dx;
             const ny = vy + dy;
             if (nx >= 0 && nx <= width && ny >= 0 && ny <= height) {
@@ -1590,17 +1613,17 @@ export class Terrain {
               const heightDiff = currentHeight - neighborHeight;
 
               // If this vertex is higher than neighbor by more than allowed
-              if (heightDiff > MAX_HEIGHT_CHANGE_PER_CELL) {
+              if (heightDiff > maxChange) {
                 // Pull this vertex down toward the neighbor
-                const newHeight = neighborHeight + MAX_HEIGHT_CHANGE_PER_CELL;
+                const newHeight = neighborHeight + maxChange;
                 if (newHeight < targetHeight) {
                   targetHeight = newHeight;
                 }
               }
               // If this vertex is lower than neighbor by more than allowed
-              else if (heightDiff < -MAX_HEIGHT_CHANGE_PER_CELL) {
+              else if (heightDiff < -maxChange) {
                 // Push this vertex up toward the neighbor
-                const newHeight = neighborHeight - MAX_HEIGHT_CHANGE_PER_CELL;
+                const newHeight = neighborHeight - maxChange;
                 if (newHeight > targetHeight) {
                   targetHeight = newHeight;
                 }
