@@ -1,27 +1,31 @@
 /**
- * OceanWater - RTS-optimized animated ocean shader using TSL
+ * OceanWater - Reflection-based water with RTS optimizations
  *
- * Designed for RTS camera angles and gameplay clarity. Uses subtle wave
- * animation that doesn't distract from units or obscure gameplay.
+ * Combines Three.js WaterMesh's reflection technique with RTS-appropriate
+ * wave displacement for stable, visually appealing water that doesn't
+ * distract from gameplay.
  *
- * Features:
- * - RTS-scale Gerstner waves (subtle, readable)
- * - Normal map simulation for surface detail without geometry cost
- * - Depth-based color variation
- * - Fresnel reflections tuned for top-down viewing
- * - Subtle caustic patterns
- * - Performance-optimized for large maps with many units
+ * Key features:
+ * - Texture-based normal maps (eliminates gradient issues)
+ * - Fixed depth coloring (no wave-height-based color mixing)
+ * - Clean fresnel implementation
+ * - Subtle Gerstner wave displacement
  *
- * Based on Age of Empires 4, Supreme Commander, and Total War water techniques.
+ * Based on:
+ * - Three.js WaterMesh (r182) reflection technique
+ * - webgpu_ocean.html example
+ * - RTS water references (Age of Empires 4, Supreme Commander)
  */
 
 import * as THREE from 'three';
 import {
   Fn,
+  vec2,
   vec3,
   vec4,
   float,
   uniform,
+  texture,
   uv,
   sin,
   cos,
@@ -35,64 +39,120 @@ import {
   pow,
   max,
   smoothstep,
-  exp,
   sqrt,
+  reflect,
+  abs,
+  length,
 } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import { MapData } from '@/data/maps';
 import { BiomeConfig } from '../Biomes';
 
-// RTS wave configuration - larger wavelengths with irrational ratios to prevent tiling
-// Using prime-based wavelengths and varied directions
+// Water normal map generator - creates tileable wave normal texture
+function generateWaterNormalMap(size: number = 512): THREE.DataTexture {
+  const data = new Uint8Array(size * size * 4);
+
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const idx = (y * size + x) * 4;
+
+      // Multiple overlapping sine waves for natural look
+      const u = x / size;
+      const v = y / size;
+
+      // Wave frequencies with irrational ratios to prevent tiling
+      const wave1 = Math.sin(u * 12.7 + v * 8.3) * 0.3;
+      const wave2 = Math.sin(u * 23.1 - v * 17.9) * 0.2;
+      const wave3 = Math.sin(u * 41.3 + v * 31.7) * 0.1;
+      const wave4 = Math.cos(u * 19.7 + v * 29.3) * 0.15;
+      const wave5 = Math.cos(u * 7.1 - v * 11.3) * 0.25;
+
+      // Combine waves for normal perturbation
+      const nx = wave1 + wave2 * 0.7 + wave3 * 0.5 + wave4 * 0.3;
+      const nz = wave4 + wave5 * 0.7 + wave1 * 0.3 + wave3 * 0.5;
+
+      // Encode normal (range -1 to 1 -> 0 to 255)
+      // Y is always pointing up (1.0) for stability
+      const normalLen = Math.sqrt(nx * nx + 1.0 + nz * nz);
+      data[idx] = Math.floor(((nx / normalLen) * 0.5 + 0.5) * 255);     // R = X
+      data[idx + 1] = Math.floor(((1.0 / normalLen) * 0.5 + 0.5) * 255); // G = Y (up)
+      data[idx + 2] = Math.floor(((nz / normalLen) * 0.5 + 0.5) * 255); // B = Z
+      data[idx + 3] = 255; // A
+    }
+  }
+
+  const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.magFilter = THREE.LinearFilter;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.generateMipmaps = true;
+  tex.needsUpdate = true;
+
+  return tex;
+}
+
+// RTS wave configuration - subtle, non-distracting
 const RTS_WAVES = {
-  wave0: new THREE.Vector4(1.0, 0.15, 0.04, 47.0),    // Primary long swell
-  wave1: new THREE.Vector4(0.2, 1.0, 0.032, 31.0),    // Secondary perpendicular
-  wave2: new THREE.Vector4(0.7, 0.7, 0.025, 19.0),    // Detail diagonal
-  wave3: new THREE.Vector4(-0.6, 0.8, 0.018, 13.0),   // Cross detail
-  wave4: new THREE.Vector4(0.5, -0.85, 0.012, 7.0),   // Medium detail
-  wave5: new THREE.Vector4(-0.4, -0.9, 0.008, 4.3),   // Fine shimmer
+  wave0: new THREE.Vector4(1.0, 0.15, 0.035, 47.0),   // Primary long swell
+  wave1: new THREE.Vector4(0.2, 1.0, 0.028, 31.0),    // Secondary perpendicular
+  wave2: new THREE.Vector4(0.7, 0.7, 0.020, 19.0),    // Detail diagonal
 };
+
+export interface OceanWaterConfig {
+  /** Water color for shallow areas */
+  shallowColor?: THREE.Color;
+  /** Water color for deep areas */
+  deepColor?: THREE.Color;
+  /** Sky/reflection color */
+  skyColor?: THREE.Color;
+  /** Wave height multiplier (0-1, default 0.08) */
+  waveHeight?: number;
+  /** Wave animation speed (default 0.5) */
+  waveSpeed?: number;
+  /** Reflectivity (0-1, default 0.25) */
+  reflectivity?: number;
+  /** Normal map distortion scale (default 3.0) */
+  distortionScale?: number;
+  /** Enable lava mode */
+  isLava?: boolean;
+}
 
 export class OceanWater {
   public mesh: THREE.Mesh;
   private material: MeshStandardNodeMaterial;
   private geometry: THREE.PlaneGeometry;
+  private normalMap: THREE.DataTexture;
 
   // Core uniforms
   private uTime = uniform(0);
-  private uWaterColor = uniform(new THREE.Color(0x3399cc));
-  private uDeepWaterColor = uniform(new THREE.Color(0x1a5577));
-  private uScatterColor = uniform(new THREE.Color(0x66ddbb));
-  private uFoamColor = uniform(new THREE.Color(0xe8f0f4));
+  private uWaterColor = uniform(new THREE.Color(0x006994));
+  private uDeepWaterColor = uniform(new THREE.Color(0x003355));
+  private uSkyColor = uniform(new THREE.Color(0x87ceeb));
 
-  // RTS-appropriate wave parameters
-  private uWaveHeight = uniform(0.12);  // Slightly increased for visibility
-  private uWaveSpeed = uniform(0.6);    // Slower, calmer
-
-  // Physical parameters tuned for RTS
-  private uFresnelPower = uniform(3.5);        // Less dramatic (was 5.0)
-  private uSubsurfaceStrength = uniform(0.25); // Subtle (was 0.5)
-  private uFoamThreshold = uniform(0.02);      // Lower for RTS scale
-  private uAbsorptionScale = uniform(0.5);     // Less aggressive
-
-  // Flow parameters
-  private uFlowDirection = uniform(new THREE.Vector2(1.0, 0.3));
-  private uFlowSpeed = uniform(0.03);
+  // Wave parameters (subtle for RTS)
+  private uWaveHeight = uniform(0.08);
+  private uWaveSpeed = uniform(0.5);
 
   // Material parameters
-  private uReflectivity = uniform(0.35);       // Moderate
-  private uSpecularPower = uniform(128.0);     // Softer (was 512)
+  private uReflectivity = uniform(0.25);
+  private uDistortionScale = uniform(3.0);
+  private uFresnelPower = uniform(3.0);
+  private uSpecularPower = uniform(64.0);
+  private uOpacity = uniform(0.85);
+
+  // Lava mode
   private uIsLava = uniform(0);
 
-  // RTS wave uniforms (subtle parameters)
+  // Wave uniforms
   private uWave0 = uniform(RTS_WAVES.wave0);
   private uWave1 = uniform(RTS_WAVES.wave1);
   private uWave2 = uniform(RTS_WAVES.wave2);
-  private uWave3 = uniform(RTS_WAVES.wave3);
-  private uWave4 = uniform(RTS_WAVES.wave4);
-  private uWave5 = uniform(RTS_WAVES.wave5);
 
-  constructor(mapData: MapData, biome: BiomeConfig) {
+  constructor(mapData: MapData, biome: BiomeConfig, config?: OceanWaterConfig) {
+    // Generate water normal map texture
+    this.normalMap = generateWaterNormalMap(512);
+
     if (!biome.hasWater) {
       this.geometry = new THREE.PlaneGeometry(1, 1);
       this.material = new MeshStandardNodeMaterial();
@@ -101,28 +161,41 @@ export class OceanWater {
       return;
     }
 
-    // Moderate segment count - RTS doesn't need high tessellation
+    // Moderate tessellation for wave displacement
     const maxDim = Math.max(mapData.width, mapData.height);
-    const segments = Math.min(128, Math.max(32, Math.floor(maxDim / 2)));
+    const segments = Math.min(96, Math.max(24, Math.floor(maxDim / 3)));
     this.geometry = new THREE.PlaneGeometry(mapData.width, mapData.height, segments, segments);
 
+    // Apply config
     const isLava = biome.name === 'Volcanic';
+    this.uIsLava.value = isLava ? 1.0 : 0.0;
 
     if (isLava) {
       this.uWaterColor.value.set(0xff4010);
       this.uDeepWaterColor.value.set(0x801000);
-      this.uScatterColor.value.set(0xff8800);
-      this.uFoamColor.value.set(0xffff00);
-      this.uIsLava.value = 1.0;
-      this.uWaveHeight.value = 0.04; // Even less for lava
-      this.uFoamThreshold.value = 0.015;
+      this.uSkyColor.value.set(0xff6600);
+      this.uWaveHeight.value = 0.03;
+      this.uReflectivity.value = 0.15;
+      this.uOpacity.value = 0.92;
     } else {
-      this.uWaterColor.value.copy(biome.colors.water);
-      this.uDeepWaterColor.value.copy(biome.colors.water).multiplyScalar(0.5);
-      this.uIsLava.value = 0.0;
+      // Use biome water color as base, create variations
+      const baseColor = biome.colors.water.clone();
+      this.uWaterColor.value.copy(baseColor);
+      this.uDeepWaterColor.value.copy(baseColor).multiplyScalar(0.5);
     }
 
-    this.material = this.createTSLMaterial();
+    // Override with config if provided
+    if (config) {
+      if (config.shallowColor) this.uWaterColor.value.copy(config.shallowColor);
+      if (config.deepColor) this.uDeepWaterColor.value.copy(config.deepColor);
+      if (config.skyColor) this.uSkyColor.value.copy(config.skyColor);
+      if (config.waveHeight !== undefined) this.uWaveHeight.value = config.waveHeight;
+      if (config.waveSpeed !== undefined) this.uWaveSpeed.value = config.waveSpeed;
+      if (config.reflectivity !== undefined) this.uReflectivity.value = config.reflectivity;
+      if (config.distortionScale !== undefined) this.uDistortionScale.value = config.distortionScale;
+    }
+
+    this.material = this.createMaterial();
 
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.rotation.x = -Math.PI / 2;
@@ -131,14 +204,13 @@ export class OceanWater {
   }
 
   /**
-   * Calculate single Gerstner wave Y displacement
+   * Gerstner wave height calculation
    */
   private calcWaveY(
     wave: ReturnType<typeof uniform<THREE.Vector4>>,
     posX: ReturnType<typeof float>,
     posY: ReturnType<typeof float>,
-    time: ReturnType<typeof uniform<number>>,
-    waveSpeed: ReturnType<typeof uniform<number>>
+    time: ReturnType<typeof uniform<number>>
   ) {
     const dirX = wave.x;
     const dirY = wave.y;
@@ -146,258 +218,222 @@ export class OceanWater {
     const wavelength = wave.w;
 
     const k = float(2.0 * Math.PI).div(wavelength);
-    const c = sqrt(float(9.8).div(k)).mul(waveSpeed);
+    const c = sqrt(float(9.8).div(k)).mul(this.uWaveSpeed);
     const len = sqrt(dirX.mul(dirX).add(dirY.mul(dirY)));
     const dx = dirX.div(max(len, float(0.001)));
     const dy = dirY.div(max(len, float(0.001)));
     const phase = k.mul(dx.mul(posX).add(dy.mul(posY)).sub(c.mul(time)));
     const a = steepness.div(k);
 
-    return a.mul(sin(phase));
+    return a.mul(sin(phase)).mul(this.uWaveHeight);
   }
 
-  private createTSLMaterial(): MeshStandardNodeMaterial {
+  private createMaterial(): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
     material.transparent = true;
     material.side = THREE.DoubleSide;
     material.depthWrite = false;
 
-    // Minimal vertex displacement for RTS - just enough for silhouette
+    // Store normal map texture node
+    const normalMapTex = texture(this.normalMap);
+
+    // Vertex displacement (subtle Gerstner waves)
     const positionNode = Fn(() => {
       const pos = positionLocal;
       const time = this.uTime;
       const posX = pos.x;
       const posY = pos.y;
 
-      // Only use first 3 waves for displacement (performance)
-      const dispY0 = this.calcWaveY(this.uWave0, posX, posY, time, this.uWaveSpeed);
-      const dispY1 = this.calcWaveY(this.uWave1, posX, posY, time, this.uWaveSpeed);
-      const dispY2 = this.calcWaveY(this.uWave2, posX, posY, time, this.uWaveSpeed);
+      const disp0 = this.calcWaveY(this.uWave0, posX, posY, time);
+      const disp1 = this.calcWaveY(this.uWave1, posX, posY, time);
+      const disp2 = this.calcWaveY(this.uWave2, posX, posY, time);
 
-      const totalY = dispY0.add(dispY1).add(dispY2).mul(this.uWaveHeight);
+      const totalY = disp0.add(disp1).add(disp2);
 
-      // Minimal XZ displacement for RTS
       return vec3(pos.x, pos.y, totalY);
     })();
 
     material.positionNode = positionNode;
 
-    // Color/output node
-    const outputNode = Fn(() => {
+    // Color output node
+    const colorNode = Fn(() => {
       const worldPos = positionWorld;
       const pos = positionLocal;
       const uvCoord = uv();
       const time = this.uTime;
-      const posX = pos.x;
-      const posY = pos.y;
 
-      // Calculate wave heights (all 6 for color variation)
-      const dispY0 = this.calcWaveY(this.uWave0, posX, posY, time, this.uWaveSpeed);
-      const dispY1 = this.calcWaveY(this.uWave1, posX, posY, time, this.uWaveSpeed);
-      const dispY2 = this.calcWaveY(this.uWave2, posX, posY, time, this.uWaveSpeed);
-      const dispY3 = this.calcWaveY(this.uWave3, posX, posY, time, this.uWaveSpeed);
-      const dispY4 = this.calcWaveY(this.uWave4, posX, posY, time, this.uWaveSpeed);
-      const dispY5 = this.calcWaveY(this.uWave5, posX, posY, time, this.uWaveSpeed);
+      // Animated normal map sampling (4 samples like WaterMesh)
+      // Different speeds and directions for natural look
+      const normalScale = float(0.08); // Scale UV for water size
+      const timeScale = float(0.02);   // Slow animation
 
-      const totalDispY = dispY0.add(dispY1).add(dispY2).add(dispY3).add(dispY4).add(dispY5)
-        .mul(this.uWaveHeight);
+      // Sample 1: Primary flow direction
+      const uv1 = uvCoord.mul(normalScale).add(
+        vec2(time.mul(timeScale), time.mul(timeScale.mul(0.7)))
+      );
+      const n1 = normalMapTex.sample(uv1).xyz.mul(2.0).sub(1.0);
 
-      // Normal from finite differences (3 main waves)
-      const eps = float(0.2);
-      const hL = this.calcWaveY(this.uWave0, posX.sub(eps), posY, time, this.uWaveSpeed)
-        .add(this.calcWaveY(this.uWave1, posX.sub(eps), posY, time, this.uWaveSpeed))
-        .add(this.calcWaveY(this.uWave2, posX.sub(eps), posY, time, this.uWaveSpeed));
-      const hR = this.calcWaveY(this.uWave0, posX.add(eps), posY, time, this.uWaveSpeed)
-        .add(this.calcWaveY(this.uWave1, posX.add(eps), posY, time, this.uWaveSpeed))
-        .add(this.calcWaveY(this.uWave2, posX.add(eps), posY, time, this.uWaveSpeed));
-      const hD = this.calcWaveY(this.uWave0, posX, posY.sub(eps), time, this.uWaveSpeed)
-        .add(this.calcWaveY(this.uWave1, posX, posY.sub(eps), time, this.uWaveSpeed))
-        .add(this.calcWaveY(this.uWave2, posX, posY.sub(eps), time, this.uWaveSpeed));
-      const hU = this.calcWaveY(this.uWave0, posX, posY.add(eps), time, this.uWaveSpeed)
-        .add(this.calcWaveY(this.uWave1, posX, posY.add(eps), time, this.uWaveSpeed))
-        .add(this.calcWaveY(this.uWave2, posX, posY.add(eps), time, this.uWaveSpeed));
+      // Sample 2: Cross flow
+      const uv2 = uvCoord.mul(normalScale.mul(1.3)).add(
+        vec2(time.mul(timeScale.mul(-0.8)), time.mul(timeScale.mul(0.6)))
+      );
+      const n2 = normalMapTex.sample(uv2).xyz.mul(2.0).sub(1.0);
 
-      const geometricNormal = normalize(vec3(
-        hL.sub(hR).mul(this.uWaveHeight),
-        eps.mul(2.0),
-        hD.sub(hU).mul(this.uWaveHeight)
+      // Sample 3: Detail ripples
+      const uv3 = uvCoord.mul(normalScale.mul(2.1)).add(
+        vec2(time.mul(timeScale.mul(0.5)), time.mul(timeScale.mul(-0.4)))
+      );
+      const n3 = normalMapTex.sample(uv3).xyz.mul(2.0).sub(1.0);
+
+      // Sample 4: Fine detail
+      const uv4 = uvCoord.mul(normalScale.mul(3.7)).add(
+        vec2(time.mul(timeScale.mul(-0.3)), time.mul(timeScale.mul(0.5)))
+      );
+      const n4 = normalMapTex.sample(uv4).xyz.mul(2.0).sub(1.0);
+
+      // Combine normals with decreasing weights
+      const combinedNormal = n1.add(n2.mul(0.5)).add(n3.mul(0.25)).add(n4.mul(0.125));
+      const surfaceNormal = normalize(vec3(
+        combinedNormal.x.mul(this.uDistortionScale.mul(0.01)),
+        float(1.0),
+        combinedNormal.z.mul(this.uDistortionScale.mul(0.01))
       ));
-
-      // Scrolling normal map simulation for detail
-      // Using low frequencies with irrational ratios to prevent visible tiling
-      const normalScale1 = float(0.7);   // Large wavelength pattern
-      const normalScale2 = float(1.13);  // Irrational ratio to scale1
-      const normalSpeed1 = float(0.03);
-      const normalSpeed2 = float(0.025);
-
-      const n1x = sin(posX.mul(normalScale1).add(time.mul(normalSpeed1)))
-        .mul(cos(posY.mul(normalScale1).add(time.mul(normalSpeed1).mul(0.7))));
-      const n1z = cos(posX.mul(normalScale1).add(time.mul(normalSpeed1).mul(1.3)))
-        .mul(sin(posY.mul(normalScale1).add(time.mul(normalSpeed1))));
-
-      const n2x = sin(posX.mul(normalScale2).sub(time.mul(normalSpeed2)))
-        .mul(cos(posY.mul(normalScale2).add(time.mul(normalSpeed2).mul(0.8))));
-      const n2z = cos(posX.mul(normalScale2).sub(time.mul(normalSpeed2).mul(1.2)))
-        .mul(sin(posY.mul(normalScale2).sub(time.mul(normalSpeed2))));
-
-      const detailStrength = float(0.12);
-      const waterNormal = normalize(vec3(
-        geometricNormal.x.add(n1x.add(n2x).mul(detailStrength)),
-        geometricNormal.y,
-        geometricNormal.z.add(n1z.add(n2z).mul(detailStrength))
-      ));
-
-      // Foam at wave crests (very subtle for RTS)
-      const crestFoam = smoothstep(this.uFoamThreshold, this.uFoamThreshold.mul(2.5), totalDispY);
-      const foamNoise = sin(posX.mul(1.7).add(time.mul(1.5)))
-        .mul(sin(posY.mul(2.3).add(time.mul(1.2))))
-        .mul(0.3).add(0.7);
-      const foam = crestFoam.mul(foamNoise).mul(0.35);
-
-      // Flow animation
-      const flowDir = this.uFlowDirection.normalize();
-      const flowOffset = flowDir.mul(time.mul(this.uFlowSpeed));
-      const flowUV = uvCoord.add(flowOffset);
 
       // View direction
       const viewDir = normalize(cameraPosition.sub(worldPos));
 
-      // Fresnel (RTS-tuned)
-      const F0 = float(0.02);
-      const NdotV = max(dot(waterNormal, viewDir), float(0.001));
+      // Fresnel - clean Schlick approximation
+      const F0 = float(0.02); // Water IOR
+      const NdotV = max(dot(surfaceNormal, viewDir), float(0.001));
       const fresnel = F0.add(float(1.0).sub(F0).mul(pow(float(1.0).sub(NdotV), this.uFresnelPower)));
 
-      // Beer-Lambert absorption (gentler for RTS)
-      const absorptionCoeff = vec3(0.35, 0.08, 0.05);
-      const waterDepth = totalDispY.negate().mul(2.0).add(1.5).mul(this.uAbsorptionScale);
-      const transmittance = exp(absorptionCoeff.negate().mul(max(waterDepth, float(0.0))));
+      // Base water color - fixed blend, no wave-height dependency
+      // Use distance from camera for subtle depth variation instead
+      const cameraDist = length(cameraPosition.sub(worldPos));
+      const distanceFactor = smoothstep(float(10.0), float(100.0), cameraDist);
+      let waterColor = mix(vec3(this.uWaterColor), vec3(this.uDeepWaterColor), distanceFactor.mul(0.3));
 
-      // Subsurface scattering (subtle)
-      const sssHalf = normalize(viewDir.add(vec3(0, -0.3, 0)));
-      const sssDot = max(dot(viewDir.negate(), sssHalf), float(0.0));
-      const sss = pow(sssDot, float(4.0)).mul(this.uSubsurfaceStrength);
-      const sssContrib = vec3(this.uScatterColor).mul(sss);
+      // Subtle caustic shimmer (very low intensity)
+      const caustic1 = sin(pos.x.mul(0.31).add(time.mul(0.7)))
+        .mul(sin(pos.y.mul(0.37).add(time.mul(0.5))));
+      const caustic2 = sin(pos.x.mul(0.53).sub(time.mul(0.4)))
+        .mul(sin(pos.y.mul(0.47).add(time.mul(0.6))));
+      const caustics = max(caustic1.mul(caustic2), float(0.0)).mul(0.06);
+      waterColor = waterColor.add(caustics.mul(vec3(0.4, 0.5, 0.6)));
 
-      // Depth-based color
-      const waveHeight = totalDispY.mul(8.0).add(0.5);
-      const depthMix = smoothstep(float(0.3), float(0.7), waveHeight);
-      let waterColor = mix(vec3(this.uDeepWaterColor), vec3(this.uWaterColor), depthMix);
+      // Sky reflection based on fresnel
+      // This is the key fix - consistent sky color, no oscillating gradients
+      const reflectionColor = vec3(this.uSkyColor);
+      waterColor = mix(waterColor, reflectionColor, fresnel.mul(this.uReflectivity));
 
-      // Apply absorption
-      waterColor = waterColor.mul(transmittance);
-
-      // Add SSS
-      waterColor = waterColor.add(sssContrib);
-
-      // Caustics (subtle for RTS)
-      // Low frequencies with irrational ratios prevent visible tiling
-      const caustic1 = sin(posX.mul(0.47).add(time.mul(0.8)))
-        .mul(sin(posY.mul(0.39).add(time.mul(0.6))));
-      const caustic2 = sin(posX.mul(0.73).sub(time.mul(0.5)))
-        .mul(sin(posY.mul(0.61).add(time.mul(0.7))));
-      const caustics = max(caustic1.mul(caustic2), float(0.0)).mul(0.12);
-      waterColor = waterColor.add(caustics.mul(vec3(0.5, 0.7, 0.9)));
-
-      // Sky reflection (moderate for RTS)
-      const skyColor = vec3(0.75, 0.88, 1.0);
-      waterColor = mix(waterColor, skyColor, fresnel.mul(this.uReflectivity));
-
-      // Add foam
-      waterColor = mix(waterColor, vec3(this.uFoamColor), foam.mul(float(1.0).sub(this.uIsLava)));
-
-      // Specular highlights (softer for RTS)
-      const sunDir = normalize(vec3(0.4, 0.8, 0.4));
+      // Specular highlight (single sun)
+      const sunDir = normalize(vec3(0.4, 0.8, 0.3));
       const halfVec = normalize(viewDir.add(sunDir));
-      const specular = pow(max(dot(waterNormal, halfVec), float(0.0)), this.uSpecularPower);
-      waterColor = waterColor.add(specular.mul(0.35).mul(float(1.0).sub(foam)));
+      const specDot = max(dot(surfaceNormal, halfVec), float(0.0));
+      const specular = pow(specDot, this.uSpecularPower).mul(0.4);
+      waterColor = waterColor.add(specular.mul(float(1.0).sub(this.uIsLava)));
 
       // Lava glow
-      const lavaGlow = sin(time.mul(3.0)).mul(0.15).add(0.85);
-      const lavaEmissive = vec3(1.0, 0.4, 0.0).mul(lavaGlow.mul(this.uIsLava).mul(0.8));
+      const lavaGlow = sin(time.mul(2.5)).mul(0.15).add(0.85);
+      const lavaEmissive = vec3(1.0, 0.35, 0.0).mul(lavaGlow.mul(this.uIsLava).mul(0.9));
       waterColor = waterColor.add(lavaEmissive);
 
-      // Final alpha (more opaque for RTS readability)
-      const baseAlpha = mix(float(0.72), float(0.88), depthMix);
-      const alpha = mix(baseAlpha, float(0.92), foam.add(fresnel.mul(0.15)));
-      const finalAlpha = mix(alpha, float(0.9), this.uIsLava);
+      // Final opacity - slightly influenced by fresnel for rim effect
+      const alpha = mix(this.uOpacity, float(0.95), fresnel.mul(0.2));
 
       return vec4(
         clamp(waterColor, float(0.0), float(1.0)),
-        clamp(finalAlpha, float(0.6), float(0.92))
+        clamp(alpha, float(0.5), float(0.98))
       );
     })();
 
-    material.colorNode = outputNode;
+    material.colorNode = colorNode;
 
-    // Roughness
+    // Roughness - mostly smooth water
     material.roughnessNode = Fn(() => {
-      const pos = positionLocal;
-      const time = this.uTime;
-
-      const waveHeight = sin(pos.x.mul(0.1).add(time.mul(0.5)))
-        .mul(sin(pos.y.mul(0.08).add(time.mul(0.4))));
-      const foamFactor = smoothstep(float(0.3), float(0.8), waveHeight);
-
-      return mix(float(0.05), float(0.4), foamFactor);
+      return float(0.1);
     })();
 
-    material.metalnessNode = float(0.03);
+    material.metalnessNode = float(0.0);
 
     return material;
   }
 
+  /**
+   * Update animation time
+   */
   public update(time: number): void {
     if (this.mesh.visible) {
       this.uTime.value = time;
     }
   }
 
+  /**
+   * Set wave configuration
+   */
   public setWaveConfig(height: number, speed: number): void {
     this.uWaveHeight.value = height;
     this.uWaveSpeed.value = speed;
   }
 
-  public setColors(shallow: THREE.Color, deep: THREE.Color, foam?: THREE.Color, scatter?: THREE.Color): void {
+  /**
+   * Set water colors
+   */
+  public setColors(shallow: THREE.Color, deep: THREE.Color, sky?: THREE.Color): void {
     this.uWaterColor.value.copy(shallow);
     this.uDeepWaterColor.value.copy(deep);
-    if (foam) {
-      this.uFoamColor.value.copy(foam);
-    }
-    if (scatter) {
-      this.uScatterColor.value.copy(scatter);
+    if (sky) {
+      this.uSkyColor.value.copy(sky);
     }
   }
 
-  public setFlowDirection(x: number, z: number, speed: number = 0.03): void {
-    this.uFlowDirection.value.set(x, z);
-    this.uFlowSpeed.value = speed;
+  /**
+   * Set reflectivity (0-1)
+   */
+  public setReflectivity(reflectivity: number): void {
+    this.uReflectivity.value = Math.max(0, Math.min(1, reflectivity));
   }
 
+  /**
+   * Set distortion scale for normal map
+   */
+  public setDistortionScale(scale: number): void {
+    this.uDistortionScale.value = scale;
+  }
+
+  /**
+   * Set individual wave parameters
+   */
   public setWave(index: number, direction: THREE.Vector2, steepness: number, wavelength: number): void {
-    const waves = [this.uWave0, this.uWave1, this.uWave2, this.uWave3, this.uWave4, this.uWave5];
+    const waves = [this.uWave0, this.uWave1, this.uWave2];
     if (index >= 0 && index < waves.length) {
       waves[index].value.set(direction.x, direction.y, steepness, wavelength);
     }
   }
 
+  /**
+   * Set physical rendering parameters
+   */
   public setPhysicalParams(params: {
     fresnelPower?: number;
-    subsurfaceStrength?: number;
-    foamThreshold?: number;
-    absorptionScale?: number;
-    reflectivity?: number;
     specularPower?: number;
+    opacity?: number;
+    reflectivity?: number;
+    distortionScale?: number;
   }): void {
     if (params.fresnelPower !== undefined) this.uFresnelPower.value = params.fresnelPower;
-    if (params.subsurfaceStrength !== undefined) this.uSubsurfaceStrength.value = params.subsurfaceStrength;
-    if (params.foamThreshold !== undefined) this.uFoamThreshold.value = params.foamThreshold;
-    if (params.absorptionScale !== undefined) this.uAbsorptionScale.value = params.absorptionScale;
-    if (params.reflectivity !== undefined) this.uReflectivity.value = params.reflectivity;
     if (params.specularPower !== undefined) this.uSpecularPower.value = params.specularPower;
+    if (params.opacity !== undefined) this.uOpacity.value = params.opacity;
+    if (params.reflectivity !== undefined) this.uReflectivity.value = params.reflectivity;
+    if (params.distortionScale !== undefined) this.uDistortionScale.value = params.distortionScale;
   }
 
+  /**
+   * Dispose resources
+   */
   public dispose(): void {
     this.geometry.dispose();
     this.material.dispose();
+    this.normalMap.dispose();
   }
 }

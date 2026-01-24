@@ -1294,44 +1294,63 @@ VOIDSTRIKE features a world-class battle effects system with:
 
 VOIDSTRIKE features a two-layer water rendering system for both game rendering and map editor:
 
-1. **OceanWater (Global)** - TSL-based animated ocean shader for biomes with water
+1. **OceanWater (Global)** - Reflection-based water shader with RTS optimizations
 2. **WaterMesh (Localized)** - Per-cell water surfaces for water features (lakes, rivers)
 
-### OceanWater (TSL Ocean Shader)
+### OceanWater (Reflection-Based Water)
 
 **File:** `src/rendering/tsl/OceanWater.ts`
 
-World-class animated water shader with industry-standard techniques:
+Hybrid water shader combining Three.js WaterMesh reflection techniques with RTS-appropriate
+wave displacement. Designed to eliminate the "big color gradients moving back and forth"
+issue from the previous procedural approach.
 
 | Feature | Description |
 |---------|-------------|
-| **Gerstner Waves** | 4 overlapping wave frequencies for realistic wave motion |
-| **Fresnel Reflections** | Angle-dependent reflectivity (more reflective at grazing angles) |
-| **Depth-based Color** | Deeper water appears darker with less transparency |
-| **Subsurface Scattering** | Light penetration effect for translucent quality |
-| **Animated Foam** | White foam at wave peaks with procedural animation |
-| **Flow Animation** | Directional current/wind with configurable speed |
-| **Normal Perturbation** | Multi-octave surface detail noise |
+| **Texture-Based Normals** | 4-sample animated normal map (generated procedurally at startup) |
+| **Fixed Depth Coloring** | Distance-based color variation instead of wave-height mixing |
+| **Clean Fresnel** | Schlick approximation for angle-dependent reflectivity |
+| **Subtle Gerstner Waves** | 3 overlapping waves for gentle vertex displacement |
+| **Stable Sky Reflection** | Consistent sky color blending, no oscillating gradients |
+| **Subtle Caustics** | Low-intensity underwater light shimmer |
 | **Lava Support** | Volcanic biomes render as animated lava with glow |
 
-**Gerstner Wave Implementation:**
+**Key Differences from Previous OceanWater:**
+
+| Aspect | OceanWater (Old) | OceanWater (New) |
+|--------|------------------|------------------------|
+| Normal generation | Procedural sin/cos | 4-sample texture animation |
+| Color mixing | Wave-height based (gradient issue) | Distance-based (stable) |
+| Reflectivity | 0.35 | 0.25 (less reflective) |
+| Wave height | 0.12 | 0.08 (subtler) |
+| Fresnel power | 3.5 | 3.0 (softer) |
+
+**Normal Map Generation:**
 ```typescript
-// 4 overlapping waves with different directions and wavelengths
+// Procedurally generated at startup (512x512)
+// Multiple sine waves with irrational ratios prevent tiling
+const wave1 = Math.sin(u * 12.7 + v * 8.3) * 0.3;
+const wave2 = Math.sin(u * 23.1 - v * 17.9) * 0.2;
+// ... combined for natural wave patterns
+```
+
+**Gerstner Wave Configuration (RTS-Scale):**
+```typescript
 const waves = [
-  { direction: (1.0, 0.0), steepness: 0.25, wavelength: 60.0 },
-  { direction: (0.7, 0.7), steepness: 0.20, wavelength: 31.0 },
-  { direction: (0.3, 0.9), steepness: 0.15, wavelength: 18.0 },
-  { direction: (-0.5, 0.5), steepness: 0.10, wavelength: 8.0 },
+  { direction: (1.0, 0.15), steepness: 0.035, wavelength: 47.0 },
+  { direction: (0.2, 1.0), steepness: 0.028, wavelength: 31.0 },
+  { direction: (0.7, 0.7), steepness: 0.020, wavelength: 19.0 },
 ];
 ```
 
 **Configurable Parameters:**
 - Wave height and speed
-- Water colors (shallow/deep/foam)
-- Flow direction and speed
+- Water colors (shallow/deep/sky)
+- Reflectivity (0-1)
+- Distortion scale
 - Fresnel power
-- Subsurface strength
-- Foam threshold
+- Specular power
+- Opacity
 
 ### WaterMesh (Localized Water)
 

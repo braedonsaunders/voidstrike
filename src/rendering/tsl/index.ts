@@ -67,6 +67,11 @@ export {
   TSLWaterPlane,
 } from './WaterPlane';
 
+export {
+  OceanWater,
+  type OceanWaterConfig,
+} from './OceanWater';
+
 // Game Overlays
 export {
   TSLGameOverlayManager,
