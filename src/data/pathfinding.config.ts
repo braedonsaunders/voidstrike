@@ -22,10 +22,10 @@
  * - Ramp traversability (ramps must have slope < this per cell)
  * - Cliff blocking (cliffs have height difference >> this)
  *
- * Value: 0.8 allows typical ramps (~0.5 per cell)
- * while blocking cliffs (3.2+ height jumps)
+ * Value: 2.0 is very permissive to ensure ramp connectivity.
+ * Cliffs are blocked by terrain type, not height difference.
  */
-export const WALKABLE_CLIMB = 0.8;
+export const WALKABLE_CLIMB = 2.0;
 
 /**
  * Maximum height change per cell for ramp boundary smoothing.
@@ -47,9 +47,10 @@ export const RAMP_SMOOTHING_PASSES = 25;
  * Maximum slope angle units can walk on (degrees).
  * Recast uses this to reject near-vertical surfaces.
  *
- * Value: 50° allows most ramps while rejecting cliff faces
+ * Value: 75° is very permissive to ensure all ramps are traversable.
+ * Only near-vertical cliff faces will be rejected.
  */
-export const WALKABLE_SLOPE_ANGLE = 50;
+export const WALKABLE_SLOPE_ANGLE = 75;
 
 /**
  * Minimum clearance height required for units to pass.
@@ -224,11 +225,11 @@ export const CROWD_CONFIG = {
  * Maximum elevation change per cell for a traversable ramp.
  * Derived from WALKABLE_CLIMB with margin for navmesh cell sampling.
  *
- * With WALKABLE_CLIMB = 0.8 and ELEVATION_TO_HEIGHT_FACTOR = 0.04:
- * - 0.8 / 0.04 = 20 elevation units theoretical max
- * - Using 16 to provide safety margin for interpolation/quantization
+ * With WALKABLE_CLIMB = 2.0 and ELEVATION_TO_HEIGHT_FACTOR = 0.04:
+ * - 2.0 / 0.04 = 50 elevation units theoretical max
+ * - Using 45 to provide safety margin for interpolation/quantization
  */
-export const MAX_RAMP_ELEVATION_PER_CELL = 16;
+export const MAX_RAMP_ELEVATION_PER_CELL = 45;
 
 /**
  * Result of ramp constraint validation.

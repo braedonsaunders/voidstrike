@@ -1293,9 +1293,6 @@ export class Terrain {
     const indices: number[] = [];
     let vertexIndex = 0;
 
-    // Wall geometry constants
-    const WALL_HEIGHT = 4.0;
-
     // Helper: Check if a cell is walkable for pathfinding
     const isCellWalkable = (cx: number, cy: number): boolean => {
       if (cx < 0 || cx >= width || cy < 0 || cy >= height) return false;
@@ -1306,175 +1303,51 @@ export class Terrain {
       return featureConfig.walkable;
     };
 
-    // Pre-compute vertex heights using RAW cell elevations (matching editor display)
-    // Each vertex averages the elevations of up to 4 adjacent cells
+    // Store vertex heights - will be computed per-cell below
     const vertexHeights = new Float32Array((width + 1) * (height + 1));
-
-    for (let vy = 0; vy <= height; vy++) {
-      for (let vx = 0; vx <= width; vx++) {
-        // Average elevation from adjacent cells (up to 4)
-        let totalElevation = 0;
-        let cellCount = 0;
-
-        const adjacentCells = [
-          { cx: vx - 1, cy: vy - 1 },
-          { cx: vx, cy: vy - 1 },
-          { cx: vx - 1, cy: vy },
-          { cx: vx, cy: vy },
-        ];
-
-        for (const { cx, cy } of adjacentCells) {
-          if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
-            totalElevation += terrain[cy][cx].elevation;
-            cellCount++;
-          }
-        }
-
-        // Convert averaged elevation to height (same formula as EditorTerrain)
-        const avgElevation = cellCount > 0 ? totalElevation / cellCount : 0;
-        vertexHeights[vy * (width + 1) + vx] = avgElevation * ELEVATION_TO_HEIGHT_FACTOR;
-      }
-    }
-
-// Store for navmesh overlay
     this.navMeshHeightMap = vertexHeights;
 
-    // Helper: Get vertex height
-    const getVertexHeight = (vx: number, vy: number): number => {
-      const hx = clamp(vx, 0, width);
-      const hy = clamp(vy, 0, height);
-      return vertexHeights[hy * (width + 1) + hx];
-    };
-
-    // Helper: Check if a cliff wall is needed between two cells
-    const needsCliffWall = (
-      cx: number, cy: number,
-      nx: number, ny: number
-    ): { needed: boolean; topHeight: number; bottomHeight: number } => {
-      if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-        return { needed: false, topHeight: 0, bottomHeight: 0 };
-      }
-
-      const cell = terrain[cy][cx];
-      const neighbor = terrain[ny][nx];
-
-      // Wall needed if neighbor is unwalkable (cliff face)
-      if (neighbor.terrain === 'unwalkable') {
-        const cellHeight = elevationToHeight(cell.elevation);
-        return {
-          needed: true,
-          topHeight: cellHeight,
-          bottomHeight: cellHeight - WALL_HEIGHT,
-        };
-      }
-
-      return { needed: false, topHeight: 0, bottomHeight: 0 };
-    };
-
-    // Create shared floor vertices (one per grid vertex position)
-    const floorVertexIndexMap = new Map<string, number>();
-
+    // SIMPLEST APPROACH: Each cell is a flat quad at its own elevation.
+    // No vertex sharing between cells with different elevations.
+    // Recast handles the step-ups via walkableClimb.
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         if (!isCellWalkable(x, y)) continue;
 
-        // Add vertices for all 4 corners of this cell if not already added
-        const corners = [
-          { vx: x, vy: y },
-          { vx: x + 1, vy: y },
-          { vx: x, vy: y + 1 },
-          { vx: x + 1, vy: y + 1 },
-        ];
+        const cell = terrain[y][x];
+        const h = cell.elevation * ELEVATION_TO_HEIGHT_FACTOR;
 
-        for (const { vx, vy } of corners) {
-          const key = `${vx},${vy}`;
-          if (!floorVertexIndexMap.has(key)) {
-            const h = getVertexHeight(vx, vy);
-            vertices.push(vx, h, vy);
-            floorVertexIndexMap.set(key, vertexIndex);
-            vertexIndex++;
-          }
-        }
-      }
-    }
+        // Store in height map for overlay
+        vertexHeights[y * (width + 1) + x] = h;
+        vertexHeights[y * (width + 1) + (x + 1)] = h;
+        vertexHeights[(y + 1) * (width + 1) + x] = h;
+        vertexHeights[(y + 1) * (width + 1) + (x + 1)] = h;
 
-    // Create triangles using shared vertex indices
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (!isCellWalkable(x, y)) continue;
+        // World coordinates for cell corners
+        const x0 = x;
+        const x1 = x + 1;
+        const z0 = y;
+        const z1 = y + 1;
 
-        const i00 = floorVertexIndexMap.get(`${x},${y}`)!;
-        const i10 = floorVertexIndexMap.get(`${x + 1},${y}`)!;
-        const i01 = floorVertexIndexMap.get(`${x},${y + 1}`)!;
-        const i11 = floorVertexIndexMap.get(`${x + 1},${y + 1}`)!;
+        // Add 4 vertices for this cell (flat quad at cell elevation)
+        const baseIdx = vertexIndex;
+        vertices.push(x0, h, z0);  // NW corner
+        vertices.push(x1, h, z0);  // NE corner
+        vertices.push(x0, h, z1);  // SW corner
+        vertices.push(x1, h, z1);  // SE corner
+        vertexIndex += 4;
 
-        // Two triangles per cell
-        indices.push(i00, i01, i10);
-        indices.push(i10, i01, i11);
+        // Two triangles per cell (CCW winding)
+        indices.push(baseIdx, baseIdx + 2, baseIdx + 1);      // NW, SW, NE
+        indices.push(baseIdx + 1, baseIdx + 2, baseIdx + 3);  // NE, SW, SE
       }
     }
 
     const floorTriangles = indices.length / 3;
 
-    // Generate cliff wall geometry
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (!isCellWalkable(x, y)) continue;
-        if (terrain[y][x].terrain === 'ramp') continue;
-
-        // Vertical edges (left/right walls)
-        const verticalEdges = [
-          { nx: x + 1, ny: y, edgeX: x + 1, y1: y, y2: y + 1 },
-          { nx: x - 1, ny: y, edgeX: x, y1: y, y2: y + 1 },
-        ];
-
-        // Horizontal edges (top/bottom walls)
-        const horizontalEdges = [
-          { nx: x, ny: y + 1, edgeY: y + 1, x1: x, x2: x + 1 },
-          { nx: x, ny: y - 1, edgeY: y, x1: x, x2: x + 1 },
-        ];
-
-        for (const edge of verticalEdges) {
-          const wallInfo = needsCliffWall(x, y, edge.nx, edge.ny);
-          if (wallInfo.needed) {
-            vertices.push(
-              edge.edgeX, wallInfo.topHeight, edge.y1,
-              edge.edgeX, wallInfo.topHeight, edge.y2,
-              edge.edgeX, wallInfo.bottomHeight, edge.y1,
-              edge.edgeX, wallInfo.bottomHeight, edge.y2
-            );
-            indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
-            indices.push(vertexIndex + 1, vertexIndex + 3, vertexIndex + 2);
-            indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 1);
-            indices.push(vertexIndex + 1, vertexIndex + 2, vertexIndex + 3);
-            vertexIndex += 4;
-          }
-        }
-
-        for (const edge of horizontalEdges) {
-          const wallInfo = needsCliffWall(x, y, edge.nx, edge.ny);
-          if (wallInfo.needed) {
-            vertices.push(
-              edge.x1, wallInfo.topHeight, edge.edgeY,
-              edge.x2, wallInfo.topHeight, edge.edgeY,
-              edge.x1, wallInfo.bottomHeight, edge.edgeY,
-              edge.x2, wallInfo.bottomHeight, edge.edgeY
-            );
-            indices.push(vertexIndex, vertexIndex + 1, vertexIndex + 2);
-            indices.push(vertexIndex + 1, vertexIndex + 3, vertexIndex + 2);
-            indices.push(vertexIndex, vertexIndex + 2, vertexIndex + 1);
-            indices.push(vertexIndex + 1, vertexIndex + 2, vertexIndex + 3);
-            vertexIndex += 4;
-          }
-        }
-      }
-    }
-
-    const wallTriangles = (indices.length / 3) - floorTriangles;
-
     debugTerrain.log(
       `[Terrain] Generated walkable geometry: ${vertices.length / 3} vertices, ` +
-      `${floorTriangles} floor triangles, ${wallTriangles} wall triangles`
+      `${floorTriangles} floor triangles`
     );
 
     return {
