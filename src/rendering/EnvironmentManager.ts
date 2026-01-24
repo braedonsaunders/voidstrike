@@ -4,7 +4,6 @@ import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
 import { CrystalField } from './GroundDetail';
 import { TSLMapBorderFog } from './tsl/MapBorderFog';
-import { OceanWater } from './tsl/OceanWater';
 import { WaterMesh } from './WaterMesh';
 import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
@@ -46,7 +45,6 @@ export class EnvironmentManager {
   private grass: InstancedGrass | null = null;
   private pebbles: InstancedPebbles | null = null;
   private crystals: CrystalField | null = null;
-  private water: OceanWater | null = null;
   private waterMesh: WaterMesh | null = null;
   private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
@@ -236,15 +234,16 @@ export class EnvironmentManager {
       this.scene.add(this.crystals.group);
     }
 
-    // Water/lava plane - Hybrid reflection-based water with RTS optimizations
+    // Water system - uses Three.js WaterMesh addon for realistic reflections
+    // Handles both full-map water (Ocean biome) and localized features (lakes, rivers)
+    this.waterMesh = new WaterMesh();
+
+    // Create full-map water plane for biomes with hasWater (Ocean, Volcanic lava)
     if (this.biome.hasWater) {
-      this.water = new OceanWater(this.mapData, this.biome);
-      this.scene.add(this.water.mesh);
+      this.waterMesh.buildFullMapWater(this.mapData, this.biome);
     }
 
-    // Localized water mesh - renders water surfaces where water features exist
-    // This works regardless of biome.hasWater setting
-    this.waterMesh = new WaterMesh();
+    // Add localized water surfaces from terrain features
     this.waterMesh.buildFromMapData(this.mapData);
     this.scene.add(this.waterMesh.group);
 
@@ -316,9 +315,6 @@ export class EnvironmentManager {
     this._tempSunDirection.copy(this.directionalLight.position).normalize();
     this.terrain.update(deltaTime, this._tempSunDirection);
 
-    if (this.water) {
-      this.water.update(gameTime);
-    }
     if (this.waterMesh) {
       this.waterMesh.update(deltaTime);
     }
@@ -775,7 +771,6 @@ export class EnvironmentManager {
     this.grass?.dispose();
     this.pebbles?.dispose();
     this.crystals?.dispose();
-    this.water?.dispose();
     this.waterMesh?.dispose();
     this.mapBorderFog?.dispose();
     this.particles?.dispose();
@@ -802,7 +797,6 @@ export class EnvironmentManager {
     if (this.grass) this.scene.remove(this.grass.group);
     if (this.pebbles) this.scene.remove(this.pebbles.group);
     if (this.crystals) this.scene.remove(this.crystals.group);
-    if (this.water) this.scene.remove(this.water.mesh);
     if (this.waterMesh) this.scene.remove(this.waterMesh.group);
     if (this.mapBorderFog) this.scene.remove(this.mapBorderFog.mesh);
     if (this.particles) this.scene.remove(this.particles.points);
