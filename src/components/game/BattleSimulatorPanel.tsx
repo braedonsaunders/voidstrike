@@ -6,6 +6,9 @@ import { UNIT_DEFINITIONS, DOMINION_UNITS } from '@/data/units/dominion';
 import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
 import { useGameStore } from '@/store/gameStore';
 import { Selectable } from '@/engine/components/Selectable';
+import { Unit } from '@/engine/components/Unit';
+import { Transform } from '@/engine/components/Transform';
+import { Health } from '@/engine/components/Health';
 
 type SpawnTeam = 'player1' | 'player2';
 type SpawnQuantity = 1 | 5 | 10 | 20;
@@ -15,6 +18,133 @@ const SPAWN_QUANTITIES: SpawnQuantity[] = [1, 5, 10, 20];
 // Arena dimensions (must match battle_arena.json)
 const ARENA_WIDTH = 256;
 const ARENA_HEIGHT = 64;
+
+/**
+ * Find the best enemy target for a unit, respecting targeting restrictions.
+ * Naval units find naval enemies, ground finds ground, air can attack based on capabilities.
+ */
+function findValidTarget(
+  game: Game,
+  entityId: number,
+  unit: Unit,
+  transform: Transform,
+  myPlayerId: string
+): number | null {
+  const world = game.world;
+
+  // Use sight range to find targets
+  const searchRange = unit.sightRange * 1.5;
+
+  // For naval units, only look for naval targets they can actually reach
+  // For ground units, look for ground targets
+  // For air units, they can go anywhere so use normal targeting
+  const isNavalUnit = unit.isNaval;
+  const isAirUnit = unit.isFlying;
+
+  // Query nearby enemy units and filter by what this unit can actually attack
+  const nearbyUnitIds = world.unitGrid.queryRadius(transform.x, transform.y, searchRange);
+
+  let bestTarget: { entityId: number; score: number } | null = null;
+
+  for (const targetId of nearbyUnitIds) {
+    if (targetId === entityId) continue;
+
+    const targetEntity = world.getEntity(targetId);
+    if (!targetEntity) continue;
+
+    const targetUnit = targetEntity.get<Unit>('Unit');
+    const targetTransform = targetEntity.get<Transform>('Transform');
+    const targetSelectable = targetEntity.get<Selectable>('Selectable');
+    const targetHealth = targetEntity.get<Health>('Health');
+
+    if (!targetUnit || !targetTransform || !targetSelectable || !targetHealth) continue;
+    if (targetSelectable.playerId === myPlayerId) continue;
+    if (targetHealth.isDead()) continue;
+
+    // Check if this unit can attack the target type
+    const targetIsFlying = targetUnit.isFlying;
+    const targetIsNaval = targetUnit.isNaval;
+
+    if (!unit.canAttackTarget(targetIsFlying, targetIsNaval)) continue;
+
+    // Naval units should prefer naval targets (they can't path to land)
+    // Ground units should prefer ground targets (they can't path to water)
+    // Air units can attack anything they're capable of
+    if (isNavalUnit && !isAirUnit) {
+      // Naval unit - strongly prefer naval targets, can also attack air if capable
+      if (!targetIsNaval && !targetIsFlying) continue;
+    } else if (!isNavalUnit && !isAirUnit) {
+      // Ground unit - strongly prefer ground/air targets, skip naval
+      if (targetIsNaval) continue;
+    }
+    // Air units can attack anything they're capable of (already checked above)
+
+    // Calculate score (simpler than full TargetAcquisition - just distance + health)
+    const dx = targetTransform.x - transform.x;
+    const dy = targetTransform.y - transform.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    const healthPercent = targetHealth.current / targetHealth.max;
+
+    // Score: closer is better, lower health is better
+    const score = (1 - distance / searchRange) * 50 + (1 - healthPercent) * 30;
+
+    if (!bestTarget || score > bestTarget.score) {
+      bestTarget = { entityId: targetId, score };
+    }
+  }
+
+  return bestTarget?.entityId ?? null;
+}
+
+/**
+ * Find the average position of enemy units that this unit can attack.
+ * Used as a fallback movement target when no direct target is found.
+ */
+function findEnemyCenter(
+  game: Game,
+  unit: Unit,
+  myPlayerId: string
+): { x: number; y: number } | null {
+  const world = game.world;
+  const entities = world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+
+  let sumX = 0;
+  let sumY = 0;
+  let count = 0;
+
+  const isNavalUnit = unit.isNaval;
+  const isAirUnit = unit.isFlying;
+
+  for (const entity of entities) {
+    const targetUnit = entity.get<Unit>('Unit')!;
+    const targetTransform = entity.get<Transform>('Transform')!;
+    const targetSelectable = entity.get<Selectable>('Selectable')!;
+    const targetHealth = entity.get<Health>('Health')!;
+
+    if (targetSelectable.playerId === myPlayerId) continue;
+    if (targetHealth.isDead()) continue;
+
+    const targetIsFlying = targetUnit.isFlying;
+    const targetIsNaval = targetUnit.isNaval;
+
+    // Only consider enemies this unit can actually attack and reach
+    if (!unit.canAttackTarget(targetIsFlying, targetIsNaval)) continue;
+
+    if (isNavalUnit && !isAirUnit) {
+      if (!targetIsNaval && !targetIsFlying) continue;
+    } else if (!isNavalUnit && !isAirUnit) {
+      if (targetIsNaval) continue;
+    }
+
+    sumX += targetTransform.x;
+    sumY += targetTransform.y;
+    count++;
+  }
+
+  if (count === 0) return null;
+
+  return { x: sumX / count, y: sumY / count };
+}
 
 export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
@@ -75,38 +205,42 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   const handleFight = useCallback(() => {
     const game = Game.getInstance();
 
-    // Get all units
-    const entities = game.world.getEntitiesWith('Unit', 'Selectable');
+    // Get all units with required components
+    const entities = game.world.getEntitiesWith('Unit', 'Selectable', 'Transform', 'Health');
 
-    const team1Units: number[] = [];
-    const team2Units: number[] = [];
-
+    // Process each unit individually - find valid targets based on unit capabilities
     for (const entity of entities) {
       const selectable = entity.get<Selectable>('Selectable');
-      if (selectable?.playerId === 'player1') {
-        team1Units.push(entity.id);
-      } else if (selectable?.playerId === 'player2') {
-        team2Units.push(entity.id);
+      const unit = entity.get<Unit>('Unit');
+      const transform = entity.get<Transform>('Transform');
+      const health = entity.get<Health>('Health');
+
+      if (!selectable || !unit || !transform || !health) continue;
+      if (health.isDead()) continue;
+      if (unit.isWorker) continue; // Skip workers
+
+      const playerId = selectable.playerId;
+      if (playerId !== 'player1' && playerId !== 'player2') continue;
+
+      // Find a valid target this unit can actually attack
+      const targetId = findValidTarget(game, entity.id, unit, transform, playerId);
+
+      if (targetId !== null) {
+        // Direct attack command to specific enemy
+        game.eventBus.emit('command:attack', {
+          entityIds: [entity.id],
+          targetEntityId: targetId,
+        });
+      } else {
+        // No target in sight - move towards enemies this unit can attack
+        const enemyCenter = findEnemyCenter(game, unit, playerId);
+        if (enemyCenter) {
+          game.eventBus.emit('command:attack', {
+            entityIds: [entity.id],
+            targetPosition: enemyCenter,
+          });
+        }
       }
-    }
-
-    // Both teams attack-move to the CENTER of the arena
-    // This ensures units converge and engage regardless of spawn positions
-    const centerX = ARENA_WIDTH / 2;
-    const centerY = ARENA_HEIGHT / 2;
-
-    if (team1Units.length > 0) {
-      game.eventBus.emit('command:attack', {
-        entityIds: team1Units,
-        targetPosition: { x: centerX, y: centerY },
-      });
-    }
-
-    if (team2Units.length > 0) {
-      game.eventBus.emit('command:attack', {
-        entityIds: team2Units,
-        targetPosition: { x: centerX, y: centerY },
-      });
     }
 
     // Unpause the game
