@@ -2477,6 +2477,8 @@ await game.initializeNavMesh(walkableGeometry.positions, walkableGeometry.indice
 **Walkability checks:**
 - `isWalkable` uses both horizontal distance and vertical height tolerances to avoid
   marking cliff edges as valid ground when the closest polygon is on a different layer.
+- Navmesh queries use a tighter vertical search window when a terrain height provider
+  is available, preventing projections onto the wrong elevation tier near ramps.
 
 **Terrain Height for Crowd Operations:**
 

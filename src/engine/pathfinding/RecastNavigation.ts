@@ -226,6 +226,11 @@ export class RecastNavigation {
     return 0;
   }
 
+  private getQueryHalfExtents(searchRadius: number): { x: number; y: number; z: number } {
+    const heightTolerance = this.terrainHeightProvider ? WALKABLE_HEIGHT_TOLERANCE * 1.5 : 20;
+    return { x: searchRadius, y: heightTolerance, z: searchRadius };
+  }
+
   /**
    * Project a 2D point onto the water navmesh surface.
    * Returns the 3D navmesh position (x, y, z) or null if no valid point found.
@@ -239,7 +244,7 @@ export class RecastNavigation {
 
     try {
       const waterHeight = 0.15;
-      const searchExtents = halfExtents ?? { x: 2, y: 10, z: 2 };
+      const searchExtents = halfExtents ?? this.getQueryHalfExtents(2);
 
       const result = this.waterNavMeshQuery.findClosestPoint(
         { x, y: waterHeight, z },
@@ -275,7 +280,7 @@ export class RecastNavigation {
       const queryY = this.getTerrainHeight(x, z);
 
       // Use provided halfExtents or default with generous height tolerance
-      const searchExtents = halfExtents ?? { x: 2, y: 10, z: 2 };
+      const searchExtents = halfExtents ?? this.getQueryHalfExtents(2);
 
       const result = this.navMeshQuery.findClosestPoint(
         { x, y: queryY, z },
@@ -566,7 +571,7 @@ export class RecastNavigation {
       // Use agent-specific halfExtents for finding nearest points
       // Larger search radius ensures we find valid navmesh positions
       const searchRadius = Math.max(agentRadius * 4, 2);
-      const halfExtents = { x: searchRadius, y: 10, z: searchRadius };
+      const halfExtents = this.getQueryHalfExtents(searchRadius);
 
       // Start queries at approximate terrain height for better accuracy
       const startQueryY = this.getTerrainHeight(startX, startY);
@@ -645,7 +650,7 @@ export class RecastNavigation {
 
     try {
       const searchRadius = Math.max(agentRadius * 4, 2);
-      const halfExtents = { x: searchRadius, y: 10, z: searchRadius };
+      const halfExtents = this.getQueryHalfExtents(searchRadius);
 
       // Water surface is relatively flat, use constant height
       const waterHeight = 0.15;
@@ -801,7 +806,7 @@ export class RecastNavigation {
     try {
       // Start query at approximate terrain height for better accuracy
       const queryY = this.getTerrainHeight(x, y);
-      const halfExtents = { x: 5, y: 20, z: 5 };
+      const halfExtents = this.getQueryHalfExtents(5);
       const result = this.navMeshQuery.findClosestPoint({ x, y: queryY, z: y }, { halfExtents });
       if (result.success && result.point) {
         return { x: result.point.x, y: result.point.z };
@@ -821,7 +826,7 @@ export class RecastNavigation {
 
     try {
       const waterHeight = 0.15;
-      const halfExtents = { x: 5, y: 20, z: 5 };
+      const halfExtents = this.getQueryHalfExtents(5);
       const result = this.waterNavMeshQuery.findClosestPoint({ x, y: waterHeight, z: y }, { halfExtents });
       if (result.success && result.point) {
         return { x: result.point.x, y: result.point.z };
@@ -848,7 +853,7 @@ export class RecastNavigation {
     try {
       // Start query at approximate terrain height for better accuracy
       const queryY = this.getTerrainHeight(x, y);
-      const halfExtents = { x: 2, y: 20, z: 2 };
+      const halfExtents = this.getQueryHalfExtents(2);
       const result = this.navMeshQuery.findClosestPoint({ x, y: queryY, z: y }, { halfExtents });
 
       if (!result.success || !result.point) {
@@ -887,7 +892,7 @@ export class RecastNavigation {
 
     try {
       const waterHeight = 0.15;
-      const halfExtents = { x: 2, y: 20, z: 2 };
+      const halfExtents = this.getQueryHalfExtents(2);
       const result = this.waterNavMeshQuery.findClosestPoint({ x, y: waterHeight, z: y }, { halfExtents });
       if (!result.success || !result.point) {
         return false;

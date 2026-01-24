@@ -120,6 +120,11 @@ let heightMap: Float32Array | null = null;
 let heightMapWidth = 0;
 let heightMapHeight = 0;
 
+function getQueryHalfExtents(searchRadius: number): { x: number; y: number; z: number } {
+  const heightTolerance = heightMap ? WALKABLE_HEIGHT_TOLERANCE * 1.5 : 20;
+  return { x: searchRadius, y: heightTolerance, z: searchRadius };
+}
+
 // Track obstacles
 const obstacleRefs: Map<number, Obstacle> = new Map();
 
@@ -299,7 +304,7 @@ function findPath(
 
   try {
     const searchRadius = Math.max(agentRadius * 4, 2);
-    const halfExtents = { x: searchRadius, y: 10, z: searchRadius };
+    const halfExtents = getQueryHalfExtents(searchRadius);
 
     const resolvedStartHeight = startHeight ?? getHeightAt(startX, startY);
     const resolvedEndHeight = endHeight ?? getHeightAt(endX, endY);
@@ -402,7 +407,7 @@ function isWalkable(x: number, y: number, height?: number): boolean {
   if (!navMeshQuery) return false;
 
   try {
-    const halfExtents = { x: 2, y: 20, z: 2 };
+    const halfExtents = getQueryHalfExtents(2);
     const queryHeight = height ?? getHeightAt(x, y);
     const result = navMeshQuery.findClosestPoint({ x, y: queryHeight, z: y }, { halfExtents });
     if (!result.success || !result.point) return false;
@@ -422,7 +427,7 @@ function findNearestPoint(x: number, y: number, height?: number): { x: number; y
   if (!navMeshQuery) return null;
 
   try {
-    const halfExtents = { x: 5, y: 20, z: 5 };
+    const halfExtents = getQueryHalfExtents(5);
     const queryHeight = height ?? getHeightAt(x, y);
     const result = navMeshQuery.findClosestPoint({ x, y: queryHeight, z: y }, { halfExtents });
     if (result.success && result.point) {
