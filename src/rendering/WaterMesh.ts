@@ -259,7 +259,6 @@ export class WaterMesh {
       waterColor: waterColor,
       distortionScale: config.distortionScale,
       size: config.size,
-      resolutionScale: this.reflectionsEnabled ? config.resolutionScale : 0,
     });
 
     water.rotation.x = -Math.PI / 2;
@@ -482,7 +481,6 @@ export class WaterMesh {
       waterColor: waterColor,
       distortionScale: config.distortionScale,
       size: config.size,
-      resolutionScale: this.reflectionsEnabled ? config.resolutionScale : 0,
     });
 
     // Calculate center position and height
