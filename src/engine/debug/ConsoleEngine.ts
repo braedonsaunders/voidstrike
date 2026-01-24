@@ -393,12 +393,24 @@ export class ConsoleEngine {
   }
 
   private buildContext(): GameContext | null {
-    if (!this.game) return null;
+    // Try to get game from singleton if not set
+    let game = this.game;
+    if (!game) {
+      try {
+        // Game.getInstance() returns existing instance or creates new one
+        // We only want the existing instance, so we check if one exists first
+        game = Game.getInstance();
+      } catch {
+        // Game not initialized yet
+      }
+    }
+
+    if (!game) return null;
 
     const playerId = getLocalPlayerId() || 'player1';
 
     return {
-      game: this.game,
+      game,
       camera: this.camera,
       playerId,
       cursorWorldPos: this.cursorWorldPos,
