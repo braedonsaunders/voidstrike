@@ -2381,6 +2381,8 @@ Units have a `movementDomain` that determines which navmesh they use:
 | `amphibious` | Can use both land and water | Tries water first, falls back to ground |
 | `air` | Flying units | No navmesh (direct paths) |
 
+**Worker note:** The pathfinding Web Worker is optimized for the ground navmesh and receives a cached terrain heightmap for elevation-aware queries. Water/amphibious pathing stays on the main thread so naval units never query the land navmesh by accident.
+
 ### Water Navmesh
 
 Naval units use a separate water navmesh where:

@@ -206,6 +206,7 @@ export class PathfindingSystem extends System {
 
   // Cached geometry for worker initialization
   private cachedNavMeshGeometry: { positions: Float32Array; indices: Uint32Array } | null = null;
+  private cachedHeightMap: { data: Float32Array; width: number; height: number } | null = null;
 
   constructor(game: Game, mapWidth: number, mapHeight: number) {
     super(game);
@@ -293,13 +294,35 @@ export class PathfindingSystem extends System {
   private sendGeometryToWorker(): void {
     if (!this.pathWorker || !this.cachedNavMeshGeometry) return;
 
+    if (!this.cachedHeightMap) {
+      this.cachedHeightMap = this.buildWorkerHeightMap();
+    }
+
     this.pathWorker.postMessage({
       type: 'loadNavMeshFromGeometry',
       positions: this.cachedNavMeshGeometry.positions,
       indices: this.cachedNavMeshGeometry.indices,
       mapWidth: this.mapWidth,
       mapHeight: this.mapHeight,
+      heightMap: this.cachedHeightMap.data,
+      heightMapWidth: this.cachedHeightMap.width,
+      heightMapHeight: this.cachedHeightMap.height,
     });
+  }
+
+  private buildWorkerHeightMap(): { data: Float32Array; width: number; height: number } {
+    const gridWidth = Math.floor(this.mapWidth) + 1;
+    const gridHeight = Math.floor(this.mapHeight) + 1;
+    const heightMap = new Float32Array(gridWidth * gridHeight);
+    const heightFn = this.terrainHeightFunction ?? ((x: number, z: number) => this.game.getTerrainHeightAt(x, z));
+
+    for (let y = 0; y < gridHeight; y++) {
+      for (let x = 0; x < gridWidth; x++) {
+        heightMap[y * gridWidth + x] = heightFn(x, y);
+      }
+    }
+
+    return { data: heightMap, width: gridWidth, height: gridHeight };
   }
 
   /**
@@ -393,10 +416,14 @@ export class PathfindingSystem extends System {
    */
   public setTerrainHeightFunction(fn: (x: number, z: number) => number): void {
     this.terrainHeightFunction = fn;
+    this.cachedHeightMap = null;
     // Update the recast terrain height provider if navmesh is already ready
     if (this.navMeshReady) {
       this.recast.setTerrainHeightProvider(fn);
       debugPathfinding.log('[PathfindingSystem] Updated terrain height provider');
+    }
+    if (this.pathWorker && this.workerWasmInitialized && this.cachedNavMeshGeometry && this.navMeshReady) {
+      this.sendGeometryToWorker();
     }
   }
 
@@ -415,6 +442,7 @@ export class PathfindingSystem extends System {
     this.workerWasmInitialized = false;
     this.pendingWorkerRequests.clear();
     this.cachedNavMeshGeometry = null;
+    this.cachedHeightMap = null;
 
     debugPathfinding.log(
       `[PathfindingSystem] Reinitialized for ${mapWidth}x${mapHeight}`
@@ -433,6 +461,7 @@ export class PathfindingSystem extends System {
     this.workerWasmInitialized = false;
     this.pendingWorkerRequests.clear();
     this.cachedNavMeshGeometry = null;
+    this.cachedHeightMap = null;
   }
 
   /**
@@ -668,10 +697,12 @@ export class PathfindingSystem extends System {
       return;
     }
 
-    // Check if destination is reachable
-    const isWalkable = this.recast.isWalkable(request.endX, request.endY);
+    const domain = request.movementDomain ?? unit?.movementDomain ?? 'ground';
+
+    // Check if destination is reachable (domain-aware)
+    const isWalkable = this.recast.isWalkableForDomain(request.endX, request.endY, domain);
     if (!isWalkable) {
-      const nearby = this.recast.findNearestPoint(request.endX, request.endY);
+      const nearby = this.recast.findNearestPointForDomain(request.endX, request.endY, domain);
       if (!nearby) {
         // For building workers, don't record failure - the building center is expected
         // to be blocked. They'll keep trying to find a path on subsequent updates.
@@ -791,8 +822,11 @@ export class PathfindingSystem extends System {
     const unit = entity.get<Unit>('Unit');
     if (!unit) return;
 
+    const domain = request.movementDomain ?? unit.movementDomain ?? 'ground';
+
     // Use worker for path computation if available (non-blocking)
-    if (this.pathWorker && this.workerReady) {
+    // NOTE: Worker only supports ground navmesh right now.
+    if (this.pathWorker && this.workerReady && domain === 'ground') {
       const requestId = this.workerRequestId++;
       this.pendingWorkerRequests.set(requestId, request);
 
@@ -820,7 +854,6 @@ export class PathfindingSystem extends System {
 
     // Fallback to main thread (blocking) if worker not available
     // Use movement domain-aware pathfinding
-    const domain = request.movementDomain ?? unit.movementDomain ?? 'ground';
     const result = this.findPathForDomain(
       request.startX,
       request.startY,
