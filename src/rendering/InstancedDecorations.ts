@@ -534,6 +534,7 @@ export class InstancedTrees {
       case 'Volcanic': return ['tree_dead'];
       case 'Void': return ['tree_alien', 'tree_mushroom'];
       case 'Jungle': return ['tree_palm', 'tree_pine_medium', 'tree_mushroom'];
+      case 'Ocean': return ['tree_palm', 'tree_dead'];
       default: return ['tree_pine_tall', 'tree_pine_medium'];
     }
   }

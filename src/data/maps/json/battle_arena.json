@@ -57379,5 +57379,29 @@
   "watchTowers": [],
   "ramps": [],
   "destructibles": [],
-  "decorations": []
+  "decorations": [
+    { "type": "rocks_large", "x": 8, "y": 28, "scale": 3.5, "rotation": 0.2 },
+    { "type": "rocks_large", "x": 24, "y": 27, "scale": 4.0, "rotation": 1.1 },
+    { "type": "rocks_large", "x": 40, "y": 28, "scale": 3.2, "rotation": 2.3 },
+    { "type": "rocks_large", "x": 56, "y": 27, "scale": 3.8, "rotation": 0.8 },
+    { "type": "rocks_large", "x": 72, "y": 28, "scale": 3.5, "rotation": 1.9 },
+    { "type": "rocks_large", "x": 88, "y": 27, "scale": 4.2, "rotation": 0.4 },
+    { "type": "rocks_large", "x": 104, "y": 28, "scale": 3.3, "rotation": 2.7 },
+    { "type": "rocks_large", "x": 120, "y": 27, "scale": 3.9, "rotation": 1.5 },
+    { "type": "rocks_large", "x": 136, "y": 28, "scale": 3.6, "rotation": 0.6 },
+    { "type": "rocks_large", "x": 152, "y": 27, "scale": 4.1, "rotation": 2.1 },
+    { "type": "rocks_large", "x": 168, "y": 28, "scale": 3.4, "rotation": 1.2 },
+    { "type": "rocks_large", "x": 184, "y": 27, "scale": 3.7, "rotation": 0.3 },
+    { "type": "rocks_large", "x": 200, "y": 28, "scale": 4.0, "rotation": 2.5 },
+    { "type": "rocks_large", "x": 216, "y": 27, "scale": 3.5, "rotation": 1.7 },
+    { "type": "rocks_large", "x": 232, "y": 28, "scale": 3.8, "rotation": 0.9 },
+    { "type": "rocks_large", "x": 248, "y": 27, "scale": 3.3, "rotation": 2.0 },
+    { "type": "tree_palm", "x": 12, "y": 6, "scale": 1.1, "rotation": 0.5 },
+    { "type": "tree_palm", "x": 45, "y": 10, "scale": 0.9, "rotation": 1.8 },
+    { "type": "tree_palm", "x": 78, "y": 4, "scale": 1.2, "rotation": 2.9 },
+    { "type": "tree_palm", "x": 128, "y": 8, "scale": 1.0, "rotation": 0.3 },
+    { "type": "tree_palm", "x": 175, "y": 5, "scale": 1.15, "rotation": 4.1 },
+    { "type": "tree_palm", "x": 210, "y": 9, "scale": 0.95, "rotation": 2.2 },
+    { "type": "tree_palm", "x": 244, "y": 7, "scale": 1.05, "rotation": 5.5 }
+  ]
 }
