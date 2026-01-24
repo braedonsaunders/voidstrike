@@ -2,11 +2,13 @@ import { System } from '../ecs/System';
 import { Game } from '../core/Game';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
+import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Velocity } from '../components/Velocity';
 import { Ability } from '../components/Ability';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
+import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { DOMINION_ABILITIES } from '../components/Ability';
 import { debugSpawning } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
@@ -31,6 +33,9 @@ export class SpawnSystem extends System {
   private setupEventListeners(): void {
     // Handle unit spawning from production
     this.game.eventBus.on('unit:spawn', this.handleUnitSpawn.bind(this));
+
+    // Handle building spawning (console command / debug)
+    this.game.eventBus.on('building:spawn', this.handleBuildingSpawn.bind(this));
 
     // Handle unit death (cleanup)
     this.game.eventBus.on('unit:died', this.handleUnitDeath.bind(this));
@@ -128,6 +133,73 @@ export class SpawnSystem extends System {
     this.game.eventBus.emit('unit:spawned', {
       entityId: entity.id,
       unitType,
+      playerId,
+      position: { x, y },
+    });
+
+    debugSpawning.log(`SpawnSystem: Spawned ${definition.name} at (${x.toFixed(1)}, ${y.toFixed(1)}) for ${playerId}`);
+  }
+
+  /**
+   * Handle building spawn from console command or debug tools
+   * Creates a fully completed building at the specified position
+   */
+  private handleBuildingSpawn(data: {
+    buildingType: string;
+    x: number;
+    y: number;
+    playerId: string;
+    completed?: boolean;
+  }): void {
+    const { buildingType, x, y, playerId, completed = true } = data;
+    const definition = BUILDING_DEFINITIONS[buildingType];
+
+    if (!definition) {
+      debugSpawning.warn(`SpawnSystem: Unknown building type: ${buildingType}`);
+      return;
+    }
+
+    // Create the entity
+    const entity = this.world.createEntity();
+
+    // Create health component - full health if completed, 10% if under construction
+    const health = new Health(definition.maxHealth, definition.armor, 'structure');
+    if (completed) {
+      health.current = definition.maxHealth;
+    } else {
+      health.current = definition.maxHealth * 0.1;
+    }
+
+    // Create building component
+    const building = new Building(definition);
+    if (completed) {
+      building.state = 'idle';
+      building.isConstructed = true;
+    }
+
+    // Selection radius based on building size
+    const selectionRadius = Math.max(definition.width, definition.height) * 0.6;
+
+    entity
+      .add(new Transform(x, y, 0))
+      .add(building)
+      .add(health)
+      .add(new Selectable(selectionRadius, 10, playerId));
+
+    // Emit placement event for pathfinding grid update
+    this.game.eventBus.emit('building:placed', {
+      entityId: entity.id,
+      buildingType,
+      playerId,
+      position: { x, y },
+      width: definition.width,
+      height: definition.height,
+    });
+
+    // Emit spawned event
+    this.game.eventBus.emit('building:spawned', {
+      entityId: entity.id,
+      buildingType,
       playerId,
       position: { x, y },
     });

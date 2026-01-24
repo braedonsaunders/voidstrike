@@ -751,8 +751,30 @@ export class ConsoleEngine {
 
       case 'endGame': {
         const result = action.result as 'victory' | 'defeat';
-        ctx.game.eventBus.emit(`game:${result}`, { playerId: ctx.playerId });
-        return { success: true, message: `Triggered ${result}` };
+        const duration = ctx.game.getGameTime();
+
+        // Get opponent player ID for loser field
+        const allPlayers = new Set<string>();
+        const allEntities = ctx.game.world.getEntitiesWith('Selectable');
+        for (const entity of allEntities) {
+          const selectable = entity.get<Selectable>('Selectable');
+          if (selectable) allPlayers.add(selectable.playerId);
+        }
+        const otherPlayers = [...allPlayers].filter(p => p !== ctx.playerId);
+        const opponent = otherPlayers[0] || 'opponent';
+
+        // Emit with correct structure: winner is local player for 'victory', opponent for 'defeat'
+        const winner = result === 'victory' ? ctx.playerId : opponent;
+        const loser = result === 'victory' ? opponent : ctx.playerId;
+
+        ctx.game.eventBus.emit('game:victory', {
+          winner,
+          loser,
+          reason: 'console',
+          duration,
+        });
+
+        return { success: true, message: `Triggered ${result} for ${ctx.playerId}` };
       }
 
       default:
