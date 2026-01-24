@@ -133,18 +133,12 @@ export class OceanWater {
   }
 
   /**
-   * Update water animation - call every frame with game time
+   * Update water animation - WaterMesh uses TSL's built-in time, no manual update needed
+   * This method is kept for API compatibility but does nothing
    */
-  public update(time: number): void {
-    if (this.mesh.visible && this.mesh.material) {
-      // WaterMesh uses material.uniforms.time for animation
-      const material = this.mesh.material as THREE.ShaderMaterial & {
-        uniforms?: { time?: { value: number } };
-      };
-      if (material.uniforms?.time) {
-        material.uniforms.time.value = time;
-      }
-    }
+  public update(_time: number): void {
+    // WaterMesh animates automatically via TSL's built-in time uniform
+    // No manual update required
   }
 
   /**
@@ -155,27 +149,23 @@ export class OceanWater {
   }
 
   /**
-   * Set water color
+   * Set water color - Note: WaterMesh uniforms are set at construction time
+   * This method is kept for API compatibility but requires recreating the mesh
    */
-  public setWaterColor(color: number): void {
-    const material = this.mesh.material as THREE.ShaderMaterial & {
-      uniforms?: { waterColor?: { value: THREE.Color } };
-    };
-    if (material.uniforms?.waterColor) {
-      material.uniforms.waterColor.value.setHex(color);
-    }
+  public setWaterColor(_color: number): void {
+    // WaterMesh uses TSL uniforms set at construction
+    // To change color, recreate OceanWater with new config
+    console.warn('OceanWater.setWaterColor: WaterMesh requires recreation to change color');
   }
 
   /**
-   * Set distortion scale
+   * Set distortion scale - Note: WaterMesh uniforms are set at construction time
+   * This method is kept for API compatibility but requires recreating the mesh
    */
-  public setDistortionScale(scale: number): void {
-    const material = this.mesh.material as THREE.ShaderMaterial & {
-      uniforms?: { distortionScale?: { value: number } };
-    };
-    if (material.uniforms?.distortionScale) {
-      material.uniforms.distortionScale.value = scale;
-    }
+  public setDistortionScale(_scale: number): void {
+    // WaterMesh uses TSL uniforms set at construction
+    // To change distortion, recreate OceanWater with new config
+    console.warn('OceanWater.setDistortionScale: WaterMesh requires recreation to change distortion');
   }
 
   /**
