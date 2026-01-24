@@ -62,16 +62,10 @@ export {
   type TSLFogOfWarConfig,
 } from './FogOfWar';
 
-// Water/Lava
+// Water/Lava (legacy - main water now in WaterMesh.ts)
 export {
   TSLWaterPlane,
 } from './WaterPlane';
-
-export {
-  OceanWater,
-  preloadWaterNormals,
-  type OceanWaterConfig,
-} from './OceanWater';
 
 // Game Overlays
 export {
