@@ -79,10 +79,9 @@ export class MovementOrchestrator {
   private trulyIdleTicks: Map<number, number> = new Map();
   private lastIdlePosition: Map<number, { x: number; y: number }> = new Map();
 
-  // PERF: Naval unit boundary enforcement - cache last validated position
-  // Only re-validate when unit moves more than threshold distance
-  private lastValidatedNavalPosition: Map<number, { x: number; y: number }> = new Map();
-  private static readonly NAVAL_VALIDATION_THRESHOLD_SQ = 0.25; // 0.5 units squared
+  // PERF: Naval unit boundary enforcement - store last valid water position
+  // When a naval unit goes on land, immediately snap back to this position
+  private lastValidNavalWaterPosition: Map<number, { x: number; y: number }> = new Map();
 
   // PERF: Dirty flag for separation - only recalculate when neighbors changed
   private unitMovedThisTick: Set<number> = new Set();
@@ -152,85 +151,6 @@ export class MovementOrchestrator {
     const feature = cell.feature || 'none';
     // Only deep water is valid for naval units - shallow water is for wading ground units
     return feature === 'water_deep';
-  }
-
-  /**
-   * Enforce movement domain boundaries for naval units.
-   * Uses O(1) terrain grid lookup instead of expensive navmesh queries.
-   * Only checks naval units (movementDomain === 'water').
-   * Caches validated positions to avoid redundant checks.
-   *
-   * PERF: Optimized for 1000+ units:
-   * - O(1) terrain lookup vs O(log n) navmesh query
-   * - Only naval units checked (ground/air skip entirely)
-   * - Position caching avoids redundant checks
-   */
-  private enforceMovementDomainBoundary(
-    entityId: number,
-    transform: Transform,
-    unit: Unit,
-    velocity: Velocity
-  ): void {
-    // Only naval units need water boundary enforcement
-    // Ground units can walk anywhere walkable, air units ignore terrain
-    if (unit.movementDomain !== 'water' || unit.isFlying) {
-      return;
-    }
-
-    // PERF: Check if we've moved enough to need re-validation
-    const lastPos = this.lastValidatedNavalPosition.get(entityId);
-    if (lastPos) {
-      const dx = transform.x - lastPos.x;
-      const dy = transform.y - lastPos.y;
-      const distSq = dx * dx + dy * dy;
-      if (distSq < MovementOrchestrator.NAVAL_VALIDATION_THRESHOLD_SQ) {
-        return; // Haven't moved enough, skip validation
-      }
-    }
-
-    // O(1) terrain lookup - check if current position is water
-    const isOnWater = this.isNavalWaterTerrain(transform.x, transform.y);
-
-    if (isOnWater) {
-      // Valid position - cache it
-      this.lastValidatedNavalPosition.set(entityId, { x: transform.x, y: transform.y });
-      return;
-    }
-
-    // Naval unit is on land - push back to water
-    // Use navmesh query only when we need to find nearest water (rare case)
-    const nearestWater = this.recast.findNearestPointForDomain(
-      transform.x,
-      transform.y,
-      'water'
-    );
-
-    if (nearestWater) {
-      const dx = nearestWater.x - transform.x;
-      const dy = nearestWater.y - transform.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist > 0.01) {
-        // Push towards water - use stronger push to quickly correct invalid state
-        const pushDistance = Math.min(dist, unit.maxSpeed * 0.2);
-        const pushX = (dx / dist) * pushDistance;
-        const pushY = (dy / dist) * pushDistance;
-
-        transform.x += pushX;
-        transform.y += pushY;
-
-        // Update velocity to point towards water
-        velocity.x = (dx / dist) * unit.maxSpeed * 0.5;
-        velocity.y = (dy / dist) * unit.maxSpeed * 0.5;
-      } else {
-        // Very close - snap to water
-        transform.x = nearestWater.x;
-        transform.y = nearestWater.y;
-      }
-
-      // Cache the corrected position
-      this.lastValidatedNavalPosition.set(entityId, { x: transform.x, y: transform.y });
-    }
   }
 
   /**
@@ -774,18 +694,34 @@ export class MovementOrchestrator {
           transform.rotation += Math.sign(normalizedDiff) * turnRate;
         }
 
+        // For naval units, save position before movement for potential revert
+        const isNaval = unit.movementDomain === 'water' && !unit.isFlying;
+        const preMovePosX = transform.x;
+        const preMovePosY = transform.y;
+
         // Apply movement
         transform.translate(velocity.x * dt, velocity.y * dt);
         transform.x = snapValue(transform.x, QUANT_POSITION);
         transform.y = snapValue(transform.y, QUANT_POSITION);
         this.pathfinding.clampToMapBounds(transform);
 
-        // Enforce movement domain boundaries (prevents boats on land, etc.)
-        this.enforceMovementDomainBoundary(entityId, transform, unit, velocity);
-
         this.unitMovedThisTick.add(entityId);
         this.trulyIdleTicks.set(entityId, 0);
         this.pathfinding.resolveHardBuildingCollision(entityId, transform, unit);
+
+        // CRITICAL: Naval boundary check must be LAST
+        if (isNaval) {
+          const isOnWater = this.isNavalWaterTerrain(transform.x, transform.y);
+          if (isOnWater) {
+            this.lastValidNavalWaterPosition.set(entityId, { x: transform.x, y: transform.y });
+          } else {
+            // Revert to pre-move position
+            transform.x = preMovePosX;
+            transform.y = preMovePosY;
+            velocity.x = 0;
+            velocity.y = 0;
+          }
+        }
         return;
       }
     }
@@ -890,16 +826,32 @@ export class MovementOrchestrator {
         velocity.x = (tempSeparation.x / sepMag) * combatMoveSpeed;
         velocity.y = (tempSeparation.y / sepMag) * combatMoveSpeed;
 
+        // For naval units, save position before movement for potential revert
+        const isNaval = unit.movementDomain === 'water' && !unit.isFlying;
+        const preMovePosX = transform.x;
+        const preMovePosY = transform.y;
+
         transform.translate(velocity.x * dt, velocity.y * dt);
         transform.x = snapValue(transform.x, QUANT_POSITION);
         transform.y = snapValue(transform.y, QUANT_POSITION);
         this.pathfinding.clampToMapBounds(transform);
 
-        // Enforce movement domain boundaries (prevents boats on land, etc.)
-        this.enforceMovementDomainBoundary(entityId, transform, unit, velocity);
-
         if (!unit.isFlying) {
           this.pathfinding.resolveHardBuildingCollision(entityId, transform, unit);
+        }
+
+        // CRITICAL: Naval boundary check must be LAST
+        if (isNaval) {
+          const isOnWater = this.isNavalWaterTerrain(transform.x, transform.y);
+          if (isOnWater) {
+            this.lastValidNavalWaterPosition.set(entityId, { x: transform.x, y: transform.y });
+          } else {
+            // Revert to pre-move position
+            transform.x = preMovePosX;
+            transform.y = preMovePosY;
+            velocity.x = 0;
+            velocity.y = 0;
+          }
         }
       } else {
         velocity.zero();
@@ -1183,15 +1135,20 @@ export class MovementOrchestrator {
       transform.rotation += Math.sign(normalizedDiff) * turnRate;
     }
 
+    // For naval units, save position before movement for potential revert
+    const isNaval = unit.movementDomain === 'water' && !unit.isFlying;
+    let preMovePosX = 0;
+    let preMovePosY = 0;
+    if (isNaval) {
+      preMovePosX = transform.x;
+      preMovePosY = transform.y;
+    }
+
     // Apply movement
     transform.translate(velocity.x * dt, velocity.y * dt);
     transform.x = snapValue(transform.x, QUANT_POSITION);
     transform.y = snapValue(transform.y, QUANT_POSITION);
     this.pathfinding.clampToMapBounds(transform);
-
-    // Enforce movement domain boundaries (prevents boats on land, etc.)
-    // Critical: must happen after all forces are applied but before collision resolution
-    this.enforceMovementDomainBoundary(entityId, transform, unit, velocity);
 
     // Update Z height for terrain following (ramps, elevated platforms)
     // Use crowd agent's height if available (most accurate for navmesh surface)
@@ -1199,9 +1156,47 @@ export class MovementOrchestrator {
       transform.z = crowdHeight;
     }
 
-    // Hard collision resolution
+    // Hard collision resolution (can push units, so must happen before naval boundary check)
     if (!unit.isFlying) {
       this.pathfinding.resolveHardBuildingCollision(entityId, transform, unit);
+    }
+
+    // CRITICAL: Naval boundary enforcement must be LAST to catch any force that pushed onto land
+    // This includes separation, building collision, physics push, etc.
+    if (isNaval) {
+      const isOnWater = this.isNavalWaterTerrain(transform.x, transform.y);
+      if (isOnWater) {
+        // Valid - save this position
+        this.lastValidNavalWaterPosition.set(entityId, { x: transform.x, y: transform.y });
+      } else {
+        // On land - revert to pre-move position if it was valid, otherwise use last known good
+        const wasValidBefore = this.isNavalWaterTerrain(preMovePosX, preMovePosY);
+        if (wasValidBefore) {
+          transform.x = preMovePosX;
+          transform.y = preMovePosY;
+          velocity.x = 0;
+          velocity.y = 0;
+        } else {
+          // Pre-move was also invalid - use last known valid position
+          const lastValid = this.lastValidNavalWaterPosition.get(entityId);
+          if (lastValid) {
+            transform.x = lastValid.x;
+            transform.y = lastValid.y;
+            velocity.x = 0;
+            velocity.y = 0;
+          } else {
+            // No valid position known - find nearest water (expensive, but rare)
+            const nearestWater = this.recast.findNearestPointForDomain(transform.x, transform.y, 'water');
+            if (nearestWater) {
+              transform.x = nearestWater.x;
+              transform.y = nearestWater.y;
+              velocity.x = 0;
+              velocity.y = 0;
+              this.lastValidNavalWaterPosition.set(entityId, { x: nearestWater.x, y: nearestWater.y });
+            }
+          }
+        }
+      }
     }
   }
 }
