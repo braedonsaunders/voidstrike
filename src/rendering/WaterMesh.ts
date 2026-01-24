@@ -52,8 +52,10 @@ function loadWaterNormalsTexture(): void {
   );
 }
 
-// Start loading immediately when module is imported
-loadWaterNormalsTexture();
+// Start loading immediately when module is imported (browser only)
+if (typeof window !== 'undefined') {
+  loadWaterNormalsTexture();
+}
 
 /**
  * Get the water normals texture
