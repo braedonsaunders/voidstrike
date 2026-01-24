@@ -333,9 +333,9 @@ export class AIMicroSystem extends System {
       if (health.isDead()) continue;
       if (unit.isWorker) continue;
 
-      // Allow transformable units to be processed even when idle
+      // Process units in combat-related states
       const canProcessUnit = unit.state === 'attacking' || unit.state === 'moving' ||
-        (unit.canTransform && unit.state === 'idle');
+        unit.state === 'attackmoving' || (unit.canTransform && unit.state === 'idle');
       if (!canProcessUnit) continue;
 
       // Get or create micro state
@@ -382,9 +382,10 @@ export class AIMicroSystem extends System {
       if (health.isDead()) continue;
       if (unit.isWorker) continue;
 
-      // Allow transformable units to be processed even when idle (for transform decisions)
+      // Process units in combat-related states
+      // attackmoving = moving to position while engaging enemies along the way
       const canProcessUnit = unit.state === 'attacking' || unit.state === 'moving' ||
-        (unit.canTransform && unit.state === 'idle');
+        unit.state === 'attackmoving' || (unit.canTransform && unit.state === 'idle');
       if (!canProcessUnit) continue;
 
       // Get or create micro state
