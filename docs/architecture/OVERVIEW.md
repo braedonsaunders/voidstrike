@@ -2460,7 +2460,7 @@ or zero crowd velocities.
 // In WebGPUGameCanvas - set terrain height BEFORE navmesh init
 // This ensures crowd agents are placed ON the navmesh surface
 game.pathfindingSystem.setTerrainHeightFunction((x: number, z: number) => {
-  return terrain.getHeightAt(x, z);  // Uses smoothed heightMap - matches navmesh!
+  return terrain.getNavmeshHeightAt(x, z);  // Matches navmesh vertex heights (ramps included)
 });
 
 // Then initialize navmesh - it will use the terrain height function above
@@ -2468,9 +2468,9 @@ await game.initializeNavMesh(walkableGeometry.positions, walkableGeometry.indice
 ```
 
 **Why this matters:**
-- NavMesh geometry uses `terrain.getHeightAt()` which reads from smoothed heightMap
-- If crowd agents are placed at `cell.elevation * 0.04` instead, there can be small
-  height differences due to smoothing
+- NavMesh geometry uses the vertex heights computed during `Terrain.generateWalkableGeometry()`
+- If crowd agents are placed using a different height source (like raw `elevation * 0.04`),
+  there can be small height differences near ramps/platforms
 - Even 0.01 unit height mismatch can cause crowd to return near-zero velocities
 - Result: units appear to move at "glacial pace" despite correct speed settings
 

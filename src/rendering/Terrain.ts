@@ -241,6 +241,7 @@ export class Terrain {
 
   // Store heightmap for queries
   private heightMap: Float32Array;
+  private navMeshHeightMap: Float32Array | null = null;
   private gridWidth: number;
   private gridHeight: number;
 
@@ -984,6 +985,37 @@ export class Terrain {
            h11 * fx * fy;
   }
 
+  public getNavmeshHeightAt(worldX: number, worldY: number): number {
+    if (!this.navMeshHeightMap) {
+      return this.getHeightAt(worldX, worldY);
+    }
+
+    const x = worldX / this.cellSize;
+    const y = worldY / this.cellSize;
+
+    if (x < 0 || x >= this.mapData.width || y < 0 || y >= this.mapData.height) {
+      return 0;
+    }
+
+    const x0 = Math.floor(x);
+    const y0 = Math.floor(y);
+    const x1 = Math.min(x0 + 1, this.mapData.width);
+    const y1 = Math.min(y0 + 1, this.mapData.height);
+
+    const fx = x - x0;
+    const fy = y - y0;
+
+    const h00 = this.navMeshHeightMap[y0 * this.gridWidth + x0];
+    const h10 = this.navMeshHeightMap[y0 * this.gridWidth + x1];
+    const h01 = this.navMeshHeightMap[y1 * this.gridWidth + x0];
+    const h11 = this.navMeshHeightMap[y1 * this.gridWidth + x1];
+
+    return h00 * (1 - fx) * (1 - fy) +
+           h10 * fx * (1 - fy) +
+           h01 * (1 - fx) * fy +
+           h11 * fx * fy;
+  }
+
   public getTerrainAt(worldX: number, worldY: number): MapCell | null {
     const x = Math.floor(worldX / this.cellSize);
     const y = Math.floor(worldY / this.cellSize);
@@ -1587,6 +1619,8 @@ export class Terrain {
       // Stop early if no changes were made
       if (changesThisPass === 0) break;
     }
+
+    this.navMeshHeightMap = vertexHeights;
 
     // Helper: Get pre-computed consistent vertex height
     const getVertexHeight = (vx: number, vy: number): number => {
