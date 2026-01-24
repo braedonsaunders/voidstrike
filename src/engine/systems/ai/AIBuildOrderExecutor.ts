@@ -240,6 +240,20 @@ export class AIBuildOrderExecutor {
       return false;
     }
 
+    // Check building requirements BEFORE deducting resources
+    // This prevents resource loss when placement is rejected by BuildingPlacementSystem
+    if (buildingDef.requirements && buildingDef.requirements.length > 0) {
+      for (const reqBuildingId of buildingDef.requirements) {
+        const requiredCount = ai.buildingCounts.get(reqBuildingId) || 0;
+        // We need at least one COMPLETE building of the required type
+        // Check if we have the building and it's complete
+        if (requiredCount === 0 || !this.hasCompleteBuildingOfType(ai, reqBuildingId)) {
+          debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding failed - ${buildingType} requires completed ${reqBuildingId}`);
+          return false;
+        }
+      }
+    }
+
     const basePos = this.coordinator.findAIBase(ai);
     if (!basePos) {
       debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding failed - cannot find AI base!`);
@@ -377,14 +391,24 @@ export class AIBuildOrderExecutor {
    */
   public tryTrainUnit(ai: AIPlayer, unitType: string): boolean {
     const unitDef = UNIT_DEFINITIONS[unitType];
-    if (!unitDef) return false;
+    if (!unitDef) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit failed - unknown unit type: ${unitType}`);
+      return false;
+    }
 
-    if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) return false;
-    if (ai.supply + unitDef.supplyCost > ai.maxSupply) return false;
+    if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit failed - insufficient resources for ${unitType} (need ${unitDef.mineralCost}M/${unitDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+      return false;
+    }
+    if (ai.supply + unitDef.supplyCost > ai.maxSupply) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit failed - supply blocked for ${unitType} (${ai.supply}+${unitDef.supplyCost} > ${ai.maxSupply})`);
+      return false;
+    }
 
     const requiresResearchModule = this.unitRequiresResearchModule(unitType);
 
     const buildings = this.world.getEntitiesWith('Building', 'Selectable');
+    let foundProducer = false;
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const building = entity.get<Building>('Building')!;
@@ -392,6 +416,9 @@ export class AIBuildOrderExecutor {
       if (selectable.playerId !== ai.playerId) continue;
       if (!building.isComplete()) continue;
       if (!building.canProduce.includes(unitType)) continue;
+
+      foundProducer = true;
+
       if (building.productionQueue.length >= 3) continue;
 
       if (requiresResearchModule) {
@@ -407,6 +434,11 @@ export class AIBuildOrderExecutor {
       return true;
     }
 
+    if (!foundProducer) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit failed - no production building for ${unitType}`);
+    } else {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit failed - all ${unitType} producers busy or missing tech lab`);
+    }
     return false;
   }
 
@@ -420,6 +452,30 @@ export class AIBuildOrderExecutor {
     // Units that require research module (tech lab)
     const techUnits = ['operative', 'inferno', 'colossus', 'devastator', 'dreadnought'];
     return techUnits.includes(unitType);
+  }
+
+  /**
+   * Check if the AI has at least one COMPLETE building of the specified type.
+   * Building counts include incomplete buildings, so we need to verify completion state.
+   */
+  private hasCompleteBuildingOfType(ai: AIPlayer, buildingId: string): boolean {
+    const buildings = this.coordinator.getCachedBuildings();
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (building.buildingId !== buildingId) continue;
+
+      if (building.isComplete()) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   // === Research System (NEW IMPLEMENTATION) ===
