@@ -13,6 +13,7 @@ import { Transform } from '../../components/Transform';
 import { Unit } from '../../components/Unit';
 import { World } from '../../ecs/World';
 import { EventBus } from '../../core/EventBus';
+import { Game } from '../../core/Game';
 import {
   generateFormationPositions,
   sortUnitsForFormation,
@@ -70,9 +71,22 @@ export class FormationMovement {
   }
 
   /**
+   * Fast O(1) check if a position is on water terrain.
+   * Uses terrain grid lookup instead of expensive navmesh queries.
+   */
+  private isWaterTerrain(x: number, y: number): boolean {
+    const game = Game.getInstance();
+    const cell = game.getTerrainAt(x, y);
+    if (!cell) return false;
+    const feature = cell.feature || 'none';
+    return feature === 'water_deep' || feature === 'water_shallow';
+  }
+
+  /**
    * Validate and adjust target position for unit's movement domain.
    * Prevents naval units from targeting land positions and vice versa.
    * Returns adjusted target position, or null if no valid position can be found.
+   * PERF: Uses O(1) terrain lookup for naval units instead of expensive navmesh queries.
    */
   private validateTargetForDomain(
     targetX: number,
@@ -84,15 +98,24 @@ export class FormationMovement {
       return { x: targetX, y: targetY };
     }
 
-    // Check if target is valid for this domain
+    // Naval units: use fast O(1) terrain lookup
+    if (domain === 'water') {
+      const isWater = this.isWaterTerrain(targetX, targetY);
+      if (isWater) {
+        return { x: targetX, y: targetY };
+      }
+      // Find nearest water point (only when target is invalid)
+      return this.recast.findNearestPointForDomain(targetX, targetY, 'water');
+    }
+
+    // Ground/amphibious units: use navmesh validation
     const isValidTarget = this.recast.isWalkableForDomain(targetX, targetY, domain);
     if (isValidTarget) {
       return { x: targetX, y: targetY };
     }
 
     // Target is invalid - find nearest valid point for this domain
-    const nearestValid = this.recast.findNearestPointForDomain(targetX, targetY, domain);
-    return nearestValid;
+    return this.recast.findNearestPointForDomain(targetX, targetY, domain);
   }
 
   /**

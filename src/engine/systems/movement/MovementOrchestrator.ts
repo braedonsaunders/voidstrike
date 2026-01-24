@@ -79,6 +79,11 @@ export class MovementOrchestrator {
   private trulyIdleTicks: Map<number, number> = new Map();
   private lastIdlePosition: Map<number, { x: number; y: number }> = new Map();
 
+  // PERF: Naval unit boundary enforcement - cache last validated position
+  // Only re-validate when unit moves more than threshold distance
+  private lastValidatedNavalPosition: Map<number, { x: number; y: number }> = new Map();
+  private static readonly NAVAL_VALIDATION_THRESHOLD_SQ = 0.25; // 0.5 units squared
+
   // PERF: Dirty flag for separation - only recalculate when neighbors changed
   private unitMovedThisTick: Set<number> = new Set();
 
@@ -135,67 +140,92 @@ export class MovementOrchestrator {
   }
 
   /**
-   * Enforce movement domain boundaries for a unit.
-   * Ensures naval units stay in water and ground units stay on land.
-   * If unit is in invalid terrain, pushes them back to nearest valid position.
+   * Fast O(1) check if a position is on water terrain.
+   * Uses terrain grid lookup instead of expensive navmesh queries.
+   */
+  private isWaterTerrain(x: number, y: number): boolean {
+    const cell = this.game.getTerrainAt(x, y);
+    if (!cell) return false;
+    const feature = cell.feature || 'none';
+    return feature === 'water_deep' || feature === 'water_shallow';
+  }
+
+  /**
+   * Enforce movement domain boundaries for naval units.
+   * Uses O(1) terrain grid lookup instead of expensive navmesh queries.
+   * Only checks naval units (movementDomain === 'water').
+   * Caches validated positions to avoid redundant checks.
    *
-   * Critical for preventing boats from ending up on land due to:
-   * - Physics pushing from other units
-   * - Separation forces during arrival
-   * - Direct movement before pathfinding validates
+   * PERF: Optimized for 1000+ units:
+   * - O(1) terrain lookup vs O(log n) navmesh query
+   * - Only naval units checked (ground/air skip entirely)
+   * - Position caching avoids redundant checks
    */
   private enforceMovementDomainBoundary(
+    entityId: number,
     transform: Transform,
     unit: Unit,
     velocity: Velocity
   ): void {
-    // Air units can go anywhere
-    if (unit.movementDomain === 'air' || unit.isFlying) {
+    // Only naval units need water boundary enforcement
+    // Ground units can walk anywhere walkable, air units ignore terrain
+    if (unit.movementDomain !== 'water' || unit.isFlying) {
       return;
     }
 
-    // Check if current position is valid for this unit's domain
-    const isValidPosition = this.recast.isWalkableForDomain(
-      transform.x,
-      transform.y,
-      unit.movementDomain
-    );
+    // PERF: Check if we've moved enough to need re-validation
+    const lastPos = this.lastValidatedNavalPosition.get(entityId);
+    if (lastPos) {
+      const dx = transform.x - lastPos.x;
+      const dy = transform.y - lastPos.y;
+      const distSq = dx * dx + dy * dy;
+      if (distSq < MovementOrchestrator.NAVAL_VALIDATION_THRESHOLD_SQ) {
+        return; // Haven't moved enough, skip validation
+      }
+    }
 
-    if (isValidPosition) {
+    // O(1) terrain lookup - check if current position is water
+    const isOnWater = this.isWaterTerrain(transform.x, transform.y);
+
+    if (isOnWater) {
+      // Valid position - cache it
+      this.lastValidatedNavalPosition.set(entityId, { x: transform.x, y: transform.y });
       return;
     }
 
-    // Unit is in invalid terrain - find nearest valid position and push them there
-    const nearestValid = this.recast.findNearestPointForDomain(
+    // Naval unit is on land - push back to water
+    // Use navmesh query only when we need to find nearest water (rare case)
+    const nearestWater = this.recast.findNearestPointForDomain(
       transform.x,
       transform.y,
-      unit.movementDomain
+      'water'
     );
 
-    if (nearestValid) {
-      // Calculate push direction towards valid terrain
-      const dx = nearestValid.x - transform.x;
-      const dy = nearestValid.y - transform.y;
+    if (nearestWater) {
+      const dx = nearestWater.x - transform.x;
+      const dy = nearestWater.y - transform.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
       if (dist > 0.01) {
-        // Immediately snap unit back if they've gone too far into invalid terrain
-        // Otherwise push them gradually to avoid jarring teleports
-        const pushDistance = Math.min(dist, unit.maxSpeed * 0.1);
+        // Push towards water - use stronger push to quickly correct invalid state
+        const pushDistance = Math.min(dist, unit.maxSpeed * 0.2);
         const pushX = (dx / dist) * pushDistance;
         const pushY = (dy / dist) * pushDistance;
 
         transform.x += pushX;
         transform.y += pushY;
 
-        // Also update velocity to point towards valid terrain
+        // Update velocity to point towards water
         velocity.x = (dx / dist) * unit.maxSpeed * 0.5;
         velocity.y = (dy / dist) * unit.maxSpeed * 0.5;
       } else {
-        // Very close - just snap to valid position
-        transform.x = nearestValid.x;
-        transform.y = nearestValid.y;
+        // Very close - snap to water
+        transform.x = nearestWater.x;
+        transform.y = nearestWater.y;
       }
+
+      // Cache the corrected position
+      this.lastValidatedNavalPosition.set(entityId, { x: transform.x, y: transform.y });
     }
   }
 
@@ -285,16 +315,29 @@ export class MovementOrchestrator {
   /**
    * Validate and adjust target position for unit's movement domain.
    * Returns adjusted target or null if no valid position exists.
+   * PERF: Uses O(1) terrain lookup for naval units instead of expensive navmesh queries.
    */
   private validateTargetForDomain(
     targetX: number,
     targetY: number,
     domain: import('../../pathfinding/RecastNavigation').MovementDomain
   ): { x: number; y: number } | null {
+    // Air units can go anywhere
     if (domain === 'air') {
       return { x: targetX, y: targetY };
     }
 
+    // Naval units: use fast O(1) terrain lookup
+    if (domain === 'water') {
+      const isWater = this.isWaterTerrain(targetX, targetY);
+      if (isWater) {
+        return { x: targetX, y: targetY };
+      }
+      // Find nearest water point (only when needed)
+      return this.recast.findNearestPointForDomain(targetX, targetY, 'water');
+    }
+
+    // Ground/amphibious units: use navmesh validation (command-time only, not per-frame)
     const isValid = this.recast.isWalkableForDomain(targetX, targetY, domain);
     if (isValid) {
       return { x: targetX, y: targetY };
@@ -556,25 +599,15 @@ export class MovementOrchestrator {
       targetX = waypoint.x;
       targetY = waypoint.y;
 
-      // Validate waypoint for movement domain (prevents boats following paths onto land)
-      if (unit.movementDomain !== 'air' && !unit.isFlying) {
-        const isValidWaypoint = this.recast.isWalkableForDomain(targetX, targetY, unit.movementDomain);
-        if (!isValidWaypoint) {
-          // Skip invalid waypoints or clear path if all remaining are invalid
+      // PERF: Only validate waypoints for naval units using O(1) terrain lookup
+      // Ground/air units rely on navmesh pathfinding which already validates terrain
+      if (unit.movementDomain === 'water' && !unit.isFlying) {
+        const isWaterWaypoint = this.isWaterTerrain(targetX, targetY);
+        if (!isWaterWaypoint) {
+          // Skip invalid waypoints - naval unit shouldn't walk on land
           unit.pathIndex++;
           if (unit.pathIndex >= unit.path.length) {
-            // All waypoints exhausted - find nearest valid point to final target
-            if (unit.targetX !== null && unit.targetY !== null) {
-              const nearestValid = this.recast.findNearestPointForDomain(
-                unit.targetX,
-                unit.targetY,
-                unit.movementDomain
-              );
-              if (nearestValid) {
-                unit.targetX = nearestValid.x;
-                unit.targetY = nearestValid.y;
-              }
-            }
+            // All waypoints exhausted - clear path, boundary enforcement will handle correction
             unit.path = [];
             unit.pathIndex = 0;
           }
@@ -582,21 +615,21 @@ export class MovementOrchestrator {
         }
       }
     } else if (unit.targetX !== null && unit.targetY !== null) {
-      // Validate direct target for movement domain (prevents boats targeting land)
-      if (unit.movementDomain !== 'air' && !unit.isFlying) {
-        const isValidTarget = this.recast.isWalkableForDomain(unit.targetX, unit.targetY, unit.movementDomain);
-        if (!isValidTarget) {
-          // Find nearest valid point for this domain
-          const nearestValid = this.recast.findNearestPointForDomain(
+      // PERF: Only validate direct targets for naval units using O(1) terrain lookup
+      if (unit.movementDomain === 'water' && !unit.isFlying) {
+        const isWaterTarget = this.isWaterTerrain(unit.targetX, unit.targetY);
+        if (!isWaterTarget) {
+          // Invalid target for naval unit - find nearest water point
+          const nearestWater = this.recast.findNearestPointForDomain(
             unit.targetX,
             unit.targetY,
-            unit.movementDomain
+            'water'
           );
-          if (nearestValid) {
-            unit.targetX = nearestValid.x;
-            unit.targetY = nearestValid.y;
+          if (nearestWater) {
+            unit.targetX = nearestWater.x;
+            unit.targetY = nearestWater.y;
           } else {
-            // No valid point found - clear target and stop
+            // No water found - clear target and stop
             unit.clearTarget();
             velocity.zero();
             return;
@@ -744,7 +777,7 @@ export class MovementOrchestrator {
         this.pathfinding.clampToMapBounds(transform);
 
         // Enforce movement domain boundaries (prevents boats on land, etc.)
-        this.enforceMovementDomainBoundary(transform, unit, velocity);
+        this.enforceMovementDomainBoundary(entityId, transform, unit, velocity);
 
         this.unitMovedThisTick.add(entityId);
         this.trulyIdleTicks.set(entityId, 0);
@@ -859,7 +892,7 @@ export class MovementOrchestrator {
         this.pathfinding.clampToMapBounds(transform);
 
         // Enforce movement domain boundaries (prevents boats on land, etc.)
-        this.enforceMovementDomainBoundary(transform, unit, velocity);
+        this.enforceMovementDomainBoundary(entityId, transform, unit, velocity);
 
         if (!unit.isFlying) {
           this.pathfinding.resolveHardBuildingCollision(entityId, transform, unit);
@@ -1154,7 +1187,7 @@ export class MovementOrchestrator {
 
     // Enforce movement domain boundaries (prevents boats on land, etc.)
     // Critical: must happen after all forces are applied but before collision resolution
-    this.enforceMovementDomainBoundary(transform, unit, velocity);
+    this.enforceMovementDomainBoundary(entityId, transform, unit, velocity);
 
     // Update Z height for terrain following (ramps, elevated platforms)
     // Use crowd agent's height if available (most accurate for navmesh surface)
