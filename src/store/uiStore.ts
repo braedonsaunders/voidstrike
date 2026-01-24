@@ -208,6 +208,11 @@ export interface GraphicsSettings {
   lodDistance1: number; // Distance threshold for LOD1 (medium detail)
   // Beyond lodDistance1, LOD2 (lowest detail) is used
 
+  // Water
+  waterEnabled: boolean;
+  waterQuality: 'low' | 'medium' | 'high' | 'ultra'; // Controls texture size, distortion, reflections
+  waterReflectionsEnabled: boolean; // Scene reflections (expensive)
+
   // Frame Rate Limit
   maxFPS: number; // 0 = unlimited, otherwise caps at this value (30, 60, 120, 144)
 }
@@ -652,6 +657,11 @@ export const useUIStore = create<UIState>((set, get) => ({
     lodEnabled: true,
     lodDistance0: 50, // Use LOD0 (highest detail) within 50 units from camera
     lodDistance1: 120, // Use LOD1 (medium detail) between 50-120 units, LOD2 beyond
+
+    // Water
+    waterEnabled: true,
+    waterQuality: 'high',
+    waterReflectionsEnabled: true,
 
     // Frame Rate Limit
     maxFPS: 0, // Unlimited by default

@@ -54,7 +54,10 @@
         "outlineEnabled": true,
         "outlineStrength": 1,
         "particlesEnabled": true,
-        "particleDensity": 2.5
+        "particleDensity": 2.5,
+        "waterEnabled": true,
+        "waterQuality": "low",
+        "waterReflectionsEnabled": false
       }
     },
     "medium": {
@@ -109,7 +112,10 @@
         "outlineEnabled": true,
         "outlineStrength": 2,
         "particlesEnabled": true,
-        "particleDensity": 5.0
+        "particleDensity": 5.0,
+        "waterEnabled": true,
+        "waterQuality": "medium",
+        "waterReflectionsEnabled": true
       }
     },
     "high": {
@@ -164,7 +170,10 @@
         "outlineEnabled": true,
         "outlineStrength": 2,
         "particlesEnabled": true,
-        "particleDensity": 7.5
+        "particleDensity": 7.5,
+        "waterEnabled": true,
+        "waterQuality": "high",
+        "waterReflectionsEnabled": true
       }
     },
     "ultra": {
@@ -219,7 +228,10 @@
         "outlineEnabled": true,
         "outlineStrength": 2,
         "particlesEnabled": true,
-        "particleDensity": 10.0
+        "particleDensity": 10.0,
+        "waterEnabled": true,
+        "waterQuality": "ultra",
+        "waterReflectionsEnabled": true
       }
     },
     "custom": {

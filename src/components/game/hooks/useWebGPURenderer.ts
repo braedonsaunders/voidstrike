@@ -518,6 +518,11 @@ export function useWebGPURenderer({
       environmentRef.current?.setEmissiveDecorationsEnabled(graphicsSettings.emissiveDecorationsEnabled);
       environmentRef.current?.setEmissiveIntensityMultiplier(graphicsSettings.emissiveIntensityMultiplier);
 
+      // Configure water settings
+      environmentRef.current?.setWaterEnabled(graphicsSettings.waterEnabled);
+      environmentRef.current?.setWaterQuality(graphicsSettings.waterQuality);
+      environmentRef.current?.setWaterReflectionsEnabled(graphicsSettings.waterReflectionsEnabled);
+
       // Create light pool
       if (graphicsSettings.dynamicLightsEnabled) {
         lightPoolRef.current = new LightPool(scene, graphicsSettings.maxDynamicLights);

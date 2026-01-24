@@ -316,6 +316,7 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
     reflections: false,
     gi: false,
     effects: false,
+    water: false,
     color: false,
   });
 
@@ -1075,6 +1076,48 @@ export const GraphicsOptionsPanel = memo(function GraphicsOptionsPanel() {
               />
             </div>
           )}
+        </div>
+      )}
+
+      {/* ===== WATER ===== */}
+      <SectionHeader
+        title="Water"
+        expanded={expanded.water}
+        onToggle={() => toggleSection('water')}
+        badge="performance"
+        masterToggle={{
+          enabled: graphicsSettings.waterEnabled,
+          onChange: () => handleToggle('waterEnabled'),
+        }}
+      />
+      {expanded.water && graphicsSettings.waterEnabled && (
+        <div style={{ marginBottom: '12px' }}>
+          <div style={{ marginBottom: '8px' }}>
+            <span style={{ fontSize: '10px', color: '#666', display: 'block', marginBottom: '4px' }}>
+              Quality
+            </span>
+            <SegmentedControl
+              options={[
+                { value: 'low', label: 'Low' },
+                { value: 'medium', label: 'Med' },
+                { value: 'high', label: 'High' },
+                { value: 'ultra', label: 'Ultra' },
+              ]}
+              value={graphicsSettings.waterQuality}
+              onChange={(v) => setGraphicsSetting('waterQuality', v as 'low' | 'medium' | 'high' | 'ultra')}
+            />
+            <div style={{ fontSize: '9px', color: '#555', marginTop: '4px' }}>
+              Controls wave detail and texture resolution
+            </div>
+          </div>
+          <ToggleRow
+            label="Reflections"
+            enabled={graphicsSettings.waterReflectionsEnabled}
+            onChange={() => handleToggle('waterReflectionsEnabled')}
+          />
+          <div style={{ fontSize: '9px', color: '#555', marginLeft: '12px' }}>
+            Real-time scene reflections on water surface
+          </div>
         </div>
       )}
 

@@ -4,7 +4,7 @@ import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
 import { CrystalField } from './GroundDetail';
 import { TSLMapBorderFog } from './tsl/MapBorderFog';
-import { WaterMesh } from './WaterMesh';
+import { WaterMesh, type WaterQuality } from './WaterMesh';
 import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
 import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles, updateDecorationFrustum } from './InstancedDecorations';
@@ -316,7 +316,7 @@ export class EnvironmentManager {
     this.terrain.update(deltaTime, this._tempSunDirection);
 
     if (this.waterMesh) {
-      this.waterMesh.update(deltaTime);
+      this.waterMesh.update(deltaTime, camera);
     }
     if (this.mapBorderFog) {
       this.mapBorderFog.update(gameTime);
@@ -758,6 +758,33 @@ export class EnvironmentManager {
   public setEmissiveIntensityMultiplier(multiplier: number): void {
     if (this.emissiveDecorationManager) {
       this.emissiveDecorationManager.setIntensityMultiplier(multiplier);
+    }
+  }
+
+  /**
+   * Set water enabled state
+   */
+  public setWaterEnabled(enabled: boolean): void {
+    if (this.waterMesh) {
+      this.waterMesh.setEnabled(enabled);
+    }
+  }
+
+  /**
+   * Set water quality level
+   */
+  public setWaterQuality(quality: WaterQuality): void {
+    if (this.waterMesh) {
+      this.waterMesh.setQuality(quality);
+    }
+  }
+
+  /**
+   * Set water reflections enabled
+   */
+  public setWaterReflectionsEnabled(enabled: boolean): void {
+    if (this.waterMesh) {
+      this.waterMesh.setReflectionsEnabled(enabled);
     }
   }
 
