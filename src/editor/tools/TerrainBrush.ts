@@ -531,6 +531,63 @@ export class TerrainBrush {
   }
 
   /**
+   * Paint feature along a line between two points
+   */
+  public paintFeatureLine(
+    fromX: number,
+    fromY: number,
+    toX: number,
+    toY: number,
+    width: number,
+    feature: string
+  ): CellUpdate[] {
+    if (!this.mapData) return [];
+
+    const updates: CellUpdate[] = [];
+    const visitedCells = new Set<string>();
+
+    const featureConfig = this.config.terrain.features.find((f) => f.id === feature);
+
+    const dx = toX - fromX;
+    const dy = toY - fromY;
+    const length = distance(fromX, fromY, toX, toY);
+    if (length === 0) {
+      // Single point
+      return this.paintFeature(fromX, fromY, Math.ceil(width / 2), feature);
+    }
+
+    const steps = Math.ceil(length);
+    const perpX = -dy / length;
+    const perpY = dx / length;
+
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const cx = fromX + dx * t;
+      const cy = fromY + dy * t;
+
+      for (let w = -width / 2; w <= width / 2; w++) {
+        const x = Math.floor(cx + perpX * w);
+        const y = Math.floor(cy + perpY * w);
+        const key = `${x},${y}`;
+
+        if (this.isInBounds(x, y) && !visitedCells.has(key)) {
+          visitedCells.add(key);
+          updates.push({
+            x,
+            y,
+            cell: {
+              feature,
+              walkable: featureConfig?.walkable ?? true,
+            },
+          });
+        }
+      }
+    }
+
+    return updates;
+  }
+
+  /**
    * Paint a filled rectangle
    */
   public paintRect(
@@ -565,6 +622,90 @@ export class TerrainBrush {
           y,
           cell: { elevation, walkable },
         });
+      }
+    }
+
+    return updates;
+  }
+
+  /**
+   * Paint feature on a filled rectangle
+   */
+  public paintFeatureRect(
+    x1: number,
+    y1: number,
+    x2: number,
+    y2: number,
+    feature: string
+  ): CellUpdate[] {
+    if (!this.mapData) return [];
+
+    const updates: CellUpdate[] = [];
+    const minX = Math.min(Math.floor(x1), Math.floor(x2));
+    const maxX = Math.max(Math.floor(x1), Math.floor(x2));
+    const minY = Math.min(Math.floor(y1), Math.floor(y2));
+    const maxY = Math.max(Math.floor(y1), Math.floor(y2));
+
+    const featureConfig = this.config.terrain.features.find((f) => f.id === feature);
+
+    for (let y = minY; y <= maxY; y++) {
+      for (let x = minX; x <= maxX; x++) {
+        if (!this.isInBounds(x, y)) continue;
+
+        updates.push({
+          x,
+          y,
+          cell: {
+            feature,
+            walkable: featureConfig?.walkable ?? true,
+          },
+        });
+      }
+    }
+
+    return updates;
+  }
+
+  /**
+   * Paint feature on a filled ellipse
+   */
+  public paintFeatureEllipse(
+    centerX: number,
+    centerY: number,
+    radiusX: number,
+    radiusY: number,
+    feature: string
+  ): CellUpdate[] {
+    if (!this.mapData) return [];
+
+    const updates: CellUpdate[] = [];
+    const cx = Math.floor(centerX);
+    const cy = Math.floor(centerY);
+    const rx = Math.abs(radiusX);
+    const ry = Math.abs(radiusY);
+
+    const featureConfig = this.config.terrain.features.find((f) => f.id === feature);
+
+    for (let dy = -ry; dy <= ry; dy++) {
+      for (let dx = -rx; dx <= rx; dx++) {
+        const x = cx + dx;
+        const y = cy + dy;
+
+        if (!this.isInBounds(x, y)) continue;
+
+        // Check if point is inside ellipse: (dx/rx)^2 + (dy/ry)^2 <= 1
+        const normalizedDist = (dx * dx) / (rx * rx || 1) + (dy * dy) / (ry * ry || 1);
+
+        if (normalizedDist <= 1) {
+          updates.push({
+            x,
+            y,
+            cell: {
+              feature,
+              walkable: featureConfig?.walkable ?? true,
+            },
+          });
+        }
       }
     }
 
