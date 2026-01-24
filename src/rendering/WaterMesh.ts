@@ -166,7 +166,7 @@ export class WaterMesh {
 
     // Determine color based on biome (lava for Volcanic)
     const isLava = biome.name === 'Volcanic';
-    const waterColor = isLava ? 0x1a0500 : 0x001e0f;
+    const waterColor = isLava ? 0x1a0500 : 0x0066aa; // Ocean blue
     const sunColor = isLava ? 0xff6600 : 0xffffff;
 
     const water = new ThreeWaterMesh(geometry, {
@@ -174,8 +174,8 @@ export class WaterMesh {
       sunDirection: this.sunDirection,
       sunColor: sunColor,
       waterColor: waterColor,
-      distortionScale: 3.7,
-      size: 1.0,
+      distortionScale: 1.0, // Reduced for RTS scale
+      size: 30.0, // Larger = smaller/slower wave pattern
     });
 
     water.rotation.x = -Math.PI / 2;
@@ -383,7 +383,7 @@ export class WaterMesh {
     // Determine water color based on depth
     const deepCount = region.cells.filter((c) => c.isDeep).length;
     const isDeep = deepCount > region.cells.length / 2;
-    const waterColor = isDeep ? 0x001510 : 0x001e0f;
+    const waterColor = isDeep ? 0x004488 : 0x0066aa; // Blue tones
 
     // Create Three.js WaterMesh
     const water = new ThreeWaterMesh(geometry, {
@@ -391,8 +391,8 @@ export class WaterMesh {
       sunDirection: this.sunDirection,
       sunColor: 0xffffff,
       waterColor: waterColor,
-      distortionScale: 3.7,
-      size: 1.0,
+      distortionScale: 1.0, // Reduced for RTS scale
+      size: 30.0, // Larger = smaller/slower wave pattern
     });
 
     // Calculate center position and height
