@@ -174,7 +174,7 @@ export class SpawnSystem extends System {
     const building = new Building(definition);
     if (completed) {
       building.state = 'complete';
-      building.isConstructed = true;
+      building.buildProgress = 1;
     }
 
     // Selection radius based on building size
