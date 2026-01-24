@@ -13,6 +13,7 @@ import {
   CLIFF_WALL_THRESHOLD_ELEVATION,
   RAMP_BOUNDARY_ELEVATION_THRESHOLD,
   WALKABLE_CLIMB_ELEVATION,
+  WALKABLE_CLIMB,
 } from '@/data/pathfinding.config';
 
 // Import from central rendering config
@@ -1503,20 +1504,23 @@ export class Terrain {
     }
 
     // =================================================================
-    // CRITICAL FIX: Enforce maximum slope constraint at ramp boundaries
+    // CRITICAL FIX: Enforce maximum height step constraint at ramp boundaries
     //
-    // Problem: Even with smooth heightMap values, adjacent vertices near ramp
-    // boundaries can have height differences that create slopes > 50 degrees.
-    // Recast rejects these triangles, leaving gaps in the navmesh.
+    // Problem: Recast requires adjacent voxels to have height differences within
+    // walkableClimb (0.8) to be connected. Previously we used 1.0 which allowed
+    // height steps that Recast would reject, causing navmesh disconnection.
     //
     // Solution: Multi-pass smoothing that propagates heights from ramp cells
-    // outward, capping the height change per cell to stay under walkableSlopeAngle.
+    // outward, capping the height change per cell to stay UNDER walkableClimb.
+    // We also check 8-connected neighbors (including diagonals) because the
+    // floor triangles have diagonal edges that must also be within bounds.
     //
-    // Max height change per cell = tan(50°) * cellSize ≈ 1.19 * 1 = 1.19
-    // We use a slightly smaller value (1.0) for safety margin.
+    // Using WALKABLE_CLIMB * 0.9 for safety margin against floating-point errors
+    // and navmesh cell sampling.
     // =================================================================
-    const MAX_HEIGHT_CHANGE_PER_CELL = 1.0; // tan(45°) = 1.0, giving 45° max slope
-    const SMOOTHING_PASSES = 15; // Number of passes to propagate heights outward
+    const MAX_HEIGHT_CHANGE_PER_CELL = WALKABLE_CLIMB * 0.9; // 0.72, safely under walkableClimb (0.8)
+    const MAX_HEIGHT_CHANGE_DIAGONAL = MAX_HEIGHT_CHANGE_PER_CELL * Math.SQRT2; // ~1.02 for diagonal distance
+    const SMOOTHING_PASSES = 20; // Increased passes for better convergence
 
     // Find all vertices that are definitely on ramps (not just near ramps)
     // These are our "anchor" heights that we propagate from
@@ -1577,10 +1581,12 @@ export class Terrain {
           }
           if (!nearRamp) continue;
 
-          // Check 4-connected neighbors and enforce slope constraint
+          // Check 8-connected neighbors (including diagonals) and enforce height constraint
+          // Diagonals are important because floor triangles have diagonal edges
           const currentHeight = vertexHeights[idx];
           let targetHeight = currentHeight;
 
+          // 4-connected neighbors (orthogonal) - use standard max height change
           for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
             const nx = vx + dx;
             const ny = vy + dy;
@@ -1601,6 +1607,33 @@ export class Terrain {
               else if (heightDiff < -MAX_HEIGHT_CHANGE_PER_CELL) {
                 // Push this vertex up toward the neighbor
                 const newHeight = neighborHeight - MAX_HEIGHT_CHANGE_PER_CELL;
+                if (newHeight > targetHeight) {
+                  targetHeight = newHeight;
+                }
+              }
+            }
+          }
+
+          // 4-connected neighbors (diagonal) - use diagonal max height change
+          // These are critical because triangles share diagonal edges
+          for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+            const nx = vx + dx;
+            const ny = vy + dy;
+            if (nx >= 0 && nx <= width && ny >= 0 && ny <= height) {
+              const neighborIdx = ny * (width + 1) + nx;
+              const neighborHeight = vertexHeights[neighborIdx];
+              const heightDiff = currentHeight - neighborHeight;
+
+              // If this vertex is higher than diagonal neighbor by more than allowed
+              if (heightDiff > MAX_HEIGHT_CHANGE_DIAGONAL) {
+                const newHeight = neighborHeight + MAX_HEIGHT_CHANGE_DIAGONAL;
+                if (newHeight < targetHeight) {
+                  targetHeight = newHeight;
+                }
+              }
+              // If this vertex is lower than diagonal neighbor by more than allowed
+              else if (heightDiff < -MAX_HEIGHT_CHANGE_DIAGONAL) {
+                const newHeight = neighborHeight - MAX_HEIGHT_CHANGE_DIAGONAL;
                 if (newHeight > targetHeight) {
                   targetHeight = newHeight;
                 }
@@ -1825,12 +1858,14 @@ export class Terrain {
         const bottomCell = terrain[y + 1][x];
 
         // Check horizontal boundary (cell to right neighbor)
+        // Compare shared vertex height from left cell's perspective vs right cell's perspective
         const isRamp1 = cell.terrain === 'ramp' || rampZone.has(`${x},${y}`);
         const isRamp2 = rightCell.terrain === 'ramp' || rampZone.has(`${x + 1},${y}`);
         if (isRamp1 !== isRamp2) {
-          // Boundary between ramp and non-ramp
-          const h1 = this.heightMap[y * this.gridWidth + (x + 1)];
-          const h2 = this.heightMap[y * this.gridWidth + (x + 1)]; // Same vertex
+          // Boundary between ramp and non-ramp - check height step at the shared edge
+          // The shared vertex is at (x+1, y) - check height step between adjacent cells
+          const h1 = vertexHeights[y * (width + 1) + x];        // Left cell corner
+          const h2 = vertexHeights[y * (width + 1) + (x + 1)];  // Shared boundary vertex
           const gap = Math.abs(h1 - h2);
           if (gap > maxRampBoundaryGap) {
             maxRampBoundaryGap = gap;
@@ -1841,8 +1876,9 @@ export class Terrain {
         // Check vertical boundary (cell to bottom neighbor)
         const isRamp3 = bottomCell.terrain === 'ramp' || rampZone.has(`${x},${y + 1}`);
         if (isRamp1 !== isRamp3) {
-          const h3 = this.heightMap[(y + 1) * this.gridWidth + x];
-          const h4 = this.heightMap[(y + 1) * this.gridWidth + x]; // Same vertex
+          // The shared vertex is at (x, y+1) - check height step between adjacent cells
+          const h3 = vertexHeights[y * (width + 1) + x];        // Top cell corner
+          const h4 = vertexHeights[(y + 1) * (width + 1) + x];  // Shared boundary vertex
           const gap = Math.abs(h3 - h4);
           if (gap > maxRampBoundaryGap) {
             maxRampBoundaryGap = gap;
