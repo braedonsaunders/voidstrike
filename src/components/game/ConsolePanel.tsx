@@ -3,21 +3,14 @@
 import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import { useUIStore } from '@/store/uiStore';
 import { ConsoleEngine, ConsoleEntry, getConsoleEngine } from '@/engine/debug/ConsoleEngine';
-import { Game } from '@/engine/core/Game';
-import { RTSCamera } from '@/rendering/Camera';
-
-interface ConsolePanelProps {
-  gameRef?: React.MutableRefObject<Game | null>;
-  cameraRef?: React.MutableRefObject<RTSCamera | null>;
-}
 
 /**
  * Debug Console Panel
  *
- * A terminal-style console for executing debug commands.
- * Disabled in multiplayer mode.
+ * A minimal, draggable, resizable console for debug commands.
+ * Single-player only.
  */
-export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: ConsolePanelProps) {
+export const ConsolePanel = memo(function ConsolePanel() {
   const { showConsole, setShowConsole } = useUIStore();
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<ConsoleEntry[]>([]);
@@ -25,8 +18,18 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
   const [engine, setEngine] = useState<ConsoleEngine | null>(null);
 
+  // Position and size state
+  const [position, setPosition] = useState({ x: 50, y: 100 });
+  const [size, setSize] = useState({ width: 500, height: 220 });
+
+  // Drag state
+  const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+
   const inputRef = useRef<HTMLInputElement>(null);
   const outputRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Initialize console engine
   useEffect(() => {
@@ -37,15 +40,6 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
         setEngine(eng);
         setHistory(eng.getHistory());
 
-        // Set up game references
-        if (gameRef?.current) {
-          eng.setGame(gameRef.current);
-        }
-        if (cameraRef?.current) {
-          eng.setCamera(cameraRef.current);
-        }
-
-        // Listen for history changes
         const handleHistoryChange = () => {
           setHistory(eng.getHistory());
         };
@@ -60,19 +54,7 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
     return () => {
       mounted = false;
     };
-  }, [gameRef, cameraRef]);
-
-  // Update game/camera refs when they change
-  useEffect(() => {
-    if (engine) {
-      if (gameRef?.current) {
-        engine.setGame(gameRef.current);
-      }
-      if (cameraRef?.current) {
-        engine.setCamera(cameraRef.current);
-      }
-    }
-  }, [engine, gameRef?.current, cameraRef?.current]);
+  }, []);
 
   // Focus input when console opens
   useEffect(() => {
@@ -87,6 +69,57 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
       outputRef.current.scrollTop = outputRef.current.scrollHeight;
     }
   }, [history]);
+
+  // Handle drag
+  useEffect(() => {
+    if (!isDragging && !isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        setPosition({
+          x: e.clientX - dragOffset.current.x,
+          y: e.clientY - dragOffset.current.y,
+        });
+      } else if (isResizing) {
+        const panel = panelRef.current;
+        if (panel) {
+          const rect = panel.getBoundingClientRect();
+          setSize({
+            width: Math.max(300, e.clientX - rect.left),
+            height: Math.max(120, e.clientY - rect.top),
+          });
+        }
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, isResizing]);
+
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragOffset.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
+    };
+    setIsDragging(true);
+  }, [position]);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsResizing(true);
+  }, []);
 
   // Handle input change with autocomplete
   const handleInputChange = useCallback(
@@ -118,19 +151,16 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
         case 'Enter': {
           e.preventDefault();
           if (selectedSuggestion >= 0 && suggestions[selectedSuggestion]) {
-            // Apply suggestion
             setInput(suggestions[selectedSuggestion] + ' ');
             setSuggestions([]);
             setSelectedSuggestion(-1);
           } else if (input.trim()) {
-            // Execute command
             engine.execute(input);
             setInput('');
             setSuggestions([]);
           }
           break;
         }
-
         case 'Tab': {
           e.preventDefault();
           if (suggestions.length > 0) {
@@ -139,7 +169,6 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
           }
           break;
         }
-
         case 'ArrowUp': {
           e.preventDefault();
           if (suggestions.length > 0 && selectedSuggestion >= 0) {
@@ -153,7 +182,6 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
           }
           break;
         }
-
         case 'ArrowDown': {
           e.preventDefault();
           if (suggestions.length > 0 && selectedSuggestion >= 0) {
@@ -167,7 +195,6 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
           }
           break;
         }
-
         case 'Escape': {
           e.preventDefault();
           if (suggestions.length > 0) {
@@ -183,7 +210,6 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
     [engine, input, suggestions, selectedSuggestion, setShowConsole]
   );
 
-  // Handle suggestion click
   const handleSuggestionClick = useCallback((suggestion: string) => {
     setInput(suggestion + ' ');
     setSuggestions([]);
@@ -191,31 +217,22 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
     inputRef.current?.focus();
   }, []);
 
-  // Prevent scroll events from reaching game canvas
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.stopPropagation();
   }, []);
 
-  // Prevent click events from reaching game canvas
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
   }, []);
 
-  // Get color for entry type
   const getEntryColor = (type: ConsoleEntry['type']): string => {
     switch (type) {
-      case 'input':
-        return '#9ca3af'; // gray-400
-      case 'output':
-        return '#e5e7eb'; // gray-200
-      case 'error':
-        return '#f87171'; // red-400
-      case 'success':
-        return '#4ade80'; // green-400
-      case 'info':
-        return '#60a5fa'; // blue-400
-      default:
-        return '#e5e7eb';
+      case 'input': return '#888';
+      case 'output': return '#ccc';
+      case 'error': return '#f66';
+      case 'success': return '#6f6';
+      case 'info': return '#6af';
+      default: return '#ccc';
     }
   };
 
@@ -223,47 +240,52 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
 
   return (
     <div
+      ref={panelRef}
       style={{
         position: 'absolute',
-        bottom: '180px',
-        left: '220px',
-        right: '220px',
-        backgroundColor: 'rgba(0, 0, 0, 0.95)',
-        border: '1px solid #333',
-        borderRadius: '4px',
-        fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace',
-        fontSize: '12px',
+        left: position.x,
+        top: position.y,
+        width: size.width,
+        height: size.height,
+        backgroundColor: 'rgba(0, 0, 0, 0.65)',
+        backdropFilter: 'blur(4px)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '6px',
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+        fontSize: '11px',
         zIndex: 1100,
         pointerEvents: 'auto',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
         display: 'flex',
         flexDirection: 'column',
-        maxHeight: '300px',
+        overflow: 'hidden',
       }}
       onWheel={handleWheel}
       onClick={handleClick}
     >
-      {/* Header */}
+      {/* Draggable Header */}
       <div
+        onMouseDown={handleDragStart}
         style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          padding: '6px 10px',
-          borderBottom: '1px solid #333',
-          backgroundColor: 'rgba(30, 30, 30, 0.9)',
+          padding: '4px 8px',
+          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+          cursor: 'move',
+          userSelect: 'none',
         }}
       >
-        <span style={{ color: '#9ca3af', fontSize: '11px', fontWeight: 500 }}>
-          Console
+        <span style={{ color: '#888', fontSize: '10px', fontWeight: 500, letterSpacing: '0.5px' }}>
+          CONSOLE
         </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
           {engine && (
-            <span style={{ color: '#6b7280', fontSize: '10px' }}>
-              {engine.getFlag('godMode') && <span style={{ color: '#fbbf24', marginRight: '6px' }}>GOD</span>}
-              {engine.getFlag('fogDisabled') && <span style={{ color: '#60a5fa', marginRight: '6px' }}>FOG OFF</span>}
-              {engine.getFlag('noCost') && <span style={{ color: '#4ade80', marginRight: '6px' }}>FREE</span>}
-              {engine.getFlag('fastBuild') && <span style={{ color: '#c084fc', marginRight: '6px' }}>FAST</span>}
+            <span style={{ fontSize: '9px', display: 'flex', gap: '4px' }}>
+              {engine.getFlag('godMode') && <span style={{ color: '#fa0', padding: '1px 4px', backgroundColor: 'rgba(255,170,0,0.2)', borderRadius: '2px' }}>GOD</span>}
+              {engine.getFlag('fogDisabled') && <span style={{ color: '#6af', padding: '1px 4px', backgroundColor: 'rgba(102,170,255,0.2)', borderRadius: '2px' }}>REVEALED</span>}
+              {engine.getFlag('noCost') && <span style={{ color: '#6f6', padding: '1px 4px', backgroundColor: 'rgba(102,255,102,0.2)', borderRadius: '2px' }}>FREE</span>}
+              {engine.getFlag('fastBuild') && <span style={{ color: '#f6f', padding: '1px 4px', backgroundColor: 'rgba(255,102,255,0.2)', borderRadius: '2px' }}>FAST</span>}
             </span>
           )}
           <button
@@ -273,13 +295,13 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
               border: 'none',
               color: '#666',
               cursor: 'pointer',
-              fontSize: '14px',
-              padding: '2px 4px',
+              fontSize: '12px',
+              padding: '0 2px',
               lineHeight: 1,
             }}
             aria-label="Close console"
           >
-            ✕
+            ×
           </button>
         </div>
       </div>
@@ -290,14 +312,13 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
         style={{
           flex: 1,
           overflowY: 'auto',
-          padding: '8px 10px',
-          minHeight: '100px',
-          maxHeight: '200px',
+          padding: '6px 8px',
+          minHeight: 0,
         }}
       >
         {history.length === 0 ? (
-          <div style={{ color: '#6b7280', fontStyle: 'italic' }}>
-            Type &quot;help&quot; for a list of commands.
+          <div style={{ color: '#666', fontStyle: 'italic' }}>
+            Type &quot;help&quot; for commands. Press ` to toggle.
           </div>
         ) : (
           history.map((entry) => (
@@ -307,8 +328,8 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
                 color: getEntryColor(entry.type),
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
-                marginBottom: '2px',
-                lineHeight: 1.4,
+                marginBottom: '1px',
+                lineHeight: 1.3,
               }}
             >
               {entry.text}
@@ -327,11 +348,11 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
               bottom: '100%',
               left: 0,
               right: 0,
-              backgroundColor: 'rgba(30, 30, 30, 0.98)',
-              border: '1px solid #444',
+              backgroundColor: 'rgba(0, 0, 0, 0.9)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
               borderBottom: 'none',
               borderRadius: '4px 4px 0 0',
-              maxHeight: '120px',
+              maxHeight: '100px',
               overflowY: 'auto',
             }}
           >
@@ -340,10 +361,10 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
                 key={suggestion}
                 onClick={() => handleSuggestionClick(suggestion)}
                 style={{
-                  padding: '4px 10px',
+                  padding: '3px 8px',
                   cursor: 'pointer',
-                  backgroundColor: idx === selectedSuggestion ? '#374151' : 'transparent',
-                  color: idx === selectedSuggestion ? '#fff' : '#9ca3af',
+                  backgroundColor: idx === selectedSuggestion ? 'rgba(255, 255, 255, 0.15)' : 'transparent',
+                  color: idx === selectedSuggestion ? '#fff' : '#aaa',
                 }}
               >
                 {suggestion}
@@ -356,25 +377,25 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
           style={{
             display: 'flex',
             alignItems: 'center',
-            padding: '8px 10px',
-            borderTop: '1px solid #333',
-            backgroundColor: 'rgba(20, 20, 20, 0.9)',
+            padding: '5px 8px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+            backgroundColor: 'rgba(0, 0, 0, 0.3)',
           }}
         >
-          <span style={{ color: '#4ade80', marginRight: '6px' }}>&gt;</span>
+          <span style={{ color: '#6f6', marginRight: '5px', fontWeight: 'bold' }}>&gt;</span>
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
-            placeholder="Enter command..."
+            placeholder="command..."
             style={{
               flex: 1,
               backgroundColor: 'transparent',
               border: 'none',
               outline: 'none',
-              color: '#e5e7eb',
+              color: '#ddd',
               fontFamily: 'inherit',
               fontSize: 'inherit',
             }}
@@ -382,6 +403,24 @@ export const ConsolePanel = memo(function ConsolePanel({ gameRef, cameraRef }: C
             spellCheck={false}
           />
         </div>
+      </div>
+
+      {/* Resize handle */}
+      <div
+        onMouseDown={handleResizeStart}
+        style={{
+          position: 'absolute',
+          right: 0,
+          bottom: 0,
+          width: '12px',
+          height: '12px',
+          cursor: 'se-resize',
+          opacity: 0.5,
+        }}
+      >
+        <svg width="12" height="12" viewBox="0 0 12 12">
+          <path d="M10 2L2 10M10 6L6 10M10 10L10 10" stroke="#666" strokeWidth="1.5" fill="none" />
+        </svg>
       </div>
     </div>
   );
