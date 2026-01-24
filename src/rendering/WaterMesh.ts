@@ -25,56 +25,76 @@ const WATER_SURFACE_OFFSET = 0.15;
 
 // Cached water normals texture (shared across all instances)
 let waterNormalsTexture: THREE.Texture | null = null;
+let textureLoading = false;
 
 /**
- * Generate a high-quality water normals texture procedurally
- * This creates wave-like patterns similar to Three.js waternormals.jpg
+ * Load the water normals texture from file
+ * Called once at startup, texture is then cached
  */
-function generateWaterNormals(): THREE.DataTexture {
-  const size = 512;
+function loadWaterNormalsTexture(): void {
+  if (waterNormalsTexture || textureLoading) return;
+
+  textureLoading = true;
+  const loader = new THREE.TextureLoader();
+
+  loader.load(
+    '/textures/waternormals.jpg',
+    (texture) => {
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      waterNormalsTexture = texture;
+      console.log('Water normals texture loaded successfully');
+    },
+    undefined,
+    (error) => {
+      console.error('Failed to load water normals texture:', error);
+    }
+  );
+}
+
+// Start loading immediately when module is imported
+loadWaterNormalsTexture();
+
+/**
+ * Get the water normals texture
+ * Returns the loaded texture, or a generated fallback if not yet loaded
+ */
+function getWaterNormals(): THREE.Texture {
+  if (waterNormalsTexture) {
+    return waterNormalsTexture;
+  }
+
+  // Generate a proper fallback with wave patterns
+  // This will only be used if texture hasn't loaded yet
+  console.warn('Water normals texture not loaded yet, using generated fallback');
+  return generateFallbackNormals();
+}
+
+/**
+ * Generate fallback water normals with actual wave patterns
+ */
+function generateFallbackNormals(): THREE.DataTexture {
+  const size = 256;
   const data = new Uint8Array(size * size * 4);
 
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const idx = (y * size + x) * 4;
-
-      // Normalized coordinates (0-1)
       const u = x / size;
       const v = y / size;
 
-      // Multiple octaves of Perlin-like noise for realistic waves
-      // Using sine waves at different frequencies and phases
-      let nx = 0;
-      let ny = 0;
+      // Wave patterns
+      let nx = Math.sin(u * 8 * Math.PI + v * 4 * Math.PI) * 0.3;
+      nx += Math.sin(u * 16 * Math.PI - v * 12 * Math.PI) * 0.2;
+      let ny = Math.cos(u * 6 * Math.PI + v * 8 * Math.PI) * 0.3;
+      ny += Math.cos(u * 14 * Math.PI + v * 18 * Math.PI) * 0.2;
 
-      // Large slow waves
-      nx += Math.sin(u * 4 * Math.PI + v * 2 * Math.PI) * 0.4;
-      ny += Math.cos(u * 3 * Math.PI + v * 4 * Math.PI) * 0.4;
-
-      // Medium waves
-      nx += Math.sin(u * 8 * Math.PI - v * 6 * Math.PI + 1.3) * 0.25;
-      ny += Math.cos(u * 7 * Math.PI + v * 9 * Math.PI + 0.7) * 0.25;
-
-      // Small ripples
-      nx += Math.sin(u * 17 * Math.PI + v * 13 * Math.PI + 2.1) * 0.15;
-      ny += Math.cos(u * 19 * Math.PI - v * 15 * Math.PI + 1.1) * 0.15;
-
-      // Fine detail
-      nx += Math.sin(u * 31 * Math.PI + v * 29 * Math.PI + 0.5) * 0.1;
-      ny += Math.cos(u * 37 * Math.PI + v * 33 * Math.PI + 1.9) * 0.1;
-
-      // Very fine shimmer
-      nx += Math.sin(u * 53 * Math.PI - v * 47 * Math.PI + 3.2) * 0.05;
-      ny += Math.cos(u * 59 * Math.PI + v * 51 * Math.PI + 2.4) * 0.05;
-
-      // Normalize the normal vector
-      const nz = 1.0; // Keep Z pointing up
+      const nz = 1.0;
       const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
 
-      // Encode as RGB (0-255 range, where 128 = 0)
-      data[idx] = Math.floor(((nx / len) * 0.5 + 0.5) * 255);     // R = X
-      data[idx + 1] = Math.floor(((ny / len) * 0.5 + 0.5) * 255); // G = Y
-      data[idx + 2] = Math.floor(((nz / len) * 0.5 + 0.5) * 255); // B = Z
+      data[idx] = Math.floor(((nx / len) * 0.5 + 0.5) * 255);
+      data[idx + 1] = Math.floor(((ny / len) * 0.5 + 0.5) * 255);
+      data[idx + 2] = Math.floor(((nz / len) * 0.5 + 0.5) * 255);
       data[idx + 3] = 255;
     }
   }
@@ -82,22 +102,33 @@ function generateWaterNormals(): THREE.DataTexture {
   const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.magFilter = THREE.LinearFilter;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.generateMipmaps = true;
   texture.needsUpdate = true;
-
   return texture;
 }
 
 /**
- * Get the water normals texture (generates once, caches for reuse)
+ * Preload water normals - call during app initialization
  */
-function getWaterNormals(): THREE.Texture {
-  if (!waterNormalsTexture) {
-    waterNormalsTexture = generateWaterNormals();
-  }
-  return waterNormalsTexture;
+export function preloadWaterNormals(): Promise<void> {
+  return new Promise((resolve) => {
+    if (waterNormalsTexture) {
+      resolve();
+      return;
+    }
+
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      '/textures/waternormals.jpg',
+      (texture) => {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        waterNormalsTexture = texture;
+        resolve();
+      },
+      undefined,
+      () => resolve() // Resolve anyway on error
+    );
+  });
 }
 
 export interface WaterRegion {
