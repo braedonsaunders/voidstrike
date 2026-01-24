@@ -226,6 +226,17 @@ export function usePostProcessing({
         if (settings.emissiveIntensityMultiplier !== prevSettings.emissiveIntensityMultiplier) {
           environmentRef.current.setEmissiveIntensityMultiplier(settings.emissiveIntensityMultiplier);
         }
+
+        // Update water settings
+        if (settings.waterEnabled !== prevSettings.waterEnabled) {
+          environmentRef.current.setWaterEnabled(settings.waterEnabled);
+        }
+        if (settings.waterQuality !== prevSettings.waterQuality) {
+          environmentRef.current.setWaterQuality(settings.waterQuality);
+        }
+        if (settings.waterReflectionsEnabled !== prevSettings.waterReflectionsEnabled) {
+          environmentRef.current.setWaterReflectionsEnabled(settings.waterReflectionsEnabled);
+        }
       }
 
       // Update dynamic lights settings

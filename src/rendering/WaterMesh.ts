@@ -10,6 +10,8 @@
  * - Proper water normal map animation
  * - Physically-based fresnel and specular
  * - Flood-fill region detection for efficient mesh creation
+ * - Frustum culling for performance
+ * - Quality settings (low/medium/high/ultra)
  */
 
 import * as THREE from 'three';
@@ -22,6 +24,39 @@ const HEIGHT_SCALE = 0.04;
 
 // Water surface offset above terrain
 const WATER_SURFACE_OFFSET = 0.15;
+
+// Water quality type
+export type WaterQuality = 'low' | 'medium' | 'high' | 'ultra';
+
+// Quality settings configuration
+interface WaterQualityConfig {
+  size: number; // Texture scale (larger = finer detail)
+  distortionScale: number; // Wave distortion amount
+  resolutionScale: number; // Reflection resolution multiplier
+}
+
+const WATER_QUALITY_CONFIGS: Record<WaterQuality, WaterQualityConfig> = {
+  low: {
+    size: 50.0, // Very fine pattern, appears calmer
+    distortionScale: 0.5,
+    resolutionScale: 0.25,
+  },
+  medium: {
+    size: 40.0,
+    distortionScale: 0.75,
+    resolutionScale: 0.5,
+  },
+  high: {
+    size: 30.0,
+    distortionScale: 1.0,
+    resolutionScale: 0.75,
+  },
+  ultra: {
+    size: 25.0, // More visible waves
+    distortionScale: 1.25,
+    resolutionScale: 1.0,
+  },
+};
 
 // Cached water normals texture (shared across all instances)
 let waterNormalsTexture: THREE.Texture | null = null;
@@ -147,6 +182,13 @@ export class WaterMesh {
 
   private waterMeshes: ThreeWaterMesh[] = [];
   private sunDirection: THREE.Vector3;
+  private quality: WaterQuality = 'high';
+  private reflectionsEnabled: boolean = true;
+  private enabled: boolean = true;
+
+  // Frustum culling helpers
+  private frustum: THREE.Frustum = new THREE.Frustum();
+  private projScreenMatrix: THREE.Matrix4 = new THREE.Matrix4();
 
   constructor() {
     this.group = new THREE.Group();
@@ -154,12 +196,53 @@ export class WaterMesh {
   }
 
   /**
+   * Set water enabled state
+   */
+  public setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    this.group.visible = enabled;
+  }
+
+  /**
+   * Set water quality level
+   */
+  public setQuality(quality: WaterQuality): void {
+    if (this.quality === quality) return;
+    this.quality = quality;
+    // Quality changes require rebuilding water meshes
+  }
+
+  /**
+   * Set whether reflections are enabled
+   */
+  public setReflectionsEnabled(enabled: boolean): void {
+    this.reflectionsEnabled = enabled;
+    // Update resolution scale on existing meshes
+    const config = WATER_QUALITY_CONFIGS[this.quality];
+    const resScale = enabled ? config.resolutionScale : 0;
+    for (const mesh of this.waterMeshes) {
+      // WaterMesh uses resolutionScale internally for reflections
+      if ('resolutionScale' in mesh) {
+        (mesh as unknown as { resolutionScale: number }).resolutionScale = resScale;
+      }
+    }
+  }
+
+  /**
+   * Get current quality config
+   */
+  private getQualityConfig(): WaterQualityConfig {
+    return WATER_QUALITY_CONFIGS[this.quality];
+  }
+
+  /**
    * Build full-map water plane for biomes with hasWater (Ocean, Grassland, Volcanic)
    */
   public buildFullMapWater(mapData: MapData, biome: BiomeConfig): void {
-    if (!biome.hasWater) return;
+    if (!biome.hasWater || !this.enabled) return;
 
     const waterNormals = getWaterNormals();
+    const config = this.getQualityConfig();
 
     // Create full-map water plane
     const geometry = new THREE.PlaneGeometry(mapData.width, mapData.height);
@@ -174,13 +257,18 @@ export class WaterMesh {
       sunDirection: this.sunDirection,
       sunColor: sunColor,
       waterColor: waterColor,
-      distortionScale: 1.0, // Reduced for RTS scale
-      size: 30.0, // Larger = smaller/slower wave pattern
+      distortionScale: config.distortionScale,
+      size: config.size,
+      resolutionScale: this.reflectionsEnabled ? config.resolutionScale : 0,
     });
 
     water.rotation.x = -Math.PI / 2;
     water.position.set(mapData.width / 2, biome.waterLevel, mapData.height / 2);
     water.renderOrder = 5;
+
+    // Enable frustum culling with proper bounding sphere
+    water.frustumCulled = true;
+    geometry.computeBoundingSphere();
 
     this.waterMeshes.push(water);
     this.group.add(water);
@@ -369,9 +457,10 @@ export class WaterMesh {
   }
 
   private createRegionMesh(region: WaterRegion): void {
-    if (region.cells.length === 0) return;
+    if (region.cells.length === 0 || !this.enabled) return;
 
     const waterNormals = getWaterNormals();
+    const config = this.getQualityConfig();
 
     // Calculate region dimensions
     const regionWidth = region.maxX - region.minX + 1;
@@ -391,8 +480,9 @@ export class WaterMesh {
       sunDirection: this.sunDirection,
       sunColor: 0xffffff,
       waterColor: waterColor,
-      distortionScale: 1.0, // Reduced for RTS scale
-      size: 30.0, // Larger = smaller/slower wave pattern
+      distortionScale: config.distortionScale,
+      size: config.size,
+      resolutionScale: this.reflectionsEnabled ? config.resolutionScale : 0,
     });
 
     // Calculate center position and height
@@ -405,15 +495,53 @@ export class WaterMesh {
     water.position.set(centerX, avgHeight, centerZ);
     water.renderOrder = 1;
 
+    // Enable frustum culling with proper bounding sphere
+    water.frustumCulled = true;
+    geometry.computeBoundingSphere();
+
     this.waterMeshes.push(water);
     this.group.add(water);
   }
 
   /**
-   * Update - Three.js WaterMesh auto-animates via TSL time
+   * Update water meshes - handles frustum culling
+   * Call once per frame with current camera
    */
-  public update(_deltaTime: number): void {
+  public update(_deltaTime: number, camera?: THREE.Camera): void {
     // WaterMesh animates automatically via TSL's built-in time uniform
+    // Frustum culling is handled automatically by Three.js when frustumCulled = true
+    // But we can do manual culling for performance if needed
+    if (!this.enabled || !camera) return;
+
+    // Update frustum for manual visibility checks if needed
+    this.projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
+  }
+
+  /**
+   * Check if a water mesh is visible in the current frustum
+   */
+  public isVisible(mesh: THREE.Mesh): boolean {
+    if (!mesh.geometry.boundingSphere) {
+      mesh.geometry.computeBoundingSphere();
+    }
+    const sphere = mesh.geometry.boundingSphere!.clone();
+    sphere.applyMatrix4(mesh.matrixWorld);
+    return this.frustum.intersectsSphere(sphere);
+  }
+
+  /**
+   * Get visible water mesh count (for debugging)
+   */
+  public getVisibleCount(): number {
+    return this.waterMeshes.filter((m) => m.visible).length;
+  }
+
+  /**
+   * Get total water mesh count
+   */
+  public getTotalCount(): number {
+    return this.waterMeshes.length;
   }
 
   /**
