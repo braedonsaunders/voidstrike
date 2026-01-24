@@ -288,7 +288,7 @@ export function useWebGPURenderer({
       const walkableGeometry = terrain.generateWalkableGeometry();
 
       game.pathfindingSystem.setTerrainHeightFunction((x: number, z: number) => {
-        return terrain.getHeightAt(x, z);
+        return terrain.getNavmeshHeightAt(x, z);
       });
 
       const navMeshSuccess = await game.initializeNavMesh(

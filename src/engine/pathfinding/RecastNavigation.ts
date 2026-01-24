@@ -53,6 +53,12 @@ const DEFAULT_AGENT_PARAMS: Partial<CrowdAgentParams> = {
   queryFilterType: 0,
 };
 
+const WALKABLE_DISTANCE_TOLERANCE = Math.max(
+  NAVMESH_CONFIG.walkableRadius * 1.5,
+  NAVMESH_CONFIG.cs * 1.5
+);
+const WALKABLE_HEIGHT_TOLERANCE = NAVMESH_CONFIG.walkableClimb * 2;
+
 export interface PathResult {
   path: Array<{ x: number; y: number }>;
   found: boolean;
@@ -806,6 +812,26 @@ export class RecastNavigation {
     }
   }
 
+  /**
+   * Find nearest point on water navmesh.
+   * Uses a constant water surface height for query accuracy.
+   */
+  public findNearestWaterPoint(x: number, y: number): { x: number; y: number } | null {
+    if (!this.waterNavMeshQuery) return null;
+
+    try {
+      const waterHeight = 0.15;
+      const halfExtents = { x: 5, y: 20, z: 5 };
+      const result = this.waterNavMeshQuery.findClosestPoint({ x, y: waterHeight, z: y }, { halfExtents });
+      if (result.success && result.point) {
+        return { x: result.point.x, y: result.point.z };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   // Diagnostic counters for limiting log output
   private walkabilityLogCount = 0;
   private readonly MAX_WALKABILITY_LOGS = 20;
@@ -831,21 +857,89 @@ export class RecastNavigation {
 
       // Check if the closest point is within a reasonable tolerance
       const dist = distance(x, y, result.point.x, result.point.z);
+      const heightDiff = Math.abs(queryY - result.point.y);
 
       // Log first few failures for diagnostics
-      if (dist >= 2.0 && this.walkabilityLogCount < this.MAX_WALKABILITY_LOGS) {
+      if (
+        (dist >= WALKABLE_DISTANCE_TOLERANCE || heightDiff > WALKABLE_HEIGHT_TOLERANCE) &&
+        this.walkabilityLogCount < this.MAX_WALKABILITY_LOGS
+      ) {
         debugPathfinding.log(
           `[Navmesh] isWalkable FAIL (dist): pos=(${x.toFixed(1)}, ${y.toFixed(1)}), ` +
           `queryY=${queryY.toFixed(2)}, closest=(${result.point.x.toFixed(1)}, ${result.point.y.toFixed(2)}, ${result.point.z.toFixed(1)}), ` +
-          `dist=${dist.toFixed(2)}`
+          `dist=${dist.toFixed(2)}, heightDiff=${heightDiff.toFixed(2)}`
         );
         this.walkabilityLogCount++;
         return false;
       }
 
-      return dist < 2.0;
+      return dist < WALKABLE_DISTANCE_TOLERANCE && heightDiff <= WALKABLE_HEIGHT_TOLERANCE;
     } catch {
       return false;
+    }
+  }
+
+  /**
+   * Check if a point is walkable on the water navmesh.
+   */
+  public isWaterWalkable(x: number, y: number): boolean {
+    if (!this.waterNavMeshQuery) return false;
+
+    try {
+      const waterHeight = 0.15;
+      const halfExtents = { x: 2, y: 20, z: 2 };
+      const result = this.waterNavMeshQuery.findClosestPoint({ x, y: waterHeight, z: y }, { halfExtents });
+      if (!result.success || !result.point) {
+        return false;
+      }
+
+      const dist = distance(x, y, result.point.x, result.point.z);
+      const heightDiff = Math.abs(waterHeight - result.point.y);
+      return dist < WALKABLE_DISTANCE_TOLERANCE && heightDiff <= WALKABLE_HEIGHT_TOLERANCE;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Check walkability using the correct navmesh for a movement domain.
+   */
+  public isWalkableForDomain(
+    x: number,
+    y: number,
+    domain: MovementDomain
+  ): boolean {
+    switch (domain) {
+      case 'water':
+        return this.isWaterWalkable(x, y);
+      case 'amphibious':
+        return this.isWaterWalkable(x, y) || this.isWalkable(x, y);
+      case 'air':
+        return true;
+      case 'ground':
+      default:
+        return this.isWalkable(x, y);
+    }
+  }
+
+  /**
+   * Find nearest point using the correct navmesh for a movement domain.
+   */
+  public findNearestPointForDomain(
+    x: number,
+    y: number,
+    domain: MovementDomain
+  ): { x: number; y: number } | null {
+    switch (domain) {
+      case 'water':
+        return this.findNearestWaterPoint(x, y);
+      case 'amphibious':
+        return this.findNearestWaterPoint(x, y) ?? this.findNearestPoint(x, y);
+      case 'air':
+        return { x, y };
+      case 'ground':
+      default:
+        return this.findNearestPoint(x, y);
     }
   }
 
