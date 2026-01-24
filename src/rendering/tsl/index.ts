@@ -68,9 +68,9 @@ export {
 } from './WaterPlane';
 
 export {
-  HybridOceanWater,
-  type HybridOceanWaterConfig,
-} from './HybridOceanWater';
+  OceanWater,
+  type OceanWaterConfig,
+} from './OceanWater';
 
 // Game Overlays
 export {

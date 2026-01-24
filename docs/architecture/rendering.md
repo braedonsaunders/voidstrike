@@ -1294,12 +1294,12 @@ VOIDSTRIKE features a world-class battle effects system with:
 
 VOIDSTRIKE features a two-layer water rendering system for both game rendering and map editor:
 
-1. **HybridOceanWater (Global)** - Reflection-based water shader with RTS optimizations
+1. **OceanWater (Global)** - Reflection-based water shader with RTS optimizations
 2. **WaterMesh (Localized)** - Per-cell water surfaces for water features (lakes, rivers)
 
-### HybridOceanWater (Reflection-Based Water)
+### OceanWater (Reflection-Based Water)
 
-**File:** `src/rendering/tsl/HybridOceanWater.ts`
+**File:** `src/rendering/tsl/OceanWater.ts`
 
 Hybrid water shader combining Three.js WaterMesh reflection techniques with RTS-appropriate
 wave displacement. Designed to eliminate the "big color gradients moving back and forth"
@@ -1317,7 +1317,7 @@ issue from the previous procedural approach.
 
 **Key Differences from Previous OceanWater:**
 
-| Aspect | OceanWater (Old) | HybridOceanWater (New) |
+| Aspect | OceanWater (Old) | OceanWater (New) |
 |--------|------------------|------------------------|
 | Normal generation | Procedural sin/cos | 4-sample texture animation |
 | Color mixing | Wave-height based (gradient issue) | Distance-based (stable) |
