@@ -69,6 +69,7 @@ export {
 
 export {
   OceanWater,
+  preloadWaterNormals,
   type OceanWaterConfig,
 } from './OceanWater';
 
