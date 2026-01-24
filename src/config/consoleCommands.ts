@@ -167,14 +167,34 @@ export const CONSOLE_COMMANDS: ConsoleCommand[] = [
     aliases: ['maphack', 'showmap'],
     description: 'Reveal the entire map (disable fog of war)',
     category: 'cheats',
-    action: { type: 'setFlag', flag: 'fogDisabled', value: true },
+    execute: (_args, ctx) => {
+      const { useGameSetupStore } = require('@/store/gameSetupStore');
+      const fogEnabled = useGameSetupStore.getState().fogOfWar;
+
+      ctx.setFlag('fogDisabled', true);
+
+      if (!fogEnabled) {
+        return { success: true, message: 'Fog of war already disabled (game setting). Flag set for when fog is enabled.' };
+      }
+      return { success: true, message: 'Fog of war disabled - map revealed' };
+    },
   },
   {
     name: 'fog',
     aliases: ['hidemap', 'unreveal'],
     description: 'Re-enable fog of war',
     category: 'cheats',
-    action: { type: 'setFlag', flag: 'fogDisabled', value: false },
+    execute: (_args, ctx) => {
+      const { useGameSetupStore } = require('@/store/gameSetupStore');
+      const fogEnabled = useGameSetupStore.getState().fogOfWar;
+
+      ctx.setFlag('fogDisabled', false);
+
+      if (!fogEnabled) {
+        return { success: true, message: 'Fog of war is disabled in game settings. Cannot re-enable via console.' };
+      }
+      return { success: true, message: 'Fog of war re-enabled' };
+    },
   },
   {
     name: 'killall',
@@ -393,7 +413,8 @@ export const CONSOLE_COMMANDS: ConsoleCommand[] = [
     category: 'info',
     execute: (_args, ctx) => {
       const { DefinitionRegistry } = require('@/engine/definitions');
-      const units = DefinitionRegistry.getAllUnits();
+      const unitsRecord = DefinitionRegistry.getAllUnits();
+      const units = Object.values(unitsRecord) as Array<{ id: string; name: string; faction: string }>;
 
       if (units.length === 0) {
         return { success: true, message: 'No units registered.' };
@@ -413,7 +434,8 @@ export const CONSOLE_COMMANDS: ConsoleCommand[] = [
     category: 'info',
     execute: (_args, ctx) => {
       const { DefinitionRegistry } = require('@/engine/definitions');
-      const buildings = DefinitionRegistry.getAllBuildings();
+      const buildingsRecord = DefinitionRegistry.getAllBuildings();
+      const buildings = Object.values(buildingsRecord) as Array<{ id: string; name: string; faction: string }>;
 
       if (buildings.length === 0) {
         return { success: true, message: 'No buildings registered.' };
@@ -436,11 +458,17 @@ export const CONSOLE_COMMANDS: ConsoleCommand[] = [
       const store = useGameSetupStore.getState();
       const localId = getLocalPlayerId();
 
+      const slots = store.playerSlots;
+      if (!slots || slots.length === 0) {
+        return { success: true, message: 'No players configured.' };
+      }
+
       let msg = 'Players:\n';
-      for (const [id, player] of store.players) {
-        const isLocal = id === localId ? ' (you)' : '';
-        const type = player.isAI ? 'AI' : 'Human';
-        msg += `  ${id}${isLocal}: ${player.name} [${type}] - ${player.faction}\n`;
+      for (const slot of slots) {
+        if (slot.type === 'open' || slot.type === 'closed') continue;
+        const isLocal = slot.id === localId ? ' (you)' : '';
+        const type = slot.type === 'ai' ? 'AI' : 'Human';
+        msg += `  ${slot.id}${isLocal}: ${slot.name} [${type}] - ${slot.faction}\n`;
       }
       return { success: true, message: msg };
     },

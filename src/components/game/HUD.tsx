@@ -177,55 +177,74 @@ export const HUD = memo(function HUD() {
               Options
             </button>
             {showOptionsMenu && (
-              <div className="absolute right-0 top-full mt-1 bg-void-900 border border-void-700 rounded shadow-lg z-50 min-w-[150px]">
+              <div className="absolute right-0 top-full mt-1 bg-void-900 border border-void-700 rounded shadow-lg z-50 min-w-[160px]">
+                {/* GAME section */}
+                <div className="px-3 py-1 text-[10px] font-medium text-void-500 uppercase tracking-wider">Game</div>
                 <button
                   onClick={() => {
                     setShowOptionsMenu(false);
                     togglePause();
                   }}
-                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors"
+                  className="w-full px-4 py-1.5 text-left text-sm text-void-200 hover:bg-void-800 transition-colors"
                 >
                   {isPaused ? 'Resume' : 'Pause'}
                 </button>
-                <div className="border-t border-void-700 my-1" />
+                {isEditorPreview && (
+                  <button
+                    onClick={() => {
+                      window.location.href = '/game/setup/editor';
+                    }}
+                    className="w-full px-4 py-1.5 text-left text-sm text-cyan-400 hover:bg-void-800 transition-colors"
+                  >
+                    Back to Editor
+                  </button>
+                )}
                 <button
                   onClick={() => {
-                    setShowOptionsMenu(false);
-                    setShowKeyboardShortcuts(true);
+                    if (confirm('Return to main menu? Progress will be lost.')) {
+                      window.location.href = '/';
+                    }
                   }}
-                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors"
+                  className="w-full px-4 py-1.5 text-left text-sm text-red-400 hover:bg-void-800 transition-colors"
                 >
-                  Controls
+                  Exit to Menu
+                </button>
+
+                {/* DISPLAY section */}
+                <div className="border-t border-void-700 mt-1" />
+                <div className="px-3 py-1 text-[10px] font-medium text-void-500 uppercase tracking-wider">Display</div>
+                <button
+                  onClick={toggleFullscreen}
+                  className="w-full px-4 py-1.5 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                >
+                  <span>Fullscreen</span>
+                  <span className={isFullscreen ? 'text-green-400' : 'text-void-500'}>{isFullscreen ? 'ON' : 'OFF'}</span>
                 </button>
                 <button
                   onClick={() => setShowPlayerStatus(!showPlayerStatus)}
-                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                  className="w-full px-4 py-1.5 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
                 >
                   <span>Players</span>
                   <span className={showPlayerStatus ? 'text-green-400' : 'text-void-500'}>{showPlayerStatus ? 'ON' : 'OFF'}</span>
-                </button>
-                <button
-                  onClick={() => {
-                    setShowOptionsMenu(false);
-                    setShowTechTree(true);
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors"
-                >
-                  Tech Tree
                 </button>
                 {/* Overlays submenu */}
                 <div className="relative">
                   <button
                     onClick={() => setShowOverlayMenu(!showOverlayMenu)}
-                    className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                    className="w-full px-4 py-1.5 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
                   >
                     <span>Overlays</span>
-                    <span className={overlaySettings.activeOverlay !== 'none' ? 'text-green-400 text-xs px-1.5 py-0.5 bg-green-900/50 rounded' : 'text-void-500'}>
-                      {overlaySettings.activeOverlay === 'elevation' ? 'ELV' :
-                       overlaySettings.activeOverlay === 'threat' ? 'THR' :
-                       overlaySettings.activeOverlay === 'navmesh' ? 'NAV' :
-                       overlaySettings.activeOverlay === 'resource' ? 'RES' :
-                       overlaySettings.activeOverlay === 'buildable' ? 'BLD' : ''}
+                    <span className="flex items-center gap-1">
+                      {overlaySettings.activeOverlay !== 'none' && (
+                        <span className="text-green-400 text-xs px-1.5 py-0.5 bg-green-900/50 rounded">
+                          {overlaySettings.activeOverlay === 'elevation' ? 'ELV' :
+                           overlaySettings.activeOverlay === 'threat' ? 'THR' :
+                           overlaySettings.activeOverlay === 'navmesh' ? 'NAV' :
+                           overlaySettings.activeOverlay === 'resource' ? 'RES' :
+                           overlaySettings.activeOverlay === 'buildable' ? 'BLD' : ''}
+                        </span>
+                      )}
+                      <span className="text-void-500">▸</span>
                     </span>
                   </button>
                   {showOverlayMenu && (
@@ -235,11 +254,11 @@ export const HUD = memo(function HUD() {
                           toggleOverlay('elevation');
                           setShowOverlayMenu(false);
                         }}
-                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
+                        className={`w-full px-4 py-1.5 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
                           overlaySettings.activeOverlay === 'elevation' ? 'text-cyan-400' : 'text-void-200'
                         }`}
                       >
-                        <span>Elevation (High Ground)</span>
+                        <span>Elevation</span>
                         {overlaySettings.activeOverlay === 'elevation' && <span>ON</span>}
                       </button>
                       <button
@@ -247,11 +266,11 @@ export const HUD = memo(function HUD() {
                           toggleOverlay('threat');
                           setShowOverlayMenu(false);
                         }}
-                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
+                        className={`w-full px-4 py-1.5 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
                           overlaySettings.activeOverlay === 'threat' ? 'text-red-400' : 'text-void-200'
                         }`}
                       >
-                        <span>Threat Ranges (Enemy)</span>
+                        <span>Threat</span>
                         {overlaySettings.activeOverlay === 'threat' && <span>ON</span>}
                       </button>
                       <button
@@ -259,11 +278,11 @@ export const HUD = memo(function HUD() {
                           toggleOverlay('navmesh');
                           setShowOverlayMenu(false);
                         }}
-                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
+                        className={`w-full px-4 py-1.5 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
                           overlaySettings.activeOverlay === 'navmesh' ? 'text-purple-400' : 'text-void-200'
                         }`}
                       >
-                        <span>Navmesh (Pathfinding)</span>
+                        <span>Navmesh</span>
                         {overlaySettings.activeOverlay === 'navmesh' && <span>ON</span>}
                       </button>
                       <button
@@ -271,11 +290,11 @@ export const HUD = memo(function HUD() {
                           toggleOverlay('resource');
                           setShowOverlayMenu(false);
                         }}
-                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
+                        className={`w-full px-4 py-1.5 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
                           overlaySettings.activeOverlay === 'resource' ? 'text-blue-400' : 'text-void-200'
                         }`}
                       >
-                        <span>Resources (Minerals/Gas)</span>
+                        <span>Resources</span>
                         {overlaySettings.activeOverlay === 'resource' && <span>ON</span>}
                       </button>
                       <button
@@ -283,33 +302,30 @@ export const HUD = memo(function HUD() {
                           toggleOverlay('buildable');
                           setShowOverlayMenu(false);
                         }}
-                        className={`w-full px-4 py-2 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
+                        className={`w-full px-4 py-1.5 text-left text-sm hover:bg-void-800 transition-colors flex justify-between items-center ${
                           overlaySettings.activeOverlay === 'buildable' ? 'text-green-400' : 'text-void-200'
                         }`}
                       >
-                        <span>Buildable (Placement)</span>
+                        <span>Buildable</span>
                         {overlaySettings.activeOverlay === 'buildable' && <span>ON</span>}
                       </button>
                       <div className="border-t border-void-700 my-1" />
                       <div className="px-4 py-1 text-xs text-void-500">
-                        Press O to cycle overlays
+                        Press O to cycle
                       </div>
                     </div>
                   )}
                 </div>
-                <button
-                  onClick={toggleFullscreen}
-                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
-                >
-                  <span>Fullscreen</span>
-                  <span className={isFullscreen ? 'text-green-400' : 'text-void-500'}>{isFullscreen ? 'ON' : 'OFF'}</span>
-                </button>
+
+                {/* SETTINGS section */}
+                <div className="border-t border-void-700 mt-1" />
+                <div className="px-3 py-1 text-[10px] font-medium text-void-500 uppercase tracking-wider">Settings</div>
                 <button
                   onClick={() => {
                     setShowOptionsMenu(false);
                     toggleGraphicsOptions();
                   }}
-                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                  className="w-full px-4 py-1.5 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
                 >
                   <span>Graphics</span>
                   <span className={showGraphicsOptions ? 'text-green-400' : 'text-void-500'}>{showGraphicsOptions ? 'OPEN' : ''}</span>
@@ -319,17 +335,43 @@ export const HUD = memo(function HUD() {
                     setShowOptionsMenu(false);
                     toggleSoundOptions();
                   }}
-                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                  className="w-full px-4 py-1.5 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
                 >
                   <span>Sound</span>
                   <span className={showSoundOptions ? 'text-green-400' : 'text-void-500'}>{showSoundOptions ? 'OPEN' : ''}</span>
                 </button>
+
+                {/* REFERENCE section */}
+                <div className="border-t border-void-700 mt-1" />
+                <div className="px-3 py-1 text-[10px] font-medium text-void-500 uppercase tracking-wider">Reference</div>
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    setShowKeyboardShortcuts(true);
+                  }}
+                  className="w-full px-4 py-1.5 text-left text-sm text-void-200 hover:bg-void-800 transition-colors"
+                >
+                  Controls
+                </button>
+                <button
+                  onClick={() => {
+                    setShowOptionsMenu(false);
+                    setShowTechTree(true);
+                  }}
+                  className="w-full px-4 py-1.5 text-left text-sm text-void-200 hover:bg-void-800 transition-colors"
+                >
+                  Tech Tree
+                </button>
+
+                {/* DEBUG section */}
+                <div className="border-t border-void-700 mt-1" />
+                <div className="px-3 py-1 text-[10px] font-medium text-void-500 uppercase tracking-wider">Debug</div>
                 <button
                   onClick={() => {
                     setShowOptionsMenu(false);
                     togglePerformancePanel();
                   }}
-                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                  className="w-full px-4 py-1.5 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
                 >
                   <span>Performance</span>
                   <span className={showPerformancePanel ? 'text-green-400' : 'text-void-500'}>{showPerformancePanel ? 'OPEN' : ''}</span>
@@ -339,9 +381,9 @@ export const HUD = memo(function HUD() {
                     setShowOptionsMenu(false);
                     toggleDebugMenu();
                   }}
-                  className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                  className="w-full px-4 py-1.5 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
                 >
-                  <span>Debug</span>
+                  <span>Debug Panel</span>
                   <span className={showDebugMenu ? 'text-green-400' : 'text-void-500'}>{showDebugMenu ? 'OPEN' : ''}</span>
                 </button>
                 {/* Console - only available in single player */}
@@ -356,7 +398,7 @@ export const HUD = memo(function HUD() {
                       }
                       setShowOptionsMenu(false);
                     }}
-                    className="w-full px-4 py-2 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
+                    className="w-full px-4 py-1.5 text-left text-sm text-void-200 hover:bg-void-800 transition-colors flex justify-between items-center"
                   >
                     <span>Console</span>
                     <span className={showConsole ? 'text-green-400' : consoleEnabled ? 'text-yellow-400' : 'text-void-500'}>
@@ -364,27 +406,6 @@ export const HUD = memo(function HUD() {
                     </span>
                   </button>
                 )}
-                <div className="border-t border-void-700 my-1" />
-                {isEditorPreview && (
-                  <button
-                    onClick={() => {
-                      window.location.href = '/game/setup/editor';
-                    }}
-                    className="w-full px-4 py-2 text-left text-sm text-cyan-400 hover:bg-void-800 transition-colors"
-                  >
-                    Back to Editor
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    if (confirm('Return to main menu? Progress will be lost.')) {
-                      window.location.href = '/';
-                    }
-                  }}
-                  className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-void-800 transition-colors"
-                >
-                  Exit to Menu
-                </button>
               </div>
             )}
           </div>

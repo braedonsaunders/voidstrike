@@ -393,12 +393,24 @@ export class ConsoleEngine {
   }
 
   private buildContext(): GameContext | null {
-    if (!this.game) return null;
+    // Try to get game from singleton if not set
+    let game = this.game;
+    if (!game) {
+      try {
+        // Game.getInstance() returns existing instance or creates new one
+        // We only want the existing instance, so we check if one exists first
+        game = Game.getInstance();
+      } catch {
+        // Game not initialized yet
+      }
+    }
+
+    if (!game) return null;
 
     const playerId = getLocalPlayerId() || 'player1';
 
     return {
-      game: this.game,
+      game,
       camera: this.camera,
       playerId,
       cursorWorldPos: this.cursorWorldPos,
@@ -739,8 +751,30 @@ export class ConsoleEngine {
 
       case 'endGame': {
         const result = action.result as 'victory' | 'defeat';
-        ctx.game.eventBus.emit(`game:${result}`, { playerId: ctx.playerId });
-        return { success: true, message: `Triggered ${result}` };
+        const duration = ctx.game.getGameTime();
+
+        // Get opponent player ID for loser field
+        const allPlayers = new Set<string>();
+        const allEntities = ctx.game.world.getEntitiesWith('Selectable');
+        for (const entity of allEntities) {
+          const selectable = entity.get<Selectable>('Selectable');
+          if (selectable) allPlayers.add(selectable.playerId);
+        }
+        const otherPlayers = [...allPlayers].filter(p => p !== ctx.playerId);
+        const opponent = otherPlayers[0] || 'opponent';
+
+        // Emit with correct structure: winner is local player for 'victory', opponent for 'defeat'
+        const winner = result === 'victory' ? ctx.playerId : opponent;
+        const loser = result === 'victory' ? opponent : ctx.playerId;
+
+        ctx.game.eventBus.emit('game:victory', {
+          winner,
+          loser,
+          reason: 'console',
+          duration,
+        });
+
+        return { success: true, message: `Triggered ${result} for ${ctx.playerId}` };
       }
 
       default:

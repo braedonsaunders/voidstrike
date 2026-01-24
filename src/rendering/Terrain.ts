@@ -13,6 +13,9 @@ import {
   CLIFF_WALL_THRESHOLD_ELEVATION,
   RAMP_BOUNDARY_ELEVATION_THRESHOLD,
   WALKABLE_CLIMB_ELEVATION,
+  RAMP_SMOOTHING_MAX_CARDINAL,
+  RAMP_SMOOTHING_MAX_DIAGONAL,
+  RAMP_SMOOTHING_PASSES,
 } from '@/data/pathfinding.config';
 
 // Import from central rendering config
@@ -1333,7 +1336,7 @@ export class Terrain {
       }
     }
 
-    // Store for navmesh overlay
+// Store for navmesh overlay
     this.navMeshHeightMap = vertexHeights;
 
     // Helper: Get vertex height

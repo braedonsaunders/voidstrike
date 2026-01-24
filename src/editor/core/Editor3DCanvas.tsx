@@ -861,6 +861,18 @@ export function Editor3DCanvas({
                 brushSize,
                 selectedElevation
               );
+              if (selectedFeature !== 'none') {
+                const featureUpdates = terrainBrushRef.current.paintFeatureLine(
+                  startPos.x, startPos.y,
+                  endPos.x, endPos.y,
+                  brushSize,
+                  selectedFeature
+                );
+                updates = updates.map((u, i) => ({
+                  ...u,
+                  cell: { ...u.cell, ...featureUpdates[i]?.cell },
+                }));
+              }
               break;
 
             case 'rect':
@@ -869,6 +881,17 @@ export function Editor3DCanvas({
                 endPos.x, endPos.y,
                 selectedElevation
               );
+              if (selectedFeature !== 'none') {
+                const featureUpdates = terrainBrushRef.current.paintFeatureRect(
+                  startPos.x, startPos.y,
+                  endPos.x, endPos.y,
+                  selectedFeature
+                );
+                updates = updates.map((u, i) => ({
+                  ...u,
+                  cell: { ...u.cell, ...featureUpdates[i]?.cell },
+                }));
+              }
               break;
 
             case 'ellipse': {
@@ -882,6 +905,17 @@ export function Editor3DCanvas({
                 radiusX, radiusY,
                 selectedElevation
               );
+              if (selectedFeature !== 'none') {
+                const featureUpdates = terrainBrushRef.current.paintFeatureEllipse(
+                  centerX, centerY,
+                  radiusX, radiusY,
+                  selectedFeature
+                );
+                updates = updates.map((u, i) => ({
+                  ...u,
+                  cell: { ...u.cell, ...featureUpdates[i]?.cell },
+                }));
+              }
               break;
             }
 
