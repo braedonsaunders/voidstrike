@@ -14,6 +14,7 @@
 import type { MapData } from '../MapTypes';
 import type { MapJson } from '../schema/MapJsonSchema';
 import { jsonToMapData } from '../serialization/deserialize';
+import { debugAssets } from '@/utils/debugLogger';
 
 // Explicit imports for reliable bundling
 import battleArenaJson from './battle_arena.json';
@@ -62,11 +63,11 @@ for (const json of MAP_JSON_FILES) {
 
 // Log any load errors
 if (loadErrors.length > 0) {
-  console.warn('[Maps] Load errors:', loadErrors);
+  debugAssets.warn('[Maps] Load errors:', loadErrors);
 }
 
 // Log loaded maps
-console.log(`[Maps] Loaded ${loadedMaps.length} maps:`, loadedMaps.map(m => m.id).join(', '));
+debugAssets.log(`[Maps] Loaded ${loadedMaps.length} maps:`, loadedMaps.map(m => m.id).join(', '));
 
 // All maps registry (by ID) - includes special mode maps
 export const ALL_MAPS: Record<string, MapData> = {};

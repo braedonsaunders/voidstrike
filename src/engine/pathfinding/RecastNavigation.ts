@@ -160,17 +160,17 @@ export class RecastNavigation {
 
     // Check for SharedArrayBuffer availability (required for threaded WASM)
     const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
-    console.log('[RecastNavigation] SharedArrayBuffer available:', hasSharedArrayBuffer);
+    debugInitialization.log('[RecastNavigation] SharedArrayBuffer available:', hasSharedArrayBuffer);
 
     if (!hasSharedArrayBuffer) {
-      console.warn(
+      debugInitialization.warn(
         '[RecastNavigation] SharedArrayBuffer is not available. ' +
         'This may be due to missing security headers (COOP/COEP). ' +
         'Navmesh initialization may fail on Safari and other browsers.'
       );
     }
 
-    console.log('[RecastNavigation] Initializing WASM module...');
+    debugInitialization.log('[RecastNavigation] Initializing WASM module...');
 
     // Create a timeout promise to prevent infinite hangs
     const INIT_TIMEOUT_MS = 10000; // 10 seconds
@@ -182,11 +182,11 @@ export class RecastNavigation {
 
     RecastNavigation.initPromise = Promise.race([init(), timeoutPromise])
       .then(() => {
-        console.log('[RecastNavigation] WASM module initialized successfully');
+        debugInitialization.log('[RecastNavigation] WASM module initialized successfully');
       })
       .catch((error) => {
-        console.error('[RecastNavigation] WASM initialization failed:', error);
-        console.error(
+        debugInitialization.error('[RecastNavigation] WASM initialization failed:', error);
+        debugInitialization.error(
           '[RecastNavigation] If this is Safari, ensure the server sends these headers:\n' +
           '  Cross-Origin-Opener-Policy: same-origin\n' +
           '  Cross-Origin-Embedder-Policy: require-corp'
@@ -361,12 +361,12 @@ export class RecastNavigation {
   ): Promise<boolean> {
     const startTime = performance.now();
 
-    console.log(`[RecastNavigation] generateFromGeometry called: ${positions.length / 3} vertices, ${indices.length / 3} triangles, map ${mapWidth}x${mapHeight}`);
+    debugInitialization.log(`[RecastNavigation] generateFromGeometry called: ${positions.length / 3} vertices, ${indices.length / 3} triangles, map ${mapWidth}x${mapHeight}`);
 
     try {
-      console.log('[RecastNavigation] Waiting for WASM initialization...');
+      debugInitialization.log('[RecastNavigation] Waiting for WASM initialization...');
       await RecastNavigation.initWasm();
-      console.log('[RecastNavigation] WASM initialization complete, proceeding...');
+      debugInitialization.log('[RecastNavigation] WASM initialization complete, proceeding...');
 
       this.mapWidth = mapWidth;
       this.mapHeight = mapHeight;
@@ -387,10 +387,9 @@ export class RecastNavigation {
         if (z > maxZ) maxZ = z;
       }
 
-      // Use console.log for production visibility of critical info
-      console.log(`[RecastNavigation] Generating navmesh: ${indices.length / 3} triangles, ${positions.length / 3} vertices`);
-      console.log(`[RecastNavigation] Geometry bounds: X=[${minX.toFixed(1)}, ${maxX.toFixed(1)}], Y(height)=[${minY.toFixed(2)}, ${maxY.toFixed(2)}], Z=[${minZ.toFixed(1)}, ${maxZ.toFixed(1)}]`);
-      console.log(`[RecastNavigation] Config: walkableClimb=${NAVMESH_CONFIG.walkableClimb}, walkableSlopeAngle=${NAVMESH_CONFIG.walkableSlopeAngle}`);
+      debugInitialization.log(`[RecastNavigation] Generating navmesh: ${indices.length / 3} triangles, ${positions.length / 3} vertices`);
+      debugInitialization.log(`[RecastNavigation] Geometry bounds: X=[${minX.toFixed(1)}, ${maxX.toFixed(1)}], Y(height)=[${minY.toFixed(2)}, ${maxY.toFixed(2)}], Z=[${minZ.toFixed(1)}, ${maxZ.toFixed(1)}]`);
+      debugInitialization.log(`[RecastNavigation] Config: walkableClimb=${NAVMESH_CONFIG.walkableClimb}, walkableSlopeAngle=${NAVMESH_CONFIG.walkableSlopeAngle}`);
 
       debugInitialization.log('[RecastNavigation] Generating navmesh from geometry...', {
         positionsLength: positions.length,
@@ -511,7 +510,7 @@ export class RecastNavigation {
     try {
       await RecastNavigation.initWasm();
 
-      console.log(`[RecastNavigation] Generating water navmesh: ${indices.length / 3} triangles, ${positions.length / 3} vertices`);
+      debugInitialization.log(`[RecastNavigation] Generating water navmesh: ${indices.length / 3} triangles, ${positions.length / 3} vertices`);
 
       // Use solo navmesh for water - simpler and more robust
       // Water doesn't need dynamic obstacles (buildings don't go in water)
@@ -534,7 +533,7 @@ export class RecastNavigation {
       this.waterInitialized = true;
 
       const elapsed = performance.now() - startTime;
-      console.log(`[RecastNavigation] Water navmesh generated in ${elapsed.toFixed(1)}ms`);
+      debugInitialization.log(`[RecastNavigation] Water navmesh generated in ${elapsed.toFixed(1)}ms`);
 
       return true;
     } catch (error) {
@@ -976,12 +975,12 @@ export class RecastNavigation {
       if (!projected) {
         // Rate-limit warnings to avoid console spam
         if (this.agentFailLogCount < this.MAX_AGENT_FAIL_LOGS) {
-          console.warn(
+          debugPathfinding.warn(
             `[RecastNavigation] Cannot add agent ${entityId}: position (${x.toFixed(1)}, ${y.toFixed(1)}) not on navmesh`
           );
           this.agentFailLogCount++;
           if (this.agentFailLogCount === this.MAX_AGENT_FAIL_LOGS) {
-            console.warn('[RecastNavigation] Suppressing further agent failure warnings...');
+            debugPathfinding.warn('[RecastNavigation] Suppressing further agent failure warnings...');
           }
         }
         return -1;
@@ -1073,7 +1072,7 @@ export class RecastNavigation {
         // Fallback: try with approximate terrain height if projection failed
         // This can happen at map edges or on dynamic obstacles
         const terrainY = this.getTerrainHeight(targetX, targetY);
-        console.warn(
+        debugPathfinding.warn(
           `[RecastNavigation] Target projection failed for (${targetX.toFixed(1)}, ${targetY.toFixed(1)}), using fallback`
         );
         agent.requestMoveTarget({ x: targetX, y: terrainY, z: targetY });
@@ -1322,7 +1321,7 @@ export class RecastNavigation {
       );
 
       if (!result.success || !result.point) {
-        console.warn(`[RecastNavigation] Cannot add water agent ${entityId}: position not on water navmesh`);
+        debugPathfinding.warn(`[RecastNavigation] Cannot add water agent ${entityId}: position not on water navmesh`);
         return -1;
       }
 
@@ -1407,14 +1406,14 @@ export class RecastNavigation {
     endY: number
   ): void {
     if (!this.navMeshQuery) {
-      console.log('[DEBUG] NavMeshQuery not initialized');
+      debugPathfinding.log('[DEBUG] NavMeshQuery not initialized');
       return;
     }
 
     const startHeight = this.getTerrainHeight(startX, startY);
     const endHeight = this.getTerrainHeight(endX, endY);
 
-    console.log(`[DEBUG] Testing path from (${startX.toFixed(1)}, ${startY.toFixed(1)}, h=${startHeight.toFixed(2)}) ` +
+    debugPathfinding.log(`[DEBUG] Testing path from (${startX.toFixed(1)}, ${startY.toFixed(1)}, h=${startHeight.toFixed(2)}) ` +
       `to (${endX.toFixed(1)}, ${endY.toFixed(1)}, h=${endHeight.toFixed(2)})`);
 
     // Find closest points on navmesh
@@ -1428,33 +1427,33 @@ export class RecastNavigation {
       { halfExtents }
     );
 
-    console.log(`[DEBUG] Start closest point: success=${startResult.success}, ` +
+    debugPathfinding.log(`[DEBUG] Start closest point: success=${startResult.success}, ` +
       (startResult.point ? `point=(${startResult.point.x.toFixed(1)}, h=${startResult.point.y.toFixed(2)}, ${startResult.point.z.toFixed(1)})` : 'null'));
-    console.log(`[DEBUG] End closest point: success=${endResult.success}, ` +
+    debugPathfinding.log(`[DEBUG] End closest point: success=${endResult.success}, ` +
       (endResult.point ? `point=(${endResult.point.x.toFixed(1)}, h=${endResult.point.y.toFixed(2)}, ${endResult.point.z.toFixed(1)})` : 'null'));
 
     if (!startResult.success || !startResult.point || !endResult.success || !endResult.point) {
-      console.log('[DEBUG] Cannot find start/end on navmesh');
+      debugPathfinding.log('[DEBUG] Cannot find start/end on navmesh');
       return;
     }
 
     // Try to compute path
     const pathResult = this.navMeshQuery.computePath(startResult.point, endResult.point, { halfExtents });
 
-    console.log(`[DEBUG] Path computation: success=${pathResult.success}, ` +
+    debugPathfinding.log(`[DEBUG] Path computation: success=${pathResult.success}, ` +
       `pathLength=${pathResult.path?.length ?? 0}`);
 
     if (pathResult.success && pathResult.path && pathResult.path.length > 0) {
-      console.log('[DEBUG] Path waypoints:');
+      debugPathfinding.log('[DEBUG] Path waypoints:');
       for (let i = 0; i < Math.min(pathResult.path.length, 10); i++) {
         const p = pathResult.path[i];
-        console.log(`  [${i}] (${p.x.toFixed(1)}, h=${p.y.toFixed(2)}, ${p.z.toFixed(1)})`);
+        debugPathfinding.log(`  [${i}] (${p.x.toFixed(1)}, h=${p.y.toFixed(2)}, ${p.z.toFixed(1)})`);
       }
       if (pathResult.path.length > 10) {
-        console.log(`  ... and ${pathResult.path.length - 10} more waypoints`);
+        debugPathfinding.log(`  ... and ${pathResult.path.length - 10} more waypoints`);
       }
     } else {
-      console.log('[DEBUG] PATH NOT FOUND - navmesh regions may be disconnected!');
+      debugPathfinding.log('[DEBUG] PATH NOT FOUND - navmesh regions may be disconnected!');
     }
   }
 
