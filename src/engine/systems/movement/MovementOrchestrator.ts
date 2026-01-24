@@ -140,14 +140,18 @@ export class MovementOrchestrator {
   }
 
   /**
-   * Fast O(1) check if a position is on water terrain.
+   * Fast O(1) check if a position is on navigable water terrain for naval units.
    * Uses terrain grid lookup instead of expensive navmesh queries.
+   *
+   * Only water_deep is valid for naval units. water_shallow represents beaches
+   * and shallow water where ground units can wade, but boats cannot navigate.
    */
-  private isWaterTerrain(x: number, y: number): boolean {
+  private isNavalWaterTerrain(x: number, y: number): boolean {
     const cell = this.game.getTerrainAt(x, y);
     if (!cell) return false;
     const feature = cell.feature || 'none';
-    return feature === 'water_deep' || feature === 'water_shallow';
+    // Only deep water is valid for naval units - shallow water is for wading ground units
+    return feature === 'water_deep';
   }
 
   /**
@@ -185,7 +189,7 @@ export class MovementOrchestrator {
     }
 
     // O(1) terrain lookup - check if current position is water
-    const isOnWater = this.isWaterTerrain(transform.x, transform.y);
+    const isOnWater = this.isNavalWaterTerrain(transform.x, transform.y);
 
     if (isOnWater) {
       // Valid position - cache it
@@ -329,7 +333,7 @@ export class MovementOrchestrator {
 
     // Naval units: use fast O(1) terrain lookup
     if (domain === 'water') {
-      const isWater = this.isWaterTerrain(targetX, targetY);
+      const isWater = this.isNavalWaterTerrain(targetX, targetY);
       if (isWater) {
         return { x: targetX, y: targetY };
       }
@@ -602,7 +606,7 @@ export class MovementOrchestrator {
       // PERF: Only validate waypoints for naval units using O(1) terrain lookup
       // Ground/air units rely on navmesh pathfinding which already validates terrain
       if (unit.movementDomain === 'water' && !unit.isFlying) {
-        const isWaterWaypoint = this.isWaterTerrain(targetX, targetY);
+        const isWaterWaypoint = this.isNavalWaterTerrain(targetX, targetY);
         if (!isWaterWaypoint) {
           // Skip invalid waypoints - naval unit shouldn't walk on land
           unit.pathIndex++;
@@ -617,7 +621,7 @@ export class MovementOrchestrator {
     } else if (unit.targetX !== null && unit.targetY !== null) {
       // PERF: Only validate direct targets for naval units using O(1) terrain lookup
       if (unit.movementDomain === 'water' && !unit.isFlying) {
-        const isWaterTarget = this.isWaterTerrain(unit.targetX, unit.targetY);
+        const isWaterTarget = this.isNavalWaterTerrain(unit.targetX, unit.targetY);
         if (!isWaterTarget) {
           // Invalid target for naval unit - find nearest water point
           const nearestWater = this.recast.findNearestPointForDomain(
