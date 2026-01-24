@@ -27,6 +27,12 @@ import { generateTileCache, generateSoloNavMesh } from '@recast-navigation/gener
 import { distance } from '@/utils/math';
 import { NAVMESH_CONFIG, SOLO_NAVMESH_CONFIG } from '@/data/pathfinding.config';
 
+const WALKABLE_DISTANCE_TOLERANCE = Math.max(
+  NAVMESH_CONFIG.walkableRadius * 1.5,
+  NAVMESH_CONFIG.cs * 1.5
+);
+const WALKABLE_HEIGHT_TOLERANCE = NAVMESH_CONFIG.walkableClimb * 2;
+
 // Debug flag for worker logging (workers can't access UI store)
 const DEBUG = false;
 
@@ -113,6 +119,11 @@ let initialized = false;
 let heightMap: Float32Array | null = null;
 let heightMapWidth = 0;
 let heightMapHeight = 0;
+
+function getQueryHalfExtents(searchRadius: number): { x: number; y: number; z: number } {
+  const heightTolerance = heightMap ? WALKABLE_HEIGHT_TOLERANCE * 1.5 : 20;
+  return { x: searchRadius, y: heightTolerance, z: searchRadius };
+}
 
 // Track obstacles
 const obstacleRefs: Map<number, Obstacle> = new Map();
@@ -293,7 +304,7 @@ function findPath(
 
   try {
     const searchRadius = Math.max(agentRadius * 4, 2);
-    const halfExtents = { x: searchRadius, y: 10, z: searchRadius };
+    const halfExtents = getQueryHalfExtents(searchRadius);
 
     const resolvedStartHeight = startHeight ?? getHeightAt(startX, startY);
     const resolvedEndHeight = endHeight ?? getHeightAt(endX, endY);
@@ -396,13 +407,14 @@ function isWalkable(x: number, y: number, height?: number): boolean {
   if (!navMeshQuery) return false;
 
   try {
-    const halfExtents = { x: 2, y: 20, z: 2 };
+    const halfExtents = getQueryHalfExtents(2);
     const queryHeight = height ?? getHeightAt(x, y);
     const result = navMeshQuery.findClosestPoint({ x, y: queryHeight, z: y }, { halfExtents });
     if (!result.success || !result.point) return false;
 
     const dist = distance(x, y, result.point.x, result.point.z);
-    return dist < 2.0;
+    const heightDiff = Math.abs(queryHeight - result.point.y);
+    return dist < WALKABLE_DISTANCE_TOLERANCE && heightDiff <= WALKABLE_HEIGHT_TOLERANCE;
   } catch {
     return false;
   }
@@ -415,7 +427,7 @@ function findNearestPoint(x: number, y: number, height?: number): { x: number; y
   if (!navMeshQuery) return null;
 
   try {
-    const halfExtents = { x: 5, y: 20, z: 5 };
+    const halfExtents = getQueryHalfExtents(5);
     const queryHeight = height ?? getHeightAt(x, y);
     const result = navMeshQuery.findClosestPoint({ x, y: queryHeight, z: y }, { halfExtents });
     if (result.success && result.point) {
