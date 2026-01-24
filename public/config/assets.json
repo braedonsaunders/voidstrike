@@ -472,7 +472,7 @@
       "model": "/models/units/mariner_LOD0.glb",
       "scale": 1.0,
       "collisionRadius": 0.5,
-      "rotation": { "y": 90 },
+      "rotation": { "y": 0 },
       "animations": {
         "idle": ["idle", "float", "bob"],
         "walk": ["walk", "sail", "cruise", "move"],
@@ -495,7 +495,7 @@
       "model": "/models/units/stingray_LOD0.glb",
       "scale": 1.5,
       "collisionRadius": 0.75,
-      "rotation": { "y": 90 },
+      "rotation": { "y": 0 },
       "animations": {
         "idle": ["idle", "float", "patrol"],
         "walk": ["walk", "sail", "cruise", "speed"],
@@ -519,7 +519,7 @@
       "model": "/models/units/corsair_LOD0.glb",
       "scale": 2.0,
       "collisionRadius": 1.0,
-      "rotation": { "y": 90 },
+      "rotation": { "y": 0 },
       "animations": {
         "idle": ["idle", "float", "scan"],
         "walk": ["walk", "sail", "cruise"],
@@ -551,7 +551,7 @@
       "model": "/models/units/leviathan_LOD0.glb",
       "scale": 3.0,
       "collisionRadius": 1.5,
-      "rotation": { "y": 90 },
+      "rotation": { "y": 0 },
       "animations": {
         "idle": ["idle", "float", "cruise"],
         "walk": ["walk", "sail", "cruise", "move"],
@@ -584,7 +584,7 @@
       "model": "/models/units/hunter_LOD0.glb",
       "scale": 2.0,
       "collisionRadius": 1.0,
-      "rotation": { "y": 90 },
+      "rotation": { "y": 0 },
       "animations": {
         "idle": ["idle", "float", "submerged"],
         "walk": ["walk", "sail", "dive", "cruise"],
