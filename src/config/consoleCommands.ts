@@ -167,14 +167,34 @@ export const CONSOLE_COMMANDS: ConsoleCommand[] = [
     aliases: ['maphack', 'showmap'],
     description: 'Reveal the entire map (disable fog of war)',
     category: 'cheats',
-    action: { type: 'setFlag', flag: 'fogDisabled', value: true },
+    execute: (_args, ctx) => {
+      const { useGameSetupStore } = require('@/store/gameSetupStore');
+      const fogEnabled = useGameSetupStore.getState().fogOfWar;
+
+      ctx.setFlag('fogDisabled', true);
+
+      if (!fogEnabled) {
+        return { success: true, message: 'Fog of war already disabled (game setting). Flag set for when fog is enabled.' };
+      }
+      return { success: true, message: 'Fog of war disabled - map revealed' };
+    },
   },
   {
     name: 'fog',
     aliases: ['hidemap', 'unreveal'],
     description: 'Re-enable fog of war',
     category: 'cheats',
-    action: { type: 'setFlag', flag: 'fogDisabled', value: false },
+    execute: (_args, ctx) => {
+      const { useGameSetupStore } = require('@/store/gameSetupStore');
+      const fogEnabled = useGameSetupStore.getState().fogOfWar;
+
+      ctx.setFlag('fogDisabled', false);
+
+      if (!fogEnabled) {
+        return { success: true, message: 'Fog of war is disabled in game settings. Cannot re-enable via console.' };
+      }
+      return { success: true, message: 'Fog of war re-enabled' };
+    },
   },
   {
     name: 'killall',
