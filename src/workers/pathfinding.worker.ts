@@ -48,6 +48,9 @@ interface LoadNavMeshFromGeometryMessage {
   indices: Uint32Array;
   mapWidth: number;
   mapHeight: number;
+  heightMap?: Float32Array;
+  heightMapWidth?: number;
+  heightMapHeight?: number;
 }
 
 interface FindPathMessage {
@@ -107,6 +110,9 @@ let navMesh: NavMesh | null = null;
 let navMeshQuery: NavMeshQuery | null = null;
 let tileCache: TileCache | null = null;
 let initialized = false;
+let heightMap: Float32Array | null = null;
+let heightMapWidth = 0;
+let heightMapHeight = 0;
 
 // Track obstacles
 const obstacleRefs: Map<number, Obstacle> = new Map();
@@ -143,6 +149,9 @@ function loadNavMesh(data: Uint8Array): boolean {
 
     navMesh = result.navMesh;
     navMeshQuery = new NavMeshQuery(navMesh);
+    heightMap = null;
+    heightMapWidth = 0;
+    heightMapHeight = 0;
     // Note: TileCache is not exported/imported, so dynamic obstacles won't work
     // with pre-exported navmesh. Use loadNavMeshFromGeometry for full support.
     tileCache = null;
@@ -159,7 +168,10 @@ function loadNavMesh(data: Uint8Array): boolean {
  */
 function loadNavMeshFromGeometry(
   positions: Float32Array,
-  indices: Uint32Array
+  indices: Uint32Array,
+  heightMapData?: Float32Array,
+  heightMapW?: number,
+  heightMapH?: number
 ): boolean {
   if (!initialized) {
     console.error('[PathfindingWorker] WASM not initialized');
@@ -175,6 +187,16 @@ function loadNavMeshFromGeometry(
     });
   }
 
+  if (heightMapData && heightMapW && heightMapH) {
+    heightMap = heightMapData;
+    heightMapWidth = heightMapW;
+    heightMapHeight = heightMapH;
+  } else {
+    heightMap = null;
+    heightMapWidth = 0;
+    heightMapHeight = 0;
+  }
+
   try {
     // Try TileCache first (supports dynamic obstacles)
     const result = generateTileCache(positions, indices, NAVMESH_CONFIG);
@@ -183,6 +205,11 @@ function loadNavMeshFromGeometry(
       tileCache = result.tileCache;
       navMesh = result.navMesh;
       navMeshQuery = new NavMeshQuery(navMesh);
+      if (heightMapData && heightMapW && heightMapH) {
+        heightMap = heightMapData;
+        heightMapWidth = heightMapW;
+        heightMapHeight = heightMapH;
+      }
       if (DEBUG) console.log('[PathfindingWorker] TileCache navmesh generated successfully');
       return true;
     }
@@ -200,6 +227,11 @@ function loadNavMeshFromGeometry(
       tileCache = null; // No dynamic obstacles in solo mode
       navMesh = soloResult.navMesh;
       navMeshQuery = new NavMeshQuery(navMesh);
+      if (heightMapData && heightMapW && heightMapH) {
+        heightMap = heightMapData;
+        heightMapWidth = heightMapW;
+        heightMapHeight = heightMapH;
+      }
       if (DEBUG) console.log('[PathfindingWorker] Solo navmesh generated successfully');
       return true;
     }
@@ -212,6 +244,37 @@ function loadNavMeshFromGeometry(
   }
 }
 
+function getHeightAt(x: number, y: number): number {
+  if (!heightMap || heightMapWidth === 0 || heightMapHeight === 0) {
+    return 0;
+  }
+
+  const maxX = heightMapWidth - 1;
+  const maxY = heightMapHeight - 1;
+
+  if (x < 0 || x >= maxX || y < 0 || y >= maxY) {
+    return 0;
+  }
+
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = Math.min(x0 + 1, maxX);
+  const y1 = Math.min(y0 + 1, maxY);
+
+  const fx = x - x0;
+  const fy = y - y0;
+
+  const h00 = heightMap[y0 * heightMapWidth + x0];
+  const h10 = heightMap[y0 * heightMapWidth + x1];
+  const h01 = heightMap[y1 * heightMapWidth + x0];
+  const h11 = heightMap[y1 * heightMapWidth + x1];
+
+  return h00 * (1 - fx) * (1 - fy) +
+         h10 * fx * (1 - fy) +
+         h01 * (1 - fx) * fy +
+         h11 * fx * fy;
+}
+
 /**
  * Find path between two points
  */
@@ -221,8 +284,8 @@ function findPath(
   endX: number,
   endY: number,
   agentRadius: number,
-  startHeight: number = 0,
-  endHeight: number = 0
+  startHeight?: number,
+  endHeight?: number
 ): { path: Array<{ x: number; y: number }>; found: boolean } {
   if (!navMeshQuery) {
     return { path: [], found: false };
@@ -232,8 +295,11 @@ function findPath(
     const searchRadius = Math.max(agentRadius * 4, 2);
     const halfExtents = { x: searchRadius, y: 10, z: searchRadius };
 
-    const startQuery = { x: startX, y: startHeight, z: startY };
-    const endQuery = { x: endX, y: endHeight, z: endY };
+    const resolvedStartHeight = startHeight ?? getHeightAt(startX, startY);
+    const resolvedEndHeight = endHeight ?? getHeightAt(endX, endY);
+
+    const startQuery = { x: startX, y: resolvedStartHeight, z: startY };
+    const endQuery = { x: endX, y: resolvedEndHeight, z: endY };
 
     const startOnMesh = navMeshQuery.findClosestPoint(startQuery, { halfExtents });
     const endOnMesh = navMeshQuery.findClosestPoint(endQuery, { halfExtents });
@@ -326,12 +392,13 @@ function canWalkDirect(
 /**
  * Check if point is walkable
  */
-function isWalkable(x: number, y: number, height: number = 0): boolean {
+function isWalkable(x: number, y: number, height?: number): boolean {
   if (!navMeshQuery) return false;
 
   try {
     const halfExtents = { x: 2, y: 20, z: 2 };
-    const result = navMeshQuery.findClosestPoint({ x, y: height, z: y }, { halfExtents });
+    const queryHeight = height ?? getHeightAt(x, y);
+    const result = navMeshQuery.findClosestPoint({ x, y: queryHeight, z: y }, { halfExtents });
     if (!result.success || !result.point) return false;
 
     const dist = distance(x, y, result.point.x, result.point.z);
@@ -344,12 +411,13 @@ function isWalkable(x: number, y: number, height: number = 0): boolean {
 /**
  * Find nearest walkable point
  */
-function findNearestPoint(x: number, y: number, height: number = 0): { x: number; y: number } | null {
+function findNearestPoint(x: number, y: number, height?: number): { x: number; y: number } | null {
   if (!navMeshQuery) return null;
 
   try {
     const halfExtents = { x: 5, y: 20, z: 5 };
-    const result = navMeshQuery.findClosestPoint({ x, y: height, z: y }, { halfExtents });
+    const queryHeight = height ?? getHeightAt(x, y);
+    const result = navMeshQuery.findClosestPoint({ x, y: queryHeight, z: y }, { halfExtents });
     if (result.success && result.point) {
       return { x: result.point.x, y: result.point.z };
     }
@@ -457,7 +525,13 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     }
 
     case 'loadNavMeshFromGeometry': {
-      const success = loadNavMeshFromGeometry(message.positions, message.indices);
+      const success = loadNavMeshFromGeometry(
+        message.positions,
+        message.indices,
+        message.heightMap,
+        message.heightMapWidth,
+        message.heightMapHeight
+      );
       self.postMessage({ type: 'navMeshLoaded', success });
       break;
     }
