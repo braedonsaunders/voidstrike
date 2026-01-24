@@ -135,6 +135,71 @@ export class MovementOrchestrator {
   }
 
   /**
+   * Enforce movement domain boundaries for a unit.
+   * Ensures naval units stay in water and ground units stay on land.
+   * If unit is in invalid terrain, pushes them back to nearest valid position.
+   *
+   * Critical for preventing boats from ending up on land due to:
+   * - Physics pushing from other units
+   * - Separation forces during arrival
+   * - Direct movement before pathfinding validates
+   */
+  private enforceMovementDomainBoundary(
+    transform: Transform,
+    unit: Unit,
+    velocity: Velocity
+  ): void {
+    // Air units can go anywhere
+    if (unit.movementDomain === 'air' || unit.isFlying) {
+      return;
+    }
+
+    // Check if current position is valid for this unit's domain
+    const isValidPosition = this.recast.isWalkableForDomain(
+      transform.x,
+      transform.y,
+      unit.movementDomain
+    );
+
+    if (isValidPosition) {
+      return;
+    }
+
+    // Unit is in invalid terrain - find nearest valid position and push them there
+    const nearestValid = this.recast.findNearestPointForDomain(
+      transform.x,
+      transform.y,
+      unit.movementDomain
+    );
+
+    if (nearestValid) {
+      // Calculate push direction towards valid terrain
+      const dx = nearestValid.x - transform.x;
+      const dy = nearestValid.y - transform.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist > 0.01) {
+        // Immediately snap unit back if they've gone too far into invalid terrain
+        // Otherwise push them gradually to avoid jarring teleports
+        const pushDistance = Math.min(dist, unit.maxSpeed * 0.1);
+        const pushX = (dx / dist) * pushDistance;
+        const pushY = (dy / dist) * pushDistance;
+
+        transform.x += pushX;
+        transform.y += pushY;
+
+        // Also update velocity to point towards valid terrain
+        velocity.x = (dx / dist) * unit.maxSpeed * 0.5;
+        velocity.y = (dy / dist) * unit.maxSpeed * 0.5;
+      } else {
+        // Very close - just snap to valid position
+        transform.x = nearestValid.x;
+        transform.y = nearestValid.y;
+      }
+    }
+  }
+
+  /**
    * Setup event listeners for movement commands
    */
   public setupEventListeners(): void {
@@ -218,6 +283,27 @@ export class MovementOrchestrator {
   // ==================== COMMAND HANDLERS ====================
 
   /**
+   * Validate and adjust target position for unit's movement domain.
+   * Returns adjusted target or null if no valid position exists.
+   */
+  private validateTargetForDomain(
+    targetX: number,
+    targetY: number,
+    domain: import('../../pathfinding/RecastNavigation').MovementDomain
+  ): { x: number; y: number } | null {
+    if (domain === 'air') {
+      return { x: targetX, y: targetY };
+    }
+
+    const isValid = this.recast.isWalkableForDomain(targetX, targetY, domain);
+    if (isValid) {
+      return { x: targetX, y: targetY };
+    }
+
+    return this.recast.findNearestPointForDomain(targetX, targetY, domain);
+  }
+
+  /**
    * Handle attack-move command
    */
   private handleAttackMoveCommand(data: {
@@ -235,17 +321,25 @@ export class MovementOrchestrator {
       const transform = entity.get<Transform>('Transform');
       if (!unit || !transform) continue;
 
+      // Validate target for unit's movement domain (prevents boats on land, etc.)
+      const validatedTarget = this.validateTargetForDomain(
+        targetPosition.x,
+        targetPosition.y,
+        unit.movementDomain
+      );
+      if (!validatedTarget) continue;
+
       if (queue) {
         unit.queueCommand({
           type: 'attackmove',
-          targetX: targetPosition.x,
-          targetY: targetPosition.y,
+          targetX: validatedTarget.x,
+          targetY: validatedTarget.y,
         });
       } else {
-        unit.setAttackMoveTarget(targetPosition.x, targetPosition.y);
+        unit.setAttackMoveTarget(validatedTarget.x, validatedTarget.y);
         unit.path = [];
         unit.pathIndex = 0;
-        this.pathfinding.requestPathWithCooldown(entityId, targetPosition.x, targetPosition.y, true);
+        this.pathfinding.requestPathWithCooldown(entityId, validatedTarget.x, validatedTarget.y, true);
       }
     }
   }
@@ -268,29 +362,37 @@ export class MovementOrchestrator {
       const transform = entity.get<Transform>('Transform');
       if (!unit || !transform) continue;
 
+      // Validate target for unit's movement domain (prevents boats on land, etc.)
+      const validatedTarget = this.validateTargetForDomain(
+        targetPosition.x,
+        targetPosition.y,
+        unit.movementDomain
+      );
+      if (!validatedTarget) continue;
+
       if (queue) {
         unit.queueCommand({
           type: 'patrol',
-          targetX: targetPosition.x,
-          targetY: targetPosition.y,
+          targetX: validatedTarget.x,
+          targetY: validatedTarget.y,
         });
       } else {
         unit.setPatrol(
           transform.x,
           transform.y,
-          targetPosition.x,
-          targetPosition.y
+          validatedTarget.x,
+          validatedTarget.y
         );
         this.pathfinding.requestPathWithCooldown(
           entityId,
-          targetPosition.x,
-          targetPosition.y,
+          validatedTarget.x,
+          validatedTarget.y,
           true
         );
         // Set initial rotation to face target direction
         transform.rotation = Math.atan2(
-          -(targetPosition.y - transform.y),
-          targetPosition.x - transform.x
+          -(validatedTarget.y - transform.y),
+          validatedTarget.x - transform.x
         );
       }
     }
@@ -453,7 +555,55 @@ export class MovementOrchestrator {
       const waypoint = unit.path[unit.pathIndex];
       targetX = waypoint.x;
       targetY = waypoint.y;
+
+      // Validate waypoint for movement domain (prevents boats following paths onto land)
+      if (unit.movementDomain !== 'air' && !unit.isFlying) {
+        const isValidWaypoint = this.recast.isWalkableForDomain(targetX, targetY, unit.movementDomain);
+        if (!isValidWaypoint) {
+          // Skip invalid waypoints or clear path if all remaining are invalid
+          unit.pathIndex++;
+          if (unit.pathIndex >= unit.path.length) {
+            // All waypoints exhausted - find nearest valid point to final target
+            if (unit.targetX !== null && unit.targetY !== null) {
+              const nearestValid = this.recast.findNearestPointForDomain(
+                unit.targetX,
+                unit.targetY,
+                unit.movementDomain
+              );
+              if (nearestValid) {
+                unit.targetX = nearestValid.x;
+                unit.targetY = nearestValid.y;
+              }
+            }
+            unit.path = [];
+            unit.pathIndex = 0;
+          }
+          return; // Re-process on next frame with next waypoint
+        }
+      }
     } else if (unit.targetX !== null && unit.targetY !== null) {
+      // Validate direct target for movement domain (prevents boats targeting land)
+      if (unit.movementDomain !== 'air' && !unit.isFlying) {
+        const isValidTarget = this.recast.isWalkableForDomain(unit.targetX, unit.targetY, unit.movementDomain);
+        if (!isValidTarget) {
+          // Find nearest valid point for this domain
+          const nearestValid = this.recast.findNearestPointForDomain(
+            unit.targetX,
+            unit.targetY,
+            unit.movementDomain
+          );
+          if (nearestValid) {
+            unit.targetX = nearestValid.x;
+            unit.targetY = nearestValid.y;
+          } else {
+            // No valid point found - clear target and stop
+            unit.clearTarget();
+            velocity.zero();
+            return;
+          }
+        }
+      }
+
       targetX = unit.targetX;
       targetY = unit.targetY;
 
@@ -592,6 +742,10 @@ export class MovementOrchestrator {
         transform.x = snapValue(transform.x, QUANT_POSITION);
         transform.y = snapValue(transform.y, QUANT_POSITION);
         this.pathfinding.clampToMapBounds(transform);
+
+        // Enforce movement domain boundaries (prevents boats on land, etc.)
+        this.enforceMovementDomainBoundary(transform, unit, velocity);
+
         this.unitMovedThisTick.add(entityId);
         this.trulyIdleTicks.set(entityId, 0);
         this.pathfinding.resolveHardBuildingCollision(entityId, transform, unit);
@@ -703,6 +857,9 @@ export class MovementOrchestrator {
         transform.x = snapValue(transform.x, QUANT_POSITION);
         transform.y = snapValue(transform.y, QUANT_POSITION);
         this.pathfinding.clampToMapBounds(transform);
+
+        // Enforce movement domain boundaries (prevents boats on land, etc.)
+        this.enforceMovementDomainBoundary(transform, unit, velocity);
 
         if (!unit.isFlying) {
           this.pathfinding.resolveHardBuildingCollision(entityId, transform, unit);
@@ -994,6 +1151,10 @@ export class MovementOrchestrator {
     transform.x = snapValue(transform.x, QUANT_POSITION);
     transform.y = snapValue(transform.y, QUANT_POSITION);
     this.pathfinding.clampToMapBounds(transform);
+
+    // Enforce movement domain boundaries (prevents boats on land, etc.)
+    // Critical: must happen after all forces are applied but before collision resolution
+    this.enforceMovementDomainBoundary(transform, unit, velocity);
 
     // Update Z height for terrain following (ramps, elevated platforms)
     // Use crowd agent's height if available (most accurate for navmesh surface)

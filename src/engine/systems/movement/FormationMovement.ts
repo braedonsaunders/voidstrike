@@ -19,6 +19,7 @@ import {
   getFormation,
 } from '@/data/formations/formations';
 import { MAGIC_BOX_MARGIN, FORMATION_BUFFER_SIZE } from '@/data/movement.config';
+import { RecastNavigation, getRecastNavigation, MovementDomain } from '../../pathfinding/RecastNavigation';
 
 // PERF: Pooled formation position buffer to avoid allocation per move command
 const formationBuffer: Array<{ x: number; y: number }> = [];
@@ -55,6 +56,7 @@ export class FormationMovement {
   private world: World;
   private eventBus: EventBus;
   private requestPathWithCooldown: PathRequestCallback;
+  private recast: RecastNavigation;
 
   constructor(
     world: World,
@@ -64,6 +66,33 @@ export class FormationMovement {
     this.world = world;
     this.eventBus = eventBus;
     this.requestPathWithCooldown = requestPathWithCooldown;
+    this.recast = getRecastNavigation();
+  }
+
+  /**
+   * Validate and adjust target position for unit's movement domain.
+   * Prevents naval units from targeting land positions and vice versa.
+   * Returns adjusted target position, or null if no valid position can be found.
+   */
+  private validateTargetForDomain(
+    targetX: number,
+    targetY: number,
+    domain: MovementDomain
+  ): { x: number; y: number } | null {
+    // Air units can go anywhere
+    if (domain === 'air') {
+      return { x: targetX, y: targetY };
+    }
+
+    // Check if target is valid for this domain
+    const isValidTarget = this.recast.isWalkableForDomain(targetX, targetY, domain);
+    if (isValidTarget) {
+      return { x: targetX, y: targetY };
+    }
+
+    // Target is invalid - find nearest valid point for this domain
+    const nearestValid = this.recast.findNearestPointForDomain(targetX, targetY, domain);
+    return nearestValid;
   }
 
   /**
@@ -185,28 +214,40 @@ export class FormationMovement {
       const unit = entity.get<Unit>('Unit');
       if (!unit) return;
 
+      // Validate target for unit's movement domain (prevents boats on land, etc.)
+      const validatedTarget = this.validateTargetForDomain(
+        targetPosition.x,
+        targetPosition.y,
+        unit.movementDomain
+      );
+
+      // If no valid target can be found, abort the move command
+      if (!validatedTarget) {
+        return;
+      }
+
       if (queue) {
         unit.queueCommand({
           type: 'move',
-          targetX: targetPosition.x,
-          targetY: targetPosition.y,
+          targetX: validatedTarget.x,
+          targetY: validatedTarget.y,
         });
       } else {
         if (unit.state === 'building' && unit.constructingBuildingId !== null) {
           unit.cancelBuilding();
         }
-        unit.setMoveTarget(targetPosition.x, targetPosition.y);
+        unit.setMoveTarget(validatedTarget.x, validatedTarget.y);
         unit.path = [];
         unit.pathIndex = 0;
-        this.requestPathWithCooldown(entityId, targetPosition.x, targetPosition.y, true);
+        this.requestPathWithCooldown(entityId, validatedTarget.x, validatedTarget.y, true);
 
         // Set initial rotation to face target direction
         // Note: Y is negated for Three.js coordinate system
         const transform = entity.get<Transform>('Transform');
         if (transform) {
           transform.rotation = Math.atan2(
-            -(targetPosition.y - transform.y),
-            targetPosition.x - transform.x
+            -(validatedTarget.y - transform.y),
+            validatedTarget.x - transform.x
           );
         }
       }
@@ -247,28 +288,32 @@ export class FormationMovement {
       const unit = entity.get<Unit>('Unit');
       if (!unit) continue;
 
+      // Validate target for unit's movement domain (prevents boats on land, etc.)
+      const validatedTarget = this.validateTargetForDomain(targetX, targetY, unit.movementDomain);
+      if (!validatedTarget) continue;
+
       if (queue) {
         unit.queueCommand({
           type: 'move',
-          targetX,
-          targetY,
+          targetX: validatedTarget.x,
+          targetY: validatedTarget.y,
         });
       } else {
         if (unit.state === 'building' && unit.constructingBuildingId !== null) {
           unit.cancelBuilding();
         }
-        unit.setMoveTarget(targetX, targetY);
+        unit.setMoveTarget(validatedTarget.x, validatedTarget.y);
         unit.path = [];
         unit.pathIndex = 0;
-        this.requestPathWithCooldown(entityId, targetX, targetY, true);
+        this.requestPathWithCooldown(entityId, validatedTarget.x, validatedTarget.y, true);
 
         // Set initial rotation to face target direction
         // Note: Y is negated for Three.js coordinate system
         const transform = entity.get<Transform>('Transform');
         if (transform) {
           transform.rotation = Math.atan2(
-            -(targetY - transform.y),
-            targetX - transform.x
+            -(validatedTarget.y - transform.y),
+            validatedTarget.x - transform.x
           );
         }
       }
@@ -302,26 +347,30 @@ export class FormationMovement {
       const unitTargetX = targetX + offsetX;
       const unitTargetY = targetY + offsetY;
 
+      // Validate target for unit's movement domain (prevents boats on land, etc.)
+      const validatedTarget = this.validateTargetForDomain(unitTargetX, unitTargetY, unit.movementDomain);
+      if (!validatedTarget) continue;
+
       if (queue) {
         unit.queueCommand({
           type: 'move',
-          targetX: unitTargetX,
-          targetY: unitTargetY,
+          targetX: validatedTarget.x,
+          targetY: validatedTarget.y,
         });
       } else {
         if (unit.state === 'building' && unit.constructingBuildingId !== null) {
           unit.cancelBuilding();
         }
-        unit.setMoveTarget(unitTargetX, unitTargetY);
+        unit.setMoveTarget(validatedTarget.x, validatedTarget.y);
         unit.path = [];
         unit.pathIndex = 0;
-        this.requestPathWithCooldown(entityId, unitTargetX, unitTargetY, true);
+        this.requestPathWithCooldown(entityId, validatedTarget.x, validatedTarget.y, true);
 
         // Set initial rotation to face target direction
         // Note: Y is negated for Three.js coordinate system
         transform.rotation = Math.atan2(
-          -(unitTargetY - transform.y),
-          unitTargetX - transform.x
+          -(validatedTarget.y - transform.y),
+          validatedTarget.x - transform.x
         );
       }
     }
@@ -416,25 +465,29 @@ export class FormationMovement {
       const pos = formationPositions[i];
       if (!pos) continue;
 
+      // Validate target for unit's movement domain (prevents boats on land, etc.)
+      const validatedTarget = this.validateTargetForDomain(pos.x, pos.y, unit.movementDomain);
+      if (!validatedTarget) continue;
+
       if (queue) {
         unit.queueCommand({
           type: 'move',
-          targetX: pos.x,
-          targetY: pos.y,
+          targetX: validatedTarget.x,
+          targetY: validatedTarget.y,
         });
       } else {
         if (unit.state === 'building' && unit.constructingBuildingId !== null) {
           unit.cancelBuilding();
         }
-        unit.setMoveTarget(pos.x, pos.y);
+        unit.setMoveTarget(validatedTarget.x, validatedTarget.y);
         unit.path = [];
         unit.pathIndex = 0;
-        this.requestPathWithCooldown(entityId, pos.x, pos.y, true);
+        this.requestPathWithCooldown(entityId, validatedTarget.x, validatedTarget.y, true);
         // Set initial rotation to face target direction
         // Note: Y is negated for Three.js coordinate system
         transform.rotation = Math.atan2(
-          -(pos.y - transform.y),
-          pos.x - transform.x
+          -(validatedTarget.y - transform.y),
+          validatedTarget.x - transform.x
         );
       }
     }
