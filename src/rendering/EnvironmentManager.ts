@@ -4,7 +4,7 @@ import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
 import { CrystalField } from './GroundDetail';
 import { TSLMapBorderFog } from './tsl/MapBorderFog';
-import { OceanWater } from './tsl/OceanWater';
+import { HybridOceanWater } from './tsl/HybridOceanWater';
 import { WaterMesh } from './WaterMesh';
 import { EnvironmentParticles } from './EnhancedDecorations';
 // PERFORMANCE: Use instanced decorations instead of individual meshes
@@ -46,7 +46,7 @@ export class EnvironmentManager {
   private grass: InstancedGrass | null = null;
   private pebbles: InstancedPebbles | null = null;
   private crystals: CrystalField | null = null;
-  private water: OceanWater | null = null;
+  private water: HybridOceanWater | null = null;
   private waterMesh: WaterMesh | null = null;
   private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
@@ -236,9 +236,9 @@ export class EnvironmentManager {
       this.scene.add(this.crystals.group);
     }
 
-    // Water/lava plane - World-class TSL ocean shader with Gerstner waves
+    // Water/lava plane - Hybrid reflection-based water with RTS optimizations
     if (this.biome.hasWater) {
-      this.water = new OceanWater(this.mapData, this.biome);
+      this.water = new HybridOceanWater(this.mapData, this.biome);
       this.scene.add(this.water.mesh);
     }
 
