@@ -28,6 +28,22 @@
 export const WALKABLE_CLIMB = 0.8;
 
 /**
+ * Maximum height change per cell for ramp boundary smoothing.
+ * Must equal WALKABLE_CLIMB to ensure navmesh polygon connectivity.
+ *
+ * For cardinal neighbors (distance 1): max change = WALKABLE_CLIMB
+ * For diagonal neighbors (distance √2): max change = WALKABLE_CLIMB * √2
+ */
+export const RAMP_SMOOTHING_MAX_CARDINAL = WALKABLE_CLIMB;
+export const RAMP_SMOOTHING_MAX_DIAGONAL = WALKABLE_CLIMB * Math.SQRT2;
+
+/**
+ * Number of smoothing passes for ramp boundary height propagation.
+ * More passes = smoother transitions over larger areas.
+ */
+export const RAMP_SMOOTHING_PASSES = 25;
+
+/**
  * Maximum slope angle units can walk on (degrees).
  * Recast uses this to reject near-vertical surfaces.
  *

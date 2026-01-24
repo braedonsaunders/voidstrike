@@ -13,7 +13,9 @@ import {
   CLIFF_WALL_THRESHOLD_ELEVATION,
   RAMP_BOUNDARY_ELEVATION_THRESHOLD,
   WALKABLE_CLIMB_ELEVATION,
-  WALKABLE_CLIMB,
+  RAMP_SMOOTHING_MAX_CARDINAL,
+  RAMP_SMOOTHING_MAX_DIAGONAL,
+  RAMP_SMOOTHING_PASSES,
 } from '@/data/pathfinding.config';
 
 // Import from central rendering config
@@ -1519,11 +1521,8 @@ export class Terrain {
     // Both must be satisfied, but walkableClimb is the stricter constraint for
     // adjacent floor vertices (1-cell apart).
     //
-    // For diagonals (√2 distance apart), max height change = walkableClimb * √2 ≈ 1.13
+    // Constants imported from pathfinding.config.ts - SINGLE SOURCE OF TRUTH
     // =================================================================
-    const MAX_HEIGHT_CHANGE_CARDINAL = WALKABLE_CLIMB; // 0.8 for 4-connected neighbors
-    const MAX_HEIGHT_CHANGE_DIAGONAL = WALKABLE_CLIMB * Math.SQRT2; // ~1.13 for 8-connected
-    const SMOOTHING_PASSES = 25; // Increased passes to propagate constraint further
 
     // Find all vertices that are definitely on ramps (not just near ramps)
     // These are our "anchor" heights that we propagate from
@@ -1555,7 +1554,7 @@ export class Terrain {
     // Each pass, for vertices adjacent to already-processed vertices,
     // cap the height difference to stay within walkableClimb
     let smoothedCount = 0;
-    for (let pass = 0; pass < SMOOTHING_PASSES; pass++) {
+    for (let pass = 0; pass < RAMP_SMOOTHING_PASSES; pass++) {
       let changesThisPass = 0;
 
       for (let vy = 0; vy <= height; vy++) {
@@ -1585,23 +1584,22 @@ export class Terrain {
           if (!nearRamp) continue;
 
           // Check 8-connected neighbors and enforce walkableClimb constraint
-          // Cardinal neighbors (4-connected) use MAX_HEIGHT_CHANGE_CARDINAL
-          // Diagonal neighbors use MAX_HEIGHT_CHANGE_DIAGONAL (scaled by √2 distance)
           const currentHeight = vertexHeights[idx];
           let targetHeight = currentHeight;
 
           // 8-connected neighbor offsets with their max height change values
+          // Constants from pathfinding.config.ts
           const neighbors: Array<[number, number, number]> = [
-            // Cardinal (distance 1): max change = WALKABLE_CLIMB
-            [0, -1, MAX_HEIGHT_CHANGE_CARDINAL],
-            [0, 1, MAX_HEIGHT_CHANGE_CARDINAL],
-            [-1, 0, MAX_HEIGHT_CHANGE_CARDINAL],
-            [1, 0, MAX_HEIGHT_CHANGE_CARDINAL],
-            // Diagonal (distance √2): max change = WALKABLE_CLIMB * √2
-            [-1, -1, MAX_HEIGHT_CHANGE_DIAGONAL],
-            [1, -1, MAX_HEIGHT_CHANGE_DIAGONAL],
-            [-1, 1, MAX_HEIGHT_CHANGE_DIAGONAL],
-            [1, 1, MAX_HEIGHT_CHANGE_DIAGONAL],
+            // Cardinal (distance 1)
+            [0, -1, RAMP_SMOOTHING_MAX_CARDINAL],
+            [0, 1, RAMP_SMOOTHING_MAX_CARDINAL],
+            [-1, 0, RAMP_SMOOTHING_MAX_CARDINAL],
+            [1, 0, RAMP_SMOOTHING_MAX_CARDINAL],
+            // Diagonal (distance √2)
+            [-1, -1, RAMP_SMOOTHING_MAX_DIAGONAL],
+            [1, -1, RAMP_SMOOTHING_MAX_DIAGONAL],
+            [-1, 1, RAMP_SMOOTHING_MAX_DIAGONAL],
+            [1, 1, RAMP_SMOOTHING_MAX_DIAGONAL],
           ];
 
           for (const [dx, dy, maxChange] of neighbors) {
