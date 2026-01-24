@@ -13,57 +13,79 @@ import { WaterMesh } from 'three/addons/objects/WaterMesh.js';
 import { MapData } from '@/data/maps';
 import { BiomeConfig } from '../Biomes';
 
-// Generate a proper water normals texture procedurally
-// This mimics the waternormals.jpg from Three.js examples
-function generateWaterNormals(size: number = 256): THREE.DataTexture {
+// Singleton texture loader and cached texture
+let waterNormalsTexture: THREE.Texture | null = null;
+let textureLoadPromise: Promise<THREE.Texture> | null = null;
+
+/**
+ * Load the water normals texture (same one used in Three.js webgpu_ocean example)
+ */
+async function loadWaterNormals(): Promise<THREE.Texture> {
+  if (waterNormalsTexture) {
+    return waterNormalsTexture;
+  }
+
+  if (textureLoadPromise) {
+    return textureLoadPromise;
+  }
+
+  textureLoadPromise = new Promise((resolve, reject) => {
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      '/textures/waternormals.jpg',
+      (texture) => {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        waterNormalsTexture = texture;
+        resolve(texture);
+      },
+      undefined,
+      (error) => {
+        console.error('Failed to load water normals texture:', error);
+        // Fall back to a simple flat normal
+        const fallback = createFallbackNormalMap();
+        waterNormalsTexture = fallback;
+        resolve(fallback);
+      }
+    );
+  });
+
+  return textureLoadPromise;
+}
+
+/**
+ * Get cached texture synchronously (returns fallback if not loaded yet)
+ */
+function getWaterNormalsSync(): THREE.Texture {
+  if (waterNormalsTexture) {
+    return waterNormalsTexture;
+  }
+  // Start loading in background
+  loadWaterNormals();
+  // Return fallback for now
+  return createFallbackNormalMap();
+}
+
+/**
+ * Create a simple fallback normal map (flat blue = pointing up)
+ */
+function createFallbackNormalMap(): THREE.DataTexture {
+  const size = 64;
   const data = new Uint8Array(size * size * 4);
 
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const idx = (y * size + x) * 4;
-
-      // Normalized coordinates
-      const u = x / size;
-      const v = y / size;
-
-      // Multiple octaves of waves for realistic water normal pattern
-      // Using cosine waves at different frequencies
-      let nx = 0;
-      let nz = 0;
-
-      // Large waves
-      nx += Math.cos(u * Math.PI * 4 + v * Math.PI * 2) * 0.5;
-      nz += Math.cos(v * Math.PI * 4 + u * Math.PI * 3) * 0.5;
-
-      // Medium waves
-      nx += Math.cos(u * Math.PI * 8 - v * Math.PI * 6) * 0.25;
-      nz += Math.cos(v * Math.PI * 10 + u * Math.PI * 4) * 0.25;
-
-      // Small ripples
-      nx += Math.cos(u * Math.PI * 20 + v * Math.PI * 16) * 0.125;
-      nz += Math.cos(v * Math.PI * 18 - u * Math.PI * 22) * 0.125;
-
-      // Fine detail
-      nx += Math.cos(u * Math.PI * 40 + v * Math.PI * 35) * 0.0625;
-      nz += Math.cos(v * Math.PI * 42 - u * Math.PI * 38) * 0.0625;
-
-      // Normalize and encode (normal map format: 0.5 = 0, 0 = -1, 1 = 1)
-      const len = Math.sqrt(nx * nx + 1 + nz * nz);
-      data[idx] = Math.floor(((nx / len) * 0.5 + 0.5) * 255);     // R = X
-      data[idx + 1] = Math.floor(((1 / len) * 0.5 + 0.5) * 255);  // G = Y (up)
-      data[idx + 2] = Math.floor(((nz / len) * 0.5 + 0.5) * 255); // B = Z
-      data[idx + 3] = 255;
-    }
+  for (let i = 0; i < size * size; i++) {
+    const idx = i * 4;
+    // Flat normal pointing up (0.5, 0.5, 1.0 in normal map space = 0, 0, 1 in world)
+    data[idx] = 128;     // R = X (0)
+    data[idx + 1] = 128; // G = Y (0)
+    data[idx + 2] = 255; // B = Z (1 = up)
+    data[idx + 3] = 255;
   }
 
   const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
-  texture.magFilter = THREE.LinearFilter;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.generateMipmaps = true;
   texture.needsUpdate = true;
-
   return texture;
 }
 
@@ -81,19 +103,18 @@ export interface OceanWaterConfig {
 export class OceanWater {
   public mesh: WaterMesh;
   private geometry: THREE.PlaneGeometry;
-  private normalMap: THREE.DataTexture;
   private sunDirection: THREE.Vector3;
 
   constructor(mapData: MapData, biome: BiomeConfig, config?: OceanWaterConfig) {
-    // Generate water normals texture
-    this.normalMap = generateWaterNormals(256);
+    // Get water normals texture (sync - may be fallback initially)
+    const waterNormals = getWaterNormalsSync();
 
     if (!biome.hasWater) {
       // Create minimal hidden mesh
       this.geometry = new THREE.PlaneGeometry(1, 1);
       this.sunDirection = new THREE.Vector3(0.7, 0.7, 0);
       this.mesh = new WaterMesh(this.geometry, {
-        waterNormals: this.normalMap,
+        waterNormals: waterNormals,
         sunDirection: this.sunDirection,
       });
       this.mesh.visible = false;
@@ -118,7 +139,7 @@ export class OceanWater {
 
     // Create WaterMesh with Three.js addon
     this.mesh = new WaterMesh(this.geometry, {
-      waterNormals: this.normalMap,
+      waterNormals: waterNormals,
       sunDirection: this.sunDirection,
       sunColor: sunColor,
       waterColor: waterColor,
@@ -173,9 +194,15 @@ export class OceanWater {
    */
   public dispose(): void {
     this.geometry.dispose();
-    this.normalMap.dispose();
     if (this.mesh.material) {
       (this.mesh.material as THREE.Material).dispose();
     }
   }
+}
+
+/**
+ * Preload water normals texture - call during game initialization
+ */
+export async function preloadWaterNormals(): Promise<void> {
+  await loadWaterNormals();
 }
