@@ -71,15 +71,19 @@ export class FormationMovement {
   }
 
   /**
-   * Fast O(1) check if a position is on water terrain.
+   * Fast O(1) check if a position is on navigable water terrain for naval units.
    * Uses terrain grid lookup instead of expensive navmesh queries.
+   *
+   * Only water_deep is valid for naval units. water_shallow represents beaches
+   * and shallow water where ground units can wade, but boats cannot navigate.
    */
-  private isWaterTerrain(x: number, y: number): boolean {
+  private isNavalWaterTerrain(x: number, y: number): boolean {
     const game = Game.getInstance();
     const cell = game.getTerrainAt(x, y);
     if (!cell) return false;
     const feature = cell.feature || 'none';
-    return feature === 'water_deep' || feature === 'water_shallow';
+    // Only deep water is valid for naval units - shallow water is for wading ground units
+    return feature === 'water_deep';
   }
 
   /**
@@ -100,7 +104,7 @@ export class FormationMovement {
 
     // Naval units: use fast O(1) terrain lookup
     if (domain === 'water') {
-      const isWater = this.isWaterTerrain(targetX, targetY);
+      const isWater = this.isNavalWaterTerrain(targetX, targetY);
       if (isWater) {
         return { x: targetX, y: targetY };
       }
