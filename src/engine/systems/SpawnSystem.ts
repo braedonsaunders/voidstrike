@@ -173,7 +173,7 @@ export class SpawnSystem extends System {
     // Create building component
     const building = new Building(definition);
     if (completed) {
-      building.state = 'idle';
+      building.state = 'complete';
       building.isConstructed = true;
     }
 
