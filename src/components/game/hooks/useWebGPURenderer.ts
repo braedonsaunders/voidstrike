@@ -14,6 +14,7 @@ import { PerformanceMonitor } from '@/engine/core/PerformanceMonitor';
 import { RTSCamera } from '@/rendering/Camera';
 import { TerrainGrid } from '@/rendering/Terrain';
 import { EnvironmentManager } from '@/rendering/EnvironmentManager';
+import { preloadWaterNormals } from '@/rendering/WaterMesh';
 import { UnitRenderer } from '@/rendering/UnitRenderer';
 import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
@@ -243,6 +244,9 @@ export function useWebGPURenderer({
       cameraRef.current = camera;
       setCameraRef(camera);
       camera.setScreenDimensions(width, height);
+
+      // Preload water texture before creating environment
+      await preloadWaterNormals();
 
       // Create environment
       const environment = new EnvironmentManager(scene, currentMap);
