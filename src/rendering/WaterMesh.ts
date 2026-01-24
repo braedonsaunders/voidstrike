@@ -174,8 +174,8 @@ export class WaterMesh {
       sunDirection: this.sunDirection,
       sunColor: sunColor,
       waterColor: waterColor,
-      distortionScale: 1.5, // Reduced for RTS scale
-      size: 10.0, // Larger = smaller wave pattern
+      distortionScale: 1.0, // Reduced for RTS scale
+      size: 30.0, // Larger = smaller/slower wave pattern
     });
 
     water.rotation.x = -Math.PI / 2;
@@ -391,8 +391,8 @@ export class WaterMesh {
       sunDirection: this.sunDirection,
       sunColor: 0xffffff,
       waterColor: waterColor,
-      distortionScale: 1.5, // Reduced for RTS scale
-      size: 10.0, // Larger = smaller wave pattern
+      distortionScale: 1.0, // Reduced for RTS scale
+      size: 30.0, // Larger = smaller/slower wave pattern
     });
 
     // Calculate center position and height
