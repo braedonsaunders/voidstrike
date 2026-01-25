@@ -80,7 +80,9 @@ npm run test:coverage # With coverage report
 | `tests/engine/pathfinding/grid.test.ts` | 23 | Active |
 | `tests/utils/fixedPoint.test.ts` | 7 | Active |
 | `tests/utils/math.test.ts` | 7 | Active |
-| **Total** | **711** | |
+| `tests/data/combat.test.ts` | 51 | Active |
+| `tests/data/projectileTypes.test.ts` | 42 | Active |
+| **Total** | **804** | |
 
 ---
 
@@ -166,6 +168,8 @@ npm run test:coverage # With coverage report
 - [ ] **DefinitionLoader.ts** - JSON definition loading
 - [ ] **DefinitionRegistry.ts** - Definition storage/lookup
 - [ ] **DefinitionValidator.ts** - Schema validation
+- [x] **combat.ts** - Damage types, armor types, multipliers (51 tests)
+- [x] **projectileTypes.ts** - Projectile definitions, behaviors (42 tests)
 
 ### Priority 10: Building Systems
 
