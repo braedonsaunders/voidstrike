@@ -7,8 +7,9 @@
     "prebuild": "node scripts/generate-music-manifest.js",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint . --ext .js,.cjs",
     "type-check": "tsc --noEmit",
+    "test": "rm -rf dist-tests && tsc -p tsconfig.test.json && node --require ./scripts/test-alias.cjs --test $(find dist-tests/tests -name \"*.test.js\")",
     "optimize-models": "node scripts/optimize-models.js",
     "generate-manifests": "node scripts/generate-music-manifest.js"
   },
