@@ -9,6 +9,7 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
+    "test": "rm -rf dist-tests && tsc -p tsconfig.test.json && node --require ./scripts/test-alias.cjs --test $(find dist-tests/tests -name \"*.test.js\")",
     "optimize-models": "node scripts/optimize-models.js",
     "generate-manifests": "node scripts/generate-music-manifest.js"
   },
