@@ -86,7 +86,9 @@ npm run test:coverage # With coverage report
 | `tests/data/formations.test.ts` | 34 | Active |
 | `tests/data/categories.test.ts` | 55 | Active |
 | `tests/data/resources.test.ts` | 45 | Active |
-| **Total** | **966** | |
+| `tests/data/walls.test.ts` | 49 | Active |
+| `tests/data/aiConfig.test.ts` | 38 | Active |
+| **Total** | **1053** | |
 
 ---
 
@@ -177,6 +179,8 @@ npm run test:coverage # With coverage report
 - [x] **formations.ts** - Formation definitions, position generation (34 tests)
 - [x] **categories.ts** - Unit categories, subcategories (55 tests)
 - [x] **resources.ts** - Resource types, saturation, gather rates (45 tests)
+- [x] **walls.ts** - Wall definitions, line calculation, connection types (49 tests)
+- [x] **aiConfig.ts** - AI condition evaluation, macro rules, utility scoring (38 tests)
 
 ### Priority 10: Building Systems
 
