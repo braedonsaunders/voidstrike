@@ -9,7 +9,9 @@
     "start": "next start",
     "lint": "eslint . --ext .js,.cjs",
     "type-check": "tsc --noEmit",
-    "test": "rm -rf dist-tests && tsc -p tsconfig.test.json && node --require ./scripts/test-alias.cjs --test $(find dist-tests/tests -name \"*.test.js\")",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "optimize-models": "node scripts/optimize-models.js",
     "generate-manifests": "node scripts/generate-music-manifest.js"
   },
@@ -31,11 +33,13 @@
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "@types/three": "^0.172.0",
+    "@vitest/coverage-v8": "^4.0.18",
     "autoprefixer": "^10.4.16",
     "eslint": "^8.56.0",
     "eslint-config-next": "14.0.4",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.18"
   }
 }

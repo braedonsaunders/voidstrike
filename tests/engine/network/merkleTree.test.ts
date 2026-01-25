@@ -1,10 +1,9 @@
+import { describe, it, expect } from 'vitest';
 import {
   MerkleTreeBuilder,
   MerkleTreeComparator,
   type MerkleTreeData,
 } from '@/engine/network/MerkleTree';
-import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
 
 const buildTree = (hashOverrides?: { unit2?: number }): MerkleTreeData => {
   const unit1 = MerkleTreeBuilder.createEntityNode(1, 'unit', 111);
@@ -39,7 +38,7 @@ describe('MerkleTree utilities', () => {
       entityCount: 2,
     };
 
-    assert.strictEqual(treeA.root.hash, treeB.root.hash);
+    expect(treeA.root.hash).toBe(treeB.root.hash);
   });
 
   it('identifies divergent entities', () => {
@@ -48,16 +47,16 @@ describe('MerkleTree utilities', () => {
 
     const result = MerkleTreeComparator.findDivergence(local.root, remote.root);
 
-    assert.ok(result.entityIds.includes(2));
-    assert.strictEqual(result.path[0], 'root');
-    assert.ok(result.comparisons > 0);
+    expect(result.entityIds).toContain(2);
+    expect(result.path[0]).toBe('root');
+    expect(result.comparisons).toBeGreaterThan(0);
   });
 
   it('finds divergent categories and groups from network summaries', () => {
     const tree = buildTree();
     const serialized = MerkleTreeComparator.serializeForNetwork(tree);
 
-    assert.strictEqual(MerkleTreeComparator.isIdentical(tree, serialized), true);
+    expect(MerkleTreeComparator.isIdentical(tree, serialized)).toBe(true);
 
     const tampered = {
       ...serialized,
@@ -67,7 +66,7 @@ describe('MerkleTree utilities', () => {
       },
     };
 
-    assert.deepStrictEqual(MerkleTreeComparator.findDivergentCategories(tree, tampered), ['units']);
+    expect(MerkleTreeComparator.findDivergentCategories(tree, tampered)).toEqual(['units']);
 
     const tamperedGroups = {
       ...serialized,
@@ -80,9 +79,6 @@ describe('MerkleTree utilities', () => {
       },
     };
 
-    assert.deepStrictEqual(
-      MerkleTreeComparator.findDivergentGroups(tree, tamperedGroups, 'units'),
-      ['player1']
-    );
+    expect(MerkleTreeComparator.findDivergentGroups(tree, tamperedGroups, 'units')).toEqual(['player1']);
   });
 });

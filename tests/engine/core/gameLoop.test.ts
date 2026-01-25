@@ -1,6 +1,5 @@
+import { describe, it, expect, afterEach } from 'vitest';
 import { GameLoop } from '@/engine/core/GameLoop';
-import assert from 'node:assert/strict';
-import { afterEach, describe, it } from 'node:test';
 
 const wait = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -22,9 +21,9 @@ describe('GameLoop fallback timing', () => {
     await wait(220);
     loop.stop();
 
-    assert.ok(updates.length >= 3);
-    assert.ok(updates.length <= 6);
-    assert.ok(updates.every((delta) => delta === 50));
+    expect(updates.length).toBeGreaterThanOrEqual(3);
+    expect(updates.length).toBeLessThanOrEqual(6);
+    expect(updates.every((delta) => delta === 50)).toBe(true);
   });
 
   it('respects tick rate changes while running', async () => {
@@ -40,8 +39,8 @@ describe('GameLoop fallback timing', () => {
     await wait(450);
     loop.stop();
 
-    assert.ok(beforeChange >= 1);
-    assert.ok(updates.length > beforeChange);
-    assert.ok(updates.slice(beforeChange).every((delta) => delta === 200));
+    expect(beforeChange).toBeGreaterThanOrEqual(1);
+    expect(updates.length).toBeGreaterThan(beforeChange);
+    expect(updates.slice(beforeChange).every((delta) => delta === 200)).toBe(true);
   });
 });

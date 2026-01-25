@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, expect } from 'vitest';
 import {
   parseConnectionCode,
   ConnectionCodeError,
@@ -7,73 +6,56 @@ import {
 
 describe('ConnectionCode - parseConnectionCode error handling', () => {
   it('throws on code that is too short', () => {
-    assert.throws(() => {
-      parseConnectionCode('VOID-ABC');
-    }, ConnectionCodeError);
+    expect(() => parseConnectionCode('VOID-ABC')).toThrow(ConnectionCodeError);
   });
 
   it('throws on empty code', () => {
-    assert.throws(() => {
-      parseConnectionCode('');
-    }, ConnectionCodeError);
+    expect(() => parseConnectionCode('')).toThrow(ConnectionCodeError);
   });
 
   it('throws on just prefix', () => {
-    assert.throws(() => {
-      parseConnectionCode('VOID-');
-    }, ConnectionCodeError);
+    expect(() => parseConnectionCode('VOID-')).toThrow(ConnectionCodeError);
   });
 
   it('throws on random garbage', () => {
-    assert.throws(() => {
-      parseConnectionCode('NOT-A-VALID-CODE-AT-ALL-AAAA-BBBB-CCCC');
-    }, ConnectionCodeError);
+    expect(() => parseConnectionCode('NOT-A-VALID-CODE-AT-ALL-AAAA-BBBB-CCCC')).toThrow(ConnectionCodeError);
   });
 
   it('throws ConnectionCodeError specifically', () => {
-    try {
-      parseConnectionCode('VOID-INVALID');
-      assert.fail('Should have thrown');
-    } catch (error) {
-      assert.ok(error instanceof ConnectionCodeError);
-    }
+    expect(() => parseConnectionCode('VOID-INVALID')).toThrow(ConnectionCodeError);
   });
 });
 
 describe('ConnectionCodeError', () => {
   it('is an instance of Error', () => {
     const error = new ConnectionCodeError('test message');
-    assert.ok(error instanceof Error);
+    expect(error instanceof Error).toBe(true);
   });
 
   it('has correct name', () => {
     const error = new ConnectionCodeError('test message');
-    assert.strictEqual(error.name, 'ConnectionCodeError');
+    expect(error.name).toBe('ConnectionCodeError');
   });
 
   it('preserves message', () => {
     const error = new ConnectionCodeError('custom error message');
-    assert.strictEqual(error.message, 'custom error message');
+    expect(error.message).toBe('custom error message');
   });
 
   it('has a stack trace', () => {
     const error = new ConnectionCodeError('test');
-    assert.ok(error.stack);
-    assert.ok(error.stack.includes('ConnectionCodeError'));
+    expect(error.stack).toBeTruthy();
+    expect(error.stack).toContain('ConnectionCodeError');
   });
 });
 
 describe('ConnectionCode - input normalization', () => {
   it('handles lowercase input by throwing ConnectionCodeError', () => {
     // Even with lowercase normalization, invalid content should throw
-    assert.throws(() => {
-      parseConnectionCode('void-aaaa-bbbb');
-    }, ConnectionCodeError);
+    expect(() => parseConnectionCode('void-aaaa-bbbb')).toThrow(ConnectionCodeError);
   });
 
   it('handles extra whitespace by throwing for invalid content', () => {
-    assert.throws(() => {
-      parseConnectionCode('  VOID-XXXX  ');
-    }, ConnectionCodeError);
+    expect(() => parseConnectionCode('  VOID-XXXX  ')).toThrow(ConnectionCodeError);
   });
 });

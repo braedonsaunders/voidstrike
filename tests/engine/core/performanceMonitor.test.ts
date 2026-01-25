@@ -1,28 +1,27 @@
-import assert from 'node:assert/strict';
-import { describe, it, afterEach } from 'node:test';
+import { describe, it, expect, afterEach } from 'vitest';
 import { PerformanceMonitor } from '@/engine/core/PerformanceMonitor';
 
 describe('PerformanceMonitor - formatBytes', () => {
   it('formats zero bytes', () => {
-    assert.strictEqual(PerformanceMonitor.formatBytes(0), '0 B');
+    expect(PerformanceMonitor.formatBytes(0)).toBe('0 B');
   });
 
   it('formats bytes', () => {
-    assert.strictEqual(PerformanceMonitor.formatBytes(500), '500 B');
+    expect(PerformanceMonitor.formatBytes(500)).toBe('500 B');
   });
 
   it('formats kilobytes', () => {
-    assert.strictEqual(PerformanceMonitor.formatBytes(1024), '1 KB');
-    assert.strictEqual(PerformanceMonitor.formatBytes(1536), '1.5 KB');
+    expect(PerformanceMonitor.formatBytes(1024)).toBe('1 KB');
+    expect(PerformanceMonitor.formatBytes(1536)).toBe('1.5 KB');
   });
 
   it('formats megabytes', () => {
-    assert.strictEqual(PerformanceMonitor.formatBytes(1048576), '1 MB');
-    assert.strictEqual(PerformanceMonitor.formatBytes(10485760), '10 MB');
+    expect(PerformanceMonitor.formatBytes(1048576)).toBe('1 MB');
+    expect(PerformanceMonitor.formatBytes(10485760)).toBe('10 MB');
   });
 
   it('formats gigabytes', () => {
-    assert.strictEqual(PerformanceMonitor.formatBytes(1073741824), '1 GB');
+    expect(PerformanceMonitor.formatBytes(1073741824)).toBe('1 GB');
   });
 });
 
@@ -30,10 +29,10 @@ describe('PerformanceMonitor - getPerformanceGrade', () => {
   it('returns grade object with grade and color', () => {
     const grade = PerformanceMonitor.getPerformanceGrade();
 
-    assert.ok(typeof grade.grade === 'string');
-    assert.ok(typeof grade.color === 'string');
-    assert.ok(['Excellent', 'Good', 'Fair', 'Poor', 'Critical'].includes(grade.grade));
-    assert.ok(grade.color.startsWith('#'));
+    expect(typeof grade.grade).toBe('string');
+    expect(typeof grade.color).toBe('string');
+    expect(['Excellent', 'Good', 'Fair', 'Poor', 'Critical']).toContain(grade.grade);
+    expect(grade.color.startsWith('#')).toBe(true);
   });
 });
 
@@ -44,10 +43,10 @@ describe('PerformanceMonitor - collection toggle', () => {
 
   it('can toggle collection on and off', () => {
     PerformanceMonitor.setCollecting(true);
-    assert.strictEqual(PerformanceMonitor.isCollecting(), true);
+    expect(PerformanceMonitor.isCollecting()).toBe(true);
 
     PerformanceMonitor.setCollecting(false);
-    assert.strictEqual(PerformanceMonitor.isCollecting(), false);
+    expect(PerformanceMonitor.isCollecting()).toBe(false);
   });
 });
 
@@ -75,34 +74,34 @@ describe('PerformanceMonitor - getSnapshot', () => {
     const snapshot = PerformanceMonitor.getSnapshot();
 
     // Verify snapshot has all required properties
-    assert.ok('timestamp' in snapshot);
-    assert.ok('fps' in snapshot);
-    assert.ok('frameTime' in snapshot);
-    assert.ok('tickTime' in snapshot);
-    assert.ok('systemTimings' in snapshot);
-    assert.ok('entityCounts' in snapshot);
-    assert.ok('memory' in snapshot);
-    assert.ok('network' in snapshot);
-    assert.ok('render' in snapshot);
+    expect(snapshot).toHaveProperty('timestamp');
+    expect(snapshot).toHaveProperty('fps');
+    expect(snapshot).toHaveProperty('frameTime');
+    expect(snapshot).toHaveProperty('tickTime');
+    expect(snapshot).toHaveProperty('systemTimings');
+    expect(snapshot).toHaveProperty('entityCounts');
+    expect(snapshot).toHaveProperty('memory');
+    expect(snapshot).toHaveProperty('network');
+    expect(snapshot).toHaveProperty('render');
 
     // Entity counts structure
-    assert.ok('total' in snapshot.entityCounts);
-    assert.ok('units' in snapshot.entityCounts);
-    assert.ok('buildings' in snapshot.entityCounts);
-    assert.ok('projectiles' in snapshot.entityCounts);
-    assert.ok('resources' in snapshot.entityCounts);
-    assert.ok('effects' in snapshot.entityCounts);
+    expect(snapshot.entityCounts).toHaveProperty('total');
+    expect(snapshot.entityCounts).toHaveProperty('units');
+    expect(snapshot.entityCounts).toHaveProperty('buildings');
+    expect(snapshot.entityCounts).toHaveProperty('projectiles');
+    expect(snapshot.entityCounts).toHaveProperty('resources');
+    expect(snapshot.entityCounts).toHaveProperty('effects');
 
     // Memory structure
-    assert.ok('available' in snapshot.memory);
+    expect(snapshot.memory).toHaveProperty('available');
 
     // Network structure
-    assert.ok('rtt' in snapshot.network);
-    assert.ok('connected' in snapshot.network);
+    expect(snapshot.network).toHaveProperty('rtt');
+    expect(snapshot.network).toHaveProperty('connected');
 
     // Render structure
-    assert.ok('drawCalls' in snapshot.render);
-    assert.ok('triangles' in snapshot.render);
+    expect(snapshot.render).toHaveProperty('drawCalls');
+    expect(snapshot.render).toHaveProperty('triangles');
   });
 });
 
@@ -111,7 +110,7 @@ describe('PerformanceMonitor - subscribe/unsubscribe', () => {
     const listener = () => {};
 
     const unsubscribe = PerformanceMonitor.subscribe(listener);
-    assert.ok(typeof unsubscribe === 'function');
+    expect(typeof unsubscribe).toBe('function');
 
     // Should not throw
     unsubscribe();
@@ -123,10 +122,10 @@ describe('PerformanceMonitor - getFPS and getFrameTime', () => {
     const fps = PerformanceMonitor.getFPS();
     const frameTime = PerformanceMonitor.getFrameTime();
 
-    assert.ok(typeof fps === 'number');
-    assert.ok(typeof frameTime === 'number');
-    assert.ok(fps >= 0);
-    assert.ok(frameTime >= 0);
+    expect(typeof fps).toBe('number');
+    expect(typeof frameTime).toBe('number');
+    expect(fps).toBeGreaterThanOrEqual(0);
+    expect(frameTime).toBeGreaterThanOrEqual(0);
   });
 });
 
@@ -143,12 +142,12 @@ describe('PerformanceMonitor - getSystemTimings', () => {
 
     const timings = PerformanceMonitor.getSystemTimings();
 
-    assert.ok(Array.isArray(timings));
+    expect(Array.isArray(timings)).toBe(true);
 
     for (const timing of timings) {
-      assert.ok('name' in timing);
-      assert.ok('duration' in timing);
-      assert.ok('percentage' in timing);
+      expect(timing).toHaveProperty('name');
+      expect(timing).toHaveProperty('duration');
+      expect(timing).toHaveProperty('percentage');
     }
   });
 
@@ -162,10 +161,7 @@ describe('PerformanceMonitor - getSystemTimings', () => {
     const timings = PerformanceMonitor.getSystemTimings();
 
     for (let i = 1; i < timings.length; i++) {
-      assert.ok(
-        timings[i - 1].duration >= timings[i].duration,
-        `Expected ${timings[i - 1].duration} >= ${timings[i].duration}`
-      );
+      expect(timings[i - 1].duration).toBeGreaterThanOrEqual(timings[i].duration);
     }
   });
 });
@@ -179,33 +175,33 @@ describe('PerformanceMonitor - updateNetworkMetrics', () => {
     });
 
     const snapshot = PerformanceMonitor.getSnapshot();
-    assert.strictEqual(snapshot.network.rtt, 50);
-    assert.strictEqual(snapshot.network.packetLoss, 0.01);
-    assert.strictEqual(snapshot.network.connected, true);
+    expect(snapshot.network.rtt).toBe(50);
+    expect(snapshot.network.packetLoss).toBe(0.01);
+    expect(snapshot.network.connected).toBe(true);
   });
 
   it('allows partial updates', () => {
     PerformanceMonitor.updateNetworkMetrics({ rtt: 100 });
 
     const snapshot = PerformanceMonitor.getSnapshot();
-    assert.strictEqual(snapshot.network.rtt, 100);
+    expect(snapshot.network.rtt).toBe(100);
   });
 });
 
 describe('PerformanceMonitor - history methods', () => {
   it('returns frame time history as array', () => {
     const history = PerformanceMonitor.getFrameTimeHistory();
-    assert.ok(Array.isArray(history));
+    expect(Array.isArray(history)).toBe(true);
   });
 
   it('returns FPS history as array', () => {
     const history = PerformanceMonitor.getFPSHistory();
-    assert.ok(Array.isArray(history));
+    expect(Array.isArray(history)).toBe(true);
   });
 
   it('returns tick time history as array', () => {
     const history = PerformanceMonitor.getTickTimeHistory();
-    assert.ok(Array.isArray(history));
+    expect(Array.isArray(history)).toBe(true);
   });
 });
 
@@ -213,6 +209,6 @@ describe('RingBuffer behavior (via PerformanceMonitor)', () => {
   it('maintains bounded history size', () => {
     const history = PerformanceMonitor.getFrameTimeHistory();
     // History should never exceed HISTORY_SIZE (300)
-    assert.ok(history.length <= 300);
+    expect(history.length).toBeLessThanOrEqual(300);
   });
 });
