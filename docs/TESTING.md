@@ -80,9 +80,13 @@ npm run test:coverage # With coverage report
 | `tests/engine/pathfinding/grid.test.ts` | 23 | Active |
 | `tests/utils/fixedPoint.test.ts` | 7 | Active |
 | `tests/utils/math.test.ts` | 7 | Active |
+| `tests/utils/vectorPool.test.ts` | 28 | Active |
 | `tests/data/combat.test.ts` | 51 | Active |
 | `tests/data/projectileTypes.test.ts` | 42 | Active |
-| **Total** | **804** | |
+| `tests/data/formations.test.ts` | 34 | Active |
+| `tests/data/categories.test.ts` | 55 | Active |
+| `tests/data/resources.test.ts` | 45 | Active |
+| **Total** | **966** | |
 
 ---
 
@@ -170,6 +174,9 @@ npm run test:coverage # With coverage report
 - [ ] **DefinitionValidator.ts** - Schema validation
 - [x] **combat.ts** - Damage types, armor types, multipliers (51 tests)
 - [x] **projectileTypes.ts** - Projectile definitions, behaviors (42 tests)
+- [x] **formations.ts** - Formation definitions, position generation (34 tests)
+- [x] **categories.ts** - Unit categories, subcategories (55 tests)
+- [x] **resources.ts** - Resource types, saturation, gather rates (45 tests)
 
 ### Priority 10: Building Systems
 
@@ -179,7 +186,7 @@ npm run test:coverage # With coverage report
 
 ### Priority 11: Utilities
 
-- [ ] **VectorPool.ts** - Vector object pooling
+- [x] **VectorPool.ts** - Vector object pooling (28 tests)
 - [ ] **storage.ts** - LocalStorage utilities
 - [ ] **overlayCache.ts** - Overlay caching
 - [ ] **gameSetup.ts** - Game initialization helpers
