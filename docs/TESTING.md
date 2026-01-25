@@ -64,6 +64,7 @@ npm run test:coverage # With coverage report
 | `tests/engine/components/transform.test.ts` | 20 | Active |
 | `tests/engine/components/unit.test.ts` | 96 | Active |
 | `tests/engine/components/velocity.test.ts` | 18 | Active |
+| `tests/engine/components/wall.test.ts` | 83 | Active |
 | `tests/engine/core/eventBus.test.ts` | 5 | Active |
 | `tests/engine/core/gameLoop.test.ts` | 2 | Active |
 | `tests/engine/core/performanceMonitor.test.ts` | 19 | Active |
@@ -79,7 +80,7 @@ npm run test:coverage # With coverage report
 | `tests/engine/pathfinding/grid.test.ts` | 23 | Active |
 | `tests/utils/fixedPoint.test.ts` | 7 | Active |
 | `tests/utils/math.test.ts` | 7 | Active |
-| **Total** | **628** | |
+| **Total** | **711** | |
 
 ---
 
@@ -115,7 +116,7 @@ npm run test:coverage # With coverage report
 - [x] **Selectable.ts** - Selection state, groups (16 tests)
 - [x] **Projectile.ts** - Projectile properties (24 tests)
 - [x] **Resource.ts** - Resource type, gathering, saturation (38 tests)
-- [ ] **Wall.ts** - Wall connections, segments
+- [x] **Wall.ts** - Wall connections, gates, upgrades, shields (83 tests)
 
 ### Priority 4: AI Systems
 
