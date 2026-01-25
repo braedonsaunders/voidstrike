@@ -205,10 +205,15 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   const handleFight = useCallback(() => {
     const game = Game.getInstance();
 
+    // Register both players as AI-controlled so AIMicroSystem handles combat behavior
+    // This enables automatic target acquisition, focus fire, and re-targeting
+    game.eventBus.emit('ai:registered', { playerId: 'player1' });
+    game.eventBus.emit('ai:registered', { playerId: 'player2' });
+
     // Get all units with required components
     const entities = game.world.getEntitiesWith('Unit', 'Selectable', 'Transform', 'Health');
 
-    // Process each unit individually - find valid targets based on unit capabilities
+    // Give each unit an initial target or move order to start the battle
     for (const entity of entities) {
       const selectable = entity.get<Selectable>('Selectable');
       const unit = entity.get<Unit>('Unit');
@@ -226,16 +231,18 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       const targetId = findValidTarget(game, entity.id, unit, transform, playerId);
 
       if (targetId !== null) {
-        // Direct attack command to specific enemy
+        // Direct attack command to specific enemy - unit enters 'attacking' state
         game.eventBus.emit('command:attack', {
           entityIds: [entity.id],
           targetEntityId: targetId,
         });
       } else {
-        // No target in sight - move towards enemies this unit can attack
+        // No target in sight - move towards enemies (not attack-move)
+        // Using 'move' puts unit in 'moving' state which AIMicroSystem can process
+        // The AI will handle target acquisition once unit is moving
         const enemyCenter = findEnemyCenter(game, unit, playerId);
         if (enemyCenter) {
-          game.eventBus.emit('command:attack', {
+          game.eventBus.emit('command:move', {
             entityIds: [entity.id],
             targetPosition: enemyCenter,
           });
