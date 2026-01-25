@@ -55,9 +55,11 @@ npm run test:coverage # With coverage report
 | Test File | Tests | Status |
 |-----------|-------|--------|
 | `tests/engine/ai/behaviorTree.test.ts` | 55 | Active |
+| `tests/engine/components/ability.test.ts` | 48 | Active |
 | `tests/engine/components/building.test.ts` | 99 | Active |
 | `tests/engine/components/health.test.ts` | 38 | Active |
 | `tests/engine/components/projectile.test.ts` | 24 | Active |
+| `tests/engine/components/resource.test.ts` | 38 | Active |
 | `tests/engine/components/selectable.test.ts` | 16 | Active |
 | `tests/engine/components/transform.test.ts` | 20 | Active |
 | `tests/engine/components/unit.test.ts` | 96 | Active |
@@ -77,7 +79,7 @@ npm run test:coverage # With coverage report
 | `tests/engine/pathfinding/grid.test.ts` | 23 | Active |
 | `tests/utils/fixedPoint.test.ts` | 7 | Active |
 | `tests/utils/math.test.ts` | 7 | Active |
-| **Total** | **542** | |
+| **Total** | **628** | |
 
 ---
 
@@ -109,10 +111,10 @@ npm run test:coverage # With coverage report
 - [x] **Velocity.ts** - Movement velocity, acceleration (100% coverage)
 - [x] **Unit.ts** - Unit state, attributes (96 tests)
 - [x] **Building.ts** - Building state, construction, production, addons, lift-off (99 tests)
-- [ ] **Ability.ts** - Ability definitions, state
+- [x] **Ability.ts** - Ability definitions, energy, cooldowns (48 tests)
 - [x] **Selectable.ts** - Selection state, groups (16 tests)
 - [x] **Projectile.ts** - Projectile properties (24 tests)
-- [ ] **Resource.ts** - Resource type, amount
+- [x] **Resource.ts** - Resource type, gathering, saturation (38 tests)
 - [ ] **Wall.ts** - Wall connections, segments
 
 ### Priority 4: AI Systems
