@@ -55,7 +55,9 @@ npm run test:coverage # With coverage report
 | Test File | Tests | Status |
 |-----------|-------|--------|
 | `tests/engine/ai/behaviorTree.test.ts` | 55 | Active |
+| `tests/engine/components/building.test.ts` | 99 | Active |
 | `tests/engine/components/health.test.ts` | 38 | Active |
+| `tests/engine/components/projectile.test.ts` | 24 | Active |
 | `tests/engine/components/selectable.test.ts` | 16 | Active |
 | `tests/engine/components/transform.test.ts` | 20 | Active |
 | `tests/engine/components/unit.test.ts` | 96 | Active |
@@ -75,7 +77,7 @@ npm run test:coverage # With coverage report
 | `tests/engine/pathfinding/grid.test.ts` | 23 | Active |
 | `tests/utils/fixedPoint.test.ts` | 7 | Active |
 | `tests/utils/math.test.ts` | 7 | Active |
-| **Total** | **419** | |
+| **Total** | **542** | |
 
 ---
 
@@ -106,10 +108,10 @@ npm run test:coverage # With coverage report
 - [x] **Transform.ts** - Position, rotation, scale (100% coverage)
 - [x] **Velocity.ts** - Movement velocity, acceleration (100% coverage)
 - [x] **Unit.ts** - Unit state, attributes (96 tests)
-- [ ] **Building.ts** - Building state, construction progress
+- [x] **Building.ts** - Building state, construction, production, addons, lift-off (99 tests)
 - [ ] **Ability.ts** - Ability definitions, state
 - [x] **Selectable.ts** - Selection state, groups (16 tests)
-- [ ] **Projectile.ts** - Projectile properties
+- [x] **Projectile.ts** - Projectile properties (24 tests)
 - [ ] **Resource.ts** - Resource type, amount
 - [ ] **Wall.ts** - Wall connections, segments
 
