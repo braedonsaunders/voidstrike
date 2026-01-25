@@ -360,6 +360,7 @@ Areas where contributions would be valuable:
 ```bash
 npm run type-check  # TypeScript validation
 npm run lint        # ESLint
+npm run test        # Unit tests
 npm run dev         # Development server
 ```
 

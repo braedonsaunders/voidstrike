@@ -5,6 +5,7 @@
 
 # Testing
 /coverage
+/dist-tests
 
 # Next.js
 /.next/
