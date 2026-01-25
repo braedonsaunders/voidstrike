@@ -16,7 +16,7 @@ npm run test:coverage # With coverage report
 
 | Category | Statements | Branches | Functions | Lines |
 |----------|------------|----------|-----------|-------|
-| **Overall** | 54.16% | 45.82% | 46.95% | 55.65% |
+| **Overall** | 56.89% | 48.21% | 49.12% | 58.34% |
 
 ### Module Breakdown
 
@@ -24,11 +24,16 @@ npm run test:coverage # With coverage report
 |--------|-------|--------|-------|-------|--------|
 | **engine/ai** |
 | BehaviorTree.ts | 87.69% | 85.22% | 88.52% | 86.74% | Covered |
+| **engine/components** |
+| Health.ts | 94.44% | 96.55% | 100% | 94.23% | Covered |
+| Transform.ts | 100% | 100% | 100% | 100% | Complete |
+| Velocity.ts | 100% | 100% | 100% | 100% | Complete |
 | **engine/core** |
 | EventBus.ts | 95.34% | 84.61% | 100% | 97.43% | Covered |
 | GameLoop.ts | 68.57% | 55.88% | 69.23% | 69.23% | Partial |
 | PerformanceMonitor.ts | 51.87% | 34.37% | 71.05% | 53.95% | Partial |
 | SpatialGrid.ts | 65.00% | 49.06% | 71.87% | 66.29% | Partial |
+| SystemRegistry.ts | 88.31% | 80.00% | 90.90% | 89.33% | Covered |
 | **engine/ecs** |
 | Entity.ts | 100% | 100% | 100% | 100% | Complete |
 | EntityId.ts | 82.35% | 64.70% | 85.71% | 89.36% | Covered |
@@ -50,10 +55,14 @@ npm run test:coverage # With coverage report
 | Test File | Tests | Status |
 |-----------|-------|--------|
 | `tests/engine/ai/behaviorTree.test.ts` | 55 | Active |
+| `tests/engine/components/health.test.ts` | 38 | Active |
+| `tests/engine/components/transform.test.ts` | 20 | Active |
+| `tests/engine/components/velocity.test.ts` | 18 | Active |
 | `tests/engine/core/eventBus.test.ts` | 5 | Active |
 | `tests/engine/core/gameLoop.test.ts` | 2 | Active |
 | `tests/engine/core/performanceMonitor.test.ts` | 19 | Active |
 | `tests/engine/core/spatialGrid.test.ts` | 4 | Active |
+| `tests/engine/core/systemRegistry.test.ts` | 23 | Active |
 | `tests/engine/ecs/entity.test.ts` | 16 | Active |
 | `tests/engine/ecs/entityId.test.ts` | 6 | Active |
 | `tests/engine/ecs/world.test.ts` | 25 | Active |
@@ -63,7 +72,7 @@ npm run test:coverage # With coverage report
 | `tests/engine/network/types.test.ts` | 9 | Active |
 | `tests/utils/fixedPoint.test.ts` | 7 | Active |
 | `tests/utils/math.test.ts` | 7 | Active |
-| **Total** | **185** | |
+| **Total** | **284** | |
 
 ---
 
@@ -72,8 +81,8 @@ npm run test:coverage # With coverage report
 ### Priority 1: Core Engine (Critical Path)
 
 - [ ] **Game.ts** - Game lifecycle, initialization, tick management
-- [ ] **SystemRegistry.ts** - System registration, dependency resolution
-- [ ] **Component.ts** - Component type definitions and validation
+- [x] **SystemRegistry.ts** - System registration, dependency resolution (88% coverage)
+- [x] **Component.ts** - Component type definitions (abstract base class)
 
 ### Priority 2: ECS Systems
 
@@ -90,9 +99,9 @@ npm run test:coverage # With coverage report
 
 ### Priority 3: Components
 
-- [ ] **Health.ts** - Health component, damage application, death
-- [ ] **Transform.ts** - Position, rotation, scale
-- [ ] **Velocity.ts** - Movement velocity, acceleration
+- [x] **Health.ts** - Health component, damage application, death (94% coverage)
+- [x] **Transform.ts** - Position, rotation, scale (100% coverage)
+- [x] **Velocity.ts** - Movement velocity, acceleration (100% coverage)
 - [ ] **Unit.ts** - Unit state, attributes
 - [ ] **Building.ts** - Building state, construction progress
 - [ ] **Ability.ts** - Ability definitions, state
