@@ -56,7 +56,9 @@ npm run test:coverage # With coverage report
 |-----------|-------|--------|
 | `tests/engine/ai/behaviorTree.test.ts` | 55 | Active |
 | `tests/engine/components/health.test.ts` | 38 | Active |
+| `tests/engine/components/selectable.test.ts` | 16 | Active |
 | `tests/engine/components/transform.test.ts` | 20 | Active |
+| `tests/engine/components/unit.test.ts` | 96 | Active |
 | `tests/engine/components/velocity.test.ts` | 18 | Active |
 | `tests/engine/core/eventBus.test.ts` | 5 | Active |
 | `tests/engine/core/gameLoop.test.ts` | 2 | Active |
@@ -70,9 +72,10 @@ npm run test:coverage # With coverage report
 | `tests/engine/network/desyncDetection.test.ts` | 16 | Active |
 | `tests/engine/network/merkleTree.test.ts` | 3 | Active |
 | `tests/engine/network/types.test.ts` | 9 | Active |
+| `tests/engine/pathfinding/grid.test.ts` | 23 | Active |
 | `tests/utils/fixedPoint.test.ts` | 7 | Active |
 | `tests/utils/math.test.ts` | 7 | Active |
-| **Total** | **284** | |
+| **Total** | **419** | |
 
 ---
 
@@ -102,10 +105,10 @@ npm run test:coverage # With coverage report
 - [x] **Health.ts** - Health component, damage application, death (94% coverage)
 - [x] **Transform.ts** - Position, rotation, scale (100% coverage)
 - [x] **Velocity.ts** - Movement velocity, acceleration (100% coverage)
-- [ ] **Unit.ts** - Unit state, attributes
+- [x] **Unit.ts** - Unit state, attributes (96 tests)
 - [ ] **Building.ts** - Building state, construction progress
 - [ ] **Ability.ts** - Ability definitions, state
-- [ ] **Selectable.ts** - Selection state, groups
+- [x] **Selectable.ts** - Selection state, groups (16 tests)
 - [ ] **Projectile.ts** - Projectile properties
 - [ ] **Resource.ts** - Resource type, amount
 - [ ] **Wall.ts** - Wall connections, segments
@@ -150,7 +153,7 @@ npm run test:coverage # With coverage report
 
 ### Priority 8: Pathfinding
 
-- [ ] **Grid.ts** - Navigation grid
+- [x] **Grid.ts** - Navigation grid (23 tests)
 - [ ] **RecastNavigation.ts** - Recast/Detour navigation
 
 ### Priority 9: Definitions & Data
