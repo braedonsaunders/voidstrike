@@ -67,7 +67,6 @@ export interface EditorCoreProps extends EditorCallbacks {
   mapList?: MapListItem[];
   onLoadMap?: (mapId: string) => void;
   onNewMap?: () => void;
-  onBattleSimulator?: () => void;
 }
 
 // ============================================
@@ -88,7 +87,6 @@ export function EditorCore({
   mapList,
   onLoadMap,
   onNewMap,
-  onBattleSimulator,
 }: EditorCoreProps) {
   const editorState = useEditorState(config);
   const { state, loadMap } = editorState;
@@ -627,7 +625,6 @@ export function EditorCore({
         currentMapId={mapId}
         onLoadMap={onLoadMap}
         onNewMap={onNewMap}
-        onBattleSimulator={onBattleSimulator}
       />
 
       {/* Main content */}
