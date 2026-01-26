@@ -716,7 +716,10 @@ export class UnitRenderer {
 
       baseMesh.traverse((child) => {
         if (child instanceof THREE.Mesh && !geometry) {
-          geometry = child.geometry;
+          // Clone geometry to avoid sharing disposal lifecycle with asset cache.
+          // Without cloning, disposing this mesh would invalidate GPU buffers
+          // still used by other meshes, causing WebGPU "setIndexBuffer" crashes.
+          geometry = child.geometry.clone();
           material = child.material;
           // Get the mesh's world position Y - this is lost when extracting geometry
           const worldPos = new THREE.Vector3();
@@ -1177,7 +1180,9 @@ export class UnitRenderer {
         this.scene.remove(group.mesh);
         // Dispose velocity buffer attributes
         disposeInstancedVelocity(group.mesh);
-        // Only dispose materials (geometry is shared with asset cache)
+        // Dispose geometry (now safe since we clone it during creation)
+        group.mesh.geometry.dispose();
+        // Dispose materials
         if (group.mesh.material instanceof THREE.Material) {
           group.mesh.material.dispose();
         } else if (Array.isArray(group.mesh.material)) {
@@ -1242,14 +1247,13 @@ export class UnitRenderer {
     debugAssets.log('[UnitRenderer] Refreshing all unit meshes...');
 
     // Clear instanced groups
-    // NOTE: Do NOT dispose geometry here - it's shared with the asset cache.
-    // Disposing shared geometry causes WebGPU "setIndexBuffer" errors when
-    // other meshes try to use the now-invalid GPU buffer.
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
       // Dispose velocity buffer attributes to prevent memory leak
       disposeInstancedVelocity(group.mesh);
-      // Only dispose materials (they are cloned per-instance group)
+      // Dispose geometry (now safe since we clone it during creation)
+      group.mesh.geometry.dispose();
+      // Dispose materials
       if (group.mesh.material instanceof THREE.Material) {
         group.mesh.material.dispose();
       } else if (Array.isArray(group.mesh.material)) {
@@ -1323,12 +1327,13 @@ export class UnitRenderer {
     this.selectionRingRenderer.dispose();
     this.teamMarkerGeometry.dispose();
 
-    // NOTE: Do NOT dispose geometry - it's shared with the asset cache
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
       // Dispose velocity buffer attributes to prevent memory leak
       disposeInstancedVelocity(group.mesh);
-      // Only dispose materials
+      // Dispose geometry (now safe since we clone it during creation)
+      group.mesh.geometry.dispose();
+      // Dispose materials
       if (group.mesh.material instanceof THREE.Material) {
         group.mesh.material.dispose();
       } else if (Array.isArray(group.mesh.material)) {

@@ -237,12 +237,12 @@ export class BuildingRenderer {
     }
     this.buildingMeshes.clear();
 
-    // Also clear instanced groups
-    // NOTE: Do NOT dispose geometry here - it's shared with the asset cache.
-    // Disposing shared geometry causes WebGPU "setIndexBuffer" errors.
+    // Clear instanced groups
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      // Only dispose materials (they may be cloned)
+      // Dispose geometry (now safe since we clone it during creation)
+      group.mesh.geometry.dispose();
+      // Dispose materials
       if (group.mesh.material instanceof THREE.Material) {
         group.mesh.material.dispose();
       } else if (Array.isArray(group.mesh.material)) {
@@ -280,7 +280,10 @@ export class BuildingRenderer {
 
       baseMesh.traverse((child) => {
         if (child instanceof THREE.Mesh && !geometry) {
-          geometry = child.geometry;
+          // Clone geometry to avoid sharing disposal lifecycle with asset cache.
+          // Without cloning, disposing this mesh would invalidate GPU buffers
+          // still used by other meshes, causing WebGPU "setIndexBuffer" crashes.
+          geometry = child.geometry.clone();
           material = child.material;
           // Get the world scale of this mesh (includes parent scales from normalization)
           child.getWorldScale(modelScale);
@@ -2409,10 +2412,11 @@ export class BuildingRenderer {
     this.buildingMeshes.clear();
 
     // Dispose instanced groups
-    // NOTE: Do NOT dispose geometry - it's shared with the asset cache
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      // Only dispose materials
+      // Dispose geometry (now safe since we clone it during creation)
+      group.mesh.geometry.dispose();
+      // Dispose materials
       if (group.mesh.material instanceof THREE.Material) {
         group.mesh.material.dispose();
       } else if (Array.isArray(group.mesh.material)) {
