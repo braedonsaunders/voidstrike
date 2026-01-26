@@ -88,7 +88,24 @@ npm run test:coverage # With coverage report
 | `tests/data/resources.test.ts` | 45 | Active |
 | `tests/data/walls.test.ts` | 49 | Active |
 | `tests/data/aiConfig.test.ts` | 38 | Active |
-| **Total** | **1053** | |
+| `tests/data/movementConfig.test.ts` | 45 | Active |
+| `tests/data/techTree.test.ts` | 34 | Active |
+| `tests/data/pathfindingConfig.test.ts` | 52 | Active |
+| `tests/data/buildOrders.test.ts` | 55 | Active |
+| `tests/data/audioConfig.test.ts` | 18 | Active |
+| `tests/data/renderingConfig.test.ts` | 63 | Active |
+| `tests/data/collisionConfig.test.ts` | 54 | Active |
+| `tests/engine/definitions/definitionRegistry.test.ts` | 52 | Active |
+| `tests/engine/definitions/definitionValidator.test.ts` | 70 | Active |
+| `tests/engine/systems/combatSystem.test.ts` | 67 | Active |
+| `tests/engine/systems/resourceSystem.test.ts` | 59 | Active |
+| `tests/engine/systems/productionSystem.test.ts` | 51 | Active |
+| `tests/engine/systems/pathfindingSystem.test.ts` | 17 | Active |
+| `tests/engine/systems/visionSystem.test.ts` | 19 | Active |
+| `tests/engine/systems/projectileSystem.test.ts` | 27 | Active |
+| `tests/engine/systems/abilitySystem.test.ts` | 28 | Active |
+| `tests/engine/systems/buildingPlacementSystem.test.ts` | 27 | Active |
+| **Total** | **1791** | |
 
 ---
 
@@ -102,16 +119,16 @@ npm run test:coverage # With coverage report
 
 ### Priority 2: ECS Systems
 
-- [ ] **CombatSystem.ts** - Damage calculation, attack logic, target validation
+- [x] **CombatSystem.ts** - Damage calculation, attack logic, target validation (67 tests)
 - [ ] **MovementSystem.ts** - Position updates, collision handling, velocity
-- [ ] **PathfindingSystem.ts** - Path calculation, waypoint management
-- [ ] **ProductionSystem.ts** - Unit/building production queues
-- [ ] **ResourceSystem.ts** - Resource gathering, consumption, storage
+- [x] **PathfindingSystem.ts** - Path calculation, waypoint management (17 tests)
+- [x] **ProductionSystem.ts** - Unit/building production queues (51 tests)
+- [x] **ResourceSystem.ts** - Resource gathering, consumption, storage (59 tests)
 - [ ] **SelectionSystem.ts** - Unit selection, group management
-- [ ] **VisionSystem.ts** - Fog of war, visibility calculations
-- [ ] **ProjectileSystem.ts** - Projectile physics, hit detection
-- [ ] **AbilitySystem.ts** - Ability casting, cooldowns, effects
-- [ ] **SpawnSystem.ts** - Entity spawning, placement validation
+- [x] **VisionSystem.ts** - Fog of war, visibility calculations (19 tests)
+- [x] **ProjectileSystem.ts** - Projectile physics, hit detection (27 tests)
+- [x] **AbilitySystem.ts** - Ability casting, cooldowns, effects (28 tests)
+- [x] **BuildingPlacementSystem.ts** - Building placement validation (27 tests)
 
 ### Priority 3: Components
 
@@ -172,8 +189,8 @@ npm run test:coverage # With coverage report
 ### Priority 9: Definitions & Data
 
 - [ ] **DefinitionLoader.ts** - JSON definition loading
-- [ ] **DefinitionRegistry.ts** - Definition storage/lookup
-- [ ] **DefinitionValidator.ts** - Schema validation
+- [x] **DefinitionRegistry.ts** - Definition storage/lookup (52 tests)
+- [x] **DefinitionValidator.ts** - Schema validation (70 tests)
 - [x] **combat.ts** - Damage types, armor types, multipliers (51 tests)
 - [x] **projectileTypes.ts** - Projectile definitions, behaviors (42 tests)
 - [x] **formations.ts** - Formation definitions, position generation (34 tests)
@@ -181,6 +198,13 @@ npm run test:coverage # With coverage report
 - [x] **resources.ts** - Resource types, saturation, gather rates (45 tests)
 - [x] **walls.ts** - Wall definitions, line calculation, connection types (49 tests)
 - [x] **aiConfig.ts** - AI condition evaluation, macro rules, utility scoring (38 tests)
+- [x] **movementConfig.ts** - Movement constants, steering behaviors, configuration objects (45 tests)
+- [x] **techTree.ts** - Tech categories, upgrade chains, effect formatting (34 tests)
+- [x] **pathfindingConfig.ts** - Pathfinding constants, ramp validation, elevation conversion (52 tests)
+- [x] **buildOrders.ts** - AI difficulty config, build orders, unit compositions (55 tests)
+- [x] **audioConfig.ts** - Voiceline cooldowns, command debounce (18 tests)
+- [x] **renderingConfig.ts** - Camera, unit, building, terrain, battle effects config (63 tests)
+- [x] **collisionConfig.ts** - Separation, physics, building avoidance, stuck detection (54 tests)
 
 ### Priority 10: Building Systems
 
