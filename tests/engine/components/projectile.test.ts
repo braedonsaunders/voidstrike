@@ -1,7 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import { Projectile, ProjectileBehavior, ProjectileTrailType } from '@/engine/components/Projectile';
+import { DamageType } from '@/engine/components/Unit';
 
-function createProjectileData(overrides: Partial<Parameters<typeof Projectile.prototype['constructor']>[0]> = {}) {
+interface ProjectileData {
+  projectileId: string;
+  sourceEntityId: number;
+  sourcePlayerId: string;
+  sourceFaction: string;
+  behavior: ProjectileBehavior;
+  targetEntityId: number | null;
+  targetX: number;
+  targetY: number;
+  targetZ: number;
+  startZ: number;
+  speed: number;
+  turnRate: number;
+  arcHeight: number;
+  damage: number;
+  rawDamage: number;
+  damageType: DamageType;
+  splashRadius: number;
+  splashFalloff: number;
+  spawnTick: number;
+  maxLifetimeTicks: number;
+  trailType: ProjectileTrailType;
+  visualScale: number;
+}
+
+function createProjectileData(overrides: Partial<ProjectileData> = {}): ProjectileData {
   return {
     projectileId: 'bullet_rifle',
     sourceEntityId: 1,

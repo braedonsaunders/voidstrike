@@ -39,8 +39,11 @@ describe('DesyncDetection Utility Functions', () => {
       checksum: 0x12345678,
       unitCount: 50,
       buildingCount: 10,
+      projectileCount: 0,
       resourceSum: 5000,
+      unitPositionHash: 0xAAAAAAAA,
       healthSum: 10000,
+      timestamp: Date.now(),
       ...overrides,
     });
 

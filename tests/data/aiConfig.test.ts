@@ -234,7 +234,7 @@ describe('evaluateCondition', () => {
   describe('edge cases', () => {
     it('returns false for unknown condition type', () => {
       const state = createTestState();
-      const condition = { type: 'unknownType', operator: '>', value: 0 } as RuleCondition;
+      const condition = { type: 'unknownType', operator: '>', value: 0 } as unknown as RuleCondition;
       expect(evaluateCondition(condition, state)).toBe(false);
     });
 
@@ -463,11 +463,11 @@ describe('calculateUtilityScore', () => {
   });
 
   it('handles fractional multipliers', () => {
-    const state = createTestState({ underAttack: true });
+    const state = createTestState({ enemyAirUnits: 5 });
     const utility: UtilityScore = {
       baseScore: 100,
       conditions: [
-        { type: 'underAttack', operator: '==', value: true, multiplier: 0.5 },
+        { type: 'enemyAirUnits', operator: '>', value: 0, multiplier: 0.5 },
       ],
     };
 
