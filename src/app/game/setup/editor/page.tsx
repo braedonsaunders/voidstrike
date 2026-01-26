@@ -4,22 +4,11 @@ import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { EditorCore, VOIDSTRIKE_EDITOR_CONFIG } from '@/editor';
 import { voidstrikeDataProvider } from '@/editor/providers/voidstrike';
-import { useGameSetupStore, loadEditorMapDataFromStorage, type GameSetupState } from '@/store/gameSetupStore';
+import { useGameSetupStore, loadEditorMapDataFromStorage } from '@/store/gameSetupStore';
 import { debugInitialization } from '@/utils/debugLogger';
 import type { EditorMapData } from '@/editor';
 import type { MapListItem } from '@/editor/core/EditorHeader';
 import type { MapData } from '@/data/maps/MapTypes';
-
-// Battle simulator launch helper
-const useBattleSimulator = () => {
-  const router = useRouter();
-  const startBattleSimulator = useGameSetupStore((state: GameSetupState) => state.startBattleSimulator);
-
-  return useCallback(() => {
-    startBattleSimulator();
-    router.push('/game');
-  }, [startBattleSimulator, router]);
-};
 
 /**
  * Map Editor Page
@@ -37,9 +26,6 @@ function EditorPageContent() {
   const searchParams = useSearchParams();
   const isNewMap = searchParams.get('new') === 'true';
   const mapIdParam = searchParams.get('map');
-
-  // Battle simulator
-  const handleBattleSimulator = useBattleSimulator();
 
   // State for map selection
   const [mapList, setMapList] = useState<MapListItem[]>([]);
@@ -168,7 +154,6 @@ function EditorPageContent() {
       mapList={mapList}
       onLoadMap={handleLoadMap}
       onNewMap={handleNewMap}
-      onBattleSimulator={handleBattleSimulator}
     />
   );
 }
