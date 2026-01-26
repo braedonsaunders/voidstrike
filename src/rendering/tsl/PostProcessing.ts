@@ -519,19 +519,21 @@ export class RenderPipeline {
     }
 
     // 4. Fog of War (StarCraft 2-style post-process)
-    if (this.config.fogOfWarEnabled && this.camera instanceof THREE.PerspectiveCamera) {
+    if (this.config.fogOfWarEnabled && scenePassDepth && this.camera instanceof THREE.PerspectiveCamera) {
       this.fogOfWarPass = createFogOfWarPass(outputNode, scenePassDepth, this.camera);
-      this.fogOfWarPass.applyConfig({
-        quality: this.config.fogOfWarQuality,
-        edgeBlurRadius: this.config.fogOfWarEdgeBlur,
-        desaturation: this.config.fogOfWarDesaturation,
-        exploredDarkness: this.config.fogOfWarExploredDarkness,
-        unexploredDarkness: this.config.fogOfWarUnexploredDarkness,
-        cloudSpeed: this.config.fogOfWarCloudSpeed,
-        rimIntensity: this.config.fogOfWarRimIntensity,
-        heightInfluence: this.config.fogOfWarHeightInfluence,
-      });
-      outputNode = this.fogOfWarPass.node;
+      if (this.fogOfWarPass) {
+        this.fogOfWarPass.applyConfig({
+          quality: this.config.fogOfWarQuality,
+          edgeBlurRadius: this.config.fogOfWarEdgeBlur,
+          desaturation: this.config.fogOfWarDesaturation,
+          exploredDarkness: this.config.fogOfWarExploredDarkness,
+          unexploredDarkness: this.config.fogOfWarUnexploredDarkness,
+          cloudSpeed: this.config.fogOfWarCloudSpeed,
+          rimIntensity: this.config.fogOfWarRimIntensity,
+          heightInfluence: this.config.fogOfWarHeightInfluence,
+        });
+        outputNode = this.fogOfWarPass.node;
+      }
     }
 
     // 5. Bloom
