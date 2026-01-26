@@ -582,13 +582,28 @@ export class AICoordinator extends System {
     const supplyPerBase = economyConfig.supplyPerMainBase;
     const supplyPerSupplyBuilding = economyConfig.supplyPerSupplyBuilding;
 
+    // Only count COMPLETED buildings for supply calculation
+    // Incomplete buildings shouldn't provide supply yet
+    const buildings = this.getCachedBuildings();
     let baseSupply = 0;
-    for (const baseType of config.roles.baseTypes) {
-      baseSupply += (ai.buildingCounts.get(baseType) || 0) * supplyPerBase;
-    }
+    let supplyBuildingCount = 0;
 
-    const supplyBuilding = config.roles.supplyBuilding;
-    const supplyBuildingCount = ai.buildingCounts.get(supplyBuilding) || 0;
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const building = entity.get<Building>('Building');
+      const health = entity.get<Health>('Health');
+
+      if (!selectable || !building || !health) continue;
+      if (selectable.playerId !== ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (!building.isComplete()) continue; // Only count completed buildings
+
+      if (config.roles.baseTypes.includes(building.buildingId)) {
+        baseSupply += supplyPerBase;
+      } else if (building.buildingId === config.roles.supplyBuilding) {
+        supplyBuildingCount++;
+      }
+    }
 
     ai.maxSupply = baseSupply + supplyBuildingCount * supplyPerSupplyBuilding;
   }
