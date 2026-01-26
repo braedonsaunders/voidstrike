@@ -175,6 +175,8 @@ export interface WaterRegion {
   minY: number;
   maxY: number;
   avgElevation: number;
+  isDeepRegion: boolean; // Whether this region is deep or shallow water
+  hasAdjacentOppositeType: boolean; // Whether this region borders the opposite water type
 }
 
 export class WaterMesh {
@@ -358,6 +360,14 @@ export class WaterMesh {
       minY = startY,
       maxY = startY;
     let totalElevation = 0;
+    let hasAdjacentOppositeType = false;
+
+    // Determine the type of water we're flood filling (based on start cell)
+    const startCell = terrain[startY]?.[startX];
+    const startFeature = startCell?.feature || 'none';
+    const isDeepRegion = startFeature === 'water_deep';
+    const targetFeature = isDeepRegion ? 'water_deep' : 'water_shallow';
+    const oppositeFeature = isDeepRegion ? 'water_shallow' : 'water_deep';
 
     while (queue.length > 0) {
       const { x, y } = queue.shift()!;
@@ -370,7 +380,15 @@ export class WaterMesh {
       if (!cell) continue;
 
       const feature = cell.feature || 'none';
-      if (feature !== 'water_shallow' && feature !== 'water_deep') continue;
+
+      // Only flood fill same type of water
+      if (feature !== targetFeature) {
+        // Check if this is the opposite water type (for boundary detection)
+        if (feature === oppositeFeature) {
+          hasAdjacentOppositeType = true;
+        }
+        continue;
+      }
 
       visited.add(key);
 
@@ -396,6 +414,8 @@ export class WaterMesh {
       minY,
       maxY,
       avgElevation: cells.length > 0 ? totalElevation / cells.length : 0,
+      isDeepRegion,
+      hasAdjacentOppositeType,
     };
   }
 
@@ -414,6 +434,14 @@ export class WaterMesh {
       minY = startY,
       maxY = startY;
     let totalElevation = 0;
+    let hasAdjacentOppositeType = false;
+
+    // Determine the type of water we're flood filling (based on start cell)
+    const startCell = terrain[startY]?.[startX];
+    const startFeature = startCell?.feature || 'none';
+    const isDeepRegion = startFeature === 'water_deep';
+    const targetFeature = isDeepRegion ? 'water_deep' : 'water_shallow';
+    const oppositeFeature = isDeepRegion ? 'water_shallow' : 'water_deep';
 
     while (queue.length > 0) {
       const { x, y } = queue.shift()!;
@@ -426,7 +454,15 @@ export class WaterMesh {
       if (!cell) continue;
 
       const feature = cell.feature || 'none';
-      if (feature !== 'water_shallow' && feature !== 'water_deep') continue;
+
+      // Only flood fill same type of water
+      if (feature !== targetFeature) {
+        // Check if this is the opposite water type (for boundary detection)
+        if (feature === oppositeFeature) {
+          hasAdjacentOppositeType = true;
+        }
+        continue;
+      }
 
       visited.add(key);
 
@@ -452,6 +488,8 @@ export class WaterMesh {
       minY,
       maxY,
       avgElevation: cells.length > 0 ? totalElevation / cells.length : 0,
+      isDeepRegion,
+      hasAdjacentOppositeType,
     };
   }
 
@@ -465,13 +503,27 @@ export class WaterMesh {
     const regionWidth = region.maxX - region.minX + 1;
     const regionHeight = region.maxY - region.minY + 1;
 
-    // Create plane geometry for this region
-    const geometry = new THREE.PlaneGeometry(regionWidth, regionHeight);
+    // Shallow water config: lighter, calmer, more translucent
+    const isShallow = !region.isDeepRegion;
 
-    // Determine water color based on depth
-    const deepCount = region.cells.filter((c) => c.isDeep).length;
-    const isDeep = deepCount > region.cells.length / 2;
-    const waterColor = isDeep ? 0x004488 : 0x0066aa; // Blue tones
+    // For shallow water at boundaries, extend slightly for blending
+    const blendExtend = isShallow && region.hasAdjacentOppositeType ? 0.3 : 0;
+    const meshWidth = regionWidth + blendExtend * 2;
+    const meshHeight = regionHeight + blendExtend * 2;
+
+    // Create plane geometry for this region
+    const geometry = new THREE.PlaneGeometry(meshWidth, meshHeight);
+
+    // Water visual properties differ by type
+    // Deep: darker blue, more distortion, opaque
+    // Shallow: lighter cyan/turquoise, calmer, semi-transparent
+    const waterColor = isShallow ? 0x40a0c0 : 0x004488;
+    const distortionScale = isShallow
+      ? config.distortionScale * 0.4 // Calmer waves for shallow
+      : config.distortionScale;
+    const textureSize = isShallow
+      ? config.size * 1.5 // Finer pattern for shallow (larger = finer)
+      : config.size;
 
     // Create Three.js WaterMesh
     const water = new ThreeWaterMesh(geometry, {
@@ -479,19 +531,31 @@ export class WaterMesh {
       sunDirection: this.sunDirection,
       sunColor: 0xffffff,
       waterColor: waterColor,
-      distortionScale: config.distortionScale,
-      size: config.size,
+      distortionScale: distortionScale,
+      size: textureSize,
     });
+
+    // Make shallow water semi-transparent for terrain visibility and blending
+    if (isShallow) {
+      water.material.transparent = true;
+      water.material.opacity = 0.75;
+      water.material.depthWrite = false; // Prevents z-fighting with deep water
+    }
 
     // Calculate center position and height
     const centerX = region.minX + regionWidth / 2;
     const centerZ = region.minY + regionHeight / 2;
     const avgHeight = region.avgElevation * HEIGHT_SCALE + WATER_SURFACE_OFFSET;
 
+    // Shallow water renders slightly higher for visual blending at boundaries
+    const heightOffset = isShallow ? 0.02 : 0;
+
     // Position the water mesh
     water.rotation.x = -Math.PI / 2;
-    water.position.set(centerX, avgHeight, centerZ);
-    water.renderOrder = 1;
+    water.position.set(centerX, avgHeight + heightOffset, centerZ);
+
+    // Render order: deep water first (1), shallow water on top (2) for proper blending
+    water.renderOrder = isShallow ? 2 : 1;
 
     // Enable frustum culling with proper bounding sphere
     water.frustumCulled = true;
