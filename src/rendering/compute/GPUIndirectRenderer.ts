@@ -178,14 +178,16 @@ export class GPUIndirectRenderer {
     const instancedGeometry = new THREE.InstancedBufferGeometry();
     instancedGeometry.instanceCount = MAX_UNITS;
 
-    // Copy attributes from source geometry
+    // Clone attributes from source geometry to avoid sharing disposal lifecycle.
+    // Setting by reference causes WebGPU "setIndexBuffer" errors when the source
+    // geometry is disposed elsewhere while this geometry is still in use.
     for (const name of Object.keys(geometry.attributes)) {
-      instancedGeometry.setAttribute(name, geometry.attributes[name]);
+      instancedGeometry.setAttribute(name, geometry.attributes[name].clone());
     }
 
-    // Copy index if present
+    // Clone index if present - critical to avoid shared buffer disposal issues
     if (geometry.index) {
-      instancedGeometry.setIndex(geometry.index);
+      instancedGeometry.setIndex(geometry.index.clone());
     }
 
     // Create per-instance position offset attribute (vec3)
