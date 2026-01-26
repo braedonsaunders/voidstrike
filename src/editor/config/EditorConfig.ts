@@ -256,7 +256,7 @@ export interface PanelConfig {
   /** Icon for tab */
   icon?: string;
   /** Panel type */
-  type: 'paint' | 'objects' | 'settings' | 'validate' | 'ai' | 'custom';
+  type: 'paint' | 'objects' | 'settings' | 'validate' | 'ai' | 'selected' | 'custom';
   /** For custom panels: component name to render */
   component?: string;
 }
