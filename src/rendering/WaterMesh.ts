@@ -738,61 +738,71 @@ export class WaterMesh {
 
   /**
    * Build shore meshes from detected edge cells
-   * Creates gradient quads that extend from water into land
+   * Creates gradient quads that extend INTO the water from the shore edge
+   * This creates a lighter/shallower appearance near the shoreline
    */
   private buildShoreFromEdgeCells(
     edgeCells: Array<{ x: number; y: number; elevation: number; edgeDirections: number[] }>
   ): void {
     if (edgeCells.length === 0) return;
 
-    // Shore transition width (extends this far onto land)
-    const shoreWidth = 0.8;
+    // Shore transition width (extends this far INTO the water)
+    const shoreWidth = 1.5;
 
     // Build geometry for all shore segments
     const positions: number[] = [];
     const colors: number[] = [];
     const indices: number[] = [];
 
-    // Water edge color (matches shallow water)
-    const waterColor = new THREE.Color(0x40a0c0);
+    // Shore/beach color - lighter cyan for shallow water appearance
+    const shoreColor = new THREE.Color(0x60c8d8);
 
     for (const cell of edgeCells) {
-      const baseHeight = cell.elevation * HEIGHT_SCALE + WATER_SURFACE_OFFSET + 0.01;
+      const baseHeight = cell.elevation * HEIGHT_SCALE + WATER_SURFACE_OFFSET + 0.03;
 
       for (const dir of cell.edgeDirections) {
         const vertexOffset = positions.length / 3;
 
-        // Direction vectors for creating the shore quad
-        // Quad extends from water edge outward onto land
+        // Direction vectors - note: we INVERT the direction to extend INTO water
+        // dir points toward land, so we go opposite direction into water
         let dx = 0, dz = 0;
         let perpX = 0, perpZ = 0;
 
         switch (dir) {
-          case 0: // North edge - shore extends north (negative Z)
-            dx = 0; dz = -1;
-            perpX = 1; perpZ = 0;
-            break;
-          case 1: // East edge - shore extends east (positive X)
-            dx = 1; dz = 0;
-            perpX = 0; perpZ = 1;
-            break;
-          case 2: // South edge - shore extends south (positive Z)
+          case 0: // North edge (land is north) - shore extends SOUTH into water
             dx = 0; dz = 1;
             perpX = 1; perpZ = 0;
             break;
-          case 3: // West edge - shore extends west (negative X)
+          case 1: // East edge (land is east) - shore extends WEST into water
             dx = -1; dz = 0;
+            perpX = 0; perpZ = 1;
+            break;
+          case 2: // South edge (land is south) - shore extends NORTH into water
+            dx = 0; dz = -1;
+            perpX = 1; perpZ = 0;
+            break;
+          case 3: // West edge (land is west) - shore extends EAST into water
+            dx = 1; dz = 0;
             perpX = 0; perpZ = 1;
             break;
         }
 
-        // Calculate the edge of the water cell in the shore direction
-        const edgeX = cell.x + 0.5 + dx * 0.5;
-        const edgeZ = cell.y + 0.5 + dz * 0.5;
+        // Start at the edge of the water cell (where it meets land)
+        // For dir=0 (land to north), the edge is at y - 0.5 (north side of cell)
+        let edgeX = cell.x + 0.5;
+        let edgeZ = cell.y + 0.5;
+
+        // Adjust to the actual edge based on direction
+        switch (dir) {
+          case 0: edgeZ = cell.y; break;      // North edge of cell
+          case 1: edgeX = cell.x + 1; break;  // East edge of cell
+          case 2: edgeZ = cell.y + 1; break;  // South edge of cell
+          case 3: edgeX = cell.x; break;      // West edge of cell
+        }
 
         // Four corners of the shore quad:
-        // v0, v1 are at the water edge (full opacity)
-        // v2, v3 are extended onto land (zero opacity)
+        // v0, v1 are at the shore edge (high opacity - lighter water)
+        // v2, v3 are extended into deeper water (zero opacity - fades to normal water)
         const v0x = edgeX - perpX * 0.5;
         const v0z = edgeZ - perpZ * 0.5;
         const v1x = edgeX + perpX * 0.5;
@@ -803,18 +813,18 @@ export class WaterMesh {
         const v3z = edgeZ + dz * shoreWidth - perpZ * 0.5;
 
         // Add vertices (XYZ)
-        positions.push(v0x, baseHeight, v0z); // Water edge
-        positions.push(v1x, baseHeight, v1z); // Water edge
-        positions.push(v2x, baseHeight, v2z); // Land side
-        positions.push(v3x, baseHeight, v3z); // Land side
+        positions.push(v0x, baseHeight, v0z); // Shore edge (near land)
+        positions.push(v1x, baseHeight, v1z); // Shore edge (near land)
+        positions.push(v2x, baseHeight, v2z); // Deep water side
+        positions.push(v3x, baseHeight, v3z); // Deep water side
 
         // Vertex colors with alpha (RGBA)
-        // Water edge vertices: water color, high alpha
-        colors.push(waterColor.r, waterColor.g, waterColor.b, 0.6);
-        colors.push(waterColor.r, waterColor.g, waterColor.b, 0.6);
-        // Land side vertices: water color, zero alpha (fade out)
-        colors.push(waterColor.r, waterColor.g, waterColor.b, 0.0);
-        colors.push(waterColor.r, waterColor.g, waterColor.b, 0.0);
+        // Shore edge: lighter color, high alpha (visible beach tint)
+        colors.push(shoreColor.r, shoreColor.g, shoreColor.b, 0.5);
+        colors.push(shoreColor.r, shoreColor.g, shoreColor.b, 0.5);
+        // Deep water side: fade to transparent
+        colors.push(shoreColor.r, shoreColor.g, shoreColor.b, 0.0);
+        colors.push(shoreColor.r, shoreColor.g, shoreColor.b, 0.0);
 
         // Two triangles for the quad
         indices.push(vertexOffset, vertexOffset + 1, vertexOffset + 2);
@@ -837,11 +847,11 @@ export class WaterMesh {
       transparent: true,
       side: THREE.DoubleSide,
       depthWrite: false,
-      blending: THREE.NormalBlending,
+      blending: THREE.AdditiveBlending, // Additive makes it lighter/glowy
     });
 
     const shoreMesh = new THREE.Mesh(geometry, material);
-    shoreMesh.renderOrder = 3; // Render after water
+    shoreMesh.renderOrder = 10; // Render on top of water
     shoreMesh.frustumCulled = true;
 
     this.shoreMeshes.push(shoreMesh);
