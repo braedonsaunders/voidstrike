@@ -79,6 +79,28 @@ export class AIBuildOrderExecutor {
       return;
     }
 
+    // For building steps, check if requirements are met before attempting
+    // Don't count "waiting for requirements" as a failure
+    if (step.type === 'building') {
+      const buildingDef = BUILDING_DEFINITIONS[step.id];
+      if (buildingDef?.requirements && buildingDef.requirements.length > 0) {
+        for (const reqBuildingId of buildingDef.requirements) {
+          if (!this.hasCompleteBuildingOfType(ai, reqBuildingId)) {
+            // Requirements not met - just wait, don't count as failure
+            return;
+          }
+        }
+      }
+    }
+
+    // For unit steps, check if we have a production building
+    if (step.type === 'unit') {
+      if (!this.hasProductionBuildingForUnit(ai, step.id)) {
+        // No production building yet - wait, don't count as failure
+        return;
+      }
+    }
+
     // Execute the step
     let success = this.executeBuildOrderStep(ai, step);
 
@@ -95,6 +117,29 @@ export class AIBuildOrderExecutor {
         ai.buildOrderFailureCount = 0;
       }
     }
+  }
+
+  /**
+   * Check if we have a completed production building that can train the specified unit.
+   */
+  private hasProductionBuildingForUnit(ai: AIPlayer, unitType: string): boolean {
+    const buildings = this.coordinator.getCachedBuildings();
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const building = entity.get<Building>('Building');
+      const health = entity.get<Health>('Health');
+
+      if (!selectable || !building || !health) continue;
+      if (selectable.playerId !== ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (!building.isComplete()) continue;
+      if (!building.canProduce.includes(unitType)) continue;
+
+      return true;
+    }
+
+    return false;
   }
 
   private executeBuildOrderStep(ai: AIPlayer, step: BuildOrderStep): boolean {

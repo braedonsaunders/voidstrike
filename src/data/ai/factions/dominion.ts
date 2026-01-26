@@ -75,28 +75,28 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 90,
     conditions: [
       // workerSaturation = workers / (bases * 16), so < 1.0 means under-saturated
-      { type: 'workerSaturation', operator: '<', value: 1.0 },
+      { type: 'workerSaturation', operator: '<', value: 1.2 }, // Allow slight over-saturation for smoother production
       { type: 'minerals', operator: '>=', value: 50 },
-      { type: 'supplyRatio', operator: '<', value: 0.95 },
+      { type: 'supplyRatio', operator: '<', value: 0.9 }, // Stop earlier to leave room for army
     ],
     action: { type: 'train', targetId: 'fabricator' },
-    cooldownTicks: 30,
+    cooldownTicks: 25, // Slightly faster worker production
   },
 
   // === Production Building Scaling ===
-  // First infantry bay
+  // First infantry bay - LOW threshold to ensure it gets built
   {
     id: 'infantry_bay_first',
     name: 'First Infantry Bay',
     description: 'Build first production building',
     priority: 85,
     conditions: [
-      { type: 'workers', operator: '>=', value: 10 },
+      { type: 'workers', operator: '>=', value: 6 }, // Lowered from 10 - build early
       { type: 'buildingCount', operator: '==', value: 0, targetId: 'infantry_bay' },
       { type: 'minerals', operator: '>=', value: 150 },
     ],
     action: { type: 'build', targetId: 'infantry_bay' },
-    cooldownTicks: 100,
+    cooldownTicks: 60, // Faster retry
   },
 
   // Second infantry bay - ALL DIFFICULTIES need to scale production
@@ -143,12 +143,12 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     description: 'Get gas for tech units',
     priority: 80,
     conditions: [
-      { type: 'workers', operator: '>=', value: 10 }, // Lowered from 12
+      { type: 'workers', operator: '>=', value: 8 }, // Lowered from 10 - get gas earlier
       { type: 'buildingCount', operator: '==', value: 0, targetId: 'extractor' },
       { type: 'minerals', operator: '>=', value: 75 },
     ],
     action: { type: 'build', targetId: 'extractor' },
-    cooldownTicks: 100,
+    cooldownTicks: 60, // Faster retry
   },
 
   // Second extractor at main base - most bases have 2 vespene geysers
@@ -436,8 +436,8 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 40,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
-      { type: 'minerals', operator: '>=', value: 75 },
-      { type: 'supplyRatio', operator: '<', value: 0.9 },
+      { type: 'minerals', operator: '>=', value: 50 }, // Lowered - always produce
+      { type: 'supplyRatio', operator: '<', value: 0.95 }, // More room to produce
     ],
     action: {
       type: 'train',
@@ -447,7 +447,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
         { id: 'vanguard', weight: 3 },
       ],
     },
-    cooldownTicks: 15,
+    cooldownTicks: 10, // Faster production
   },
 
   {
@@ -462,6 +462,28 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     ],
     action: { type: 'train', targetId: 'trooper' },
     cooldownTicks: 18,
+  },
+
+  // === CATCHALL: Spend excess minerals ===
+  // If we have lots of minerals and infantry_bay, train units
+  {
+    id: 'train_excess_minerals',
+    name: 'Spend Excess Minerals',
+    description: 'Dont float minerals - produce something!',
+    priority: 25, // Low priority but catches stockpiling
+    conditions: [
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
+      { type: 'minerals', operator: '>=', value: 200 }, // Floating too much
+    ],
+    action: {
+      type: 'train',
+      options: [
+        { id: 'trooper', weight: 10 },
+        { id: 'breacher', weight: 5 },
+        { id: 'vanguard', weight: 3 },
+      ],
+    },
+    cooldownTicks: 8, // Very fast - spend those minerals!
   },
 
   // === Expansion ===

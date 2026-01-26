@@ -666,10 +666,12 @@ export class AICoordinator extends System {
     // Follow build order if still in progress
     if (ai.buildOrderIndex < ai.buildOrder.length) {
       this.buildOrderExecutor.executeBuildOrder(ai);
-      return;
+      // IMPORTANT: Don't return early! Continue to macro rules below.
+      // This allows the AI to keep producing while waiting for build order steps.
     }
 
-    // Post-build order: continuous macro
+    // Always run macro rules - they complement the build order
+    // Build order handles early sequencing, macro rules handle continuous production
     this.buildOrderExecutor.doMacro(ai);
   }
 
