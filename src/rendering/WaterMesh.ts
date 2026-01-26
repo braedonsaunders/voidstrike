@@ -183,6 +183,7 @@ export class WaterMesh {
   public group: THREE.Group;
 
   private waterMeshes: ThreeWaterMesh[] = [];
+  private shoreMeshes: THREE.Mesh[] = []; // Shore/beach transition overlays
   private sunDirection: THREE.Vector3;
   private quality: WaterQuality = 'high';
   private reflectionsEnabled: boolean = true;
@@ -307,6 +308,9 @@ export class WaterMesh {
     for (const region of regions) {
       this.createRegionMesh(region);
     }
+
+    // Create shore transitions at water-land boundaries
+    this.createShoreTransitions(terrain, width, height);
   }
 
   /**
@@ -343,6 +347,9 @@ export class WaterMesh {
     for (const region of regions) {
       this.createRegionMesh(region);
     }
+
+    // Create shore transitions at water-land boundaries
+    this.createShoreTransitionsFromEditor(terrain, width, height);
   }
 
   private floodFillWaterRegion(
@@ -566,6 +573,282 @@ export class WaterMesh {
   }
 
   /**
+   * Create shore transition meshes at water-land boundaries
+   * These gradient overlays smooth the hard edge between water and terrain
+   */
+  private createShoreTransitions(
+    terrain: MapCell[][],
+    width: number,
+    height: number
+  ): void {
+    if (!this.enabled) return;
+
+    const edgeCells = this.findWaterEdgeCells(terrain, width, height);
+    if (edgeCells.length === 0) return;
+
+    this.createShoreGeometry(edgeCells, terrain, width, height);
+  }
+
+  /**
+   * Create shore transitions from editor data format
+   */
+  private createShoreTransitionsFromEditor(
+    terrain: Array<Array<{ elevation: number; feature: string }>>,
+    width: number,
+    height: number
+  ): void {
+    if (!this.enabled) return;
+
+    const edgeCells = this.findWaterEdgeCellsEditor(terrain, width, height);
+    if (edgeCells.length === 0) return;
+
+    this.createShoreGeometryEditor(edgeCells, terrain, width, height);
+  }
+
+  /**
+   * Find water cells that border non-water cells (the shoreline)
+   */
+  private findWaterEdgeCells(
+    terrain: MapCell[][],
+    width: number,
+    height: number
+  ): Array<{ x: number; y: number; elevation: number; edgeDirections: number[] }> {
+    const edgeCells: Array<{ x: number; y: number; elevation: number; edgeDirections: number[] }> = [];
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const cell = terrain[y]?.[x];
+        if (!cell) continue;
+
+        const feature = cell.feature || 'none';
+        if (feature !== 'water_shallow' && feature !== 'water_deep') continue;
+
+        // Check 4 cardinal neighbors for non-water (land)
+        const directions: number[] = [];
+        const neighbors = [
+          { dx: 0, dy: -1, dir: 0 }, // North
+          { dx: 1, dy: 0, dir: 1 },  // East
+          { dx: 0, dy: 1, dir: 2 },  // South
+          { dx: -1, dy: 0, dir: 3 }, // West
+        ];
+
+        for (const { dx, dy, dir } of neighbors) {
+          const nx = x + dx;
+          const ny = y + dy;
+
+          // Map edge counts as land
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+            directions.push(dir);
+            continue;
+          }
+
+          const neighborCell = terrain[ny]?.[nx];
+          const neighborFeature = neighborCell?.feature || 'none';
+
+          // Non-water neighbor = this is an edge
+          if (neighborFeature !== 'water_shallow' && neighborFeature !== 'water_deep') {
+            directions.push(dir);
+          }
+        }
+
+        if (directions.length > 0) {
+          edgeCells.push({ x, y, elevation: cell.elevation, edgeDirections: directions });
+        }
+      }
+    }
+
+    return edgeCells;
+  }
+
+  /**
+   * Find water edge cells from editor terrain format
+   */
+  private findWaterEdgeCellsEditor(
+    terrain: Array<Array<{ elevation: number; feature: string }>>,
+    width: number,
+    height: number
+  ): Array<{ x: number; y: number; elevation: number; edgeDirections: number[] }> {
+    const edgeCells: Array<{ x: number; y: number; elevation: number; edgeDirections: number[] }> = [];
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const cell = terrain[y]?.[x];
+        if (!cell) continue;
+
+        const feature = cell.feature || 'none';
+        if (feature !== 'water_shallow' && feature !== 'water_deep') continue;
+
+        const directions: number[] = [];
+        const neighbors = [
+          { dx: 0, dy: -1, dir: 0 },
+          { dx: 1, dy: 0, dir: 1 },
+          { dx: 0, dy: 1, dir: 2 },
+          { dx: -1, dy: 0, dir: 3 },
+        ];
+
+        for (const { dx, dy, dir } of neighbors) {
+          const nx = x + dx;
+          const ny = y + dy;
+
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+            directions.push(dir);
+            continue;
+          }
+
+          const neighborCell = terrain[ny]?.[nx];
+          const neighborFeature = neighborCell?.feature || 'none';
+
+          if (neighborFeature !== 'water_shallow' && neighborFeature !== 'water_deep') {
+            directions.push(dir);
+          }
+        }
+
+        if (directions.length > 0) {
+          edgeCells.push({ x, y, elevation: cell.elevation, edgeDirections: directions });
+        }
+      }
+    }
+
+    return edgeCells;
+  }
+
+  /**
+   * Create shore gradient geometry from edge cells
+   */
+  private createShoreGeometry(
+    edgeCells: Array<{ x: number; y: number; elevation: number; edgeDirections: number[] }>,
+    _terrain: MapCell[][],
+    _width: number,
+    _height: number
+  ): void {
+    this.buildShoreFromEdgeCells(edgeCells);
+  }
+
+  /**
+   * Create shore gradient geometry from editor edge cells
+   */
+  private createShoreGeometryEditor(
+    edgeCells: Array<{ x: number; y: number; elevation: number; edgeDirections: number[] }>,
+    _terrain: Array<Array<{ elevation: number; feature: string }>>,
+    _width: number,
+    _height: number
+  ): void {
+    this.buildShoreFromEdgeCells(edgeCells);
+  }
+
+  /**
+   * Build shore meshes from detected edge cells
+   * Creates gradient quads that extend from water into land
+   */
+  private buildShoreFromEdgeCells(
+    edgeCells: Array<{ x: number; y: number; elevation: number; edgeDirections: number[] }>
+  ): void {
+    if (edgeCells.length === 0) return;
+
+    // Shore transition width (extends this far onto land)
+    const shoreWidth = 0.8;
+
+    // Build geometry for all shore segments
+    const positions: number[] = [];
+    const colors: number[] = [];
+    const indices: number[] = [];
+
+    // Water edge color (matches shallow water)
+    const waterColor = new THREE.Color(0x40a0c0);
+
+    for (const cell of edgeCells) {
+      const baseHeight = cell.elevation * HEIGHT_SCALE + WATER_SURFACE_OFFSET + 0.01;
+
+      for (const dir of cell.edgeDirections) {
+        const vertexOffset = positions.length / 3;
+
+        // Direction vectors for creating the shore quad
+        // Quad extends from water edge outward onto land
+        let dx = 0, dz = 0;
+        let perpX = 0, perpZ = 0;
+
+        switch (dir) {
+          case 0: // North edge - shore extends north (negative Z)
+            dx = 0; dz = -1;
+            perpX = 1; perpZ = 0;
+            break;
+          case 1: // East edge - shore extends east (positive X)
+            dx = 1; dz = 0;
+            perpX = 0; perpZ = 1;
+            break;
+          case 2: // South edge - shore extends south (positive Z)
+            dx = 0; dz = 1;
+            perpX = 1; perpZ = 0;
+            break;
+          case 3: // West edge - shore extends west (negative X)
+            dx = -1; dz = 0;
+            perpX = 0; perpZ = 1;
+            break;
+        }
+
+        // Calculate the edge of the water cell in the shore direction
+        const edgeX = cell.x + 0.5 + dx * 0.5;
+        const edgeZ = cell.y + 0.5 + dz * 0.5;
+
+        // Four corners of the shore quad:
+        // v0, v1 are at the water edge (full opacity)
+        // v2, v3 are extended onto land (zero opacity)
+        const v0x = edgeX - perpX * 0.5;
+        const v0z = edgeZ - perpZ * 0.5;
+        const v1x = edgeX + perpX * 0.5;
+        const v1z = edgeZ + perpZ * 0.5;
+        const v2x = edgeX + dx * shoreWidth + perpX * 0.5;
+        const v2z = edgeZ + dz * shoreWidth + perpZ * 0.5;
+        const v3x = edgeX + dx * shoreWidth - perpX * 0.5;
+        const v3z = edgeZ + dz * shoreWidth - perpZ * 0.5;
+
+        // Add vertices (XYZ)
+        positions.push(v0x, baseHeight, v0z); // Water edge
+        positions.push(v1x, baseHeight, v1z); // Water edge
+        positions.push(v2x, baseHeight, v2z); // Land side
+        positions.push(v3x, baseHeight, v3z); // Land side
+
+        // Vertex colors with alpha (RGBA)
+        // Water edge vertices: water color, high alpha
+        colors.push(waterColor.r, waterColor.g, waterColor.b, 0.6);
+        colors.push(waterColor.r, waterColor.g, waterColor.b, 0.6);
+        // Land side vertices: water color, zero alpha (fade out)
+        colors.push(waterColor.r, waterColor.g, waterColor.b, 0.0);
+        colors.push(waterColor.r, waterColor.g, waterColor.b, 0.0);
+
+        // Two triangles for the quad
+        indices.push(vertexOffset, vertexOffset + 1, vertexOffset + 2);
+        indices.push(vertexOffset, vertexOffset + 2, vertexOffset + 3);
+      }
+    }
+
+    if (positions.length === 0) return;
+
+    // Create buffer geometry
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4));
+    geometry.setIndex(indices);
+    geometry.computeVertexNormals();
+
+    // Create material with vertex colors and transparency
+    const material = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+      blending: THREE.NormalBlending,
+    });
+
+    const shoreMesh = new THREE.Mesh(geometry, material);
+    shoreMesh.renderOrder = 3; // Render after water
+    shoreMesh.frustumCulled = true;
+
+    this.shoreMeshes.push(shoreMesh);
+    this.group.add(shoreMesh);
+  }
+
+  /**
    * Update water meshes - handles frustum culling
    * Call once per frame with current camera
    */
@@ -614,7 +897,7 @@ export class WaterMesh {
   }
 
   /**
-   * Clear all water meshes
+   * Clear all water meshes and shore transitions
    */
   public clear(): void {
     for (const mesh of this.waterMeshes) {
@@ -625,6 +908,15 @@ export class WaterMesh {
       this.group.remove(mesh);
     }
     this.waterMeshes = [];
+
+    for (const mesh of this.shoreMeshes) {
+      mesh.geometry.dispose();
+      if (mesh.material) {
+        (mesh.material as THREE.Material).dispose();
+      }
+      this.group.remove(mesh);
+    }
+    this.shoreMeshes = [];
   }
 
   /**
