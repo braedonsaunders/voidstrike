@@ -51,6 +51,7 @@ export interface EditorObjectInstance {
   selectionRing: THREE.Mesh;
   label: THREE.Sprite;
   baseScale: number;
+  baseRotation: number; // Base rotation from model normalization (radians)
   isRealModel: boolean;
 }
 
@@ -275,6 +276,7 @@ export class EditorObjects {
     let isRealModel = false;
     let visualHeight = 2; // Default height for positioning
     let baseScale = 1; // Base scale from model normalization
+    let baseRotation = 0; // Base rotation from model normalization (radians)
 
     const modelInstance = this.modelsInitialized ? EditorModelLoader.getModelInstance(obj.type) : null;
 
@@ -284,8 +286,9 @@ export class EditorObjects {
       mesh.add(modelInstance);
       isRealModel = true;
 
-      // Store the base scale from model normalization (already applied by EditorModelLoader)
+      // Store the base scale and rotation from model normalization
       baseScale = modelInstance.scale.x;
+      baseRotation = modelInstance.rotation.y; // Already in radians from EditorModelLoader
 
       // Get model height from bounding box (after normalization, min.y=0 and max.y=height)
       const box = new THREE.Box3().setFromObject(modelInstance);
@@ -305,12 +308,13 @@ export class EditorObjects {
       baseScale = 1; // Placeholders start at scale 1
     }
 
-    // Apply user scale on top of base scale, and apply rotation
-    // For real models, baseScale is already set from normalization
-    // For placeholders, baseScale is 1
+    // Apply user scale on top of base scale, and user rotation on top of base rotation
+    // For real models, baseScale/baseRotation are from EditorModelLoader normalization
+    // For placeholders, baseScale is 1 and baseRotation is 0
     if (mesh.children[0]) {
       mesh.children[0].scale.setScalar(baseScale * userScale);
-      mesh.children[0].rotation.y = THREE.MathUtils.degToRad(rotation);
+      // Add user rotation to base rotation (user rotation is in degrees, base is in radians)
+      mesh.children[0].rotation.y = baseRotation + THREE.MathUtils.degToRad(rotation);
     }
 
     // Calculate visual height with user scale applied
@@ -357,7 +361,7 @@ export class EditorObjects {
     this.group.add(selectionRing);
     this.group.add(label);
 
-    // Store reference with base scale for later updates
+    // Store reference with base scale and rotation for later updates
     this.objects.set(obj.id, {
       id: obj.id,
       type: obj.type,
@@ -367,6 +371,7 @@ export class EditorObjects {
       selectionRing,
       label,
       baseScale,
+      baseRotation,
       isRealModel,
     });
   }
@@ -439,13 +444,18 @@ export class EditorObjects {
   /**
    * Update an object's rotation
    */
-  public updateObjectRotation(id: string, rotation: number): void {
+  /**
+   * Update an object's rotation
+   * @param userRotation - The user-specified rotation in degrees (added to base rotation)
+   */
+  public updateObjectRotation(id: string, userRotation: number): void {
     const instance = this.objects.get(id);
     if (!instance) return;
 
-    // Update inner mesh rotation
+    // Add user rotation to base rotation
+    // baseRotation is in radians (from EditorModelLoader), userRotation is in degrees
     if (instance.mesh.children[0]) {
-      instance.mesh.children[0].rotation.y = THREE.MathUtils.degToRad(rotation);
+      instance.mesh.children[0].rotation.y = instance.baseRotation + THREE.MathUtils.degToRad(userRotation);
     }
   }
 
