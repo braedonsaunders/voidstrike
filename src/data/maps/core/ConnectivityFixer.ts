@@ -5,7 +5,7 @@
  * Can apply fixes directly to MapData or return paint commands for blueprints.
  */
 
-import type { MapData, MapCell, Ramp, ElevationLevel } from '../MapTypes';
+import type { MapData, MapCell, Ramp } from '../MapTypes';
 import { type Point, type RampCommand, ramp as createRampCommand, CLIFF_THRESHOLD, toXY } from './ElevationMap';
 import { distance, clamp } from '@/utils/math';
 import type {
@@ -50,15 +50,6 @@ function generateRampCommand(fix: SuggestedFix): RampCommand | null {
   if (fix.type !== 'add_ramp' || !fix.ramp) return null;
 
   return createRampCommand(fix.ramp.from, fix.ramp.to, fix.ramp.width);
-}
-
-/**
- * Convert elevation (0-255) to legacy elevation level (0, 1, 2).
- */
-function elevationToLevel(elevation: number): ElevationLevel {
-  if (elevation <= 85) return 0;
-  if (elevation <= 170) return 1;
-  return 2;
 }
 
 /**
@@ -155,8 +146,8 @@ function applyRampToTerrain(
     width: rampW,
     height: rampH,
     direction,
-    fromElevation: elevationToLevel(fromElevation),
-    toElevation: elevationToLevel(toElevation),
+    fromElevation,
+    toElevation,
   };
 }
 

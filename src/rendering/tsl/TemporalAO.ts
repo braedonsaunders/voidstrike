@@ -344,36 +344,3 @@ export class TemporalAOManager {
   }
 }
 
-/**
- * Simple helper to create a temporal AO blend pass
- * This blends quarter-res AO with reprojected history using TSL.
- * Uses shared utilities from TemporalUtils for consistent behavior.
- */
-export function createTemporalAOBlendNode(
-  quarterAONode: any, // Quarter-res AO texture node
-  historyNode: any, // History AO texture node
-  velocityNode: any, // Velocity texture node
-  _depthNode: any, // Depth texture node (unused in simplified version)
-  config: { historyBlend: number; depthThreshold: number }
-): ReturnType<typeof Fn> {
-  const uHistoryBlend = uniform(config.historyBlend);
-
-  return Fn(() => {
-    const fragUV = uv();
-
-    // Use shared utility for velocity reprojection
-    const prevUV = calculateReprojectedUV(velocityNode, fragUV);
-
-    // Sample current quarter-res AO
-    const currentAO = quarterAONode.sample(fragUV).r;
-
-    // Use shared utility for bounds checking
-    const inBounds = isUVInBounds(prevUV);
-
-    // Sample history
-    const historyAO = historyNode.sample(prevUV).r;
-
-    // Use shared temporal blend
-    return temporalBlend(currentAO, historyAO, uHistoryBlend, inBounds);
-  })();
-}
