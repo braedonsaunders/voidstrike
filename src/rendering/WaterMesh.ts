@@ -606,7 +606,7 @@ export class WaterMesh {
   }
 
   /**
-   * Find water cells that border non-water cells (the shoreline)
+   * Find water cells that border actual terrain (not map edges)
    */
   private findWaterEdgeCells(
     terrain: MapCell[][],
@@ -623,7 +623,7 @@ export class WaterMesh {
         const feature = cell.feature || 'none';
         if (feature !== 'water_shallow' && feature !== 'water_deep') continue;
 
-        // Check 4 cardinal neighbors for non-water (land)
+        // Check 4 cardinal neighbors for actual terrain (not map edges)
         const directions: number[] = [];
         const neighbors = [
           { dx: 0, dy: -1, dir: 0 }, // North
@@ -636,16 +636,17 @@ export class WaterMesh {
           const nx = x + dx;
           const ny = y + dy;
 
-          // Map edge counts as land
+          // Skip map edges - we only want actual terrain boundaries
           if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-            directions.push(dir);
             continue;
           }
 
           const neighborCell = terrain[ny]?.[nx];
-          const neighborFeature = neighborCell?.feature || 'none';
+          if (!neighborCell) continue;
 
-          // Non-water neighbor = this is an edge
+          const neighborFeature = neighborCell.feature || 'none';
+
+          // Non-water neighbor = this is a beach/terrain edge
           if (neighborFeature !== 'water_shallow' && neighborFeature !== 'water_deep') {
             directions.push(dir);
           }
@@ -661,7 +662,7 @@ export class WaterMesh {
   }
 
   /**
-   * Find water edge cells from editor terrain format
+   * Find water edge cells from editor terrain format (actual terrain only, not map edges)
    */
   private findWaterEdgeCellsEditor(
     terrain: Array<Array<{ elevation: number; feature: string }>>,
@@ -690,13 +691,15 @@ export class WaterMesh {
           const nx = x + dx;
           const ny = y + dy;
 
+          // Skip map edges - only actual terrain boundaries
           if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
-            directions.push(dir);
             continue;
           }
 
           const neighborCell = terrain[ny]?.[nx];
-          const neighborFeature = neighborCell?.feature || 'none';
+          if (!neighborCell) continue;
+
+          const neighborFeature = neighborCell.feature || 'none';
 
           if (neighborFeature !== 'water_shallow' && neighborFeature !== 'water_deep') {
             directions.push(dir);
@@ -738,33 +741,31 @@ export class WaterMesh {
 
   /**
    * Build shore meshes from detected edge cells
-   * Creates gradient quads that extend INTO the water from the shore edge
-   * This creates a lighter/shallower appearance near the shoreline
+   * Creates a smooth gradient that lightens water near the shoreline
    */
   private buildShoreFromEdgeCells(
     edgeCells: Array<{ x: number; y: number; elevation: number; edgeDirections: number[] }>
   ): void {
     if (edgeCells.length === 0) return;
 
-    // Shore transition width (extends this far INTO the water)
-    const shoreWidth = 1.5;
+    // Shore transition - wider for smoother gradient
+    const shoreWidth = 3.0;
 
     // Build geometry for all shore segments
     const positions: number[] = [];
     const colors: number[] = [];
     const indices: number[] = [];
 
-    // Shore/beach color - lighter cyan for shallow water appearance
-    const shoreColor = new THREE.Color(0x60c8d8);
+    // Shore color - light teal/cyan for shallow beach water look
+    const shoreColor = new THREE.Color(0x70d0e0);
 
     for (const cell of edgeCells) {
-      const baseHeight = cell.elevation * HEIGHT_SCALE + WATER_SURFACE_OFFSET + 0.03;
+      const baseHeight = cell.elevation * HEIGHT_SCALE + WATER_SURFACE_OFFSET + 0.02;
 
       for (const dir of cell.edgeDirections) {
         const vertexOffset = positions.length / 3;
 
-        // Direction vectors - note: we INVERT the direction to extend INTO water
-        // dir points toward land, so we go opposite direction into water
+        // Direction vectors - extend INTO water from shore
         let dx = 0, dz = 0;
         let perpX = 0, perpZ = 0;
 
@@ -787,22 +788,18 @@ export class WaterMesh {
             break;
         }
 
-        // Start at the edge of the water cell (where it meets land)
-        // For dir=0 (land to north), the edge is at y - 0.5 (north side of cell)
+        // Start at the edge of the water cell where it meets land
         let edgeX = cell.x + 0.5;
         let edgeZ = cell.y + 0.5;
 
-        // Adjust to the actual edge based on direction
         switch (dir) {
-          case 0: edgeZ = cell.y; break;      // North edge of cell
-          case 1: edgeX = cell.x + 1; break;  // East edge of cell
-          case 2: edgeZ = cell.y + 1; break;  // South edge of cell
-          case 3: edgeX = cell.x; break;      // West edge of cell
+          case 0: edgeZ = cell.y; break;
+          case 1: edgeX = cell.x + 1; break;
+          case 2: edgeZ = cell.y + 1; break;
+          case 3: edgeX = cell.x; break;
         }
 
-        // Four corners of the shore quad:
-        // v0, v1 are at the shore edge (high opacity - lighter water)
-        // v2, v3 are extended into deeper water (zero opacity - fades to normal water)
+        // Create quad from shore edge into water
         const v0x = edgeX - perpX * 0.5;
         const v0z = edgeZ - perpZ * 0.5;
         const v1x = edgeX + perpX * 0.5;
@@ -812,21 +809,17 @@ export class WaterMesh {
         const v3x = edgeX + dx * shoreWidth - perpX * 0.5;
         const v3z = edgeZ + dz * shoreWidth - perpZ * 0.5;
 
-        // Add vertices (XYZ)
-        positions.push(v0x, baseHeight, v0z); // Shore edge (near land)
-        positions.push(v1x, baseHeight, v1z); // Shore edge (near land)
-        positions.push(v2x, baseHeight, v2z); // Deep water side
-        positions.push(v3x, baseHeight, v3z); // Deep water side
+        positions.push(v0x, baseHeight, v0z);
+        positions.push(v1x, baseHeight, v1z);
+        positions.push(v2x, baseHeight, v2z);
+        positions.push(v3x, baseHeight, v3z);
 
-        // Vertex colors with alpha (RGBA)
-        // Shore edge: lighter color, high alpha (visible beach tint)
-        colors.push(shoreColor.r, shoreColor.g, shoreColor.b, 0.5);
-        colors.push(shoreColor.r, shoreColor.g, shoreColor.b, 0.5);
-        // Deep water side: fade to transparent
+        // Softer alpha gradient - 0.35 at shore, 0 at deep end
+        colors.push(shoreColor.r, shoreColor.g, shoreColor.b, 0.35);
+        colors.push(shoreColor.r, shoreColor.g, shoreColor.b, 0.35);
         colors.push(shoreColor.r, shoreColor.g, shoreColor.b, 0.0);
         colors.push(shoreColor.r, shoreColor.g, shoreColor.b, 0.0);
 
-        // Two triangles for the quad
         indices.push(vertexOffset, vertexOffset + 1, vertexOffset + 2);
         indices.push(vertexOffset, vertexOffset + 2, vertexOffset + 3);
       }
@@ -834,24 +827,23 @@ export class WaterMesh {
 
     if (positions.length === 0) return;
 
-    // Create buffer geometry
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
 
-    // Create material with vertex colors and transparency
+    // Softer blending - normal blend with lower opacity feels more natural
     const material = new THREE.MeshBasicMaterial({
       vertexColors: true,
       transparent: true,
       side: THREE.DoubleSide,
       depthWrite: false,
-      blending: THREE.AdditiveBlending, // Additive makes it lighter/glowy
+      blending: THREE.NormalBlending,
     });
 
     const shoreMesh = new THREE.Mesh(geometry, material);
-    shoreMesh.renderOrder = 10; // Render on top of water
+    shoreMesh.renderOrder = 10;
     shoreMesh.frustumCulled = true;
 
     this.shoreMeshes.push(shoreMesh);
