@@ -194,7 +194,10 @@ export class ResourceRenderer {
       // Extract geometry, material, and transform info from first mesh
       baseMesh.traverse((child: THREE.Object3D) => {
         if (child instanceof THREE.Mesh && !geometry) {
-          geometry = child.geometry;
+          // Clone geometry to avoid sharing disposal lifecycle with asset cache.
+          // Without cloning, disposing this mesh would invalidate GPU buffers
+          // still used by other meshes, causing WebGPU "setIndexBuffer" crashes.
+          geometry = child.geometry.clone();
           material = child.material;
           // Get world quaternion to extract X/Z rotations that stand the model upright
           child.getWorldQuaternion(tempQuat);
