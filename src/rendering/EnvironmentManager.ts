@@ -5,6 +5,7 @@ import { Terrain, MapDecorations } from './Terrain';
 import { TSLMapBorderFog } from './tsl/MapBorderFog';
 import { WaterMesh, type WaterQuality } from './WaterMesh';
 import { EnvironmentParticles } from './EnhancedDecorations';
+import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles, InstancedCrystals, updateDecorationFrustum } from './InstancedDecorations';
 import { DecorationLightManager } from './DecorationLightManager';
 import { EmissiveDecorationManager } from './EmissiveDecorationManager';
 import { LightPool } from './LightPool';
@@ -34,6 +35,12 @@ export class EnvironmentManager {
   private scene: THREE.Scene;
   private mapData: MapData;
 
+  // Instanced decoration systems (single draw call per type, frustum culled)
+  private trees: InstancedTrees | null = null;
+  private rocks: InstancedRocks | null = null;
+  private grass: InstancedGrass | null = null;
+  private pebbles: InstancedPebbles | null = null;
+  private crystals: InstancedCrystals | null = null;
   private waterMesh: WaterMesh | null = null;
   private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
@@ -185,21 +192,39 @@ export class EnvironmentManager {
   }
 
   private createEnhancedDecorations(): void {
-    // Water system - uses Three.js WaterMesh addon for realistic reflections
-    // Handles both full-map water (Ocean biome) and localized features (lakes, rivers)
-    this.waterMesh = new WaterMesh();
+    const getHeightAt = this.terrain.getHeightAt.bind(this.terrain);
 
-    // Create full-map water plane for biomes with hasWater (Ocean, Volcanic lava)
+    // Instanced trees from explicit map data (frustum culled, single draw call per model)
+    this.trees = new InstancedTrees(this.mapData, this.biome, getHeightAt);
+    this.scene.add(this.trees.group);
+
+    // Instanced rocks from explicit map data (frustum culled, single draw call per model)
+    this.rocks = new InstancedRocks(this.mapData, this.biome, getHeightAt);
+    this.scene.add(this.rocks.group);
+
+    // Instanced crystals from explicit map data (frustum culled, emissive)
+    this.crystals = new InstancedCrystals(this.mapData, this.biome, getHeightAt);
+    this.scene.add(this.crystals.group);
+
+    // Environmental ground detail (procedural - these are not map decorations)
+    if (this.biome.grassDensity > 0) {
+      this.grass = new InstancedGrass(this.mapData, this.biome, getHeightAt);
+      this.scene.add(this.grass.group);
+    }
+    if (this.biome.grassDensity > 0 || this.biome.rockDensity > 0.1) {
+      this.pebbles = new InstancedPebbles(this.mapData, this.biome, getHeightAt);
+      this.scene.add(this.pebbles.group);
+    }
+
+    // Water system - handles both full-map water (Ocean biome) and localized features
+    this.waterMesh = new WaterMesh();
     if (this.biome.hasWater) {
       this.waterMesh.buildFullMapWater(this.mapData, this.biome);
     }
-
-    // Add localized water surfaces from terrain features
     this.waterMesh.buildFromMapData(this.mapData);
     this.scene.add(this.waterMesh.group);
 
     // Map border fog - dark smoky effect around map edges
-    // Uses TSL for WebGPU/WebGL compatibility
     this.mapBorderFog = new TSLMapBorderFog(this.mapData);
     this.scene.add(this.mapBorderFog.mesh);
 
@@ -216,7 +241,34 @@ export class EnvironmentManager {
     this.emissiveLightPool = new LightPool(this.scene, 16);
     this.emissiveDecorationManager = new EmissiveDecorationManager(this.scene, this.emissiveLightPool);
 
-    // MapDecorations handles explicit map decorations, watch towers, and destructibles
+    // Register crystals with emissive decoration manager for pulsing animation
+    if (this.crystals) {
+      const crystalMesh = this.crystals.getInstancedMesh();
+      if (crystalMesh) {
+        let emissiveHex = '#204060';
+        let pulseSpeed = 0.3;
+        let pulseAmplitude = 0.15;
+
+        if (this.biome.name === 'Void') {
+          emissiveHex = '#4020a0';
+          pulseSpeed = 0.5;
+          pulseAmplitude = 0.25;
+        } else if (this.biome.name === 'Volcanic') {
+          emissiveHex = '#802010';
+          pulseSpeed = 0.8;
+          pulseAmplitude = 0.3;
+        }
+
+        this.emissiveDecorationManager.registerInstancedDecoration(crystalMesh, {
+          emissive: emissiveHex,
+          emissiveIntensity: 0.5,
+          pulseSpeed,
+          pulseAmplitude,
+        });
+      }
+    }
+
+    // MapDecorations handles watch towers and destructibles (non-instanced objects)
     this.legacyDecorations = new MapDecorations(this.mapData, this.terrain, this.scene, this.decorationLightManager);
     this.scene.add(this.legacyDecorations.group);
   }
@@ -258,6 +310,15 @@ export class EnvironmentManager {
       this.decorationLightManager.update(camera, deltaTime);
     }
 
+    // PERF: Update instanced decoration frustum culling - only render visible instances
+    if (camera) {
+      updateDecorationFrustum(camera);
+      this.trees?.update();
+      this.rocks?.update();
+      this.crystals?.update();
+      this.grass?.update();
+      this.pebbles?.update();
+    }
   }
 
   /**
@@ -331,10 +392,12 @@ export class EnvironmentManager {
   public getRockCollisions(): Array<{ x: number; z: number; radius: number }> {
     const collisions: Array<{ x: number; z: number; radius: number }> = [];
 
-    // Get from explicit decorations (includes rocks and trees from map data)
-    if (this.legacyDecorations) {
-      collisions.push(...this.legacyDecorations.getRockCollisions());
-      collisions.push(...this.legacyDecorations.getTreeCollisions());
+    // Get from instanced decorations
+    if (this.rocks) {
+      collisions.push(...this.rocks.getRockCollisions());
+    }
+    if (this.trees) {
+      collisions.push(...this.trees.getTreeCollisions());
     }
 
     return collisions;
@@ -692,6 +755,14 @@ export class EnvironmentManager {
    * Dispose all resources
    */
   public dispose(): void {
+    // Dispose instanced decorations
+    this.trees?.dispose();
+    this.rocks?.dispose();
+    this.crystals?.dispose();
+    this.grass?.dispose();
+    this.pebbles?.dispose();
+
+    // Dispose other resources
     this.terrain.dispose();
     this.waterMesh?.dispose();
     this.mapBorderFog?.dispose();
@@ -701,6 +772,7 @@ export class EnvironmentManager {
     this.emissiveDecorationManager?.dispose();
     this.emissiveLightPool?.dispose();
 
+    // Remove from scene
     this.scene.remove(this.terrain.mesh);
     this.scene.remove(this.ambientLight);
     this.scene.remove(this.directionalLight);
@@ -714,6 +786,12 @@ export class EnvironmentManager {
       this.scene.environment = null;
     }
 
+    // Remove groups from scene
+    if (this.trees) this.scene.remove(this.trees.group);
+    if (this.rocks) this.scene.remove(this.rocks.group);
+    if (this.crystals) this.scene.remove(this.crystals.group);
+    if (this.grass) this.scene.remove(this.grass.group);
+    if (this.pebbles) this.scene.remove(this.pebbles.group);
     if (this.waterMesh) this.scene.remove(this.waterMesh.group);
     if (this.mapBorderFog) this.scene.remove(this.mapBorderFog.mesh);
     if (this.particles) this.scene.remove(this.particles.points);
