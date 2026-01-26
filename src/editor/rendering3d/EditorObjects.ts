@@ -1,34 +1,51 @@
 /**
  * EditorObjects - 3D object rendering for the map editor
  *
- * Renders map objects (bases, towers, destructibles) as 3D representations.
- * Supports category-based visibility toggles.
+ * Renders map objects (bases, towers, destructibles, decorations) as 3D models.
+ * Uses real GLTF models for decorations with fallback to placeholder geometry.
+ * Supports category-based visibility toggles, scale, and rotation.
  */
 
 import * as THREE from 'three';
 import type { EditorObject, ObjectTypeConfig } from '../config/EditorConfig';
+import { EditorModelLoader } from './EditorModelLoader';
 
-// Object visual configurations
-const OBJECT_VISUALS: Record<string, { color: number; height: number; shape: 'cylinder' | 'box' | 'sphere' }> = {
+// Object visual configurations (fallback when no model available)
+const OBJECT_VISUALS: Record<
+  string,
+  { color: number; height: number; shape: 'cylinder' | 'box' | 'sphere' | 'cone' }
+> = {
   main_base: { color: 0x00ff00, height: 3, shape: 'cylinder' },
   natural: { color: 0x00cc00, height: 2.5, shape: 'cylinder' },
   third: { color: 0x009900, height: 2, shape: 'cylinder' },
+  fourth: { color: 0x008800, height: 2, shape: 'cylinder' },
   gold: { color: 0xffd700, height: 2, shape: 'cylinder' },
   watch_tower: { color: 0x00aaff, height: 4, shape: 'box' },
   destructible_rock: { color: 0x8b4513, height: 1.5, shape: 'sphere' },
+  destructible_debris: { color: 0x606060, height: 1.2, shape: 'sphere' },
   mineral_patch: { color: 0x4169e1, height: 0.8, shape: 'box' },
   vespene_geyser: { color: 0x32cd32, height: 1.2, shape: 'cylinder' },
+  // Decorations fallback
+  decoration_tree_pine_tall: { color: 0x2e7d32, height: 6, shape: 'cone' },
+  decoration_tree_pine_medium: { color: 0x388e3c, height: 4, shape: 'cone' },
+  decoration_tree_dead: { color: 0x5d4037, height: 4, shape: 'cone' },
+  decoration_rocks_large: { color: 0x757575, height: 2, shape: 'sphere' },
+  decoration_rocks_small: { color: 0x616161, height: 1, shape: 'sphere' },
+  decoration_crystal_formation: { color: 0x7c4dff, height: 3, shape: 'cone' },
+  decoration_bush: { color: 0x66bb6a, height: 1, shape: 'sphere' },
+  decoration_ruined_wall: { color: 0x8d6e63, height: 2, shape: 'box' },
 };
 
 export interface EditorObjectInstance {
   id: string;
   type: string;
   category: string;
-  mesh: THREE.Mesh;
-  hitMesh: THREE.Mesh; // Larger invisible mesh for easier selection
+  mesh: THREE.Object3D;
+  hitMesh: THREE.Mesh;
   selectionRing: THREE.Mesh;
   label: THREE.Sprite;
-  baseScale: number; // Original scale before user modifications
+  baseScale: number;
+  isRealModel: boolean;
 }
 
 export class EditorObjects {
@@ -43,8 +60,75 @@ export class EditorObjects {
   private categoryVisibility: Map<string, boolean> = new Map();
   private labelsVisible: boolean = true;
 
+  // Model loading state
+  private modelsInitialized: boolean = false;
+
   constructor() {
     this.group = new THREE.Group();
+    this.initModels();
+  }
+
+  /**
+   * Initialize model loader
+   */
+  private async initModels(): Promise<void> {
+    try {
+      await EditorModelLoader.initialize();
+      this.modelsInitialized = true;
+      // Refresh all objects to use real models
+      this.refreshAllModels();
+    } catch (error) {
+      console.warn('[EditorObjects] Failed to initialize models:', error);
+    }
+  }
+
+  /**
+   * Refresh all objects to use real models if available
+   */
+  private refreshAllModels(): void {
+    // Store current object data
+    const objectsData: Array<{
+      obj: EditorObject;
+      selected: boolean;
+    }> = [];
+
+    for (const [id, instance] of this.objects) {
+      const objData: EditorObject = {
+        id,
+        type: instance.type,
+        x: instance.mesh.position.x,
+        y: instance.mesh.position.z,
+        radius: 5,
+        properties: {},
+      };
+
+      // Extract current scale and rotation from mesh
+      if (instance.mesh instanceof THREE.Group && instance.mesh.children[0]) {
+        const innerMesh = instance.mesh.children[0];
+        objData.properties = {
+          scale: innerMesh.scale.x / instance.baseScale,
+          rotation: THREE.MathUtils.radToDeg(innerMesh.rotation.y),
+        };
+      }
+
+      objectsData.push({
+        obj: objData,
+        selected: this.selectedIds.has(id),
+      });
+    }
+
+    // Clear and reload
+    this.clearAll();
+
+    for (const { obj, selected } of objectsData) {
+      this.addObject(obj);
+      if (selected) {
+        this.selectedIds.add(obj.id);
+      }
+    }
+
+    // Restore selection visuals
+    this.setSelection(Array.from(this.selectedIds));
   }
 
   /**
@@ -52,7 +136,6 @@ export class EditorObjects {
    */
   public setObjectTypes(types: ObjectTypeConfig[]): void {
     this.objectTypes = types;
-    // Initialize all categories as visible
     for (const type of types) {
       if (!this.categoryVisibility.has(type.category)) {
         this.categoryVisibility.set(type.category, true);
@@ -122,31 +205,22 @@ export class EditorObjects {
    * Load objects from map data
    */
   public loadObjects(objects: EditorObject[]): void {
-    // Clear existing
     this.clearAll();
-
-    // Add each object
     for (const obj of objects) {
       this.addObject(obj);
     }
   }
 
   /**
-   * Add a single object
+   * Create placeholder geometry for objects without models
    */
-  public addObject(obj: EditorObject): void {
-    const objType = this.objectTypes.find((t) => t.id === obj.type);
-    const visual = OBJECT_VISUALS[obj.type] || { color: 0xffffff, height: 1, shape: 'cylinder' as const };
-    const radius = obj.radius || objType?.defaultRadius || 5;
-    const category = objType?.category || 'objects';
+  private createPlaceholderMesh(
+    type: string,
+    radius: number,
+    color: number
+  ): { mesh: THREE.Mesh; height: number } {
+    const visual = OBJECT_VISUALS[type] || { color: 0xffffff, height: 1, shape: 'cylinder' as const };
 
-    // Get scale from properties (default to 1)
-    const scale = (obj.properties?.scale as number) || 1;
-
-    // Get terrain height at position
-    const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(obj.x, obj.y) : 0;
-
-    // Create mesh based on shape
     let geometry: THREE.BufferGeometry;
     switch (visual.shape) {
       case 'box':
@@ -155,36 +229,86 @@ export class EditorObjects {
       case 'sphere':
         geometry = new THREE.SphereGeometry(radius * 0.3, 12, 8);
         break;
+      case 'cone':
+        geometry = new THREE.ConeGeometry(radius * 0.35, visual.height, 12);
+        break;
       case 'cylinder':
       default:
         geometry = new THREE.CylinderGeometry(radius * 0.3, radius * 0.4, visual.height, 12);
     }
 
-    // Parse color - ensure we have a valid string before calling replace
-    const colorStr = objType?.color;
-    const colorValue = typeof colorStr === 'string' && colorStr.length > 0
-      ? parseInt(colorStr.replace('#', ''), 16)
-      : visual.color;
-
     const material = new THREE.MeshLambertMaterial({
-      color: colorValue,
+      color: color || visual.color,
       transparent: true,
       opacity: 0.85,
     });
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(obj.x, terrainHeight + (visual.height * scale) / 2, obj.y);
-    mesh.scale.set(scale, scale, scale);
+    return {
+      mesh: new THREE.Mesh(geometry, material),
+      height: visual.height,
+    };
+  }
 
-    // Create slightly larger hit mesh for easier selection (fixed size, doesn't scale with object)
-    const hitSize = Math.max(2, radius * 0.5); // Minimum 2 units, proportional to radius
-    const hitGeometry = new THREE.CylinderGeometry(hitSize, hitSize, visual.height * 1.5, 8);
-    const hitMaterial = new THREE.MeshBasicMaterial({
-      visible: false,
-    });
+  /**
+   * Add a single object
+   */
+  public addObject(obj: EditorObject): void {
+    const objType = this.objectTypes.find((t) => t.id === obj.type);
+    const radius = obj.radius || objType?.defaultRadius || 5;
+    const category = objType?.category || 'objects';
+
+    // Get scale and rotation from properties
+    const scale = (obj.properties?.scale as number) || 1;
+    const rotation = (obj.properties?.rotation as number) || 0;
+
+    // Get terrain height at position
+    const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(obj.x, obj.y) : 0;
+
+    // Try to get real model first
+    let mesh: THREE.Object3D;
+    let isRealModel = false;
+    let visualHeight = 2; // Default height for positioning
+
+    const modelInstance = this.modelsInitialized ? EditorModelLoader.getModelInstance(obj.type) : null;
+
+    if (modelInstance) {
+      // Use real model
+      mesh = new THREE.Group();
+      mesh.add(modelInstance);
+      isRealModel = true;
+
+      // Get model height from bounding box
+      const box = new THREE.Box3().setFromObject(modelInstance);
+      visualHeight = box.max.y - box.min.y;
+    } else {
+      // Fallback to placeholder
+      const colorStr = objType?.color;
+      const colorValue =
+        typeof colorStr === 'string' && colorStr.length > 0
+          ? parseInt(colorStr.replace('#', ''), 16)
+          : OBJECT_VISUALS[obj.type]?.color || 0xffffff;
+
+      const placeholder = this.createPlaceholderMesh(obj.type, radius, colorValue);
+      mesh = new THREE.Group();
+      mesh.add(placeholder.mesh);
+      visualHeight = placeholder.height;
+    }
+
+    // Apply scale and rotation
+    if (mesh.children[0]) {
+      mesh.children[0].scale.setScalar(scale);
+      mesh.children[0].rotation.y = THREE.MathUtils.degToRad(rotation);
+    }
+
+    // Position the mesh
+    mesh.position.set(obj.x, terrainHeight + (visualHeight * scale) / 2, obj.y);
+
+    // Create hit mesh for easier selection
+    const hitSize = Math.max(2, radius * 0.5);
+    const hitGeometry = new THREE.CylinderGeometry(hitSize, hitSize, visualHeight * 1.5, 8);
+    const hitMaterial = new THREE.MeshBasicMaterial({ visible: false });
     const hitMesh = new THREE.Mesh(hitGeometry, hitMaterial);
-    hitMesh.position.set(obj.x, terrainHeight + (visual.height * scale) / 2, obj.y);
-    // Don't scale hitMesh - keep it fixed size for consistent selection
+    hitMesh.position.set(obj.x, terrainHeight + (visualHeight * scale) / 2, obj.y);
 
     // Create selection ring
     const ringGeometry = new THREE.RingGeometry(radius * 0.9, radius, 24);
@@ -198,9 +322,9 @@ export class EditorObjects {
     selectionRing.rotation.x = -Math.PI / 2;
     selectionRing.position.set(obj.x, terrainHeight + 0.1, obj.y);
 
-    // Create label sprite (positioned above object, accounting for scale)
+    // Create label sprite
     const label = this.createLabel(objType?.name || obj.type, objType?.icon || '●');
-    label.position.set(obj.x, terrainHeight + (visual.height * scale) + 2.5, obj.y);
+    label.position.set(obj.x, terrainHeight + visualHeight * scale + 2.5, obj.y);
 
     // Check category visibility
     const categoryVisible = this.isCategoryVisible(category);
@@ -223,7 +347,8 @@ export class EditorObjects {
       hitMesh,
       selectionRing,
       label,
-      baseScale: 1, // Base scale before user modifications
+      baseScale: 1,
+      isRealModel,
     });
   }
 
@@ -235,13 +360,14 @@ export class EditorObjects {
     if (!instance) return;
 
     const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(x, y) : 0;
-    const scale = instance.mesh.scale.y; // Current scale
-    const visual = OBJECT_VISUALS[instance.type] || { height: 1 };
+    const scale = instance.mesh.children[0]?.scale.x || 1;
+    const visual = OBJECT_VISUALS[instance.type] || { height: 2 };
+    const height = instance.isRealModel ? 3 : visual.height;
 
-    instance.mesh.position.set(x, terrainHeight + (visual.height * scale) / 2, y);
-    instance.hitMesh.position.set(x, terrainHeight + (visual.height * scale) / 2, y);
+    instance.mesh.position.set(x, terrainHeight + (height * scale) / 2, y);
+    instance.hitMesh.position.set(x, terrainHeight + (height * scale) / 2, y);
     instance.selectionRing.position.set(x, terrainHeight + 0.1, y);
-    instance.label.position.set(x, terrainHeight + (visual.height * scale) + 2.5, y);
+    instance.label.position.set(x, terrainHeight + height * scale + 2.5, y);
   }
 
   /**
@@ -251,20 +377,34 @@ export class EditorObjects {
     const instance = this.objects.get(id);
     if (!instance) return;
 
-    const visual = OBJECT_VISUALS[instance.type] || { height: 1 };
+    const visual = OBJECT_VISUALS[instance.type] || { height: 2 };
+    const height = instance.isRealModel ? 3 : visual.height;
     const x = instance.mesh.position.x;
     const z = instance.mesh.position.z;
     const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(x, z) : 0;
 
-    // Update mesh scale and position
-    instance.mesh.scale.set(scale, scale, scale);
-    instance.mesh.position.y = terrainHeight + (visual.height * scale) / 2;
+    // Update inner mesh scale
+    if (instance.mesh.children[0]) {
+      instance.mesh.children[0].scale.setScalar(scale);
+    }
 
-    // Update hit mesh position only (don't scale - keep fixed for consistent selection)
-    instance.hitMesh.position.y = terrainHeight + (visual.height * scale) / 2;
+    // Update positions
+    instance.mesh.position.y = terrainHeight + (height * scale) / 2;
+    instance.hitMesh.position.y = terrainHeight + (height * scale) / 2;
+    instance.label.position.y = terrainHeight + height * scale + 2.5;
+  }
 
-    // Update label position
-    instance.label.position.y = terrainHeight + (visual.height * scale) + 2.5;
+  /**
+   * Update an object's rotation
+   */
+  public updateObjectRotation(id: string, rotation: number): void {
+    const instance = this.objects.get(id);
+    if (!instance) return;
+
+    // Update inner mesh rotation
+    if (instance.mesh.children[0]) {
+      instance.mesh.children[0].rotation.y = THREE.MathUtils.degToRad(rotation);
+    }
   }
 
   /**
@@ -279,11 +419,21 @@ export class EditorObjects {
     this.group.remove(instance.selectionRing);
     this.group.remove(instance.label);
 
-    (instance.mesh.geometry as THREE.BufferGeometry).dispose();
-    (instance.mesh.material as THREE.Material).dispose();
-    (instance.hitMesh.geometry as THREE.BufferGeometry).dispose();
+    // Dispose meshes
+    instance.mesh.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.geometry?.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach((m) => m.dispose());
+        } else if (child.material) {
+          child.material.dispose();
+        }
+      }
+    });
+
+    instance.hitMesh.geometry.dispose();
     (instance.hitMesh.material as THREE.Material).dispose();
-    (instance.selectionRing.geometry as THREE.BufferGeometry).dispose();
+    instance.selectionRing.geometry.dispose();
     (instance.selectionRing.material as THREE.Material).dispose();
 
     this.objects.delete(id);
@@ -300,7 +450,15 @@ export class EditorObjects {
       if (instance) {
         (instance.selectionRing.material as THREE.MeshBasicMaterial).opacity = 0;
         instance.selectionRing.visible = false;
-        (instance.mesh.material as THREE.MeshLambertMaterial).emissive?.setHex(0x000000);
+
+        // Remove emissive highlight from model
+        instance.mesh.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+            child.material.emissive?.setHex(0x000000);
+          } else if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshLambertMaterial) {
+            child.material.emissive?.setHex(0x000000);
+          }
+        });
       }
     }
 
@@ -312,24 +470,29 @@ export class EditorObjects {
         (instance.selectionRing.material as THREE.MeshBasicMaterial).opacity = 0.8;
         (instance.selectionRing.material as THREE.MeshBasicMaterial).color.setHex(0x00ffff);
         instance.selectionRing.visible = true;
-        (instance.mesh.material as THREE.MeshLambertMaterial).emissive?.setHex(0x222222);
+
+        // Add emissive highlight to model
+        instance.mesh.traverse((child) => {
+          if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
+            child.material.emissive?.setHex(0x222222);
+          } else if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshLambertMaterial) {
+            child.material.emissive?.setHex(0x222222);
+          }
+        });
       }
     }
   }
 
   /**
    * Find object at screen position via raycasting
-   * Uses hitMesh for selection, sorted by distance to pick closest object
    */
   public findObjectAt(raycaster: THREE.Raycaster): string | null {
-    // Use hitMesh for easier selection
     const hitMeshes = Array.from(this.objects.values())
       .filter((o) => o.mesh.visible)
       .map((o) => o.hitMesh);
     const intersects = raycaster.intersectObjects(hitMeshes);
 
     if (intersects.length > 0) {
-      // Intersects are already sorted by distance, pick the closest one
       for (const intersect of intersects) {
         for (const [id, instance] of this.objects) {
           if (instance.hitMesh === intersect.object) {
@@ -361,10 +524,9 @@ export class EditorObjects {
   }
 
   /**
-   * Create a text label sprite with high-resolution text
+   * Create a text label sprite
    */
   private createLabel(text: string, icon: string): THREE.Sprite {
-    // Use higher resolution for crisp text (2x scale)
     const scale = 2;
     const baseWidth = 256;
     const baseHeight = 80;
@@ -374,10 +536,9 @@ export class EditorObjects {
     canvas.width = baseWidth * scale;
     canvas.height = baseHeight * scale;
 
-    // Scale context for high-DPI rendering
     ctx.scale(scale, scale);
 
-    // Background with rounded corners
+    // Background
     ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
     ctx.beginPath();
     ctx.roundRect(4, 4, baseWidth - 8, baseHeight - 8, 10);
@@ -390,7 +551,7 @@ export class EditorObjects {
     ctx.fillStyle = '#ffffff';
     ctx.fillText(icon, 36, baseHeight / 2);
 
-    // Full text (truncated if needed)
+    // Text
     ctx.font = 'bold 24px sans-serif';
     ctx.textAlign = 'left';
     const displayText = text.length > 14 ? text.substring(0, 13) + '…' : text;
@@ -408,7 +569,7 @@ export class EditorObjects {
     });
 
     const sprite = new THREE.Sprite(material);
-    sprite.scale.set(8, 2.5, 1); // Larger, readable size
+    sprite.scale.set(8, 2.5, 1);
 
     return sprite;
   }

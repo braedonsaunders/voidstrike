@@ -317,14 +317,17 @@ export function Editor3DCanvas({
     objectsRef.current?.setSelection(selectedObjects);
   }, [isInitialized, selectedObjects]);
 
-  // Update object properties (like scale) when they change
+  // Update object properties (scale, rotation) when they change
   useEffect(() => {
     if (!isInitialized || !mapData) return;
 
-    // Update scale for all objects that have it
+    // Update properties for all objects that have them
     for (const obj of mapData.objects) {
       if (obj.properties?.scale !== undefined) {
         objectsRef.current?.updateObjectScale(obj.id, obj.properties.scale as number);
+      }
+      if (obj.properties?.rotation !== undefined) {
+        objectsRef.current?.updateObjectRotation(obj.id, obj.properties.rotation as number);
       }
     }
   }, [isInitialized, mapData?.objects]);
