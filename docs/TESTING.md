@@ -90,7 +90,12 @@ npm run test:coverage # With coverage report
 | `tests/data/aiConfig.test.ts` | 38 | Active |
 | `tests/data/movementConfig.test.ts` | 45 | Active |
 | `tests/data/techTree.test.ts` | 34 | Active |
-| **Total** | **1132** | |
+| `tests/data/pathfindingConfig.test.ts` | 52 | Active |
+| `tests/data/buildOrders.test.ts` | 55 | Active |
+| `tests/data/audioConfig.test.ts` | 18 | Active |
+| `tests/data/renderingConfig.test.ts` | 63 | Active |
+| `tests/data/collisionConfig.test.ts` | 54 | Active |
+| **Total** | **1374** | |
 
 ---
 
@@ -185,6 +190,11 @@ npm run test:coverage # With coverage report
 - [x] **aiConfig.ts** - AI condition evaluation, macro rules, utility scoring (38 tests)
 - [x] **movementConfig.ts** - Movement constants, steering behaviors, configuration objects (45 tests)
 - [x] **techTree.ts** - Tech categories, upgrade chains, effect formatting (34 tests)
+- [x] **pathfindingConfig.ts** - Pathfinding constants, ramp validation, elevation conversion (52 tests)
+- [x] **buildOrders.ts** - AI difficulty config, build orders, unit compositions (55 tests)
+- [x] **audioConfig.ts** - Voiceline cooldowns, command debounce (18 tests)
+- [x] **renderingConfig.ts** - Camera, unit, building, terrain, battle effects config (63 tests)
+- [x] **collisionConfig.ts** - Separation, physics, building avoidance, stuck detection (54 tests)
 
 ### Priority 10: Building Systems
 
