@@ -708,13 +708,21 @@ describe('DefinitionValidator', () => {
         research1: {
           id: 'research1',
           name: 'Research 1',
+          description: 'Test research 1',
           faction: 'test',
+          mineralCost: 100,
+          vespeneCost: 100,
+          researchTime: 60,
           effects: [{ type: 'damage_bonus', value: 1, targets: ['unit1'] }],
         } as ResearchDefinition,
         research2: {
           id: 'research2',
           name: 'Research 2',
+          description: 'Test research 2',
           faction: 'test',
+          mineralCost: 100,
+          vespeneCost: 100,
+          researchTime: 60,
           requirements: ['building1', 'research1'],
           nextLevel: 'research3',
           effects: [],
@@ -722,7 +730,11 @@ describe('DefinitionValidator', () => {
         research3: {
           id: 'research3',
           name: 'Research 3',
+          description: 'Test research 3',
           faction: 'test',
+          mineralCost: 100,
+          vespeneCost: 100,
+          researchTime: 60,
           effects: [],
         } as ResearchDefinition,
       };
