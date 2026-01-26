@@ -1331,20 +1331,24 @@ export class PeerRelayNetwork extends EventEmitter {
 ## Implementation Phases (Updated)
 
 ### Phase 1: Connection Codes
-**Status**: Ready to implement
+**Status**: Complete
 **Reliability**: 100%
 **Dependencies**: `pako` (compression, ~30KB)
+**Implementation**: `src/networking/ConnectionCode.ts`
 
 ```
 Tasks:
-- [ ] SDP offer compression with pako
-- [ ] Base32-like encoding with friendly alphabet
-- [ ] Connection code generation (VOID-XXXX format)
-- [ ] Connection code parsing and validation
-- [ ] Two-way code exchange UI
+- [x] SDP offer compression with pako
+- [x] Base32-like encoding with friendly alphabet
+- [x] Connection code generation (VOID-XXXX format)
+- [x] Connection code parsing and validation
+- [x] Code expiration (5 minutes)
+- [ ] Two-way code exchange UI (superseded by Nostr short codes)
 - [ ] QR code generation (optional, nice-to-have)
-- [ ] Code expiration (5 minutes)
 ```
+
+Note: Primary connection flow uses Nostr-based short codes. ConnectionCode.ts
+provides fallback/offline capability.
 
 ### Phase 2: LAN Discovery (mDNS)
 **Status**: Requires Electron/Tauri

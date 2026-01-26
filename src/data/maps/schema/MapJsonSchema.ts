@@ -109,8 +109,8 @@ export interface RampJson {
   width: number;
   height: number;
   direction: 'north' | 'south' | 'east' | 'west';
-  fromElevation: 0 | 1 | 2;
-  toElevation: 0 | 1 | 2;
+  fromElevation: number;  // 0-255 scale
+  toElevation: number;    // 0-255 scale
 }
 
 /**

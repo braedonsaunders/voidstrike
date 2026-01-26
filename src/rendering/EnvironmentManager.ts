@@ -2,15 +2,11 @@ import * as THREE from 'three';
 import { MapData } from '@/data/maps';
 import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
-import { CrystalField } from './GroundDetail';
 import { TSLMapBorderFog } from './tsl/MapBorderFog';
 import { WaterMesh, type WaterQuality } from './WaterMesh';
 import { EnvironmentParticles } from './EnhancedDecorations';
-// PERFORMANCE: Use instanced decorations instead of individual meshes
-import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles, updateDecorationFrustum } from './InstancedDecorations';
-// AAA-quality decoration light pooling, frustum culling, and distance falloff
+import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles, InstancedCrystals, updateDecorationFrustum } from './InstancedDecorations';
 import { DecorationLightManager } from './DecorationLightManager';
-// Centralized emissive decoration management with animation support
 import { EmissiveDecorationManager } from './EmissiveDecorationManager';
 import { LightPool } from './LightPool';
 import {
@@ -39,12 +35,12 @@ export class EnvironmentManager {
   private scene: THREE.Scene;
   private mapData: MapData;
 
-  // PERFORMANCE: Instanced decoration systems (single draw call per type)
+  // Instanced decoration systems (single draw call per type, frustum culled)
   private trees: InstancedTrees | null = null;
   private rocks: InstancedRocks | null = null;
   private grass: InstancedGrass | null = null;
   private pebbles: InstancedPebbles | null = null;
-  private crystals: CrystalField | null = null;
+  private crystals: InstancedCrystals | null = null;
   private waterMesh: WaterMesh | null = null;
   private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
@@ -198,57 +194,37 @@ export class EnvironmentManager {
   private createEnhancedDecorations(): void {
     const getHeightAt = this.terrain.getHeightAt.bind(this.terrain);
 
-    // Check if map has explicit decorations defined
-    const hasExplicitDecorations = this.mapData.decorations && this.mapData.decorations.length > 0;
+    // Instanced trees from explicit map data (frustum culled, single draw call per model)
+    this.trees = new InstancedTrees(this.mapData, this.biome, getHeightAt);
+    this.scene.add(this.trees.group);
 
-    // Only use instanced random decorations if no explicit decorations defined
-    if (!hasExplicitDecorations) {
-      // PERFORMANCE: Instanced trees - single draw call for all trees
-      if (this.biome.treeDensity > 0) {
-        this.trees = new InstancedTrees(this.mapData, this.biome, getHeightAt);
-        this.scene.add(this.trees.group);
-      }
+    // Instanced rocks from explicit map data (frustum culled, single draw call per model)
+    this.rocks = new InstancedRocks(this.mapData, this.biome, getHeightAt);
+    this.scene.add(this.rocks.group);
 
-      // PERFORMANCE: Instanced rocks - single draw call for all rocks
-      if (this.biome.rockDensity > 0) {
-        this.rocks = new InstancedRocks(this.mapData, this.biome, getHeightAt);
-        this.scene.add(this.rocks.group);
-      }
-    }
+    // Instanced crystals from explicit map data (frustum culled, emissive)
+    this.crystals = new InstancedCrystals(this.mapData, this.biome, getHeightAt);
+    this.scene.add(this.crystals.group);
 
-    // PERFORMANCE: Instanced grass - thousands of grass blades in one draw call
+    // Environmental ground detail (procedural - these are not map decorations)
     if (this.biome.grassDensity > 0) {
       this.grass = new InstancedGrass(this.mapData, this.biome, getHeightAt);
       this.scene.add(this.grass.group);
     }
-
-    // PERFORMANCE: Instanced pebbles - replaces old GroundDebris
     if (this.biome.grassDensity > 0 || this.biome.rockDensity > 0.1) {
       this.pebbles = new InstancedPebbles(this.mapData, this.biome, getHeightAt);
       this.scene.add(this.pebbles.group);
     }
 
-    // Crystals (for frozen/void biomes)
-    if (this.biome.crystalDensity > 0) {
-      this.crystals = new CrystalField(this.mapData, this.biome, getHeightAt);
-      this.scene.add(this.crystals.group);
-    }
-
-    // Water system - uses Three.js WaterMesh addon for realistic reflections
-    // Handles both full-map water (Ocean biome) and localized features (lakes, rivers)
+    // Water system - handles both full-map water (Ocean biome) and localized features
     this.waterMesh = new WaterMesh();
-
-    // Create full-map water plane for biomes with hasWater (Ocean, Volcanic lava)
     if (this.biome.hasWater) {
       this.waterMesh.buildFullMapWater(this.mapData, this.biome);
     }
-
-    // Add localized water surfaces from terrain features
     this.waterMesh.buildFromMapData(this.mapData);
     this.scene.add(this.waterMesh.group);
 
     // Map border fog - dark smoky effect around map edges
-    // Uses TSL for WebGPU/WebGL compatibility
     this.mapBorderFog = new TSLMapBorderFog(this.mapData);
     this.scene.add(this.mapBorderFog.mesh);
 
@@ -259,31 +235,27 @@ export class EnvironmentManager {
     }
 
     // AAA decoration light manager - pools lights for hundreds of emissive decorations
-    // This enables maps like Crystal Caverns (295 crystals) to run at 60+ fps
     this.decorationLightManager = new DecorationLightManager(this.scene, 50);
 
     // Emissive decoration manager with optional light attachment
-    // Uses separate light pool for permanent emissive lights (vs transient combat lights)
     this.emissiveLightPool = new LightPool(this.scene, 16);
     this.emissiveDecorationManager = new EmissiveDecorationManager(this.scene, this.emissiveLightPool);
 
-    // Register crystals with emissive decoration manager
-    // This enables centralized animation and intensity control
+    // Register crystals with emissive decoration manager for pulsing animation
     if (this.crystals) {
       const crystalMesh = this.crystals.getInstancedMesh();
       if (crystalMesh) {
-        // Get biome-specific emissive color for hints
-        let emissiveHex = '#204060'; // Default frozen
-        let pulseSpeed = 0.3; // Subtle pulse
+        let emissiveHex = '#204060';
+        let pulseSpeed = 0.3;
         let pulseAmplitude = 0.15;
 
         if (this.biome.name === 'Void') {
           emissiveHex = '#4020a0';
-          pulseSpeed = 0.5; // More ethereal pulsing
+          pulseSpeed = 0.5;
           pulseAmplitude = 0.25;
         } else if (this.biome.name === 'Volcanic') {
           emissiveHex = '#802010';
-          pulseSpeed = 0.8; // Rapid flickering
+          pulseSpeed = 0.8;
           pulseAmplitude = 0.3;
         }
 
@@ -296,9 +268,7 @@ export class EnvironmentManager {
       }
     }
 
-    // MapDecorations handles explicit map decorations, watch towers, and destructibles.
-    // Required even with instanced systems - InstancedTrees/Rocks only handle random procedural decorations.
-    // Pass scene and light manager to enable pooled lights for emissive decorations.
+    // MapDecorations handles watch towers and destructibles (non-instanced objects)
     this.legacyDecorations = new MapDecorations(this.mapData, this.terrain, this.scene, this.decorationLightManager);
     this.scene.add(this.legacyDecorations.group);
   }
@@ -340,11 +310,12 @@ export class EnvironmentManager {
       this.decorationLightManager.update(camera, deltaTime);
     }
 
-    // PERF: Update decoration frustum culling - only render visible instances
+    // PERF: Update instanced decoration frustum culling - only render visible instances
     if (camera) {
       updateDecorationFrustum(camera);
       this.trees?.update();
       this.rocks?.update();
+      this.crystals?.update();
       this.grass?.update();
       this.pebbles?.update();
     }
@@ -421,20 +392,12 @@ export class EnvironmentManager {
   public getRockCollisions(): Array<{ x: number; z: number; radius: number }> {
     const collisions: Array<{ x: number; z: number; radius: number }> = [];
 
-    // Get from instanced rocks (if no explicit decorations)
+    // Get from instanced decorations
     if (this.rocks) {
       collisions.push(...this.rocks.getRockCollisions());
     }
-
-    // Get from instanced trees (if no explicit decorations)
     if (this.trees) {
       collisions.push(...this.trees.getTreeCollisions());
-    }
-
-    // Get from legacy/explicit decorations (includes rocks and trees from map data)
-    if (this.legacyDecorations) {
-      collisions.push(...this.legacyDecorations.getRockCollisions());
-      collisions.push(...this.legacyDecorations.getTreeCollisions());
     }
 
     return collisions;
@@ -792,12 +755,15 @@ export class EnvironmentManager {
    * Dispose all resources
    */
   public dispose(): void {
-    this.terrain.dispose();
+    // Dispose instanced decorations
     this.trees?.dispose();
     this.rocks?.dispose();
+    this.crystals?.dispose();
     this.grass?.dispose();
     this.pebbles?.dispose();
-    this.crystals?.dispose();
+
+    // Dispose other resources
+    this.terrain.dispose();
     this.waterMesh?.dispose();
     this.mapBorderFog?.dispose();
     this.particles?.dispose();
@@ -806,6 +772,7 @@ export class EnvironmentManager {
     this.emissiveDecorationManager?.dispose();
     this.emissiveLightPool?.dispose();
 
+    // Remove from scene
     this.scene.remove(this.terrain.mesh);
     this.scene.remove(this.ambientLight);
     this.scene.remove(this.directionalLight);
@@ -819,11 +786,12 @@ export class EnvironmentManager {
       this.scene.environment = null;
     }
 
+    // Remove groups from scene
     if (this.trees) this.scene.remove(this.trees.group);
     if (this.rocks) this.scene.remove(this.rocks.group);
+    if (this.crystals) this.scene.remove(this.crystals.group);
     if (this.grass) this.scene.remove(this.grass.group);
     if (this.pebbles) this.scene.remove(this.pebbles.group);
-    if (this.crystals) this.scene.remove(this.crystals.group);
     if (this.waterMesh) this.scene.remove(this.waterMesh.group);
     if (this.mapBorderFog) this.scene.remove(this.mapBorderFog.mesh);
     if (this.particles) this.scene.remove(this.particles.points);

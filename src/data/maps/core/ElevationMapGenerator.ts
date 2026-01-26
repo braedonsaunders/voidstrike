@@ -630,18 +630,14 @@ function extractRamps(grid: GenerationGrid): Ramp[] {
             direction = topElev < bottomElev ? 'south' : 'north';
           }
 
-          // Convert elevation to legacy 0-2 levels
-          const fromLevel = minElev <= 85 ? 0 : minElev <= 170 ? 1 : 2;
-          const toLevel = maxElev <= 85 ? 0 : maxElev <= 170 ? 1 : 2;
-
           ramps.push({
             x: minX,
             y: minY,
             width,
             height,
             direction,
-            fromElevation: fromLevel as 0 | 1 | 2,
-            toElevation: toLevel as 0 | 1 | 2,
+            fromElevation: minElev,
+            toElevation: maxElev,
           });
         }
       }
@@ -1054,10 +1050,6 @@ export function generateMapWithResult(
     isRanked: true,
 
     biome,
-    skyboxColor: theme.skyboxColor,
-    ambientColor: theme.ambientColor,
-    sunColor: theme.sunColor,
-    fogColor: theme.fogColor,
     fogNear: theme.fogNear,
     fogFar: theme.fogFar,
   };

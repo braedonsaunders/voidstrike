@@ -166,8 +166,8 @@ export interface Ramp {
   width: number;
   height: number;
   direction: 'north' | 'south' | 'east' | 'west';
-  fromElevation: ElevationLevel;
-  toElevation: ElevationLevel;
+  fromElevation: Elevation;  // 0-255 scale
+  toElevation: Elevation;    // 0-255 scale
 }
 
 export interface DestructibleRock {
@@ -239,11 +239,7 @@ export interface MapData {
   // Special mode maps (e.g., battle simulator) - hidden from lobby selection
   isSpecialMode?: boolean;
 
-  // Legacy visual settings (deprecated - use biome instead)
-  skyboxColor?: string;
-  ambientColor?: string;
-  sunColor?: string;
-  fogColor?: string;
+  // Fog settings (optional - biome provides defaults)
   fogNear?: number;
   fogFar?: number;
 }
@@ -535,10 +531,6 @@ export function createRampInTerrain(
 ): void {
   const { x, y, width, height, direction, fromElevation, toElevation } = ramp;
 
-  // Convert legacy elevations to 256 scale
-  const fromElev256 = legacyElevationTo256(fromElevation);
-  const toElev256 = legacyElevationTo256(toElevation);
-
   for (let dy = 0; dy < height; dy++) {
     for (let dx = 0; dx < width; dx++) {
       const px = Math.floor(x + dx);
@@ -563,9 +555,8 @@ export function createRampInTerrain(
             break;
         }
 
-        // LINEAR interpolation for STRAIGHT ramps - no curves, just a clean slope
-        // This creates a straight line from top to bottom
-        const elevationValue = fromElev256 + (toElev256 - fromElev256) * t;
+        // Linear interpolation for straight ramps
+        const elevationValue = fromElevation + (toElevation - fromElevation) * t;
 
         grid[py][px] = {
           terrain: 'ramp',

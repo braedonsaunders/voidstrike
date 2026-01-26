@@ -178,8 +178,9 @@ export function jsonToMapData(json: MapJson): MapData {
       width: r.width,
       height: r.height,
       direction: r.direction,
-      fromElevation: r.fromElevation,
-      toElevation: r.toElevation,
+      // Backward compatibility: convert legacy 0|1|2 format to 256-scale
+      fromElevation: r.fromElevation <= 2 ? [60, 140, 220][r.fromElevation] : r.fromElevation,
+      toElevation: r.toElevation <= 2 ? [60, 140, 220][r.toElevation] : r.toElevation,
     })),
 
     destructibles: json.destructibles.map((d): DestructibleRock => ({

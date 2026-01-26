@@ -1681,12 +1681,9 @@ export class MapDecorations {
     this.createWatchTowers(mapData);
     this.createDestructibles(mapData);
 
-    // Use explicit decorations from map data if available, otherwise use procedural
+    // Create explicit decorations from map data (instanced decorations handle procedural)
     if (mapData.decorations && mapData.decorations.length > 0) {
       this.createExplicitDecorations(mapData);
-    } else {
-      this.createTrees(mapData);
-      this.createRocks(mapData);
     }
   }
 
@@ -2095,131 +2092,6 @@ export class MapDecorations {
 
         rockGroup.position.set(rock.x, terrainHeight, rock.y);
         this.group.add(rockGroup);
-      }
-    }
-  }
-
-  private createTrees(mapData: MapData): void {
-    // Scatter trees around the map edges and unbuildable areas
-    const treePositions: Array<{ x: number; y: number }> = [];
-
-    // Add trees along map edges (inside the playable area)
-    for (let i = 0; i < 50; i++) {
-      const edge = Math.floor(Math.random() * 4);
-      let x: number, y: number;
-
-      switch (edge) {
-        case 0: // Left
-          x = 10 + Math.random() * 8;
-          y = 15 + Math.random() * (mapData.height - 30);
-          break;
-        case 1: // Right
-          x = mapData.width - 18 + Math.random() * 8;
-          y = 15 + Math.random() * (mapData.height - 30);
-          break;
-        case 2: // Top
-          x = 15 + Math.random() * (mapData.width - 30);
-          y = 10 + Math.random() * 8;
-          break;
-        default: // Bottom
-          x = 15 + Math.random() * (mapData.width - 30);
-          y = mapData.height - 18 + Math.random() * 8;
-          break;
-      }
-
-      // Check terrain is suitable
-      const cellX = Math.floor(x);
-      const cellY = Math.floor(y);
-      if (cellX >= 0 && cellX < mapData.width && cellY >= 0 && cellY < mapData.height) {
-        const cell = mapData.terrain[cellY][cellX];
-        if (cell.terrain === 'ground' || cell.terrain === 'unbuildable') {
-          treePositions.push({ x, y });
-        }
-      }
-    }
-
-    // Create trees
-    for (const pos of treePositions) {
-      // Get terrain height at tree position
-      const terrainHeight = this.terrain.getHeightAt(pos.x, pos.y);
-
-      const treeGroup = new THREE.Group();
-      const height = 3 + Math.random() * 2;
-
-      // Trunk
-      const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, height * 0.4, 6);
-      const trunkMaterial = new THREE.MeshStandardMaterial({
-        color: 0x4a3520,
-        roughness: 0.9,
-      });
-      const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-      trunk.position.y = height * 0.2;
-      // PERF: Decorations receive shadows but don't cast
-      trunk.castShadow = false;
-      trunk.receiveShadow = true;
-      treeGroup.add(trunk);
-
-      // Foliage (multiple cones for pine tree look)
-      const foliageMaterial = new THREE.MeshStandardMaterial({
-        color: 0x2d5a2d,
-        roughness: 0.8,
-      });
-
-      for (let layer = 0; layer < 3; layer++) {
-        const layerHeight = height * 0.25;
-        const layerRadius = 1.2 - layer * 0.3;
-        const foliageGeometry = new THREE.ConeGeometry(layerRadius, layerHeight, 8);
-        const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
-        foliage.position.y = height * 0.4 + layer * layerHeight * 0.7;
-        // PERF: Decorations receive shadows but don't cast
-        foliage.castShadow = false;
-        foliage.receiveShadow = true;
-        treeGroup.add(foliage);
-      }
-
-      treeGroup.position.set(pos.x, terrainHeight, pos.y);
-      treeGroup.rotation.y = Math.random() * Math.PI * 2;
-      const treeScale = 0.8 + Math.random() * 0.4;
-      treeGroup.scale.setScalar(treeScale);
-      this.group.add(treeGroup);
-
-      // Track tree collision for pathfinding - trunk collision radius scaled by tree size
-      const collisionRadius = treeScale * 0.6;
-      this.treeCollisions.push({ x: pos.x, z: pos.y, radius: collisionRadius });
-    }
-  }
-
-  private createRocks(mapData: MapData): void {
-    // Scatter small rocks around the map
-    for (let i = 0; i < 80; i++) {
-      const x = 12 + Math.random() * (mapData.width - 24);
-      const y = 12 + Math.random() * (mapData.height - 24);
-
-      const cellX = Math.floor(x);
-      const cellY = Math.floor(y);
-      if (cellX >= 0 && cellX < mapData.width && cellY >= 0 && cellY < mapData.height) {
-        const cell = mapData.terrain[cellY][cellX];
-        if (cell.terrain === 'ground' || cell.terrain === 'unbuildable') {
-          // Get terrain height at rock position
-          const terrainHeight = this.terrain.getHeightAt(x, y);
-
-          const rockGeometry = new THREE.DodecahedronGeometry(0.3 + Math.random() * 0.4);
-          const rockMaterial = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(0.3 + Math.random() * 0.1, 0.28 + Math.random() * 0.1, 0.25 + Math.random() * 0.1),
-            roughness: 0.9,
-          });
-          const rock = new THREE.Mesh(rockGeometry, rockMaterial);
-          rock.position.set(x, terrainHeight + 0.15 + Math.random() * 0.1, y);
-          rock.rotation.set(
-            Math.random() * Math.PI,
-            Math.random() * Math.PI,
-            Math.random() * Math.PI
-          );
-          // PERF: Decorations receive shadows but don't cast
-          rock.castShadow = false;
-          rock.receiveShadow = true;
-          this.group.add(rock);
-        }
       }
     }
   }
