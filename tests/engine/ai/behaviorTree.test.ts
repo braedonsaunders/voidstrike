@@ -555,7 +555,7 @@ describe('Action Nodes', () => {
 
     it('sets computed value', () => {
       const blackboard = new Blackboard();
-      const sb = setBlackboard('test', 'key', (ctx) => ctx.entityId * 10);
+      const sb = setBlackboard('test', 'key', (ctx: BehaviorContext) => ctx.entityId * 10);
 
       sb(createMockContext({ blackboard, entityId: 5 }));
 
