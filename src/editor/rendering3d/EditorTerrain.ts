@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import type { EditorMapData, EditorCell } from '../config/EditorConfig';
 import { CliffMesh } from './CliffMesh';
 import { GuardrailMesh } from './GuardrailMesh';
-import { WaterMesh } from '@/rendering/WaterMesh';
+import { EditorWater } from './EditorWater';
 import { clamp } from '@/utils/math';
 
 // Height scale factor (matches game terrain)
@@ -70,7 +70,7 @@ export class EditorTerrain {
   // Platform terrain rendering
   private cliffMesh: CliffMesh;
   private guardrailMesh: GuardrailMesh;
-  private waterMesh: WaterMesh;
+  private waterMesh: EditorWater;
   private showGuardrails: boolean = true;
 
   private cellSize: number;
@@ -117,7 +117,7 @@ export class EditorTerrain {
     // Create platform terrain meshes (cliff faces and guardrails)
     this.cliffMesh = new CliffMesh({ cellSize: this.cellSize });
     this.guardrailMesh = new GuardrailMesh({ cellSize: this.cellSize });
-    this.waterMesh = new WaterMesh();
+    this.waterMesh = new EditorWater();
 
     // Add as children (inherits rotation)
     this.mesh.add(this.cliffMesh.mesh);
@@ -125,7 +125,7 @@ export class EditorTerrain {
     this.mesh.add(this.waterMesh.group);
 
     // Counter-rotate water mesh to cancel parent terrain rotation.
-    // WaterMesh creates geometry in world space (Y = height), but as a child of
+    // EditorWater creates geometry in world space (Y = height), but as a child of
     // the terrain mesh (rotated -90 around X), it needs compensation.
     this.waterMesh.group.rotation.x = Math.PI / 2;
   }

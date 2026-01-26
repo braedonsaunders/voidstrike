@@ -278,12 +278,12 @@ export class EditorObjects {
     const modelInstance = this.modelsInitialized ? EditorModelLoader.getModelInstance(obj.type) : null;
 
     if (modelInstance) {
-      // Use real model
+      // Use real model - already normalized and grounded (bottom at y=0)
       mesh = new THREE.Group();
       mesh.add(modelInstance);
       isRealModel = true;
 
-      // Get model height from bounding box
+      // Get model height from bounding box (after normalization, min.y=0 and max.y=height)
       const box = new THREE.Box3().setFromObject(modelInstance);
       visualHeight = box.max.y - box.min.y;
     } else {
@@ -307,11 +307,14 @@ export class EditorObjects {
     }
 
     // Position the mesh
-    mesh.position.set(obj.x, terrainHeight + (visualHeight * scale) / 2, obj.y);
+    // Real models are grounded (bottom at y=0), so position at terrainHeight directly
+    // Placeholder geometries are centered, so need to add height/2
+    const yOffset = isRealModel ? 0 : (visualHeight * scale) / 2;
+    mesh.position.set(obj.x, terrainHeight + yOffset, obj.y);
 
-    // Create hit mesh for easier selection
+    // Create hit mesh for easier selection (always centered for raycast)
     const hitSize = Math.max(2, radius * 0.5);
-    const hitGeometry = new THREE.CylinderGeometry(hitSize, hitSize, visualHeight * 1.5, 8);
+    const hitGeometry = new THREE.CylinderGeometry(hitSize, hitSize, visualHeight * scale * 1.5, 8);
     const hitMaterial = new THREE.MeshBasicMaterial({ visible: false });
     const hitMesh = new THREE.Mesh(hitGeometry, hitMaterial);
     hitMesh.position.set(obj.x, terrainHeight + (visualHeight * scale) / 2, obj.y);
@@ -328,7 +331,7 @@ export class EditorObjects {
     selectionRing.rotation.x = -Math.PI / 2;
     selectionRing.position.set(obj.x, terrainHeight + 0.1, obj.y);
 
-    // Create label sprite
+    // Create label sprite (above the model)
     const label = this.createLabel(objType?.name || obj.type, objType?.icon || '●');
     label.position.set(obj.x, terrainHeight + visualHeight * scale + 2.5, obj.y);
 
@@ -367,13 +370,24 @@ export class EditorObjects {
 
     const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(x, y) : 0;
     const scale = instance.mesh.children[0]?.scale.x || 1;
-    const visual = OBJECT_VISUALS[instance.type] || { height: 2 };
-    const height = instance.isRealModel ? 3 : visual.height;
 
-    instance.mesh.position.set(x, terrainHeight + (height * scale) / 2, y);
-    instance.hitMesh.position.set(x, terrainHeight + (height * scale) / 2, y);
+    // Get visual height - for real models compute from bounding box, for placeholders use config
+    let visualHeight = 2;
+    if (instance.isRealModel && instance.mesh.children[0]) {
+      const box = new THREE.Box3().setFromObject(instance.mesh.children[0]);
+      visualHeight = (box.max.y - box.min.y) / scale; // Divide by scale to get base height
+    } else {
+      const visual = OBJECT_VISUALS[instance.type] || { height: 2 };
+      visualHeight = visual.height;
+    }
+
+    // Real models are grounded, placeholders are centered
+    const yOffset = instance.isRealModel ? 0 : (visualHeight * scale) / 2;
+
+    instance.mesh.position.set(x, terrainHeight + yOffset, y);
+    instance.hitMesh.position.set(x, terrainHeight + (visualHeight * scale) / 2, y);
     instance.selectionRing.position.set(x, terrainHeight + 0.1, y);
-    instance.label.position.set(x, terrainHeight + height * scale + 2.5, y);
+    instance.label.position.set(x, terrainHeight + visualHeight * scale + 2.5, y);
   }
 
   /**
@@ -383,21 +397,32 @@ export class EditorObjects {
     const instance = this.objects.get(id);
     if (!instance) return;
 
-    const visual = OBJECT_VISUALS[instance.type] || { height: 2 };
-    const height = instance.isRealModel ? 3 : visual.height;
     const x = instance.mesh.position.x;
     const z = instance.mesh.position.z;
     const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(x, z) : 0;
 
-    // Update inner mesh scale
+    // Update inner mesh scale first
     if (instance.mesh.children[0]) {
       instance.mesh.children[0].scale.setScalar(scale);
     }
 
+    // Get visual height - for real models compute from bounding box, for placeholders use config
+    let visualHeight = 2;
+    if (instance.isRealModel && instance.mesh.children[0]) {
+      const box = new THREE.Box3().setFromObject(instance.mesh.children[0]);
+      visualHeight = (box.max.y - box.min.y) / scale; // Divide by scale to get base height
+    } else {
+      const visual = OBJECT_VISUALS[instance.type] || { height: 2 };
+      visualHeight = visual.height;
+    }
+
+    // Real models are grounded, placeholders are centered
+    const yOffset = instance.isRealModel ? 0 : (visualHeight * scale) / 2;
+
     // Update positions
-    instance.mesh.position.y = terrainHeight + (height * scale) / 2;
-    instance.hitMesh.position.y = terrainHeight + (height * scale) / 2;
-    instance.label.position.y = terrainHeight + height * scale + 2.5;
+    instance.mesh.position.y = terrainHeight + yOffset;
+    instance.hitMesh.position.y = terrainHeight + (visualHeight * scale) / 2;
+    instance.label.position.y = terrainHeight + visualHeight * scale + 2.5;
   }
 
   /**
