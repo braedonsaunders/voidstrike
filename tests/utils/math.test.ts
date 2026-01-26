@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, expect } from 'vitest';
 import {
   clamp,
   lerp,
@@ -16,44 +15,44 @@ import {
 
 describe('math utilities', () => {
   it('clamps values within bounds', () => {
-    assert.strictEqual(clamp(5, 0, 10), 5);
-    assert.strictEqual(clamp(-2, 0, 10), 0);
-    assert.strictEqual(clamp(20, 0, 10), 10);
+    expect(clamp(5, 0, 10)).toBe(5);
+    expect(clamp(-2, 0, 10)).toBe(0);
+    expect(clamp(20, 0, 10)).toBe(10);
   });
 
   it('interpolates linearly', () => {
-    assert.strictEqual(lerp(0, 10, 0), 0);
-    assert.strictEqual(lerp(0, 10, 1), 10);
-    assert.strictEqual(lerp(0, 10, 0.5), 5);
+    expect(lerp(0, 10, 0)).toBe(0);
+    expect(lerp(0, 10, 1)).toBe(10);
+    expect(lerp(0, 10, 0.5)).toBe(5);
   });
 
   it('computes distances consistently', () => {
-    assert.strictEqual(distance(0, 0, 3, 4), 5);
-    assert.strictEqual(distanceSquared(0, 0, 3, 4), 25);
-    assert.strictEqual(distanceXY({ x: 0, y: 0 }, { x: 3, y: 4 }), 5);
-    assert.strictEqual(distanceSquaredXY({ x: 0, y: 0 }, { x: 3, y: 4 }), 25);
+    expect(distance(0, 0, 3, 4)).toBe(5);
+    expect(distanceSquared(0, 0, 3, 4)).toBe(25);
+    expect(distanceXY({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5);
+    expect(distanceSquaredXY({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(25);
   });
 
   it('normalizes vectors', () => {
     const normalized = normalize(3, 4);
-    assert.ok(Math.abs(normalized.x - 0.6) < 0.0001);
-    assert.ok(Math.abs(normalized.y - 0.8) < 0.0001);
+    expect(Math.abs(normalized.x - 0.6)).toBeLessThan(0.0001);
+    expect(Math.abs(normalized.y - 0.8)).toBeLessThan(0.0001);
 
     const zero = normalize(0, 0);
-    assert.deepStrictEqual(zero, { x: 0, y: 0 });
+    expect(zero).toEqual({ x: 0, y: 0 });
   });
 
   it('computes angles', () => {
-    assert.strictEqual(angle(0, 0, 1, 0), 0);
-    assert.strictEqual(angle(0, 0, 0, 1), Math.PI / 2);
+    expect(angle(0, 0, 1, 0)).toBe(0);
+    expect(angle(0, 0, 0, 1)).toBe(Math.PI / 2);
   });
 
   it('uses Math.random for non-deterministic helpers', () => {
     const originalRandom = Math.random;
     Math.random = () => 0.5;
 
-    assert.strictEqual(randomRange(0, 10), 5);
-    assert.strictEqual(randomInt(0, 9), 5);
+    expect(randomRange(0, 10)).toBe(5);
+    expect(randomInt(0, 9)).toBe(5);
 
     Math.random = originalRandom;
   });
@@ -62,12 +61,12 @@ describe('math utilities', () => {
     const rngA = new SeededRandom(42);
     const rngB = new SeededRandom(42);
 
-    assert.strictEqual(rngA.next(), rngB.next());
-    assert.strictEqual(rngA.nextRange(0, 10), rngB.nextRange(0, 10));
-    assert.strictEqual(rngA.nextInt(1, 5), rngB.nextInt(1, 5));
+    expect(rngA.next()).toBe(rngB.next());
+    expect(rngA.nextRange(0, 10)).toBe(rngB.nextRange(0, 10));
+    expect(rngA.nextInt(1, 5)).toBe(rngB.nextInt(1, 5));
 
     rngA.reseed(99);
     rngB.reseed(99);
-    assert.strictEqual(rngA.next(), rngB.next());
+    expect(rngA.next()).toBe(rngB.next());
   });
 });

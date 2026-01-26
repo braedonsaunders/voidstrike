@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, expect } from 'vitest';
 import { EventBus } from '@/engine/core/EventBus';
 
 describe('EventBus', () => {
@@ -11,7 +10,7 @@ describe('EventBus', () => {
     bus.emit('tick', 3);
     bus.emit('tick', 7);
 
-    assert.deepStrictEqual(payloads, [3, 7]);
+    expect(payloads).toEqual([3, 7]);
   });
 
   it('supports once listeners', () => {
@@ -25,7 +24,7 @@ describe('EventBus', () => {
     bus.emit('ready');
     bus.emit('ready');
 
-    assert.strictEqual(calls, 1);
+    expect(calls).toBe(1);
   });
 
   it('unsubscribes listeners and clears events', () => {
@@ -40,16 +39,16 @@ describe('EventBus', () => {
     unsubscribe();
     bus.emit('event');
 
-    assert.strictEqual(calls, 1);
-    assert.strictEqual(bus.hasListeners('event'), false);
+    expect(calls).toBe(1);
+    expect(bus.hasListeners('event')).toBe(false);
 
     bus.on('event', () => {
       calls += 1;
     });
-    assert.strictEqual(bus.listenerCount('event'), 1);
+    expect(bus.listenerCount('event')).toBe(1);
 
     bus.clear('event');
-    assert.strictEqual(bus.listenerCount('event'), 0);
+    expect(bus.listenerCount('event')).toBe(0);
   });
 
   it('handles unsubscribe during emit without skipping remaining listeners', () => {
@@ -73,7 +72,7 @@ describe('EventBus', () => {
 
     bus.emit('swap');
 
-    assert.deepStrictEqual(calls, ['first', 'third']);
+    expect(calls).toEqual(['first', 'third']);
   });
 
   it('emits error summaries when handlers throw', () => {
@@ -94,8 +93,8 @@ describe('EventBus', () => {
 
     bus.emit('faulty');
 
-    assert.strictEqual(errors.length, 1);
-    assert.strictEqual(errors[0].event, 'faulty');
-    assert.strictEqual(errors[0].errorCount, 2);
+    expect(errors.length).toBe(1);
+    expect(errors[0].event).toBe('faulty');
+    expect(errors[0].errorCount).toBe(2);
   });
 });

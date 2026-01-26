@@ -1,5 +1,4 @@
-import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, expect } from 'vitest';
 import {
   EntityIdAllocator,
   INVALID_ENTITY_ID,
@@ -14,20 +13,20 @@ import {
 describe('EntityId utilities', () => {
   it('packs and unpacks entity ids', () => {
     const id = packEntityId(42, 7);
-    assert.strictEqual(getEntityIndex(id), 42);
-    assert.strictEqual(getEntityGeneration(id), 7);
+    expect(getEntityIndex(id)).toBe(42);
+    expect(getEntityGeneration(id)).toBe(7);
   });
 
   it('reserves invalid entity id sentinel', () => {
-    assert.ok(isInvalidEntityId(INVALID_ENTITY_ID));
-    assert.strictEqual(getEntityIndex(INVALID_ENTITY_ID), 0);
-    assert.strictEqual(getEntityGeneration(INVALID_ENTITY_ID), 0);
+    expect(isInvalidEntityId(INVALID_ENTITY_ID)).toBe(true);
+    expect(getEntityIndex(INVALID_ENTITY_ID)).toBe(0);
+    expect(getEntityGeneration(INVALID_ENTITY_ID)).toBe(0);
   });
 
   it('masks indices and generations to allowed ranges', () => {
     const id = packEntityId(MAX_ENTITY_INDEX + 10, MAX_GENERATION + 5);
-    assert.strictEqual(getEntityIndex(id), MAX_ENTITY_INDEX + 10 & MAX_ENTITY_INDEX);
-    assert.strictEqual(getEntityGeneration(id), (MAX_GENERATION + 5) & MAX_GENERATION);
+    expect(getEntityIndex(id)).toBe(MAX_ENTITY_INDEX + 10 & MAX_ENTITY_INDEX);
+    expect(getEntityGeneration(id)).toBe((MAX_GENERATION + 5) & MAX_GENERATION);
   });
 });
 
@@ -38,18 +37,18 @@ describe('EntityIdAllocator', () => {
     const first = allocator.allocate();
     const second = allocator.allocate();
 
-    assert.ok(allocator.isValid(first));
-    assert.ok(allocator.isValid(second));
-    assert.strictEqual(allocator.getAllocatedCount(), 2);
+    expect(allocator.isValid(first)).toBe(true);
+    expect(allocator.isValid(second)).toBe(true);
+    expect(allocator.getAllocatedCount()).toBe(2);
 
     allocator.free(first);
 
-    assert.strictEqual(allocator.isValid(first), false);
-    assert.strictEqual(allocator.getFreeCount(), 1);
+    expect(allocator.isValid(first)).toBe(false);
+    expect(allocator.getFreeCount()).toBe(1);
 
     const recycled = allocator.allocate();
-    assert.strictEqual(getEntityIndex(recycled), getEntityIndex(first));
-    assert.ok(getEntityGeneration(recycled) > getEntityGeneration(first));
+    expect(getEntityIndex(recycled)).toBe(getEntityIndex(first));
+    expect(getEntityGeneration(recycled)).toBeGreaterThan(getEntityGeneration(first));
   });
 
   it('returns invalid id when capacity exceeded', () => {
@@ -59,9 +58,9 @@ describe('EntityIdAllocator', () => {
     const second = allocator.allocate();
     const third = allocator.allocate();
 
-    assert.ok(!isInvalidEntityId(first));
-    assert.ok(isInvalidEntityId(second));
-    assert.ok(isInvalidEntityId(third));
+    expect(isInvalidEntityId(first)).toBe(false);
+    expect(isInvalidEntityId(second)).toBe(true);
+    expect(isInvalidEntityId(third)).toBe(true);
   });
 
   it('resets allocator state on clear', () => {
@@ -71,8 +70,8 @@ describe('EntityIdAllocator', () => {
 
     allocator.clear();
 
-    assert.strictEqual(allocator.getAllocatedCount(), 0);
-    assert.strictEqual(allocator.getFreeCount(), 0);
-    assert.strictEqual(allocator.getStats().highWaterMark, 0);
+    expect(allocator.getAllocatedCount()).toBe(0);
+    expect(allocator.getFreeCount()).toBe(0);
+    expect(allocator.getStats().highWaterMark).toBe(0);
   });
 });
