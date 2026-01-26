@@ -3,6 +3,7 @@
  *
  * Loads real 3D models for decorations and objects in the editor,
  * replacing placeholder geometries with actual game assets.
+ * Uses the same scale values as assets.json for consistency.
  */
 
 import * as THREE from 'three';
@@ -12,71 +13,102 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 // Model configuration mapping decoration IDs to model paths and settings
 export interface ModelConfig {
   path: string;
-  scale: number;
+  scale: number; // Target height in game units (matches assets.json)
   rotationY?: number; // Base rotation offset in degrees
 }
 
 // Maps editor object type IDs to their model configurations
+// Scale values match assets.json for consistency with game rendering
 const MODEL_CONFIGS: Record<string, ModelConfig> = {
-  // Trees
+  // Trees - from assets.json decorations section
   decoration_tree_pine_tall: {
-    path: '/models/decorations/tree_pine_tall_LOD2.glb',
+    path: '/models/decorations/tree_pine_tall_LOD0.glb',
     scale: 14.0,
     rotationY: -90,
   },
   decoration_tree_pine_medium: {
-    path: '/models/decorations/tree_pine_tall_LOD2.glb',
+    path: '/models/decorations/tree_pine_tall_LOD0.glb',
     scale: 10.0,
     rotationY: -90,
   },
   decoration_tree_dead: {
-    path: '/models/decorations/tree_dead_LOD2.glb',
+    path: '/models/decorations/tree_dead_LOD0.glb',
     scale: 9.0,
     rotationY: -90,
   },
+  decoration_tree_alien: {
+    path: '/models/decorations/tree_alien_LOD0.glb',
+    scale: 11.0,
+    rotationY: -90,
+  },
+  decoration_tree_palm: {
+    path: '/models/decorations/tree_palm_LOD0.glb',
+    scale: 11.0,
+    rotationY: -90,
+  },
+  decoration_tree_mushroom: {
+    path: '/models/decorations/tree_mushroom_LOD0.glb',
+    scale: 8.0,
+    rotationY: -90,
+  },
 
-  // Rocks
+  // Rocks - from assets.json decorations section
   decoration_rocks_large: {
-    path: '/models/decorations/rocks_large_LOD2.glb',
+    path: '/models/decorations/rocks_large_LOD0.glb',
     scale: 3.0,
     rotationY: -90,
   },
   decoration_rocks_small: {
-    path: '/models/decorations/rocks_small_LOD2.glb',
+    path: '/models/decorations/rocks_small_LOD0.glb',
     scale: 2.0,
     rotationY: -90,
   },
+  decoration_rock_single: {
+    path: '/models/decorations/rock_single_LOD0.glb',
+    scale: 2.5,
+    rotationY: -90,
+  },
 
-  // Special decorations
+  // Special decorations - from assets.json decorations section
   decoration_crystal_formation: {
-    path: '/models/decorations/crystal_formation_LOD2.glb',
+    path: '/models/decorations/crystal_formation_LOD0.glb',
     scale: 4.0,
     rotationY: -90,
   },
   decoration_bush: {
-    path: '/models/decorations/shrub_LOD2.glb',
+    path: '/models/decorations/shrub_LOD0.glb',
     scale: 1.5,
     rotationY: -90,
   },
   decoration_ruined_wall: {
-    path: '/models/decorations/ruined_wall_LOD2.glb',
+    path: '/models/decorations/ruined_wall_LOD0.glb',
     scale: 5.0,
     rotationY: -90,
   },
+  decoration_alien_tower: {
+    path: '/models/decorations/alien_tower_LOD0.glb',
+    scale: 14.0,
+    rotationY: -90,
+  },
+  decoration_debris: {
+    path: '/models/decorations/debris_LOD0.glb',
+    scale: 1.5,
+    rotationY: -90,
+  },
 
-  // Objects (using decoration models as stand-ins)
+  // Game objects using decoration models
   watch_tower: {
-    path: '/models/decorations/alien_tower_LOD2.glb',
-    scale: 8.0,
+    path: '/models/decorations/alien_tower_LOD0.glb',
+    scale: 14.0,
     rotationY: -90,
   },
   destructible_rock: {
-    path: '/models/decorations/rock_single_LOD2.glb',
+    path: '/models/decorations/rock_single_LOD0.glb',
     scale: 2.5,
     rotationY: -90,
   },
   destructible_debris: {
-    path: '/models/decorations/debris_LOD2.glb',
+    path: '/models/decorations/debris_LOD0.glb',
     scale: 1.5,
     rotationY: -90,
   },
@@ -126,7 +158,7 @@ function normalizeModel(root: THREE.Object3D, targetScale: number, rotationY: nu
   // Update matrices after transform
   root.updateMatrixWorld(true);
 
-  // Recalculate bounds
+  // Recalculate bounds after scaling
   box.setFromObject(root);
 
   // Ground the model (set bottom at y=0)
@@ -161,7 +193,7 @@ async function loadModel(typeId: string): Promise<THREE.Object3D | null> {
       (gltf: GLTF) => {
         const model = gltf.scene;
 
-        // Normalize the model
+        // Normalize the model to target height
         normalizeModel(model, config.scale, config.rotationY);
 
         // Enable shadows and visibility

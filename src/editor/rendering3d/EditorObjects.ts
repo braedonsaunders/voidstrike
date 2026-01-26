@@ -25,15 +25,21 @@ const OBJECT_VISUALS: Record<
   destructible_debris: { color: 0x606060, height: 1.2, shape: 'sphere' },
   mineral_patch: { color: 0x4169e1, height: 0.8, shape: 'box' },
   vespene_geyser: { color: 0x32cd32, height: 1.2, shape: 'cylinder' },
-  // Decorations fallback
-  decoration_tree_pine_tall: { color: 0x2e7d32, height: 6, shape: 'cone' },
-  decoration_tree_pine_medium: { color: 0x388e3c, height: 4, shape: 'cone' },
-  decoration_tree_dead: { color: 0x5d4037, height: 4, shape: 'cone' },
-  decoration_rocks_large: { color: 0x757575, height: 2, shape: 'sphere' },
-  decoration_rocks_small: { color: 0x616161, height: 1, shape: 'sphere' },
-  decoration_crystal_formation: { color: 0x7c4dff, height: 3, shape: 'cone' },
-  decoration_bush: { color: 0x66bb6a, height: 1, shape: 'sphere' },
-  decoration_ruined_wall: { color: 0x8d6e63, height: 2, shape: 'box' },
+  // Decorations fallback (heights match base scale from assets.json)
+  decoration_tree_pine_tall: { color: 0x2e7d32, height: 14, shape: 'cone' },
+  decoration_tree_pine_medium: { color: 0x388e3c, height: 10, shape: 'cone' },
+  decoration_tree_dead: { color: 0x5d4037, height: 9, shape: 'cone' },
+  decoration_tree_alien: { color: 0x9c27b0, height: 11, shape: 'cone' },
+  decoration_tree_palm: { color: 0x4caf50, height: 11, shape: 'cone' },
+  decoration_tree_mushroom: { color: 0xe91e63, height: 8, shape: 'sphere' },
+  decoration_rocks_large: { color: 0x757575, height: 3, shape: 'sphere' },
+  decoration_rocks_small: { color: 0x616161, height: 2, shape: 'sphere' },
+  decoration_rock_single: { color: 0x78909c, height: 2.5, shape: 'sphere' },
+  decoration_crystal_formation: { color: 0x7c4dff, height: 4, shape: 'cone' },
+  decoration_bush: { color: 0x66bb6a, height: 1.5, shape: 'sphere' },
+  decoration_ruined_wall: { color: 0x8d6e63, height: 5, shape: 'box' },
+  decoration_alien_tower: { color: 0xff5722, height: 14, shape: 'cylinder' },
+  decoration_debris: { color: 0x546e7a, height: 1.5, shape: 'sphere' },
 };
 
 export interface EditorObjectInstance {
