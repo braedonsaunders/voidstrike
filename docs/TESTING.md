@@ -88,7 +88,9 @@ npm run test:coverage # With coverage report
 | `tests/data/resources.test.ts` | 45 | Active |
 | `tests/data/walls.test.ts` | 49 | Active |
 | `tests/data/aiConfig.test.ts` | 38 | Active |
-| **Total** | **1053** | |
+| `tests/data/movementConfig.test.ts` | 45 | Active |
+| `tests/data/techTree.test.ts` | 34 | Active |
+| **Total** | **1132** | |
 
 ---
 
@@ -181,6 +183,8 @@ npm run test:coverage # With coverage report
 - [x] **resources.ts** - Resource types, saturation, gather rates (45 tests)
 - [x] **walls.ts** - Wall definitions, line calculation, connection types (49 tests)
 - [x] **aiConfig.ts** - AI condition evaluation, macro rules, utility scoring (38 tests)
+- [x] **movementConfig.ts** - Movement constants, steering behaviors, configuration objects (45 tests)
+- [x] **techTree.ts** - Tech categories, upgrade chains, effect formatting (34 tests)
 
 ### Priority 10: Building Systems
 
