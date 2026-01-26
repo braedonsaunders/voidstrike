@@ -18,6 +18,7 @@ import * as THREE from 'three';
 import { WaterMesh as ThreeWaterMesh } from 'three/addons/objects/WaterMesh.js';
 import type { MapData, MapCell } from '@/data/maps/MapTypes';
 import type { BiomeConfig } from './Biomes';
+import { debugAssets } from '@/utils/debugLogger';
 
 // Height scale factor (matches Terrain.ts)
 const HEIGHT_SCALE = 0.04;
@@ -78,7 +79,7 @@ function loadWaterNormalsTexture(): void {
       texture.wrapS = THREE.RepeatWrapping;
       texture.wrapT = THREE.RepeatWrapping;
       waterNormalsTexture = texture;
-      console.log('Water normals texture loaded successfully');
+      debugAssets.log('Water normals texture loaded successfully');
     },
     undefined,
     (error) => {
