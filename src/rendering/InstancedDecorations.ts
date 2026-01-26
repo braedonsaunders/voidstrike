@@ -75,22 +75,27 @@ function extractGeometry(object: THREE.Object3D): THREE.BufferGeometry | null {
 
 /**
  * Extract material from a loaded model
- * Applies rendering hints from assets.json if available
+ * Returns a CLONE with rendering hints applied (doesn't modify original)
  */
 function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Material | null {
-  let material: THREE.Material | null = null;
+  let originalMaterial: THREE.Material | null = null;
   object.traverse((child) => {
-    if (child instanceof THREE.Mesh && child.material && !material) {
+    if (child instanceof THREE.Mesh && child.material && !originalMaterial) {
       if (Array.isArray(child.material)) {
-        material = child.material[0];
+        originalMaterial = child.material[0];
       } else {
-        material = child.material;
+        originalMaterial = child.material;
       }
     }
   });
 
+  if (!originalMaterial) return null;
+
+  // Clone the material to avoid modifying the original
+  const material = originalMaterial.clone();
+
   // Apply rendering hints for MeshStandardMaterial
-  if (material && (material as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+  if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
     const stdMaterial = material as THREE.MeshStandardMaterial;
     const hints = assetId ? AssetManager.getRenderingHints(assetId) : null;
 
@@ -222,13 +227,17 @@ export class InstancedTrees {
       if (!original) continue;
 
       const geometry = extractGeometry(original);
-      const material = extractMaterial(original, modelId);
-      if (!geometry || !material) continue;
+      if (!geometry) continue;
 
-      const instancedGeometry = geometry.clone();
-      const instancedMaterial = material.clone();
-      this.geometries.push(instancedGeometry);
-      this.materials.push(instancedMaterial);
+      // extractMaterial returns a clone, so we use it directly
+      const playableMaterial = extractMaterial(original, modelId);
+      const borderMaterial = extractMaterial(original, modelId);
+      if (!playableMaterial || !borderMaterial) continue;
+
+      const playableGeometry = geometry.clone();
+      const borderGeometry = geometry.clone();
+      this.geometries.push(playableGeometry, borderGeometry);
+      this.materials.push(playableMaterial, borderMaterial);
 
       const yOffset = AssetManager.getModelYOffset(modelId);
 
@@ -261,9 +270,9 @@ export class InstancedTrees {
         this.treeCollisions.push({ x: dec.x, z: dec.y, radius: collisionRadius });
       }
 
-      // Create instanced meshes
-      this.createInstancedMesh(instancedGeometry, instancedMaterial, playable, true);
-      this.createInstancedMesh(instancedGeometry.clone(), instancedMaterial.clone(), border, false);
+      // Create instanced meshes (extractMaterial already returns clones)
+      this.createInstancedMesh(playableGeometry, playableMaterial, playable, true);
+      this.createInstancedMesh(borderGeometry, borderMaterial, border, false);
     }
   }
 
@@ -393,13 +402,17 @@ export class InstancedRocks {
       if (!original) continue;
 
       const geometry = extractGeometry(original);
-      const material = extractMaterial(original, modelId);
-      if (!geometry || !material) continue;
+      if (!geometry) continue;
 
-      const instancedGeometry = geometry.clone();
-      const instancedMaterial = material.clone();
-      this.geometries.push(instancedGeometry);
-      this.materials.push(instancedMaterial);
+      // extractMaterial returns clones, so we need one for each mesh (playable/border)
+      const playableMaterial = extractMaterial(original, modelId);
+      const borderMaterial = extractMaterial(original, modelId);
+      if (!playableMaterial || !borderMaterial) continue;
+
+      const playableGeometry = geometry.clone();
+      const borderGeometry = geometry.clone();
+      this.geometries.push(playableGeometry, borderGeometry);
+      this.materials.push(playableMaterial, borderMaterial);
 
       const yOffset = AssetManager.getModelYOffset(modelId);
 
@@ -436,9 +449,9 @@ export class InstancedRocks {
         this.rockCollisions.push({ x: dec.x, z: dec.y, radius: baseRadius * scale });
       }
 
-      // Create instanced meshes
-      this.createInstancedMesh(instancedGeometry, instancedMaterial, playable, true);
-      this.createInstancedMesh(instancedGeometry.clone(), instancedMaterial.clone(), border, false);
+      // Create instanced meshes (extractMaterial already returns clones)
+      this.createInstancedMesh(playableGeometry, playableMaterial, playable, true);
+      this.createInstancedMesh(borderGeometry, borderMaterial, border, false);
     }
   }
 
@@ -551,9 +564,13 @@ export class InstancedCrystals {
     const original = AssetManager.getDecorationOriginal(modelId);
     if (!original) return;
 
-    this.geometry = extractGeometry(original)?.clone() || null;
-    this.material = extractMaterial(original, modelId)?.clone() || null;
-    if (!this.geometry || !this.material) return;
+    const baseGeometry = extractGeometry(original);
+    if (!baseGeometry) return;
+
+    // extractMaterial already returns a clone, no need to clone again
+    this.geometry = baseGeometry.clone();
+    this.material = extractMaterial(original, modelId);
+    if (!this.material) return;
 
     const yOffset = AssetManager.getModelYOffset(modelId);
 
