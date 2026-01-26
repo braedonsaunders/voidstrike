@@ -1,118 +1,36 @@
 /**
- * EditorModelLoader - GLTF model loader for the map editor
+ * EditorModelLoader - Dynamic GLTF model loader for the map editor
  *
- * Loads real 3D models for decorations and objects in the editor,
- * replacing placeholder geometries with actual game assets.
- * Uses the same scale values as assets.json for consistency.
+ * Loads real 3D models for decorations and objects in the editor.
+ * Configuration is read dynamically from assets.json to stay in sync
+ * with the game's asset definitions. This allows the editor to work
+ * with any game that follows the same asset configuration format.
  */
 
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 
-// Model configuration mapping decoration IDs to model paths and settings
+// Model configuration loaded from assets.json
 export interface ModelConfig {
   path: string;
-  scale: number; // Target height in game units (matches assets.json)
-  rotationY?: number; // Base rotation offset in degrees
+  scale: number;
+  rotationY: number;
 }
 
-// Maps editor object type IDs to their model configurations
-// Scale values match assets.json for consistency with game rendering
-const MODEL_CONFIGS: Record<string, ModelConfig> = {
-  // Trees - from assets.json decorations section
-  decoration_tree_pine_tall: {
-    path: '/models/decorations/tree_pine_tall_LOD0.glb',
-    scale: 14.0,
-    rotationY: -90,
-  },
-  decoration_tree_pine_medium: {
-    path: '/models/decorations/tree_pine_tall_LOD0.glb',
-    scale: 10.0,
-    rotationY: -90,
-  },
-  decoration_tree_dead: {
-    path: '/models/decorations/tree_dead_LOD0.glb',
-    scale: 9.0,
-    rotationY: -90,
-  },
-  decoration_tree_alien: {
-    path: '/models/decorations/tree_alien_LOD0.glb',
-    scale: 11.0,
-    rotationY: -90,
-  },
-  decoration_tree_palm: {
-    path: '/models/decorations/tree_palm_LOD0.glb',
-    scale: 11.0,
-    rotationY: -90,
-  },
-  decoration_tree_mushroom: {
-    path: '/models/decorations/tree_mushroom_LOD0.glb',
-    scale: 8.0,
-    rotationY: -90,
-  },
-
-  // Rocks - from assets.json decorations section
-  decoration_rocks_large: {
-    path: '/models/decorations/rocks_large_LOD0.glb',
-    scale: 3.0,
-    rotationY: -90,
-  },
-  decoration_rocks_small: {
-    path: '/models/decorations/rocks_small_LOD0.glb',
-    scale: 2.0,
-    rotationY: -90,
-  },
-  decoration_rock_single: {
-    path: '/models/decorations/rock_single_LOD0.glb',
-    scale: 2.5,
-    rotationY: -90,
-  },
-
-  // Special decorations - from assets.json decorations section
-  decoration_crystal_formation: {
-    path: '/models/decorations/crystal_formation_LOD0.glb',
-    scale: 4.0,
-    rotationY: -90,
-  },
-  decoration_bush: {
-    path: '/models/decorations/shrub_LOD0.glb',
-    scale: 1.5,
-    rotationY: -90,
-  },
-  decoration_ruined_wall: {
-    path: '/models/decorations/ruined_wall_LOD0.glb',
-    scale: 5.0,
-    rotationY: -90,
-  },
-  decoration_alien_tower: {
-    path: '/models/decorations/alien_tower_LOD0.glb',
-    scale: 14.0,
-    rotationY: -90,
-  },
-  decoration_debris: {
-    path: '/models/decorations/debris_LOD0.glb',
-    scale: 1.5,
-    rotationY: -90,
-  },
-
-  // Game objects using decoration models
-  watch_tower: {
-    path: '/models/decorations/alien_tower_LOD0.glb',
-    scale: 14.0,
-    rotationY: -90,
-  },
-  destructible_rock: {
-    path: '/models/decorations/rock_single_LOD0.glb',
-    scale: 2.5,
-    rotationY: -90,
-  },
-  destructible_debris: {
-    path: '/models/decorations/debris_LOD0.glb',
-    scale: 1.5,
-    rotationY: -90,
-  },
-};
+// Asset configuration structure from assets.json
+interface AssetJsonConfig {
+  decorations?: Record<string, {
+    model: string;
+    scale?: number;
+    rotation?: { x?: number; y?: number; z?: number };
+  }>;
+  resources?: Record<string, {
+    model: string;
+    scale?: number;
+    rotation?: { x?: number; y?: number; z?: number };
+  }>;
+}
 
 // DRACO loader for compressed meshes
 const dracoLoader = new DRACOLoader();
@@ -123,6 +41,9 @@ dracoLoader.setDecoderConfig({ type: 'js' });
 const gltfLoader = new GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
 
+// Dynamic model configurations loaded from assets.json
+const modelConfigs = new Map<string, ModelConfig>();
+
 // Cache for loaded models (template instances)
 const modelCache = new Map<string, THREE.Object3D>();
 
@@ -132,6 +53,96 @@ const loadingPromises = new Map<string, Promise<THREE.Object3D | null>>();
 // Track loading state
 let isInitialized = false;
 let initPromise: Promise<void> | null = null;
+let configLoaded = false;
+
+/**
+ * Load asset configuration from assets.json
+ */
+async function loadAssetConfig(): Promise<void> {
+  if (configLoaded) return;
+
+  try {
+    const response = await fetch('/config/assets.json');
+    if (!response.ok) {
+      console.warn('[EditorModelLoader] assets.json not found, using fallback');
+      return;
+    }
+
+    const config: AssetJsonConfig = await response.json();
+
+    // Register decoration models
+    if (config.decorations) {
+      for (const [assetId, assetConfig] of Object.entries(config.decorations)) {
+        const editorId = `decoration_${assetId}`;
+        modelConfigs.set(editorId, {
+          path: assetConfig.model,
+          scale: assetConfig.scale ?? 1.0,
+          rotationY: assetConfig.rotation?.y ?? 0,
+        });
+      }
+    }
+
+    // Register resource models (minerals, vespene)
+    if (config.resources) {
+      for (const [assetId, assetConfig] of Object.entries(config.resources)) {
+        const editorId = `resource_${assetId}`;
+        modelConfigs.set(editorId, {
+          path: assetConfig.model,
+          scale: assetConfig.scale ?? 1.0,
+          rotationY: assetConfig.rotation?.y ?? 0,
+        });
+      }
+    }
+
+    // Add common editor type aliases that map to asset IDs
+    // This handles cases where editor uses different naming conventions
+    const aliases: Record<string, string> = {
+      // Trees
+      'decoration_tree_pine_tall': 'decoration_tree_pine_tall',
+      'decoration_tree_pine_medium': 'decoration_tree_pine_tall', // Uses same model, different scale
+      'decoration_tree_dead': 'decoration_tree_dead',
+      'decoration_tree_alien': 'decoration_tree_alien',
+      'decoration_tree_palm': 'decoration_tree_palm',
+      'decoration_tree_mushroom': 'decoration_tree_mushroom',
+      // Rocks
+      'decoration_rocks_large': 'decoration_rocks_large',
+      'decoration_rocks_small': 'decoration_rocks_small',
+      'decoration_rock_single': 'decoration_rock_single',
+      // Special
+      'decoration_crystal_formation': 'decoration_crystal_formation',
+      'decoration_bush': 'decoration_shrub',
+      'decoration_ruined_wall': 'decoration_ruined_wall',
+      'decoration_alien_tower': 'decoration_alien_tower',
+      'decoration_debris': 'decoration_debris',
+      // Game objects using decoration models
+      'watch_tower': 'decoration_alien_tower',
+      'destructible_rock': 'decoration_rock_single',
+      'destructible_debris': 'decoration_debris',
+    };
+
+    // Apply aliases - copy config from source to alias
+    for (const [alias, source] of Object.entries(aliases)) {
+      if (!modelConfigs.has(alias) && modelConfigs.has(source)) {
+        const sourceConfig = modelConfigs.get(source)!;
+        modelConfigs.set(alias, { ...sourceConfig });
+      }
+    }
+
+    // Special case: decoration_tree_pine_medium uses pine_tall model but smaller
+    if (modelConfigs.has('decoration_tree_pine_tall') && !modelConfigs.has('decoration_tree_pine_medium')) {
+      const pineConfig = modelConfigs.get('decoration_tree_pine_tall')!;
+      modelConfigs.set('decoration_tree_pine_medium', {
+        ...pineConfig,
+        scale: pineConfig.scale * 0.7, // 70% of tall pine
+      });
+    }
+
+    configLoaded = true;
+    console.log(`[EditorModelLoader] Loaded ${modelConfigs.size} model configurations from assets.json`);
+  } catch (error) {
+    console.warn('[EditorModelLoader] Failed to load assets.json:', error);
+  }
+}
 
 /**
  * Normalize a model: scale to target height and ground to y=0
@@ -171,7 +182,7 @@ function normalizeModel(root: THREE.Object3D, targetScale: number, rotationY: nu
  * Load a single model by its type ID
  */
 async function loadModel(typeId: string): Promise<THREE.Object3D | null> {
-  const config = MODEL_CONFIGS[typeId];
+  const config = modelConfigs.get(typeId);
   if (!config) {
     return null;
   }
@@ -226,6 +237,9 @@ async function loadModel(typeId: string): Promise<THREE.Object3D | null> {
 
 /**
  * Editor Model Loader - Manages 3D models for the map editor
+ *
+ * Dynamically loads model configurations from assets.json to stay
+ * in sync with the game's asset definitions.
  */
 export class EditorModelLoader {
   /**
@@ -236,8 +250,11 @@ export class EditorModelLoader {
     if (initPromise) return initPromise;
 
     initPromise = (async () => {
-      // Preload all decoration models
-      const modelTypes = Object.keys(MODEL_CONFIGS);
+      // Load configuration from assets.json
+      await loadAssetConfig();
+
+      // Preload all registered models
+      const modelTypes = Array.from(modelConfigs.keys());
       await Promise.all(modelTypes.map((typeId) => loadModel(typeId)));
       isInitialized = true;
     })();
@@ -246,17 +263,41 @@ export class EditorModelLoader {
   }
 
   /**
+   * Register a custom model configuration
+   * Useful for game-specific extensions or runtime additions
+   */
+  static registerModel(typeId: string, config: ModelConfig): void {
+    modelConfigs.set(typeId, config);
+  }
+
+  /**
+   * Register multiple model configurations at once
+   */
+  static registerModels(configs: Record<string, ModelConfig>): void {
+    for (const [typeId, config] of Object.entries(configs)) {
+      modelConfigs.set(typeId, config);
+    }
+  }
+
+  /**
    * Check if a model is available for a given type
    */
   static hasModel(typeId: string): boolean {
-    return MODEL_CONFIGS[typeId] !== undefined;
+    return modelConfigs.has(typeId);
   }
 
   /**
    * Get the model config for a type
    */
   static getModelConfig(typeId: string): ModelConfig | null {
-    return MODEL_CONFIGS[typeId] || null;
+    return modelConfigs.get(typeId) || null;
+  }
+
+  /**
+   * Get all registered model type IDs
+   */
+  static getRegisteredTypes(): string[] {
+    return Array.from(modelConfigs.keys());
   }
 
   /**
@@ -307,7 +348,7 @@ export class EditorModelLoader {
    * Get loading progress (0-1)
    */
   static getLoadingProgress(): number {
-    const total = Object.keys(MODEL_CONFIGS).length;
+    const total = modelConfigs.size;
     if (total === 0) return 1;
     return modelCache.size / total;
   }
@@ -332,6 +373,17 @@ export class EditorModelLoader {
     loadingPromises.clear();
     isInitialized = false;
     initPromise = null;
+  }
+
+  /**
+   * Reset and reload configurations
+   * Useful when assets.json is updated
+   */
+  static async reload(): Promise<void> {
+    this.dispose();
+    modelConfigs.clear();
+    configLoaded = false;
+    await this.initialize();
   }
 }
 
