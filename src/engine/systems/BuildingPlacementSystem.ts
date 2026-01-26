@@ -313,7 +313,6 @@ export class BuildingPlacementSystem extends System {
     buildingType: string;
     position: { x: number; y: number };
     workerId?: number;
-    additionalWorkerIds?: number[]; // Additional workers to assign (for AI multi-worker building)
     playerId?: string;
     isAddon?: boolean;
     attachTo?: number; // Parent building ID for addons
@@ -437,59 +436,6 @@ export class BuildingPlacementSystem extends System {
     const workerUnit = worker.entity.get<Unit>('Unit')!;
     workerUnit.startBuilding(buildingType, snappedX, snappedY);
     workerUnit.constructingBuildingId = buildingEntity.id;
-
-    // Assign additional workers if provided (for AI multi-worker building)
-    if (data.additionalWorkerIds && data.additionalWorkerIds.length > 0) {
-      for (const additionalWorkerId of data.additionalWorkerIds) {
-        // Skip if same as primary worker
-        if (additionalWorkerId === worker.entity.id) continue;
-
-        const additionalWorkerEntity = this.world.getEntity(additionalWorkerId);
-        if (!additionalWorkerEntity) continue;
-
-        const additionalUnit = additionalWorkerEntity.get<Unit>('Unit');
-        const additionalSelectable = additionalWorkerEntity.get<Selectable>('Selectable');
-        const additionalHealth = additionalWorkerEntity.get<Health>('Health');
-
-        if (!additionalUnit || !additionalSelectable || !additionalHealth) continue;
-        if (!additionalUnit.isWorker) continue;
-        if (additionalSelectable.playerId !== playerId) continue;
-        if (additionalHealth.isDead()) continue;
-        // Skip workers already building something
-        if (additionalUnit.constructingBuildingId !== null) continue;
-
-        // Store original position for helper workers
-        const additionalTransform = additionalWorkerEntity.get<Transform>('Transform');
-        if (additionalTransform) {
-          additionalUnit.returnPositionX = additionalTransform.x;
-          additionalUnit.returnPositionY = additionalTransform.y;
-        }
-        additionalUnit.isHelperWorker = true;
-
-        // Store previous gather target if worker was gathering
-        if (additionalUnit.state === 'gathering' && additionalUnit.gatherTargetId !== null) {
-          additionalUnit.previousGatherTargetId = additionalUnit.gatherTargetId;
-        } else {
-          additionalUnit.previousGatherTargetId = null;
-        }
-
-        // Assign to construction
-        additionalUnit.constructingBuildingId = buildingEntity.id;
-        additionalUnit.buildingType = buildingType;
-        additionalUnit.buildTargetX = snappedX;
-        additionalUnit.buildTargetY = snappedY;
-        additionalUnit.state = 'building';
-        additionalUnit.targetX = snappedX;
-        additionalUnit.targetY = snappedY;
-        additionalUnit.path = [];
-        additionalUnit.pathIndex = 0;
-        additionalUnit.gatherTargetId = null;
-        additionalUnit.isMining = false;
-        additionalUnit.miningTimer = 0;
-
-        debugBuildingPlacement.log(`BuildingPlacementSystem: Additional worker ${additionalWorkerId} assigned to ${definition.name}`);
-      }
-    }
 
     // Emit placement success event (includes dimensions for pathfinding grid update)
     this.game.eventBus.emit('building:placed', {

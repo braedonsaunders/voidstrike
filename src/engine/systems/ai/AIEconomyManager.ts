@@ -75,49 +75,6 @@ export class AIEconomyManager {
   }
 
   /**
-   * Find multiple available workers for the AI to assign to construction.
-   * Returns up to `count` worker IDs, prioritizing idle workers first.
-   */
-  public findAvailableWorkers(playerId: string, count: number): number[] {
-    if (count <= 0) return [];
-
-    const units = this.coordinator.getCachedUnits();
-    const workers: Array<{ id: number; priority: number }> = [];
-
-    for (const entity of units) {
-      const unit = entity.get<Unit>('Unit');
-      const selectable = entity.get<Selectable>('Selectable');
-      const health = entity.get<Health>('Health');
-
-      if (!unit || !selectable || !health) continue;
-      if (selectable.playerId !== playerId) continue;
-      if (!unit.isWorker) continue;
-      if (health.isDead()) continue;
-      // Skip workers already building
-      if (unit.constructingBuildingId !== null) continue;
-
-      let priority = 0;
-      if (unit.state === 'idle') {
-        priority = 3;
-      } else if (unit.state === 'gathering') {
-        priority = 2;
-      } else if (unit.state === 'moving') {
-        priority = 1;
-      }
-
-      if (priority > 0) {
-        workers.push({ id: entity.id, priority });
-      }
-    }
-
-    // Sort by priority (highest first)
-    workers.sort((a, b) => b.priority - a.priority);
-
-    // Return up to `count` worker IDs
-    return workers.slice(0, count).map(w => w.id);
-  }
-
-  /**
    * Find an available worker that's not already building.
    * Stricter than findAvailableWorker - excludes workers in 'building' state.
    */

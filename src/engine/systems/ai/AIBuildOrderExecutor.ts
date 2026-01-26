@@ -272,7 +272,6 @@ export class AIBuildOrderExecutor {
 
   /**
    * Try to build a building.
-   * Sends multiple workers for important buildings based on difficulty.
    */
   public tryBuildBuilding(ai: AIPlayer, buildingType: string): boolean {
     const config = ai.config!;
@@ -307,21 +306,11 @@ export class AIBuildOrderExecutor {
     }
 
     const economyManager = this.getEconomyManager();
-    const diffConfig = config.difficultyConfig[ai.difficulty];
-
-    // Determine how many workers to send based on difficulty and building importance
-    const isImportantBuilding = this.isImportantBuilding(buildingType, config);
-    const targetWorkerCount = isImportantBuilding ? diffConfig.multiWorkerBuildingCount : 1;
-
-    // Find multiple workers if needed
-    const workerIds = economyManager.findAvailableWorkers(ai.playerId, targetWorkerCount);
-    if (workerIds.length === 0) {
+    const workerId = economyManager.findAvailableWorker(ai.playerId);
+    if (workerId === null) {
       debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding failed - no available worker for ${buildingType}`);
       return false;
     }
-
-    const primaryWorkerId = workerIds[0];
-    const additionalWorkerIds = workerIds.slice(1);
 
     let buildPos: { x: number; y: number } | null = null;
 
@@ -333,7 +322,7 @@ export class AIBuildOrderExecutor {
         return false;
       }
     } else {
-      buildPos = this.findBuildingSpot(ai.playerId, basePos, buildingDef.width, buildingDef.height, primaryWorkerId);
+      buildPos = this.findBuildingSpot(ai.playerId, basePos, buildingDef.width, buildingDef.height, workerId);
       if (!buildPos) {
         debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding failed - no valid building spot for ${buildingType}`);
         return false;
@@ -347,38 +336,12 @@ export class AIBuildOrderExecutor {
       buildingType,
       position: buildPos,
       playerId: ai.playerId,
-      workerId: primaryWorkerId,
-      additionalWorkerIds: additionalWorkerIds.length > 0 ? additionalWorkerIds : undefined,
+      workerId,
     });
 
-    const workerCountStr = workerIds.length > 1 ? ` with ${workerIds.length} workers` : ` with worker ${primaryWorkerId}`;
-    debugAI.log(`[AIBuildOrder] ${ai.playerId}: Placed ${buildingType} at (${buildPos.x.toFixed(1)}, ${buildPos.y.toFixed(1)})${workerCountStr}`);
+    debugAI.log(`[AIBuildOrder] ${ai.playerId}: Placed ${buildingType} at (${buildPos.x.toFixed(1)}, ${buildPos.y.toFixed(1)}) with worker ${workerId}`);
 
     return true;
-  }
-
-  /**
-   * Check if a building is important enough to warrant multiple workers.
-   * Important buildings: bases, production buildings, tech buildings.
-   */
-  private isImportantBuilding(buildingType: string, config: import('@/data/ai/aiConfig').FactionAIConfig): boolean {
-    // Base buildings are always important
-    if (config.roles.baseTypes.includes(buildingType)) {
-      return true;
-    }
-
-    // Main production building is important
-    if (buildingType === config.roles.basicProduction) {
-      return true;
-    }
-
-    // Tech buildings that take longer to build
-    const importantBuildings = ['forge', 'hangar', 'power_core', 'tech_center', 'arsenal', 'ops_center'];
-    if (importantBuildings.includes(buildingType)) {
-      return true;
-    }
-
-    return false;
   }
 
   /**
@@ -697,7 +660,6 @@ export class AIBuildOrderExecutor {
 
   /**
    * Try to expand to a new base location.
-   * Sends multiple workers for faster expansion based on difficulty.
    */
   public tryExpand(ai: AIPlayer): boolean {
     const config = ai.config!;
@@ -729,16 +691,10 @@ export class AIBuildOrderExecutor {
     }
 
     const economyManager = this.getEconomyManager();
-
-    // Expansions are important - send multiple workers based on difficulty
-    const targetWorkerCount = diffConfig.multiWorkerBuildingCount;
-    const workerIds = economyManager.findAvailableWorkers(ai.playerId, targetWorkerCount);
-    if (workerIds.length === 0) {
+    const workerId = economyManager.findAvailableWorker(ai.playerId);
+    if (workerId === null) {
       return false;
     }
-
-    const primaryWorkerId = workerIds[0];
-    const additionalWorkerIds = workerIds.slice(1);
 
     ai.minerals -= buildingDef.mineralCost;
     ai.vespene -= buildingDef.vespeneCost;
@@ -747,12 +703,10 @@ export class AIBuildOrderExecutor {
       buildingType: expansionType,
       position: expansionLocation,
       playerId: ai.playerId,
-      workerId: primaryWorkerId,
-      additionalWorkerIds: additionalWorkerIds.length > 0 ? additionalWorkerIds : undefined,
+      workerId,
     });
 
-    const workerCountStr = workerIds.length > 1 ? ` with ${workerIds.length} workers` : '';
-    debugAI.log(`[AIBuildOrder] ${ai.playerId}: Expanding to (${expansionLocation.x.toFixed(1)}, ${expansionLocation.y.toFixed(1)})${workerCountStr}`);
+    debugAI.log(`[AIBuildOrder] ${ai.playerId}: Expanding to (${expansionLocation.x.toFixed(1)}, ${expansionLocation.y.toFixed(1)})`);
     return true;
   }
 

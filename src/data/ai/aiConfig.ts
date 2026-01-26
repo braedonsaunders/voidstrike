@@ -402,8 +402,6 @@ export interface DifficultySettings {
   minWorkersForExpansion: number;
   /** Min army before considering expansion */
   minArmyForExpansion: number;
-  /** Number of workers to send for important buildings (1 = single worker) */
-  multiWorkerBuildingCount: number;
 }
 
 // ==================== HELPER FUNCTIONS ====================
