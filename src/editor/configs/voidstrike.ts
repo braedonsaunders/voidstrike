@@ -465,7 +465,7 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     movable: true,
   },
 
-  // Decorations - all have scale property
+  // Decorations - all have scale and rotation properties
   {
     id: 'decoration_tree_pine_tall',
     category: 'decorations',
@@ -476,6 +476,7 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     movable: true,
     properties: [
       { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+      { key: 'rotation', name: 'Rotation', type: 'number', defaultValue: 0, min: 0, max: 360 },
     ],
   },
   {
@@ -488,6 +489,7 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     movable: true,
     properties: [
       { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+      { key: 'rotation', name: 'Rotation', type: 'number', defaultValue: 0, min: 0, max: 360 },
     ],
   },
   {
@@ -500,6 +502,7 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     movable: true,
     properties: [
       { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+      { key: 'rotation', name: 'Rotation', type: 'number', defaultValue: 0, min: 0, max: 360 },
     ],
   },
   {
@@ -512,6 +515,7 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     movable: true,
     properties: [
       { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+      { key: 'rotation', name: 'Rotation', type: 'number', defaultValue: 0, min: 0, max: 360 },
     ],
   },
   {
@@ -524,6 +528,7 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     movable: true,
     properties: [
       { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+      { key: 'rotation', name: 'Rotation', type: 'number', defaultValue: 0, min: 0, max: 360 },
     ],
   },
   {
@@ -536,6 +541,7 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     movable: true,
     properties: [
       { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+      { key: 'rotation', name: 'Rotation', type: 'number', defaultValue: 0, min: 0, max: 360 },
     ],
   },
   {
@@ -548,6 +554,7 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     movable: true,
     properties: [
       { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+      { key: 'rotation', name: 'Rotation', type: 'number', defaultValue: 0, min: 0, max: 360 },
     ],
   },
   {
@@ -560,6 +567,7 @@ export const VOIDSTRIKE_OBJECTS: ObjectTypeConfig[] = [
     movable: true,
     properties: [
       { key: 'scale', name: 'Scale', type: 'number', defaultValue: 1, min: 0.25, max: 3 },
+      { key: 'rotation', name: 'Rotation', type: 'number', defaultValue: 0, min: 0, max: 360 },
     ],
   },
 ];

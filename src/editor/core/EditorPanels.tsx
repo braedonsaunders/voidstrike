@@ -1299,7 +1299,238 @@ function ValidatePanel({
   );
 }
 
-// Selected object properties panel
+// Rotation dial component for intuitive rotation control
+function RotationDial({
+  value,
+  onChange,
+  theme,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  theme: EditorConfig['theme'];
+}) {
+  const dialRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    updateRotation(e);
+  };
+
+  const updateRotation = (e: React.MouseEvent | MouseEvent) => {
+    if (!dialRef.current) return;
+    const rect = dialRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const dx = e.clientX - centerX;
+    const dy = e.clientY - centerY;
+    let angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
+    if (angle < 0) angle += 360;
+    onChange(Math.round(angle) % 360);
+  };
+
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => updateRotation(e);
+    const handleMouseUp = () => setIsDragging(false);
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging]);
+
+  // Quick snap buttons
+  const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between items-center">
+        <span className="text-[10px] uppercase tracking-wider" style={{ color: theme.text.muted }}>
+          Rotation
+        </span>
+        <span
+          className="text-[11px] font-mono px-1.5 py-0.5 rounded transition-all duration-200"
+          style={{
+            backgroundColor: isDragging ? `${theme.primary}20` : theme.surface,
+            color: isDragging ? theme.primary : theme.text.secondary,
+          }}
+        >
+          {value}°
+        </span>
+      </div>
+
+      <div className="flex items-center gap-3">
+        {/* Dial */}
+        <div
+          ref={dialRef}
+          onMouseDown={handleMouseDown}
+          className="relative w-16 h-16 rounded-full cursor-pointer transition-all duration-200 flex-shrink-0"
+          style={{
+            background: `conic-gradient(from 0deg, ${theme.primary}40, ${theme.primary}, ${theme.primary}40)`,
+            boxShadow: isDragging ? `0 0 16px ${theme.primary}50` : `0 2px 8px rgba(0,0,0,0.3)`,
+          }}
+        >
+          {/* Inner circle */}
+          <div
+            className="absolute inset-2 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: theme.background }}
+          >
+            {/* Rotation indicator */}
+            <div
+              className="absolute w-1 h-6 rounded-full transition-transform duration-75"
+              style={{
+                backgroundColor: theme.primary,
+                transform: `rotate(${value}deg) translateY(-4px)`,
+                transformOrigin: 'center bottom',
+              }}
+            />
+            {/* Center dot */}
+            <div
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: theme.text.muted }}
+            />
+          </div>
+
+          {/* Cardinal markers */}
+          {[0, 90, 180, 270].map((angle) => (
+            <div
+              key={angle}
+              className="absolute w-1 h-1.5 rounded-full"
+              style={{
+                backgroundColor: theme.text.muted,
+                left: '50%',
+                top: '2px',
+                transform: `translateX(-50%) rotate(${angle}deg)`,
+                transformOrigin: 'center 30px',
+              }}
+            />
+          ))}
+        </div>
+
+        {/* Quick snap buttons */}
+        <div className="grid grid-cols-4 gap-1 flex-1">
+          {snapAngles.map((angle) => (
+            <button
+              key={angle}
+              onClick={() => onChange(angle)}
+              className="px-1.5 py-1 text-[10px] rounded transition-all duration-150 hover:scale-105"
+              style={{
+                backgroundColor: value === angle ? `${theme.primary}30` : theme.surface,
+                color: value === angle ? theme.primary : theme.text.muted,
+                border: value === angle ? `1px solid ${theme.primary}` : `1px solid transparent`,
+              }}
+            >
+              {angle}°
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Scale control with visual feedback
+function ScaleControl({
+  value,
+  min,
+  max,
+  onChange,
+  theme,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  onChange: (value: number) => void;
+  theme: EditorConfig['theme'];
+}) {
+  const percentage = ((value - min) / (max - min)) * 100;
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Quick scale presets
+  const presets = [0.5, 1.0, 1.5, 2.0];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex justify-between items-center">
+        <span className="text-[10px] uppercase tracking-wider" style={{ color: theme.text.muted }}>
+          Scale
+        </span>
+        <span
+          className="text-[11px] font-mono px-1.5 py-0.5 rounded transition-all duration-200"
+          style={{
+            backgroundColor: isDragging ? `${theme.primary}20` : theme.surface,
+            color: isDragging ? theme.primary : theme.text.secondary,
+          }}
+        >
+          {value.toFixed(2)}x
+        </span>
+      </div>
+
+      {/* Slider */}
+      <div
+        className="relative h-2 rounded-full transition-all duration-200"
+        style={{
+          backgroundColor: theme.border,
+          height: isDragging ? '10px' : '8px',
+        }}
+      >
+        <div
+          className="absolute left-0 top-0 h-full rounded-full transition-all duration-150"
+          style={{
+            width: `${percentage}%`,
+            backgroundColor: theme.primary,
+            boxShadow: isDragging ? `0 0 8px ${theme.primary}60` : 'none',
+          }}
+        />
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white transition-all duration-200 pointer-events-none"
+          style={{
+            left: `${percentage}%`,
+            transform: `translateX(-50%) translateY(-50%) scale(${isDragging ? 1.2 : 1})`,
+            boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+          }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={0.05}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          onMouseDown={() => setIsDragging(true)}
+          onMouseUp={() => setIsDragging(false)}
+          onMouseLeave={() => setIsDragging(false)}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        />
+      </div>
+
+      {/* Preset buttons */}
+      <div className="flex gap-1">
+        {presets.map((preset) => (
+          <button
+            key={preset}
+            onClick={() => onChange(preset)}
+            className="flex-1 py-1 text-[10px] rounded transition-all duration-150 hover:scale-105"
+            style={{
+              backgroundColor: Math.abs(value - preset) < 0.05 ? `${theme.primary}30` : theme.surface,
+              color: Math.abs(value - preset) < 0.05 ? theme.primary : theme.text.muted,
+              border: Math.abs(value - preset) < 0.05 ? `1px solid ${theme.primary}` : `1px solid transparent`,
+            }}
+          >
+            {preset}x
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Selected object properties panel with enhanced UI
 function SelectedObjectPanel({
   config,
   state,
@@ -1324,37 +1555,91 @@ function SelectedObjectPanel({
 
   const properties = objType.properties || [];
 
+  // Separate rotation and scale from other properties
+  const rotationProp = properties.find((p) => p.key === 'rotation');
+  const scaleProp = properties.find((p) => p.key === 'scale');
+  const otherProps = properties.filter((p) => p.key !== 'rotation' && p.key !== 'scale');
+
+  const currentRotation = (selectedObj.properties?.rotation as number) ?? rotationProp?.defaultValue ?? 0;
+  const currentScale = (selectedObj.properties?.scale as number) ?? scaleProp?.defaultValue ?? 1;
+
   return (
     <div
-      className="border-t p-3 space-y-3"
+      className="border-t p-3 space-y-4"
       style={{ borderColor: theme.border, backgroundColor: theme.surface }}
     >
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="text-lg">{objType.icon}</span>
+          <div
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-xl transition-all duration-200"
+            style={{ backgroundColor: `${theme.primary}20` }}
+          >
+            {objType.icon}
+          </div>
           <div>
             <div className="text-sm font-medium" style={{ color: theme.text.primary }}>
               {objType.name}
             </div>
-            <div className="text-[10px] font-mono" style={{ color: theme.text.muted }}>
-              ({Math.round(selectedObj.x)}, {Math.round(selectedObj.y)})
+            <div className="text-[10px] font-mono flex items-center gap-1" style={{ color: theme.text.muted }}>
+              <span style={{ color: theme.primary }}>x:</span>{Math.round(selectedObj.x)}
+              <span style={{ color: theme.primary, marginLeft: '4px' }}>y:</span>{Math.round(selectedObj.y)}
             </div>
           </div>
         </div>
         <button
           onClick={() => onRemove(selectedId)}
-          className="px-2 py-1 rounded text-xs transition-colors hover:bg-white/10"
+          className="w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all duration-200 hover:bg-red-500/20 hover:scale-110"
           style={{ color: theme.error }}
+          title="Delete object"
         >
-          Delete
+          ✕
         </button>
       </div>
 
-      {/* Properties */}
-      {properties.length > 0 && (
-        <div className="space-y-3">
-          {properties.map((prop) => {
+      {/* Transform Section */}
+      {(scaleProp || rotationProp) && (
+        <div
+          className="p-3 rounded-lg space-y-4"
+          style={{ backgroundColor: theme.background }}
+        >
+          <div className="text-[10px] uppercase tracking-wider font-medium" style={{ color: theme.text.muted }}>
+            Transform
+          </div>
+
+          {/* Scale control */}
+          {scaleProp && (
+            <ScaleControl
+              value={currentScale}
+              min={scaleProp.min ?? 0.25}
+              max={scaleProp.max ?? 3}
+              onChange={(v) => onPropertyUpdate(selectedId, 'scale', v)}
+              theme={theme}
+            />
+          )}
+
+          {/* Rotation dial */}
+          {rotationProp && (
+            <RotationDial
+              value={currentRotation}
+              onChange={(v) => onPropertyUpdate(selectedId, 'rotation', v)}
+              theme={theme}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Other Properties */}
+      {otherProps.length > 0 && (
+        <div
+          className="p-3 rounded-lg space-y-3"
+          style={{ backgroundColor: theme.background }}
+        >
+          <div className="text-[10px] uppercase tracking-wider font-medium" style={{ color: theme.text.muted }}>
+            Properties
+          </div>
+
+          {otherProps.map((prop) => {
             const currentValue = selectedObj.properties?.[prop.key] ?? prop.defaultValue;
 
             if (prop.type === 'number') {
@@ -1380,12 +1665,13 @@ function SelectedObjectPanel({
                   <select
                     value={currentValue as string}
                     onChange={(e) => onPropertyUpdate(selectedId, prop.key, e.target.value)}
-                    className="w-full mt-1 px-3 py-2 rounded-lg text-sm"
+                    className="w-full mt-1 px-3 py-2 rounded-lg text-sm transition-all duration-200 focus:ring-2"
                     style={{
-                      backgroundColor: theme.background,
+                      backgroundColor: theme.surface,
                       border: `1px solid ${theme.border}`,
                       color: theme.text.primary,
-                    }}
+                      '--tw-ring-color': theme.primary,
+                    } as React.CSSProperties}
                   >
                     {prop.options.map((opt) => (
                       <option key={opt.value} value={opt.value}>
@@ -1405,10 +1691,16 @@ function SelectedObjectPanel({
       {/* Multi-selection indicator */}
       {state.selectedObjects.length > 1 && (
         <div
-          className="text-xs italic pt-2 border-t"
+          className="flex items-center gap-2 text-xs pt-2 border-t"
           style={{ color: theme.text.muted, borderColor: theme.border }}
         >
-          +{state.selectedObjects.length - 1} more selected
+          <div
+            className="w-5 h-5 rounded flex items-center justify-center text-[10px] font-medium"
+            style={{ backgroundColor: `${theme.primary}20`, color: theme.primary }}
+          >
+            +{state.selectedObjects.length - 1}
+          </div>
+          <span>more selected</span>
         </div>
       )}
     </div>
