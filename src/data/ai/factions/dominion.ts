@@ -571,6 +571,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       harassCooldown: 0,
       minWorkersForExpansion: 14,
       minArmyForExpansion: 8,
+      multiWorkerBuildingCount: 1, // Easy AI uses single worker
     },
     medium: {
       actionDelayTicks: 40, // 2 seconds
@@ -588,6 +589,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       harassCooldown: 0,
       minWorkersForExpansion: 12,
       minArmyForExpansion: 6,
+      multiWorkerBuildingCount: 2, // Medium AI sends 2 workers
     },
     hard: {
       actionDelayTicks: 20, // 1 second
@@ -605,6 +607,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       harassCooldown: 300,
       minWorkersForExpansion: 8,
       minArmyForExpansion: 2,
+      multiWorkerBuildingCount: 2, // Hard AI sends 2 workers
     },
     very_hard: {
       actionDelayTicks: 15,
@@ -622,6 +625,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       harassCooldown: 200,
       minWorkersForExpansion: 6,
       minArmyForExpansion: 0,
+      multiWorkerBuildingCount: 3, // Very hard AI sends 3 workers
     },
     insane: {
       actionDelayTicks: 10,
@@ -639,6 +643,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       harassCooldown: 150,
       minWorkersForExpansion: 4,
       minArmyForExpansion: 0,
+      multiWorkerBuildingCount: 3, // Insane AI sends 3 workers
     },
   },
 
