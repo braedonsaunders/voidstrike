@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useMemo } from 'react';
 import type { EditorConfig, EditorMapData } from '../config/EditorConfig';
 
 export interface MapListItem {
@@ -34,6 +34,8 @@ export interface EditorHeaderProps {
   currentMapId?: string;
   onLoadMap?: (mapId: string) => void;
   onNewMap?: () => void;
+  // Battle Simulator
+  onBattleSimulator?: () => void;
 }
 
 export function EditorHeader({
@@ -56,11 +58,21 @@ export function EditorHeader({
   currentMapId,
   onLoadMap,
   onNewMap,
+  onBattleSimulator,
 }: EditorHeaderProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showLoadDropdown, setShowLoadDropdown] = useState(false);
+  const [mapSearch, setMapSearch] = useState('');
 
   const hasLoadMapFeature = mapList && onLoadMap && onNewMap;
+
+  // Filter maps based on search
+  const filteredMaps = useMemo(() => {
+    if (!mapList) return [];
+    if (!mapSearch.trim()) return mapList;
+    const searchLower = mapSearch.toLowerCase();
+    return mapList.filter(map => map.name.toLowerCase().includes(searchLower));
+  }, [mapList, mapSearch]);
 
   // Handle file import
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -182,22 +194,59 @@ export function EditorHeader({
                 {/* Click outside to close */}
                 <div
                   className="fixed inset-0 z-40"
-                  onClick={() => setShowLoadDropdown(false)}
+                  onClick={() => {
+                    setShowLoadDropdown(false);
+                    setMapSearch('');
+                  }}
                 />
                 <div
-                  className="absolute top-full right-0 mt-1 w-56 max-h-72 overflow-y-auto rounded-lg shadow-xl z-50"
+                  className="absolute top-full right-0 mt-1 w-64 rounded-lg shadow-xl z-50 flex flex-col"
                   style={{
                     backgroundColor: 'var(--editor-bg)',
                     border: '1px solid var(--editor-border)',
+                    maxHeight: '400px',
                   }}
                 >
+                  {/* Search input */}
+                  <div
+                    className="p-2 flex-shrink-0"
+                    style={{ borderBottom: '1px solid var(--editor-border)' }}
+                  >
+                    <div className="relative">
+                      <svg
+                        className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        style={{ color: 'var(--editor-text-muted)' }}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                      <input
+                        type="text"
+                        placeholder="Search maps..."
+                        value={mapSearch}
+                        onChange={(e) => setMapSearch(e.target.value)}
+                        className="w-full pl-8 pr-3 py-1.5 text-sm rounded outline-none"
+                        style={{
+                          backgroundColor: 'var(--editor-surface)',
+                          color: 'var(--editor-text)',
+                          border: '1px solid var(--editor-border)',
+                        }}
+                        autoFocus
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+                  </div>
+
                   {/* New Map option */}
                   <button
                     onClick={() => {
                       onNewMap();
                       setShowLoadDropdown(false);
+                      setMapSearch('');
                     }}
-                    className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors hover:opacity-80"
+                    className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors hover:opacity-80 flex-shrink-0"
                     style={{
                       color: 'var(--editor-text)',
                       borderBottom: '1px solid var(--editor-border)',
@@ -209,34 +258,47 @@ export function EditorHeader({
                     New Blank Map
                   </button>
 
-                  {/* Existing maps */}
-                  <div className="py-1">
+                  {/* Scrollable maps list */}
+                  <div className="flex-1 overflow-y-auto min-h-0">
                     <div
-                      className="px-3 py-1 text-xs uppercase tracking-wider"
-                      style={{ color: 'var(--editor-text-muted)' }}
+                      className="px-3 py-1.5 text-xs uppercase tracking-wider sticky top-0"
+                      style={{
+                        color: 'var(--editor-text-muted)',
+                        backgroundColor: 'var(--editor-bg)',
+                      }}
                     >
-                      Existing Maps
+                      {mapSearch.trim() ? `Results (${filteredMaps.length})` : 'Existing Maps'}
                     </div>
-                    {mapList.map((map: MapListItem) => (
-                      <button
-                        key={map.id}
-                        onClick={() => {
-                          onLoadMap(map.id);
-                          setShowLoadDropdown(false);
-                        }}
-                        className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors hover:opacity-80"
-                        style={{
-                          backgroundColor: currentMapId === map.id ? 'var(--editor-selection)' : 'transparent',
-                          color: currentMapId === map.id ? 'var(--editor-text)' : 'var(--editor-text-secondary)',
-                        }}
+                    {filteredMaps.length === 0 ? (
+                      <div
+                        className="px-3 py-4 text-sm text-center"
+                        style={{ color: 'var(--editor-text-muted)' }}
                       >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--editor-text-muted)' }}>
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                            d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                        </svg>
-                        {map.name}
-                      </button>
-                    ))}
+                        No maps found
+                      </div>
+                    ) : (
+                      filteredMaps.map((map: MapListItem) => (
+                        <button
+                          key={map.id}
+                          onClick={() => {
+                            onLoadMap(map.id);
+                            setShowLoadDropdown(false);
+                            setMapSearch('');
+                          }}
+                          className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors hover:opacity-80"
+                          style={{
+                            backgroundColor: currentMapId === map.id ? 'var(--editor-selection)' : 'transparent',
+                            color: currentMapId === map.id ? 'var(--editor-text)' : 'var(--editor-text-secondary)',
+                          }}
+                        >
+                          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--editor-text-muted)' }}>
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                              d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                          </svg>
+                          <span className="truncate">{map.name}</span>
+                        </button>
+                      ))
+                    )}
                   </div>
                 </div>
               </>
@@ -327,6 +389,21 @@ export function EditorHeader({
         >
           Cancel
         </button>
+
+        {/* Battle Simulator button */}
+        {onBattleSimulator && (
+          <button
+            onClick={onBattleSimulator}
+            className="px-3 py-1.5 text-sm font-medium rounded transition-colors hover:opacity-90"
+            style={{
+              backgroundColor: 'var(--editor-warning)',
+              color: 'var(--editor-bg)',
+            }}
+            title="Launch Battle Simulator sandbox"
+          >
+            Battle Sim
+          </button>
+        )}
 
         {/* Preview button */}
         {onPreview && (
