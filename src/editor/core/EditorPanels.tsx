@@ -155,36 +155,40 @@ function Section({
   );
 }
 
-// Modern panel tab with animated indicator
+// Modern panel tab with animated indicator - compact design
 function PanelTab({
   active,
   onClick,
   icon,
   name,
   theme,
+  hasContent,
 }: {
   active: boolean;
   onClick: () => void;
   icon?: string;
   name: string;
   theme: EditorConfig['theme'];
+  hasContent?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
       title={name}
       className={`
-        relative px-3 py-2.5 flex items-center justify-center gap-1.5 transition-all duration-200
+        relative px-2 py-2 flex-1 flex items-center justify-center transition-all duration-200
         ${active ? '' : 'hover:bg-white/5'}
+        ${hasContent === false ? 'opacity-40' : ''}
       `}
       style={{
         color: active ? theme.primary : theme.text.muted,
+        minWidth: '32px',
       }}
     >
       <span
-        className="text-base transition-transform duration-200"
+        className="text-sm transition-transform duration-200"
         style={{
-          transform: active ? 'scale(1.15)' : 'scale(1)',
+          transform: active ? 'scale(1.1)' : 'scale(1)',
         }}
       >
         {icon || PANEL_ICONS[name.toLowerCase()] || name.charAt(0)}
@@ -194,19 +198,18 @@ function PanelTab({
         className="absolute bottom-0 left-1/2 h-0.5 rounded-full transition-all duration-300 ease-out"
         style={{
           backgroundColor: theme.primary,
-          width: active ? '24px' : '0px',
+          width: active ? '16px' : '0px',
           transform: 'translateX(-50%)',
           opacity: active ? 1 : 0,
         }}
       />
-      {/* Hover glow effect */}
-      <div
-        className="absolute inset-0 rounded-md transition-opacity duration-200 pointer-events-none"
-        style={{
-          background: `radial-gradient(circle at center, ${theme.primary}15 0%, transparent 70%)`,
-          opacity: active ? 1 : 0,
-        }}
-      />
+      {/* Active indicator dot for "has content" */}
+      {hasContent && !active && (
+        <div
+          className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full"
+          style={{ backgroundColor: theme.primary }}
+        />
+      )}
     </button>
   );
 }
@@ -1530,8 +1533,51 @@ function ScaleControl({
   );
 }
 
+// Selected panel - wrapper with empty state
+function SelectedPanel({
+  config,
+  state,
+  onPropertyUpdate,
+  onRemove,
+}: {
+  config: EditorConfig;
+  state: EditorState;
+  onPropertyUpdate: (id: string, key: string, value: unknown) => void;
+  onRemove: (id: string) => void;
+}) {
+  const theme = config.theme;
+
+  if (state.selectedObjects.length === 0 || !state.mapData) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <div
+          className="w-16 h-16 rounded-full flex items-center justify-center text-2xl mb-4"
+          style={{ backgroundColor: `${theme.primary}15` }}
+        >
+          ✎
+        </div>
+        <div className="text-sm font-medium mb-2" style={{ color: theme.text.primary }}>
+          No Object Selected
+        </div>
+        <div className="text-xs max-w-[180px]" style={{ color: theme.text.muted }}>
+          Click on an object in the map to select it and edit its properties here
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <SelectedObjectPanelContent
+      config={config}
+      state={state}
+      onPropertyUpdate={onPropertyUpdate}
+      onRemove={onRemove}
+    />
+  );
+}
+
 // Selected object properties panel with enhanced UI
-function SelectedObjectPanel({
+function SelectedObjectPanelContent({
   config,
   state,
   onPropertyUpdate,
@@ -1564,10 +1610,7 @@ function SelectedObjectPanel({
   const currentScale = (selectedObj.properties?.scale as number) ?? scaleProp?.defaultValue ?? 1;
 
   return (
-    <div
-      className="border-t p-3 space-y-4"
-      style={{ borderColor: theme.border, backgroundColor: theme.surface }}
-    >
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -1848,6 +1891,7 @@ export function EditorPanels({
             icon={panel.icon}
             name={panel.name}
             theme={theme}
+            hasContent={panel.id === 'selected' ? state.selectedObjects.length > 0 : undefined}
           />
         ))}
       </div>
@@ -1900,6 +1944,14 @@ export function EditorPanels({
             onObjectRemove={onObjectRemove}
           />
         </AnimatedPanelContent>
+        <AnimatedPanelContent isActive={state.activePanel === 'selected'}>
+          <SelectedPanel
+            config={config}
+            state={state}
+            onPropertyUpdate={onObjectPropertyUpdate}
+            onRemove={onObjectRemove}
+          />
+        </AnimatedPanelContent>
         <AnimatedPanelContent isActive={state.activePanel === 'settings'}>
           <SettingsPanel
             config={config}
@@ -1922,14 +1974,6 @@ export function EditorPanels({
           />
         </AnimatedPanelContent>
       </div>
-
-      {/* Selected object properties */}
-      <SelectedObjectPanel
-        config={config}
-        state={state}
-        onPropertyUpdate={onObjectPropertyUpdate}
-        onRemove={onObjectRemove}
-      />
 
       {/* Keyboard shortcuts footer */}
       <ShortcutsFooter theme={theme} />

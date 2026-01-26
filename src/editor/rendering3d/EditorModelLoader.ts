@@ -103,8 +103,9 @@ let initPromise: Promise<void> | null = null;
 
 /**
  * Normalize a model: scale to target height and ground to y=0
+ * This matches how the game's AssetManager handles model scaling.
  */
-function normalizeModel(root: THREE.Object3D, scale: number, rotationY: number = 0): void {
+function normalizeModel(root: THREE.Object3D, targetScale: number, rotationY: number = 0): void {
   root.updateMatrixWorld(true);
 
   const box = new THREE.Box3().setFromObject(root);
@@ -112,9 +113,11 @@ function normalizeModel(root: THREE.Object3D, scale: number, rotationY: number =
 
   const size = box.getSize(new THREE.Vector3());
 
-  // Apply scale
+  // Normalize to unit height first, then multiply by target scale
+  // This ensures model height equals targetScale in world units
   if (size.y > 0.001) {
-    root.scale.setScalar(scale);
+    const normalizeScale = targetScale / size.y;
+    root.scale.setScalar(normalizeScale);
   }
 
   // Apply base rotation
