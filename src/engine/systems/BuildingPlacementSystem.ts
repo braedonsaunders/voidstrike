@@ -1567,7 +1567,8 @@ export class BuildingPlacementSystem extends System {
   }
 
   /**
-   * Check if any worker is assigned to a building (even if not close yet)
+   * Check if any worker is assigned to a building (even if not close yet).
+   * Only one worker can build a building at a time.
    */
   private hasWorkerAssigned(buildingEntityId: number): boolean {
     const workers = this.world.getEntitiesWith('Unit');
@@ -1576,7 +1577,9 @@ export class BuildingPlacementSystem extends System {
       const unit = entity.get<Unit>('Unit');
       if (!unit) continue;
 
-      if (unit.constructingBuildingId === buildingEntityId && unit.state === 'building') {
+      // Check if worker is assigned to this building, regardless of state
+      // (worker could be walking to site, or actively building)
+      if (unit.constructingBuildingId === buildingEntityId) {
         return true;
       }
     }
