@@ -249,7 +249,7 @@ export function EditorHeader({
                     className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors hover:opacity-80 flex-shrink-0"
                     style={{
                       color: 'var(--editor-text)',
-                      borderBottom: '1px solid var(--editor-border)',
+                      borderBottom: onBattleSimulator ? 'none' : '1px solid var(--editor-border)',
                     }}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--editor-text-secondary)' }}>
@@ -257,6 +257,27 @@ export function EditorHeader({
                     </svg>
                     New Blank Map
                   </button>
+
+                  {/* Battle Simulator option */}
+                  {onBattleSimulator && (
+                    <button
+                      onClick={() => {
+                        onBattleSimulator();
+                        setShowLoadDropdown(false);
+                        setMapSearch('');
+                      }}
+                      className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors hover:opacity-80 flex-shrink-0"
+                      style={{
+                        color: 'var(--editor-warning)',
+                        borderBottom: '1px solid var(--editor-border)',
+                      }}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--editor-warning)' }}>
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                      Battle Simulator
+                    </button>
+                  )}
 
                   {/* Scrollable maps list */}
                   <div className="flex-1 overflow-y-auto min-h-0">
@@ -389,21 +410,6 @@ export function EditorHeader({
         >
           Cancel
         </button>
-
-        {/* Battle Simulator button */}
-        {onBattleSimulator && (
-          <button
-            onClick={onBattleSimulator}
-            className="px-3 py-1.5 text-sm font-medium rounded transition-colors hover:opacity-90"
-            style={{
-              backgroundColor: 'var(--editor-warning)',
-              color: 'var(--editor-bg)',
-            }}
-            title="Launch Battle Simulator sandbox"
-          >
-            Battle Sim
-          </button>
-        )}
 
         {/* Preview button */}
         {onPreview && (
