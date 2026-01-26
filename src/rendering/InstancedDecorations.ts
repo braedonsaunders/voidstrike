@@ -92,7 +92,8 @@ function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Materi
   if (!originalMaterial) return null;
 
   // Clone the material to avoid modifying the original
-  const material = originalMaterial.clone();
+  // Type assertion needed because TS doesn't track callback assignments
+  const material = (originalMaterial as THREE.Material).clone();
 
   // Apply rendering hints for MeshStandardMaterial
   if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
