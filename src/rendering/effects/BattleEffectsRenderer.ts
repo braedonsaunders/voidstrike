@@ -201,6 +201,7 @@ export class BattleEffectsRenderer {
   private projectileHeadPool: MeshPool;
   private projectileGlowPool: MeshPool<THREE.Sprite>;
   private groundEffectPool: MeshPool;
+  private deathEffectPool: MeshPool; // Separate pool for death effects (uses largeRingGeometry)
   private decalPool: MeshPool;
   private debrisPool: MeshPool;
   private explosionCorePool: MeshPool;
@@ -383,6 +384,15 @@ export class BattleEffectsRenderer {
 
     this.groundEffectPool = this.createMeshPool(POOL_SIZE, () => {
       const mesh = new THREE.Mesh(this.groundRingGeometry, this.groundEffectMaterial.clone());
+      mesh.visible = false;
+      mesh.rotation.x = -Math.PI / 2;
+      mesh.renderOrder = RENDER_ORDER.GROUND_EFFECT;
+      return mesh;
+    });
+
+    // Separate pool for death effects - WebGPU crashes when geometry is swapped on pooled meshes
+    this.deathEffectPool = this.createMeshPool(POOL_SIZE, () => {
+      const mesh = new THREE.Mesh(this.largeRingGeometry, this.deathEffectMaterial.clone());
       mesh.visible = false;
       mesh.rotation.x = -Math.PI / 2;
       mesh.renderOrder = RENDER_ORDER.GROUND_EFFECT;
@@ -1197,10 +1207,10 @@ export class BattleEffectsRenderer {
       this.particleSystem.emitExplosion(effectPos, 0.6); // Smaller explosion for unit death
     }
 
-    const mesh = this.acquireFromPool(this.groundEffectPool);
+    // Use separate death effect pool to avoid geometry swapping (causes WebGPU crashes)
+    const mesh = this.acquireFromPool(this.deathEffectPool);
     if (!mesh) return;
 
-    mesh.geometry = this.largeRingGeometry;
     mesh.position.set(position.x, position.y + heightOffset + GROUND_EFFECT_OFFSET, position.z);
     mesh.scale.set(1, 1, 1);
 
@@ -1660,11 +1670,12 @@ export class BattleEffectsRenderer {
       effect.progress += dt / effect.duration;
 
       if (effect.progress >= 1) {
-        // Reset geometry if we changed it
+        // Release to appropriate pool based on effect type
         if (effect.type === 'death') {
-          effect.mesh.geometry = this.groundRingGeometry;
+          this.releaseToPool(this.deathEffectPool, effect.mesh);
+        } else {
+          this.releaseToPool(this.groundEffectPool, effect.mesh);
         }
-        this.releaseToPool(this.groundEffectPool, effect.mesh);
         this.groundEffects.splice(i, 1);
       } else {
         // Scale and fade
@@ -1915,6 +1926,7 @@ export class BattleEffectsRenderer {
     disposeMeshPool(this.projectileHeadPool);
     disposeMeshPool(this.projectileGlowPool as unknown as MeshPool);
     disposeMeshPool(this.groundEffectPool);
+    disposeMeshPool(this.deathEffectPool);
     disposeMeshPool(this.decalPool);
     disposeMeshPool(this.debrisPool);
     disposeMeshPool(this.explosionCorePool);
