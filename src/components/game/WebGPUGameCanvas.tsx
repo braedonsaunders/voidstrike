@@ -84,7 +84,8 @@ export function WebGPUGameCanvas() {
   const gameRef = useRef<Game | null>(null);
   const workerBridgeRef = useRef<WorkerBridge | null>(null);
   const eventHandlerRef = useRef<MainThreadEventHandler | null>(null);
-  const renderStateAdapterRef = useRef<RenderStateWorldAdapter>(new RenderStateWorldAdapter());
+  // Use singleton pattern for render state adapter so UI components can access it
+  const renderStateAdapterRef = useRef<RenderStateWorldAdapter>(RenderStateWorldAdapter.getInstance());
 
   // Refs for hook consumption - these point to worker mode data sources
   const worldProviderRef = useRef<IWorldProvider | null>(null);
@@ -517,7 +518,7 @@ export function WebGPUGameCanvas() {
         WorkerBridge.resetInstance();
         workerBridgeRef.current = null;
       }
-      renderStateAdapterRef.current.clear();
+      RenderStateWorldAdapter.resetInstance();
       worldProviderRef.current = null;
       eventBusRef.current = null;
 

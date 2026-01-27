@@ -336,6 +336,19 @@ class BuildingComponentAdapter {
   public getConstructionProgress(): number {
     return this.buildProgress;
   }
+
+  public isComplete(): boolean {
+    return this.state === 'complete' || (this.buildProgress >= 1 && this.state !== 'constructing');
+  }
+
+  public hasAddon(): boolean {
+    // Check if productionQueue has tech-gated items that require addon
+    return false; // Will be set properly when addon data is passed
+  }
+
+  public hasTechLab(): boolean {
+    return false; // Will be set properly when addon data is passed
+  }
 }
 
 class BuildingHealthAdapter {
@@ -445,13 +458,17 @@ class ResourceComponentAdapter {
   public resourceType: string;
   public amount: number;
   public maxAmount: number;
+  public maxGatherers: number;
   private _hasExtractor: boolean;
+  private _currentGatherers: number;
 
   constructor(data: ResourceRenderState) {
     this.resourceType = data.resourceType;
     this.amount = data.amount;
     this.maxAmount = data.maxAmount;
     this._hasExtractor = data.hasExtractor;
+    this._currentGatherers = data.gathererCount ?? 0;
+    this.maxGatherers = data.resourceType === 'minerals' ? 2 : 3;
   }
 
   public update(data: ResourceRenderState): void {
@@ -459,6 +476,8 @@ class ResourceComponentAdapter {
     this.amount = data.amount;
     this.maxAmount = data.maxAmount;
     this._hasExtractor = data.hasExtractor;
+    this._currentGatherers = data.gathererCount ?? 0;
+    this.maxGatherers = data.resourceType === 'minerals' ? 2 : 3;
   }
 
   public isDepleted(): boolean {
@@ -480,6 +499,10 @@ class ResourceComponentAdapter {
   public getDepletionPercent(): number {
     return this.maxAmount > 0 ? 1 - (this.amount / this.maxAmount) : 0;
   }
+
+  public getCurrentGatherers(): number {
+    return this._currentGatherers;
+  }
 }
 
 // ============================================================================
@@ -490,13 +513,44 @@ class ResourceComponentAdapter {
  * Provides a World-like interface for consuming RenderState data.
  * This allows renderers to work with both worker mode (RenderState) and
  * non-worker mode (ECS World) with minimal changes.
+ *
+ * Singleton pattern for global access from UI components.
  */
 export class RenderStateWorldAdapter implements IWorldProvider {
+  private static instance: RenderStateWorldAdapter | null = null;
+
   private unitEntities: Map<number, UnitEntityAdapter> = new Map();
   private buildingEntities: Map<number, BuildingEntityAdapter> = new Map();
   private resourceEntities: Map<number, ResourceEntityAdapter> = new Map();
 
   private currentRenderState: RenderState | null = null;
+
+  /**
+   * Get the singleton instance (creates one if needed)
+   */
+  public static getInstance(): RenderStateWorldAdapter {
+    if (!RenderStateWorldAdapter.instance) {
+      RenderStateWorldAdapter.instance = new RenderStateWorldAdapter();
+    }
+    return RenderStateWorldAdapter.instance;
+  }
+
+  /**
+   * Reset the singleton instance (for game restart)
+   */
+  public static resetInstance(): void {
+    if (RenderStateWorldAdapter.instance) {
+      RenderStateWorldAdapter.instance.clear();
+      RenderStateWorldAdapter.instance = null;
+    }
+  }
+
+  /**
+   * Check if instance exists
+   */
+  public static hasInstance(): boolean {
+    return RenderStateWorldAdapter.instance !== null;
+  }
 
   /**
    * Update the adapter with new render state from the worker

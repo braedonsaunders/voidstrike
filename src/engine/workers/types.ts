@@ -406,6 +406,7 @@ export interface GameCommand {
   abilityId?: string;
   upgradeId?: string;
   queueIndex?: number;
+  newQueueIndex?: number;
   targetIndex?: number;
   autocastEnabled?: boolean;
   wallPoints?: Array<{ x: number; y: number }>;

@@ -1,10 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { Game } from '@/engine/core/Game';
-import { Unit } from '@/engine/components/Unit';
-import { Transform } from '@/engine/components/Transform';
-import { Selectable } from '@/engine/components/Selectable';
+import { getRenderStateAdapter, getWorkerBridge } from '@/engine/workers';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore } from '@/store/gameSetupStore';
 
@@ -25,27 +22,28 @@ export function IdleWorkerButton() {
 
   // Update idle worker count via event-driven approach + throttled polling
   useEffect(() => {
-    const game = Game.getInstance();
-    if (!game) return;
+    const bridge = getWorkerBridge();
+    if (!bridge) return;
 
     const computeIdleWorkers = () => {
-      const currentTick = game.getCurrentTick();
+      const currentTick = bridge.currentTick;
       // Skip if already computed for this tick
       if (currentTick === lastTickRef.current) {
         return cachedCountRef.current;
       }
 
-      const workers = game.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
+      const worldAdapter = getRenderStateAdapter();
+      const workers = worldAdapter.getEntitiesWith('Unit', 'Transform', 'Selectable');
       let count = 0;
 
       for (const entity of workers) {
-        const unit = entity.get<Unit>('Unit')!;
-        const selectable = entity.get<Selectable>('Selectable')!;
+        const unit = entity.get<{ isWorker: boolean; state: string }>('Unit');
+        const selectable = entity.get<{ playerId: string }>('Selectable');
 
         if (
-          unit.isWorker &&
+          unit?.isWorker &&
           unit.state === 'idle' &&
-          selectable.playerId === playerId
+          selectable?.playerId === playerId
         ) {
           count++;
         }
@@ -61,8 +59,8 @@ export function IdleWorkerButton() {
       setIdleWorkerCount(count);
     };
 
-    // Subscribe to events that could change idle worker count
-    const eventBus = game.eventBus;
+    // Subscribe to events via worker bridge event bus
+    const eventBus = bridge.eventBus;
     const unsubSpawned = eventBus.on('unit:spawned', updateCount);
     const unsubDied = eventBus.on('unit:died', updateCount);
 
@@ -81,26 +79,24 @@ export function IdleWorkerButton() {
   }, [playerId]);
 
   const handleClick = useCallback(() => {
-    const game = Game.getInstance();
-    if (!game) return;
-
-    const workers = game.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
+    const worldAdapter = getRenderStateAdapter();
+    const workers = worldAdapter.getEntitiesWith('Unit', 'Transform', 'Selectable');
     const idleWorkers: Array<{ id: number; x: number; y: number }> = [];
 
     for (const entity of workers) {
-      const unit = entity.get<Unit>('Unit')!;
-      const transform = entity.get<Transform>('Transform')!;
-      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<{ isWorker: boolean; state: string }>('Unit');
+      const transform = entity.get<{ x: number; y: number }>('Transform');
+      const selectable = entity.get<{ playerId: string }>('Selectable');
 
       if (
-        unit.isWorker &&
+        unit?.isWorker &&
         unit.state === 'idle' &&
-        selectable.playerId === playerId
+        selectable?.playerId === playerId
       ) {
         idleWorkers.push({
           id: entity.id,
-          x: transform.x,
-          y: transform.y,
+          x: transform?.x ?? 0,
+          y: transform?.y ?? 0,
         });
       }
     }

@@ -3,11 +3,7 @@
 import { memo, useCallback, useMemo } from 'react';
 import { useGameStore } from '@/store/gameStore';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
-import { Game } from '@/engine/core/Game';
-import { Unit } from '@/engine/components/Unit';
-import { Building } from '@/engine/components/Building';
-import { Health } from '@/engine/components/Health';
-import { Resource } from '@/engine/components/Resource';
+import { getRenderStateAdapter, getWorkerBridge } from '@/engine/workers';
 import { useEffect, useState } from 'react';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
@@ -61,24 +57,53 @@ export const SelectionPanel = memo(function SelectionPanel() {
 
   useEffect(() => {
     const updateSelection = () => {
-      const game = Game.getInstance();
-      if (!game) return;
-
+      const worldAdapter = getRenderStateAdapter();
       const info: SelectedEntityInfo[] = [];
 
       for (const entityId of selectedUnits) {
-        const entity = game.world.getEntity(entityId);
+        const entity = worldAdapter.getEntity(entityId);
         if (!entity) continue;
 
-        const unit = entity.get<Unit>('Unit');
-        const building = entity.get<Building>('Building');
-        const health = entity.get<Health>('Health');
-        const resource = entity.get<Resource>('Resource');
+        // Get components with flexible types (worker mode adapters)
+        const unit = entity.get<{
+          name?: string;
+          unitId: string;
+          state: string;
+          attackDamage?: number;
+          attackSpeed?: number;
+          attackRange?: number;
+          speed?: number;
+          sightRange?: number;
+          damageType?: string;
+        }>('Unit');
+        const building = entity.get<{
+          name?: string;
+          buildingId: string;
+          state: string;
+          productionQueue?: { id: string; progress: number; buildTime: number; supplyAllocated: boolean; produceCount?: number }[];
+          isComplete?: () => boolean;
+        }>('Building');
+        const health = entity.get<{
+          current: number;
+          max: number;
+          shield?: number;
+          maxShield?: number;
+          armor?: number;
+        }>('Health');
+        const resource = entity.get<{
+          resourceType: string;
+          amount: number;
+          maxAmount: number;
+          maxGatherers: number;
+          getCurrentGatherers?: () => number;
+        }>('Resource');
 
         if (unit && health) {
+          // Get name from unit definitions as fallback
+          const unitDef = UNIT_DEFINITIONS[unit.unitId];
           info.push({
             id: entityId,
-            name: unit.name,
+            name: unit.name || unitDef?.name || unit.unitId,
             type: 'unit',
             health: health.current,
             maxHealth: health.max,
@@ -86,17 +111,17 @@ export const SelectionPanel = memo(function SelectionPanel() {
             maxShield: health.maxShield,
             state: unit.state,
             unitId: unit.unitId,
-            attackDamage: unit.attackDamage,
-            attackSpeed: unit.attackSpeed,
-            attackRange: unit.attackRange,
+            attackDamage: unit.attackDamage ?? unitDef?.attackDamage,
+            attackSpeed: unit.attackSpeed ?? unitDef?.attackSpeed,
+            attackRange: unit.attackRange ?? unitDef?.attackRange,
             armor: health.armor,
-            speed: unit.speed,
-            sightRange: unit.sightRange,
-            damageType: unit.damageType,
+            speed: unit.speed ?? unitDef?.speed,
+            sightRange: unit.sightRange ?? unitDef?.sightRange,
+            damageType: unit.damageType ?? unitDef?.damageType,
           });
         } else if (building && health) {
           // Get production queue info
-          const queue: ProductionQueueItem[] = building.productionQueue.map((item, idx) => {
+          const queue: ProductionQueueItem[] = (building.productionQueue ?? []).map((item, idx) => {
             const unitDef = UNIT_DEFINITIONS[item.id];
             return {
               id: item.id,
@@ -109,9 +134,12 @@ export const SelectionPanel = memo(function SelectionPanel() {
             };
           });
 
+          // Get name from building definitions as fallback
+          const buildingDef = BUILDING_DEFINITIONS[building.buildingId];
+          const isComplete = building.isComplete?.() ?? building.state === 'complete';
           info.push({
             id: entityId,
-            name: building.name,
+            name: building.name || buildingDef?.name || building.buildingId,
             type: 'building',
             health: health.current,
             maxHealth: health.max,
@@ -119,21 +147,22 @@ export const SelectionPanel = memo(function SelectionPanel() {
             buildingId: building.buildingId,
             armor: health.armor,
             productionQueue: queue,
-            isComplete: building.isComplete(),
+            isComplete,
           });
         } else if (resource) {
           // Resource (mineral patch or vespene geyser)
           const resourceName = resource.resourceType === 'minerals' ? 'Mineral Field' : 'Vespene Geyser';
+          const currentGatherers = resource.getCurrentGatherers?.() ?? 0;
           info.push({
             id: entityId,
             name: resourceName,
             type: 'resource',
             health: resource.amount,
             maxHealth: resource.maxAmount,
-            resourceType: resource.resourceType,
+            resourceType: resource.resourceType as 'minerals' | 'vespene',
             resourceAmount: resource.amount,
             resourceMaxAmount: resource.maxAmount,
-            currentGatherers: resource.getCurrentGatherers(),
+            currentGatherers,
             maxGatherers: resource.maxGatherers,
           });
         }
@@ -377,15 +406,15 @@ const MultiSelectProductionQueues = memo(function MultiSelectProductionQueues({
   buildings: SelectedEntityInfo[];
 }) {
   const handleCancelItem = useCallback((entityId: number, index: number) => {
-    const game = Game.getInstance();
-    if (!game) return;
+    const bridge = getWorkerBridge();
+    if (!bridge) return;
 
     const localPlayer = getLocalPlayerId();
     if (!localPlayer) return;
 
     // Use issueCommand for multiplayer sync
-    game.issueCommand({
-      tick: game.getCurrentTick(),
+    bridge.issueCommand({
+      tick: bridge.currentTick,
       playerId: localPlayer,
       type: 'CANCEL_PRODUCTION',
       entityIds: [entityId],
@@ -480,15 +509,15 @@ const ProductionQueueDisplay = memo(function ProductionQueueDisplay({
   queuedItems: ProductionQueueItem[];
 }) {
   const handleCancelItem = useCallback((index: number) => {
-    const game = Game.getInstance();
-    if (!game) return;
+    const bridge = getWorkerBridge();
+    if (!bridge) return;
 
     const localPlayer = getLocalPlayerId();
     if (!localPlayer) return;
 
     // Use issueCommand for multiplayer sync
-    game.issueCommand({
-      tick: game.getCurrentTick(),
+    bridge.issueCommand({
+      tick: bridge.currentTick,
       playerId: localPlayer,
       type: 'CANCEL_PRODUCTION',
       entityIds: [entityId],
@@ -497,15 +526,15 @@ const ProductionQueueDisplay = memo(function ProductionQueueDisplay({
   }, [entityId]);
 
   const handleMoveUp = useCallback((index: number) => {
-    const game = Game.getInstance();
-    if (!game) return;
+    const bridge = getWorkerBridge();
+    if (!bridge) return;
 
     const localPlayer = getLocalPlayerId();
     if (!localPlayer) return;
 
     // Use issueCommand for multiplayer sync - move up means newIndex = index - 1
-    game.issueCommand({
-      tick: game.getCurrentTick(),
+    bridge.issueCommand({
+      tick: bridge.currentTick,
       playerId: localPlayer,
       type: 'QUEUE_REORDER',
       entityIds: [entityId],
@@ -515,15 +544,15 @@ const ProductionQueueDisplay = memo(function ProductionQueueDisplay({
   }, [entityId]);
 
   const handleMoveDown = useCallback((index: number) => {
-    const game = Game.getInstance();
-    if (!game) return;
+    const bridge = getWorkerBridge();
+    if (!bridge) return;
 
     const localPlayer = getLocalPlayerId();
     if (!localPlayer) return;
 
     // Use issueCommand for multiplayer sync - move down means newIndex = index + 1
-    game.issueCommand({
-      tick: game.getCurrentTick(),
+    bridge.issueCommand({
+      tick: bridge.currentTick,
       playerId: localPlayer,
       type: 'QUEUE_REORDER',
       entityIds: [entityId],
