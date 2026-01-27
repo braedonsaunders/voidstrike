@@ -193,6 +193,8 @@ export function WebGPUGameCanvas() {
     containerRef,
     cameraRef: refs.camera,
     gameRef,
+    worldProviderRef,
+    eventBusRef,
     placementPreviewRef: refs.placementPreview,
     wallPlacementPreviewRef: refs.wallPlacementPreview,
     overlayManagerRef: refs.overlayManager,
