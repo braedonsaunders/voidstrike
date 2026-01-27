@@ -901,24 +901,32 @@ export class WaterMesh {
 
   /**
    * Clear all water meshes and shore transitions
+   * CRITICAL: Remove from group FIRST, then dispose to prevent WebGPU crashes.
    */
   public clear(): void {
+    // Remove all meshes from group first (prevents WebGPU render crashes)
+    for (const mesh of this.waterMeshes) {
+      this.group.remove(mesh);
+    }
+    for (const mesh of this.shoreMeshes) {
+      this.group.remove(mesh);
+    }
+
+    // Now safe to dispose (meshes no longer being rendered)
     for (const mesh of this.waterMeshes) {
       mesh.geometry.dispose();
       if (mesh.material) {
         (mesh.material as THREE.Material).dispose();
       }
-      this.group.remove(mesh);
     }
-    this.waterMeshes = [];
-
     for (const mesh of this.shoreMeshes) {
       mesh.geometry.dispose();
       if (mesh.material) {
         (mesh.material as THREE.Material).dispose();
       }
-      this.group.remove(mesh);
     }
+
+    this.waterMeshes = [];
     this.shoreMeshes = [];
   }
 

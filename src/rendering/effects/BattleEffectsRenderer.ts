@@ -858,17 +858,24 @@ export class BattleEffectsRenderer {
 
     const trailGeometry = new THREE.BufferGeometry();
     const trailVertices = new Float32Array(trailLength * 2 * 3); // 2 vertices per segment for ribbon
-    const trailIndices: number[] = [];
 
-    // Create triangle strip indices
+    // Create triangle strip indices with proper TypedArray for WebGPU compatibility
+    // (trailLength - 1) quads * 2 triangles * 3 vertices = indices needed
+    const indexCount = (trailLength - 1) * 6;
+    const trailIndices = new Uint16Array(indexCount);
+    let indexOffset = 0;
     for (let i = 0; i < trailLength - 1; i++) {
       const base = i * 2;
-      trailIndices.push(base, base + 1, base + 2);
-      trailIndices.push(base + 1, base + 3, base + 2);
+      trailIndices[indexOffset++] = base;
+      trailIndices[indexOffset++] = base + 1;
+      trailIndices[indexOffset++] = base + 2;
+      trailIndices[indexOffset++] = base + 1;
+      trailIndices[indexOffset++] = base + 3;
+      trailIndices[indexOffset++] = base + 2;
     }
 
     trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailVertices, 3));
-    trailGeometry.setIndex(trailIndices);
+    trailGeometry.setIndex(new THREE.BufferAttribute(trailIndices, 1));
 
     const trailMaterial = this.trailMaterial.clone();
     trailMaterial.color.setHex(colors.secondary);
@@ -940,16 +947,23 @@ export class BattleEffectsRenderer {
 
     const trailGeometry = new THREE.BufferGeometry();
     const trailVertices = new Float32Array(trailLength * 2 * 3);
-    const trailIndices: number[] = [];
 
+    // Create triangle strip indices with proper TypedArray for WebGPU compatibility
+    const indexCount = (trailLength - 1) * 6;
+    const trailIndices = new Uint16Array(indexCount);
+    let indexOffset = 0;
     for (let i = 0; i < trailLength - 1; i++) {
       const base = i * 2;
-      trailIndices.push(base, base + 1, base + 2);
-      trailIndices.push(base + 1, base + 3, base + 2);
+      trailIndices[indexOffset++] = base;
+      trailIndices[indexOffset++] = base + 1;
+      trailIndices[indexOffset++] = base + 2;
+      trailIndices[indexOffset++] = base + 1;
+      trailIndices[indexOffset++] = base + 3;
+      trailIndices[indexOffset++] = base + 2;
     }
 
     trailGeometry.setAttribute('position', new THREE.BufferAttribute(trailVertices, 3));
-    trailGeometry.setIndex(trailIndices);
+    trailGeometry.setIndex(new THREE.BufferAttribute(trailIndices, 1));
 
     const trailMaterial = this.trailMaterial.clone();
     trailMaterial.color.setHex(colors.secondary);
