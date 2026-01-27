@@ -4,210 +4,542 @@
 
 ```
 voidstrike/
-├── .claude/                    # Claude Code instructions
-│   ├── CLAUDE.md              # Main instructions file
-│   ├── TODO.md                # Development roadmap
-│   ├── templates/             # Documentation templates
-│   └── skills/                # Custom skills
-├── docs/                       # Project documentation
-│   ├── architecture/          # Architecture docs (this file)
-│   ├── design/                # Game design docs
-│   ├── reference/             # Technical reference
-│   ├── security/              # Security documentation
-│   └── tools/                 # Development tools
-├── wasm/                       # WebAssembly modules
-│   └── boids/                 # SIMD-accelerated boids flocking
-│       ├── Cargo.toml         # Rust crate configuration
-│       └── src/
-│           ├── lib.rs         # WASM exports (BoidsEngine)
-│           ├── simd.rs        # f32x4 SIMD operations
-│           └── soa.rs         # SoA memory layout
+├── .claude/
+│   ├── templates/ # Documentation templates
+│   │   ├── component.md
+│   │   ├── feature.md
+│   │   ├── system.md
+│   │   └── tool.md
+│   ├── CLAUDE.md # Main instructions file
+│   └── TODO.md # Development roadmap
+├── docs/
+│   ├── architecture/ # Architecture docs (this file)
+│   │   ├── networking.md # P2P multiplayer
+│   │   ├── OVERVIEW.md # System architecture
+│   │   └── rendering.md # Graphics pipeline
+│   ├── design/ # Game design docs
+│   │   ├── audio.md # Audio system
+│   │   └── GAME_DESIGN.md # Core design doc
+│   ├── reference/ # Technical reference
+│   │   ├── models.md # 3D model specs
+│   │   ├── schema.md # Data schemas
+│   │   └── textures.md # Texture specs
+│   ├── security/ # Security documentation
+│   │   ├── CODE_AUDIT_REPORT.md
+│   │   └── SECURITY_AUDIT.md
+│   ├── tools/ # Development tools
+│   │   ├── blender/
+│   │   │   └── README.md
+│   │   ├── debug/
+│   │   │   ├── effect-placer.html
+│   │   │   └── README.md
+│   │   └── README.md
+│   └── TESTING.md # Test documentation
+├── wasm/ # WASM module wrappers
+│   └── boids/ # SIMD-accelerated boids
+│       ├── src/
+│       │   ├── lib.rs
+│       │   ├── simd.rs
+│       │   └── soa.rs
+│       └── Cargo.toml
 ├── src/
-│   ├── app/                   # Next.js App Router
-│   │   ├── page.tsx           # Landing page
+│   ├── adapters/
+│   │   └── ZustandStateAdapter.ts
+│   ├── app/ # Next.js App Router
 │   │   ├── game/
-│   │   │   └── page.tsx       # Main game view
-│   │   ├── lobby/
-│   │   │   └── page.tsx       # Multiplayer lobby
-│   │   └── (no API routes)    # Static site - API routes removed for Vercel compatibility
-│   ├── components/
-│   │   ├── home/              # Homepage/menu components
-│   │   │   └── HomeBackground.tsx  # Cinematic Three.js animated background
-│   │   ├── game/              # Game-specific components
-│   │   │   ├── WebGPUGameCanvas.tsx # Main game canvas (WebGPU with WebGL fallback)
-│   │   │   ├── HUD.tsx
-│   │   │   ├── Minimap.tsx
+│   │   │   ├── setup/
+│   │   │   │   ├── editor/ # 3D Map Editor
+│   │   │   │   │   └── ...
+│   │   │   │   └── page.tsx
+│   │   │   └── page.tsx
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   └── page.tsx
+│   ├── assets/ # Asset management
+│   │   ├── AssetManager.ts
+│   │   └── GLTFWorkerManager.ts
+│   ├── audio/ # Audio management
+│   │   ├── audioConfig.ts
+│   │   ├── AudioManager.ts
+│   │   └── MusicPlayer.ts
+│   ├── components/ # React components
+│   │   ├── game/
+│   │   │   ├── hooks/ # React hooks
+│   │   │   │   ├── index.ts
+│   │   │   │   ├── useCameraControl.ts
+│   │   │   │   ├── useGameInput.ts
+│   │   │   │   ├── usePostProcessing.ts
+│   │   │   │   └── useWebGPURenderer.ts
+│   │   │   ├── BaseModal.tsx
+│   │   │   ├── BasePanel.tsx
+│   │   │   ├── BattleSimulatorPanel.tsx
 │   │   │   ├── CommandCard.tsx
-│   │   │   ├── SelectionPanel.tsx
+│   │   │   ├── ConsolePanel.tsx
+│   │   │   ├── DebugMenuPanel.tsx
+│   │   │   ├── GraphicsOptionsPanel.tsx
+│   │   │   ├── HUD.tsx
+│   │   │   ├── icons.ts
+│   │   │   ├── IdleWorkerButton.tsx
+│   │   │   ├── KeyboardShortcutsPanel.tsx
+│   │   │   ├── LoadingScreen.tsx
+│   │   │   ├── Minimap.tsx
+│   │   │   ├── MultiplayerOverlay.tsx
+│   │   │   ├── PerformanceDashboard.tsx
+│   │   │   ├── PerformancePanel.tsx
+│   │   │   ├── PerformanceRecorder.tsx
+│   │   │   ├── PlayerStatusPanel.tsx
 │   │   │   ├── ResourcePanel.tsx
-│   │   │   ├── GraphicsOptionsPanel.tsx # Graphics settings panel
-│   │   │   ├── SoundOptionsPanel.tsx    # Audio settings panel with music controls
-│   │   │   ├── DebugMenuPanel.tsx       # Debug logging settings (disabled in multiplayer)
-│   │   │   ├── PerformanceDashboard.tsx # Real-time performance metrics display
-│   │   │   ├── PerformancePanel.tsx     # Performance monitoring panel wrapper
-│   │   │   ├── PerformanceRecorder.tsx  # 30-second performance data recorder with export
-│   │   │   ├── BattleSimulatorPanel.tsx # Unit battle simulation tool
-│   │   │   ├── TechTreePanel.tsx        # Tech tree visualization
-│   │   │   ├── IdleWorkerButton.tsx     # Idle worker selection button
-│   │   │   ├── KeyboardShortcutsPanel.tsx # Hotkeys reference
-│   │   │   └── MultiplayerOverlay.tsx   # Multiplayer connection status
-│   │   └── ui/                # Reusable UI components
-│   ├── engine/
+│   │   │   ├── SelectionBox.tsx
+│   │   │   ├── SelectionPanel.tsx
+│   │   │   ├── SoundOptionsPanel.tsx
+│   │   │   ├── TechTreePanel.tsx
+│   │   │   └── WebGPUGameCanvas.tsx
+│   │   ├── home/
+│   │   │   └── HomeBackground.tsx
+│   │   ├── lobby/
+│   │   │   └── LobbyBrowser.tsx
+│   │   ├── ui/
+│   │   │   └── Tooltip.tsx
+│   │   └── Providers.tsx
+│   ├── config/ # Configuration files
+│   │   └── consoleCommands.ts
+│   ├── data/ # Game data definitions
+│   │   ├── abilities/
+│   │   │   ├── abilities.ts
+│   │   │   └── abilityMapper.ts
+│   │   ├── ai/ # AI subsystems
+│   │   │   ├── factions/
+│   │   │   │   └── dominion.ts
+│   │   │   ├── aiConfig.ts
+│   │   │   ├── buildOrders.ts
+│   │   │   └── index.ts
+│   │   ├── buildings/
+│   │   │   ├── dominion.ts
+│   │   │   └── walls.ts
+│   │   ├── combat/
+│   │   │   └── combat.ts
+│   │   ├── formations/
+│   │   │   └── formations.ts
+│   │   ├── maps/
+│   │   │   ├── core/
+│   │   │   │   ├── ConnectivityAnalyzer.ts
+│   │   │   │   ├── ConnectivityFixer.ts
+│   │   │   │   ├── ConnectivityGraph.ts
+│   │   │   │   ├── ConnectivityValidator.ts
+│   │   │   │   ├── ElevationMap.ts
+│   │   │   │   ├── ElevationMapGenerator.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   └── MapScaffolder.ts
+│   │   │   ├── json/
+│   │   │   │   ├── battle_arena.json
+│   │   │   │   ├── contested_frontier.json
+│   │   │   │   ├── crystal_caverns.json
+│   │   │   │   ├── index.ts
+│   │   │   │   ├── scorched_basin.json
+│   │   │   │   ├── test_6p_flat.json
+│   │   │   │   ├── titans_colosseum.json
+│   │   │   │   ├── void_assault.json
+│   │   │   │   └── webpack.d.ts
+│   │   │   ├── schema/
+│   │   │   │   ├── index.ts
+│   │   │   │   └── MapJsonSchema.ts
+│   │   │   ├── serialization/
+│   │   │   │   ├── deserialize.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   └── serialize.ts
+│   │   │   ├── index.ts
+│   │   │   ├── loader.ts
+│   │   │   └── MapTypes.ts
+│   │   ├── projectiles/
+│   │   │   ├── index.ts
+│   │   │   └── projectileTypes.ts
+│   │   ├── research/
+│   │   │   └── dominion.ts
+│   │   ├── resources/
+│   │   │   └── resources.ts
+│   │   ├── units/
+│   │   │   ├── categories.ts
+│   │   │   └── dominion.ts
+│   │   ├── audio.config.ts
+│   │   ├── collisionConfig.ts
+│   │   ├── index.ts
+│   │   ├── movement.config.ts
+│   │   ├── music-manifest.json
+│   │   ├── pathfinding.config.ts
+│   │   ├── rendering.config.ts
+│   │   └── tech-tree.ts
+│   ├── editor/ # 3D Map Editor
+│   │   ├── config/ # Configuration files
+│   │   │   └── EditorConfig.ts
+│   │   ├── configs/
+│   │   │   └── voidstrike.ts
 │   │   ├── core/
-│   │   │   ├── Game.ts        # Main game class
-│   │   │   ├── GameLoop.ts    # Fixed timestep loop
-│   │   │   └── EventBus.ts    # Event system
-│   │   ├── ecs/
-│   │   │   ├── World.ts       # ECS world container
-│   │   │   ├── Entity.ts      # Entity class
-│   │   │   ├── Component.ts   # Component base
-│   │   │   └── System.ts      # System base
-│   │   ├── systems/
-│   │   │   ├── SpawnSystem.ts           # Unit spawning from production
-│   │   │   ├── BuildingPlacementSystem.ts # Building construction
-│   │   │   ├── PathfindingSystem.ts     # Dynamic pathfinding with obstacle detection
-│   │   │   ├── MovementSystem.ts        # Unit movement & formations (thin wrapper)
-│   │   │   ├── movement/                # Movement subsystem modules
-│   │   │   │   ├── FlockingBehavior.ts     # Boids: separation, cohesion, alignment
-│   │   │   │   ├── PathfindingMovement.ts  # A-star/navmesh, crowd, building avoidance
-│   │   │   │   ├── FormationMovement.ts    # Magic box, group formations
-│   │   │   │   ├── MovementOrchestrator.ts # Main coordinator
-│   │   │   │   └── index.ts                # Module exports
-│   │   │   ├── CombatSystem.ts          # Attack, damage, high ground
-│   │   │   ├── ProjectileSystem.ts      # Projectile movement & impact damage
-│   │   │   ├── SelectionSystem.ts       # Screen-space selection with flying unit support
-│   │   │   ├── ProductionSystem.ts      # Building production queues
-│   │   │   ├── ResourceSystem.ts        # Resource gathering
-│   │   │   ├── VisionSystem.ts          # Fog of war visibility
-│   │   │   ├── AbilitySystem.ts         # Unit abilities & cooldowns
-│   │   │   ├── EnhancedAISystem.ts      # AI wrapper (delegates to ai/AICoordinator)
-│   │   │   ├── AIMicroSystem.ts         # AI unit micro (kiting, focus fire, positioning)
-│   │   │   └── ai/                      # Modular AI subsystems
-│   │   │       ├── AICoordinator.ts     # Central orchestrator
-│   │   │       ├── AIEconomyManager.ts  # Worker & resource management
-│   │   │       ├── AIBuildOrderExecutor.ts # Production & research
-│   │   │       ├── AITacticsManager.ts  # Combat decisions
-│   │   │       └── AIScoutingManager.ts # Map exploration
-│   │   │   ├── UnitMechanicsSystem.ts   # Transform, cloak, transport, heal
-│   │   │   ├── BuildingMechanicsSystem.ts # Lift-off, addons, lowering
-│   │   │   ├── WallSystem.ts            # Wall connections, gates, upgrades
-│   │   │   ├── GameStateSystem.ts       # Victory/defeat conditions
-│   │   │   └── SaveLoadSystem.ts        # Game save/load functionality
-│   │   ├── ai/
-│   │   │   ├── BehaviorTree.ts          # Behavior tree for unit AI micro
-│   │   │   ├── UnitBehaviors.ts         # Pre-built behavior trees for units
-│   │   │   ├── AIWorkerManager.ts       # Web Worker for AI decisions
-│   │   │   ├── InfluenceMap.ts          # Spatial threat tracking & safe pathfinding
-│   │   │   ├── PositionalAnalysis.ts    # Terrain analysis (chokes, ramps, defensible positions)
-│   │   │   ├── ScoutingMemory.ts        # Enemy intel with knowledge decay & inference
-│   │   │   ├── FormationControl.ts      # Army formations (concave, spread, box)
-│   │   │   ├── RetreatCoordination.ts   # Group retreat & re-engagement logic
-│   │   │   ├── AbilityAI.ts             # Intelligent ability usage decisions
-│   │   │   ├── WorkerDistribution.ts    # Multi-base worker saturation balancing
-│   │   │   ├── AdvancedAIController.ts  # Unified controller for all AI subsystems
-│   │   │   └── index.ts                 # AI module exports
-│   │   ├── components/
-│   │   │   ├── Transform.ts
-│   │   │   ├── Health.ts
-│   │   │   ├── Selectable.ts
-│   │   │   ├── Unit.ts
+│   │   │   ├── Editor3DCanvas.tsx
+│   │   │   ├── EditorCanvas.tsx
+│   │   │   ├── EditorContextMenu.tsx
+│   │   │   ├── EditorCore.tsx
+│   │   │   ├── EditorExportModal.tsx
+│   │   │   ├── EditorFloatingToolbar.tsx
+│   │   │   ├── EditorHeader.tsx
+│   │   │   ├── EditorMiniMap.tsx
+│   │   │   ├── EditorPanels.tsx
+│   │   │   ├── EditorStatusBar.tsx
+│   │   │   └── EditorToolbar.tsx
+│   │   ├── hooks/ # React hooks
+│   │   │   ├── useEditorState.ts
+│   │   │   └── useLLMGeneration.ts
+│   │   ├── panels/
+│   │   │   └── AIGeneratePanel.tsx
+│   │   ├── providers/
+│   │   │   └── voidstrike.ts
+│   │   ├── rendering3d/
+│   │   │   ├── CliffMesh.ts
+│   │   │   ├── EditorBrushPreview.ts
+│   │   │   ├── EditorGrid.ts
+│   │   │   ├── EditorModelLoader.ts
+│   │   │   ├── EditorObjects.ts
+│   │   │   ├── EditorTerrain.ts
+│   │   │   ├── EditorWater.ts
+│   │   │   ├── GuardrailMesh.ts
+│   │   │   └── index.ts
+│   │   ├── services/
+│   │   │   └── LLMMapGenerator.ts
+│   │   ├── terrain/
+│   │   │   └── EdgeDetector.ts
+│   │   ├── tools/ # Development tools
+│   │   │   ├── AngleConstraint.ts
+│   │   │   ├── index.ts
+│   │   │   ├── ObjectPlacer.ts
+│   │   │   └── TerrainBrush.ts
+│   │   ├── utils/ # Utility functions
+│   │   │   ├── borderDecorations.ts
+│   │   │   └── mapExport.ts
+│   │   └── index.ts
+│   ├── engine/ # Game engine core
+│   │   ├── ai/ # AI subsystems
+│   │   │   ├── AbilityAI.ts
+│   │   │   ├── AIWorkerManager.ts
+│   │   │   ├── BehaviorTree.ts
+│   │   │   ├── FormationControl.ts
+│   │   │   ├── index.ts
+│   │   │   ├── InfluenceMap.ts
+│   │   │   ├── PositionalAnalysis.ts
+│   │   │   ├── RetreatCoordination.ts
+│   │   │   ├── ScoutingMemory.ts
+│   │   │   ├── UnitBehaviors.ts
+│   │   │   └── WorkerDistribution.ts
+│   │   ├── combat/
+│   │   │   └── TargetAcquisition.ts
+│   │   ├── components/ # React components
+│   │   │   ├── Ability.ts
 │   │   │   ├── Building.ts
+│   │   │   ├── Health.ts
+│   │   │   ├── Projectile.ts
 │   │   │   ├── Resource.ts
-│   │   │   ├── Ability.ts          # Unit abilities component
-│   │   │   ├── Wall.ts             # Wall/gate component
-│   │   │   └── Projectile.ts       # Projectile entity component
-│   │   ├── pathfinding/
-│   │   │   ├── RecastNavigation.ts  # WASM-based navmesh pathfinding & crowd simulation
-│   │   │   ├── Grid.ts
-│   │   │   └── SpatialGrid.ts
-│   │   ├── wasm/
-│   │   │   └── WasmBoids.ts         # SIMD-accelerated boids wrapper with JS fallback
-│   │   └── definitions/
-│   │       ├── DefinitionRegistry.ts # Centralized config access
-│   │       ├── DefinitionLoader.ts   # Config loading
-│   │       └── DefinitionValidator.ts # Config validation
-│   ├── audio/
-│   │   ├── AudioManager.ts    # Sound effects management
-│   │   └── MusicPlayer.ts     # Dynamic music system with auto-discovery
-│   ├── assets/
-│   │   └── AssetManager.ts    # 3D asset generation & loading
-│   ├── rendering/
-│   │   ├── Camera.ts          # RTS camera controller
-│   │   ├── Terrain.ts         # Terrain mesh with procedural details
-│   │   ├── UnitRenderer.ts    # Unit rendering with player colors
-│   │   ├── BuildingRenderer.ts # Building mesh rendering
-│   │   ├── ResourceRenderer.ts # Resource node rendering
-│   │   ├── FogOfWar.ts        # Fog of war visibility system
-│   │   ├── RallyPointRenderer.ts # Building rally point visuals
-│   │   ├── CommandQueueRenderer.ts # Shift-click waypoint visualization
-│   │   ├── BuildingPlacementPreview.ts # Placement grid + ghost
-│   │   ├── WallPlacementPreview.ts # Wall line drawing preview
-│   │   ├── EnvironmentManager.ts # Sky, lighting, environment
-│   │   ├── LightPool.ts       # Dynamic light pooling
-│   │   └── effects/           # Battle effects module
-│   │       ├── index.ts       # Module exports
-│   │       ├── BattleEffectsRenderer.ts # Projectile trails, explosions, decals
-│   │       ├── AdvancedParticleSystem.ts # GPU instanced particles (fire, smoke, sparks)
-│   │       └── VehicleEffectsSystem.ts # Continuous vehicle effects (engine trails, dust)
-│   ├── phaser/               # Phaser 4 2D overlay system
-│   │   ├── index.ts          # Module exports
+│   │   │   ├── Selectable.ts
+│   │   │   ├── Transform.ts
+│   │   │   ├── Unit.ts
+│   │   │   ├── Velocity.ts
+│   │   │   └── Wall.ts
+│   │   ├── core/
+│   │   │   ├── __mocks__/
+│   │   │   │   └── MockStatePort.ts
+│   │   │   ├── EventBus.ts # Event system
+│   │   │   ├── Game.ts # Main game class
+│   │   │   ├── GameLoop.ts # Fixed timestep loop
+│   │   │   ├── GameStatePort.ts
+│   │   │   ├── PerformanceMonitor.ts
+│   │   │   ├── SpatialGrid.ts
+│   │   │   └── SystemRegistry.ts
+│   │   ├── debug/
+│   │   │   ├── ConsoleEngine.ts
+│   │   │   └── index.ts
+│   │   ├── definitions/ # Definition registry
+│   │   │   ├── bootstrap.ts
+│   │   │   ├── DefinitionLoader.ts
+│   │   │   ├── DefinitionRegistry.ts
+│   │   │   ├── DefinitionValidator.ts
+│   │   │   ├── index.ts
+│   │   │   └── types.ts
+│   │   ├── ecs/ # Entity Component System
+│   │   │   ├── Component.ts # Component base
+│   │   │   ├── Entity.ts # Entity class
+│   │   │   ├── EntityId.ts
+│   │   │   ├── IWorldProvider.ts
+│   │   │   ├── System.ts # System base
+│   │   │   └── World.ts # ECS world container
+│   │   ├── network/
+│   │   │   ├── p2p/
+│   │   │   │   ├── ConnectionCode.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   ├── NostrMatchmaking.ts
+│   │   │   │   ├── NostrRelays.ts
+│   │   │   │   └── PeerRelay.ts
+│   │   │   ├── DesyncDetection.ts
+│   │   │   ├── index.ts
+│   │   │   ├── MerkleTree.ts
+│   │   │   └── types.ts
+│   │   ├── pathfinding/ # Navigation & pathfinding
+│   │   │   └── RecastNavigation.ts
+│   │   ├── systems/ # ECS Systems
+│   │   │   ├── ai/ # AI subsystems
+│   │   │   │   ├── AIBuildOrderExecutor.ts
+│   │   │   │   ├── AICoordinator.ts
+│   │   │   │   ├── AIEconomyManager.ts
+│   │   │   │   ├── AIScoutingManager.ts
+│   │   │   │   ├── AITacticsManager.ts
+│   │   │   │   └── index.ts
+│   │   │   ├── movement/
+│   │   │   │   ├── FlockingBehavior.ts
+│   │   │   │   ├── FormationMovement.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   ├── MovementOrchestrator.ts
+│   │   │   │   └── PathfindingMovement.ts
+│   │   │   ├── AbilitySystem.ts
+│   │   │   ├── AIEconomySystem.ts
+│   │   │   ├── AIMicroSystem.ts
+│   │   │   ├── AudioSystem.ts
+│   │   │   ├── BuildingMechanicsSystem.ts
+│   │   │   ├── BuildingPlacementSystem.ts
+│   │   │   ├── ChecksumSystem.ts
+│   │   │   ├── CombatSystem.ts
+│   │   │   ├── EnhancedAISystem.ts
+│   │   │   ├── GameStateSystem.ts
+│   │   │   ├── MovementSystem.ts
+│   │   │   ├── PathfindingSystem.ts
+│   │   │   ├── ProductionSystem.ts
+│   │   │   ├── ProjectileSystem.ts
+│   │   │   ├── ResearchSystem.ts
+│   │   │   ├── ResourceSystem.ts
+│   │   │   ├── SaveLoadSystem.ts
+│   │   │   ├── SelectionSystem.ts
+│   │   │   ├── SpawnSystem.ts
+│   │   │   ├── systemDependencies.ts
+│   │   │   ├── UnitMechanicsSystem.ts
+│   │   │   ├── VisionSystem.ts
+│   │   │   └── WallSystem.ts
+│   │   ├── wasm/ # WASM module wrappers
+│   │   │   ├── wasm-modules.d.ts
+│   │   │   └── WasmBoids.ts
+│   │   └── workers/ # Web Workers
+│   │       ├── GameWorker.ts
+│   │       ├── index.ts
+│   │       ├── MainThreadEventHandler.ts
+│   │       ├── RenderStateAdapter.ts
+│   │       ├── types.ts
+│   │       └── WorkerBridge.ts
+│   ├── hooks/ # React hooks
+│   │   ├── useMultiplayer.ts
+│   │   ├── useP2P.ts
+│   │   └── usePublicLobbies.ts
+│   ├── phaser/ # Phaser 4 2D overlay
 │   │   ├── scenes/
-│   │   │   └── OverlayScene.ts # Main 2D overlay (alerts, vignettes, countdown)
-│   │   └── systems/           # Advanced overlay systems
-│   │       ├── index.ts       # System exports
-│   │       ├── DamageNumberSystem.ts # Consolidated damage number display
-│   │       └── ScreenEffectsSystem.ts # Chromatic aberration, kill streaks, etc.
-│   ├── data/
-│   │   ├── units/             # Unit definitions
-│   │   ├── buildings/         # Building definitions
-│   │   │   ├── dominion.ts    # Dominion faction buildings
-│   │   │   └── walls.ts       # Wall/gate definitions
-│   │   ├── factions/          # Faction configs
-│   │   └── maps/              # Map data & generation
-│   │       └── core/          # Map system core (elevation, connectivity, scaffolding)
-│   ├── editor/                # 3D Map Editor
-│   │   ├── core/              # Editor UI components (EditorCore, Canvas, Toolbar, Panels)
-│   │   ├── config/            # Editor configuration types
-│   │   ├── hooks/             # React hooks (useEditorState)
-│   │   ├── providers/         # Game-specific data providers (voidstrike.ts)
-│   │   ├── rendering3d/       # 3D rendering (EditorTerrain, EditorGrid, BrushPreview)
-│   │   └── tools/             # Editing tools (TerrainBrush, ObjectPlacer)
-│   ├── store/
-│   │   ├── gameStore.ts       # Zustand game state
-│   │   └── uiStore.ts         # UI state
-│   ├── hooks/
-│   │   └── useMultiplayer.ts  # Nostr-based lobby & WebRTC hook
-│   ├── store/
-│   │   └── multiplayerStore.ts # P2P connection state
-│   └── utils/
-│       ├── math.ts            # Math utilities
-│       ├── spatial.ts         # Spatial hashing
-│       ├── deterministic.ts   # Deterministic random
-│       ├── gameSetup.ts       # Initial game entity spawning
-│       └── debugLogger.ts     # Category-based debug logging utility
+│   │   │   └── OverlayScene.ts
+│   │   ├── systems/ # ECS Systems
+│   │   │   ├── DamageNumberSystem.ts
+│   │   │   ├── index.ts
+│   │   │   └── ScreenEffectsSystem.ts
+│   │   └── index.ts
+│   ├── rendering/ # Rendering systems
+│   │   ├── compute/
+│   │   │   ├── GPUEntityBuffer.ts
+│   │   │   ├── GPUIndirectRenderer.ts
+│   │   │   ├── UnifiedCullingCompute.ts
+│   │   │   └── VisionCompute.ts
+│   │   ├── effects/ # Visual effects
+│   │   │   ├── AdvancedParticleSystem.ts
+│   │   │   ├── BattleEffectsRenderer.ts
+│   │   │   ├── index.ts
+│   │   │   └── VehicleEffectsSystem.ts
+│   │   ├── services/
+│   │   │   └── CullingService.ts
+│   │   ├── shared/
+│   │   │   ├── HealthBarRenderer.ts
+│   │   │   ├── index.ts
+│   │   │   ├── InstancedMeshPool.ts
+│   │   │   └── SelectionRingRenderer.ts
+│   │   ├── tsl/
+│   │   │   ├── effects/ # Visual effects
+│   │   │   │   ├── EffectPasses.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   ├── TemporalManager.ts
+│   │   │   │   └── TemporalUtils.ts
+│   │   │   ├── BuildingMaterials.ts
+│   │   │   ├── FogOfWar.ts
+│   │   │   ├── GameOverlay.ts
+│   │   │   ├── index.ts
+│   │   │   ├── InstancedVelocity.ts
+│   │   │   ├── MapBorderFog.ts
+│   │   │   ├── noise.ts
+│   │   │   ├── PostProcessing.ts
+│   │   │   ├── SelectionMaterial.ts
+│   │   │   ├── TemporalAO.ts
+│   │   │   ├── TemporalSSR.ts
+│   │   │   ├── TerrainMaterial.ts
+│   │   │   ├── UpscalerNode.ts
+│   │   │   ├── VolumetricFog.ts
+│   │   │   └── WebGPURenderer.ts
+│   │   ├── Biomes.ts
+│   │   ├── BuildingPlacementPreview.ts
+│   │   ├── BuildingRenderer.ts
+│   │   ├── Camera.ts
+│   │   ├── CommandQueueRenderer.ts
+│   │   ├── DecorationLightManager.ts
+│   │   ├── EmissiveDecorationManager.ts
+│   │   ├── EnhancedDecorations.ts
+│   │   ├── EnvironmentManager.ts
+│   │   ├── GroundDetail.ts
+│   │   ├── InstancedDecorations.ts
+│   │   ├── LightPool.ts
+│   │   ├── RallyPointRenderer.ts
+│   │   ├── ResourceRenderer.ts
+│   │   ├── Terrain.ts
+│   │   ├── UnitRenderer.ts
+│   │   ├── WallPlacementPreview.ts
+│   │   ├── WatchTowerRenderer.ts
+│   │   └── WaterMesh.ts
+│   ├── store/ # State management
+│   │   ├── cameraStore.ts
+│   │   ├── gameSetupStore.ts
+│   │   ├── gameStore.ts
+│   │   ├── multiplayerStore.ts
+│   │   ├── projectionStore.ts
+│   │   └── uiStore.ts
+│   ├── types/
+│   │   └── three-webgpu.d.ts
+│   ├── utils/ # Utility functions
+│   │   ├── debugLogger.ts
+│   │   ├── FixedPoint.ts
+│   │   ├── gameSetup.ts
+│   │   ├── math.ts
+│   │   ├── overlayCache.ts
+│   │   ├── storage.ts
+│   │   └── VectorPool.ts
+│   └── workers/ # Web Workers
+│       ├── ai-decisions.worker.ts
+│       ├── countdownWorker.ts
+│       ├── gltf.worker.ts
+│       ├── pathfinding.worker.ts
+│       ├── phaserLoopWorker.ts
+│       └── vision.worker.ts
 ├── public/
-│   ├── config/
-│   │   └── assets.json        # Model & animation configuration (JSON)
-│   ├── models/                # 3D models (GLTF/GLB)
-│   │   ├── units/             # Unit models
-│   │   ├── buildings/         # Building models
-│   │   ├── resources/         # Resource models
-│   │   └── decorations/       # Decoration models
-│   ├── textures/              # Terrain, unit textures
-│   └── audio/                 # Sound effects, music
-├── src/workers/
-│   ├── countdownWorker.ts     # Countdown timer Web Worker
-│   ├── phaserLoopWorker.ts    # Phaser overlay loop (background tab immune)
-│   ├── pathfinding.worker.ts  # Recast Navigation WASM pathfinding
-│   ├── gltf.worker.ts         # GLTF asset loading
-│   ├── vision.worker.ts       # Fog of war vision calculations
-│   └── ai-decisions.worker.ts # AI micro decision-making (threat assessment, kiting)
-├── src/engine/ai/
-│   ├── BehaviorTree.ts        # Behavior tree for unit AI
-│   ├── UnitBehaviors.ts       # Unit-specific behavior trees
-│   └── AIWorkerManager.ts     # Manages AI worker for micro decisions
+│   ├── audio/ # Audio management
+│   │   ├── alert/
+│   │   ├── ambient/
+│   │   ├── building/
+│   │   ├── combat/
+│   │   │   └── death/
+│   │   ├── music/
+│   │   │   ├── defeat/
+│   │   │   ├── gameplay/
+│   │   │   ├── menu/
+│   │   │   └── victory/
+│   │   ├── ui/
+│   │   ├── unit/
+│   │   ├── voice/
+│   │   │   ├── breacher/
+│   │   │   ├── colossus/
+│   │   │   ├── devastator/
+│   │   │   ├── dreadnought/
+│   │   │   ├── fabricator/
+│   │   │   ├── lifter/
+│   │   │   ├── operative/
+│   │   │   ├── overseer/
+│   │   │   ├── scorcher/
+│   │   │   ├── specter/
+│   │   │   ├── trooper/
+│   │   │   ├── valkyrie/
+│   │   │   └── vanguard/
+│   │   ├── music.config.json
+│   │   ├── sounds.config.json
+│   │   └── voices.config.json
+│   ├── config/ # Configuration files
+│   │   ├── assets.json
+│   │   ├── collision.config.json
+│   │   └── graphics-presets.json
+│   ├── data/ # Game data definitions
+│   │   ├── factions/
+│   │   │   └── dominion/
+│   │   │       ├── abilities.json
+│   │   │       ├── buildings.json
+│   │   │       ├── manifest.json
+│   │   │       ├── research.json
+│   │   │       └── units.json
+│   │   └── game.json
+│   ├── draco/
+│   │   ├── draco_decoder.js
+│   │   └── draco_wasm_wrapper.js
+│   ├── models/ # 3D models (GLTF/GLB)
+│   │   ├── buildings/
+│   │   ├── decorations/
+│   │   ├── resources/
+│   │   └── units/
+│   ├── textures/ # Texture assets
+│   │   └── terrain/
+│   └── wasm/ # WASM module wrappers
+│       ├── boids_wasm.d.ts
+│       └── boids_wasm.js
 └── tests/
-    └── ...                    # Test files
+    ├── data/ # Game data definitions
+    │   ├── aiConfig.test.ts
+    │   ├── audioConfig.test.ts
+    │   ├── buildOrders.test.ts
+    │   ├── categories.test.ts
+    │   ├── collisionConfig.test.ts
+    │   ├── combat.test.ts
+    │   ├── formations.test.ts
+    │   ├── movementConfig.test.ts
+    │   ├── pathfindingConfig.test.ts
+    │   ├── projectileTypes.test.ts
+    │   ├── renderingConfig.test.ts
+    │   ├── resources.test.ts
+    │   ├── techTree.test.ts
+    │   └── walls.test.ts
+    ├── engine/ # Game engine core
+    │   ├── ai/ # AI subsystems
+    │   │   └── behaviorTree.test.ts
+    │   ├── components/ # React components
+    │   │   ├── ability.test.ts
+    │   │   ├── building.test.ts
+    │   │   ├── health.test.ts
+    │   │   ├── projectile.test.ts
+    │   │   ├── resource.test.ts
+    │   │   ├── selectable.test.ts
+    │   │   ├── transform.test.ts
+    │   │   ├── unit.test.ts
+    │   │   ├── velocity.test.ts
+    │   │   └── wall.test.ts
+    │   ├── core/
+    │   │   ├── eventBus.test.ts
+    │   │   ├── gameLoop.test.ts
+    │   │   ├── performanceMonitor.test.ts
+    │   │   ├── spatialGrid.test.ts
+    │   │   └── systemRegistry.test.ts
+    │   ├── definitions/ # Definition registry
+    │   │   ├── definitionRegistry.test.ts
+    │   │   └── definitionValidator.test.ts
+    │   ├── ecs/ # Entity Component System
+    │   │   ├── entity.test.ts
+    │   │   ├── entityId.test.ts
+    │   │   └── world.test.ts
+    │   ├── network/
+    │   │   ├── connectionCode.test.ts
+    │   │   ├── desyncDetection.test.ts
+    │   │   ├── merkleTree.test.ts
+    │   │   └── types.test.ts
+    │   └── systems/ # ECS Systems
+    │       ├── abilitySystem.test.ts
+    │       ├── buildingPlacementSystem.test.ts
+    │       ├── combatSystem.test.ts
+    │       ├── pathfindingSystem.test.ts
+    │       ├── productionSystem.test.ts
+    │       ├── projectileSystem.test.ts
+    │       ├── resourceSystem.test.ts
+    │       └── visionSystem.test.ts
+    └── utils/ # Utility functions
+        ├── fixedPoint.test.ts
+        ├── math.test.ts
+        └── vectorPool.test.ts
 ```
 
 ## Data-Driven Game Configuration
