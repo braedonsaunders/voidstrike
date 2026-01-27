@@ -189,15 +189,22 @@ class HealthAdapter {
  */
 class SelectableAdapter {
   public isSelected: boolean;
+  public playerId: string;
   public controlGroup: number;
+  // Default visual properties (not in render state, so use sensible defaults)
+  public visualScale: number = 1;
+  public visualHeight: number = 0;
 
   constructor(data: UnitRenderState) {
     this.isSelected = data.isSelected;
-    this.controlGroup = 0; // Not available in render state
+    this.playerId = data.playerId;
+    this.controlGroup = data.controlGroup ?? 0;
   }
 
   public update(data: UnitRenderState): void {
     this.isSelected = data.isSelected;
+    this.playerId = data.playerId;
+    this.controlGroup = data.controlGroup ?? 0;
   }
 }
 
@@ -352,15 +359,21 @@ class BuildingHealthAdapter {
 
 class BuildingSelectableAdapter {
   public isSelected: boolean;
+  public playerId: string;
   public controlGroup: number;
+  // Default visual properties (not in render state, so use sensible defaults)
+  public visualScale: number = 1;
+  public visualHeight: number = 0;
 
   constructor(data: BuildingRenderState) {
     this.isSelected = data.isSelected;
+    this.playerId = data.playerId;
     this.controlGroup = 0;
   }
 
   public update(data: BuildingRenderState): void {
     this.isSelected = data.isSelected;
+    this.playerId = data.playerId;
   }
 }
 
