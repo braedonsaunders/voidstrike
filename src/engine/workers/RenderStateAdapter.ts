@@ -15,6 +15,7 @@ import type {
   BuildingRenderState,
   ResourceRenderState,
 } from './types';
+import type { IEntity, IWorldProvider } from '@/engine/ecs/IWorldProvider';
 
 // ============================================================================
 // ENTITY ADAPTERS
@@ -23,7 +24,7 @@ import type {
 /**
  * A lightweight wrapper that makes RenderState unit data look like an Entity
  */
-class UnitEntityAdapter {
+class UnitEntityAdapter implements IEntity {
   public readonly id: number;
   private data: UnitRenderState;
 
@@ -189,7 +190,7 @@ class SelectableAdapter {
 // BUILDING ENTITY ADAPTER
 // ============================================================================
 
-class BuildingEntityAdapter {
+class BuildingEntityAdapter implements IEntity {
   public readonly id: number;
   private data: BuildingRenderState;
 
@@ -342,7 +343,7 @@ class BuildingSelectableAdapter {
 // RESOURCE ENTITY ADAPTER
 // ============================================================================
 
-class ResourceEntityAdapter {
+class ResourceEntityAdapter implements IEntity {
   public readonly id: number;
   private data: ResourceRenderState;
 
@@ -437,7 +438,7 @@ class ResourceComponentAdapter {
  * This allows renderers to work with both worker mode (RenderState) and
  * non-worker mode (ECS World) with minimal changes.
  */
-export class RenderStateWorldAdapter {
+export class RenderStateWorldAdapter implements IWorldProvider {
   private unitEntities: Map<number, UnitEntityAdapter> = new Map();
   private buildingEntities: Map<number, BuildingEntityAdapter> = new Map();
   private resourceEntities: Map<number, ResourceEntityAdapter> = new Map();
@@ -509,8 +510,8 @@ export class RenderStateWorldAdapter {
   /**
    * Get all entities with the specified components (simplified version)
    */
-  public getEntitiesWith(...componentTypes: string[]): Array<UnitEntityAdapter | BuildingEntityAdapter | ResourceEntityAdapter> {
-    const results: Array<UnitEntityAdapter | BuildingEntityAdapter | ResourceEntityAdapter> = [];
+  public getEntitiesWith(...componentTypes: string[]): IEntity[] {
+    const results: IEntity[] = [];
 
     // Check for Unit queries
     if (componentTypes.includes('Unit') || (componentTypes.includes('Transform') && componentTypes.length === 1)) {
@@ -539,7 +540,7 @@ export class RenderStateWorldAdapter {
   /**
    * Get entity by ID
    */
-  public getEntity(entityId: number): UnitEntityAdapter | BuildingEntityAdapter | ResourceEntityAdapter | null {
+  public getEntity(entityId: number): IEntity | null {
     return this.unitEntities.get(entityId)
       ?? this.buildingEntities.get(entityId)
       ?? this.resourceEntities.get(entityId)

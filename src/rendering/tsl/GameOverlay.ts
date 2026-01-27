@@ -27,7 +27,7 @@ import {
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import { MapData, elevationToZone } from '@/data/maps';
 import { debugPathfinding } from '@/utils/debugLogger';
-import { World } from '@/engine/ecs/World';
+import type { IWorldProvider } from '@/engine/ecs/IWorldProvider';
 import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
 import { Building } from '@/engine/components/Building';
@@ -156,7 +156,7 @@ export class TSLGameOverlayManager {
   private scene: THREE.Scene;
   private mapData: MapData;
   private mapHash: string;
-  private world: World | null = null;
+  private world: IWorldProvider | null = null;
   private getTerrainHeight: (x: number, y: number) => number;
 
   // Overlay meshes
@@ -329,7 +329,7 @@ export class TSLGameOverlayManager {
     };
   }
 
-  public setWorld(world: World): void {
+  public setWorld(world: IWorldProvider): void {
     this.world = world;
   }
 

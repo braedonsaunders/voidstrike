@@ -67,6 +67,9 @@ export { MainThreadEventHandler } from './MainThreadEventHandler';
 // Render State Adapter
 export { RenderStateWorldAdapter } from './RenderStateAdapter';
 
+// World Provider Interface (for renderers that accept either World or RenderStateWorldAdapter)
+export type { IEntity, IWorldProvider } from '@/engine/ecs/IWorldProvider';
+
 // Type helpers
 export {
   TRANSFORM_FLOATS_PER_ENTITY,

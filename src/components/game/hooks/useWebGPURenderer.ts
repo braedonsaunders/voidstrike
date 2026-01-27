@@ -11,6 +11,8 @@ import * as THREE from 'three';
 
 import { Game } from '@/engine/core/Game';
 import { PerformanceMonitor } from '@/engine/core/PerformanceMonitor';
+import type { IWorldProvider } from '@/engine/ecs/IWorldProvider';
+import type { EventBus } from '@/engine/core/EventBus';
 import { RTSCamera } from '@/rendering/Camera';
 import { TerrainGrid } from '@/rendering/Terrain';
 import { EnvironmentManager } from '@/rendering/EnvironmentManager';
@@ -84,6 +86,14 @@ export interface UseWebGPURendererProps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
   containerRef: RefObject<HTMLDivElement | null>;
   gameRef: MutableRefObject<Game | null>;
+  /** World provider for entity queries - if provided, uses this instead of game.world */
+  worldProviderRef?: MutableRefObject<IWorldProvider | null>;
+  /** Event bus for subscribing to game events - if provided, uses this instead of game.eventBus */
+  eventBusRef?: MutableRefObject<EventBus | null>;
+  /** Function to get current game time - if provided, uses this instead of game.getGameTime() */
+  getGameTime?: () => number;
+  /** Function to check if game is finished - if provided, uses this instead of game.gameStateSystem */
+  isGameFinished?: () => boolean;
   map: MapData;
   onProgress: (progress: number, status: string) => void;
   onWebGPUDetected: (isWebGPU: boolean) => void;
@@ -99,6 +109,10 @@ export function useWebGPURenderer({
   canvasRef,
   containerRef,
   gameRef,
+  worldProviderRef,
+  eventBusRef,
+  getGameTime: getGameTimeProp,
+  isGameFinished: isGameFinishedProp,
   map,
   onProgress,
   onWebGPUDetected,
@@ -195,6 +209,11 @@ export function useWebGPURenderer({
 
     const game = gameRef.current;
     if (!game) return false;
+
+    // Helper to get world provider (uses worldProviderRef if available, falls back to game.world)
+    const getWorldProvider = (): IWorldProvider => worldProviderRef?.current ?? (game.world as unknown as IWorldProvider);
+    // Helper to get event bus (uses eventBusRef if available, falls back to game.eventBus)
+    const getEventBus = (): EventBus => eventBusRef?.current ?? game.eventBus;
 
     try {
       // Load saved graphics settings
@@ -329,10 +348,12 @@ export function useWebGPURenderer({
       });
 
       // Create unit renderer
+      // In worker mode, worldProviderRef points to RenderStateWorldAdapter
+      // visionSystem is null in worker mode - visibility comes from RenderState
       unitRendererRef.current = new UnitRenderer(
         scene,
-        game.world,
-        fogOfWarEnabled ? game.visionSystem : undefined,
+        getWorldProvider(),
+        worldProviderRef?.current ? undefined : (fogOfWarEnabled ? game.visionSystem : undefined),
         terrain
       );
       if (localPlayerId) {
@@ -361,8 +382,8 @@ export function useWebGPURenderer({
       // Create building renderer
       buildingRendererRef.current = new BuildingRenderer(
         scene,
-        game.world,
-        fogOfWarEnabled ? game.visionSystem : undefined,
+        getWorldProvider(),
+        worldProviderRef?.current ? undefined : (fogOfWarEnabled ? game.visionSystem : undefined),
         terrain
       );
       if (localPlayerId) {
@@ -370,10 +391,11 @@ export function useWebGPURenderer({
       }
 
       // Create resource renderer
-      resourceRendererRef.current = new ResourceRenderer(scene, game.world, terrain);
+      resourceRendererRef.current = new ResourceRenderer(scene, getWorldProvider(), terrain);
 
       // Create fog of war
-      if (fogOfWarEnabled && !isSpectatorMode()) {
+      // In worker mode, fog of war visibility comes from RenderState, not visionSystem
+      if (fogOfWarEnabled && !isSpectatorMode() && !worldProviderRef?.current) {
         const fogOfWar = new TSLFogOfWar({ mapWidth, mapHeight });
         fogOfWar.setVisionSystem(game.visionSystem);
         fogOfWar.setPlayerId(localPlayerId);
@@ -383,7 +405,7 @@ export function useWebGPURenderer({
       // Create battle effects
       battleEffectsRef.current = new BattleEffectsRenderer(
         scene,
-        game.eventBus,
+        getEventBus(),
         (x, z) => terrain.getHeightAt(x, z)
       );
 
@@ -394,7 +416,8 @@ export function useWebGPURenderer({
 
       // Connect projectile position callback
       battleEffectsRef.current.setProjectilePositionCallback((entityId: number) => {
-        const entity = game.world.getEntity(entityId);
+        const world = getWorldProvider();
+        const entity = world.getEntity(entityId);
         if (!entity || entity.isDestroyed()) return null;
         const transform = entity.get<Transform>('Transform');
         if (!transform) return null;
@@ -408,8 +431,8 @@ export function useWebGPURenderer({
       // Create rally point renderer
       rallyPointRendererRef.current = new RallyPointRenderer(
         scene,
-        game.eventBus,
-        game.world,
+        getEventBus(),
+        getWorldProvider(),
         localPlayerId,
         (x: number, y: number) => terrain.getHeightAt(x, y)
       );
@@ -417,12 +440,13 @@ export function useWebGPURenderer({
       // Create placement preview
       placementPreviewRef.current = new BuildingPlacementPreview(currentMap, (x: number, y: number) => terrain.getHeightAt(x, y));
       placementPreviewRef.current.setVespeneGeyserChecker((x: number, y: number) => {
-        const resources = game.world.getEntitiesWith('Resource', 'Transform');
+        const world = getWorldProvider();
+        const resources = world.getEntitiesWith('Resource', 'Transform');
         const searchRadius = 1.5;
         for (const entity of resources) {
           const resource = entity.get<Resource>('Resource');
           if (resource?.resourceType !== 'vespene') continue;
-          if (resource.hasRefinery()) continue;
+          if (resource.hasRefinery?.()) continue;
           const transform = entity.get<Transform>('Transform');
           if (!transform) continue;
           const dx = Math.abs(transform.x - x);
@@ -530,20 +554,21 @@ export function useWebGPURenderer({
 
       // Create overlay manager
       overlayManagerRef.current = new TSLGameOverlayManager(scene, currentMap, (x, y) => terrain.getHeightAt(x, y));
-      overlayManagerRef.current.setWorld(game.world);
+      overlayManagerRef.current.setWorld(getWorldProvider());
 
       // Create command queue renderer
       commandQueueRendererRef.current = new CommandQueueRenderer(
         scene,
-        game.eventBus,
-        game.world,
+        getEventBus(),
+        getWorldProvider(),
         localPlayerId,
         (x, y) => terrain.getHeightAt(x, y)
       );
 
       // Subscribe to combat events
+      const eventBus = getEventBus();
       eventUnsubscribersRef.current.push(
-        game.eventBus.on(
+        eventBus.on(
           'combat:attack',
           (data: {
             attackerId?: string;
@@ -582,7 +607,7 @@ export function useWebGPURenderer({
       );
 
       eventUnsubscribersRef.current.push(
-        game.eventBus.on(
+        eventBus.on(
           'unit:died',
           (data: { position?: { x: number; y: number }; isFlying?: boolean; unitType?: string }) => {
             if (data.position && advancedParticlesRef.current) {
@@ -601,7 +626,7 @@ export function useWebGPURenderer({
       );
 
       eventUnsubscribersRef.current.push(
-        game.eventBus.on(
+        eventBus.on(
           'building:destroyed',
           (data: { entityId: number; playerId: string; buildingType: string; position: { x: number; y: number } }) => {
             if (advancedParticlesRef.current) {
@@ -615,7 +640,8 @@ export function useWebGPURenderer({
       );
 
       // Create watch tower renderer
-      if (currentMap.watchTowers && currentMap.watchTowers.length > 0) {
+      // In worker mode, visionSystem is not available on main thread
+      if (currentMap.watchTowers && currentMap.watchTowers.length > 0 && !worldProviderRef?.current) {
         game.visionSystem.setWatchTowers(currentMap.watchTowers);
         watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
       }
@@ -630,7 +656,7 @@ export function useWebGPURenderer({
       debugInitialization.error('[useWebGPURenderer] Initialization failed:', error);
       return false;
     }
-  }, [canvasRef, containerRef, gameRef, map, onProgress, onWebGPUDetected, calculateDisplayResolution]);
+  }, [canvasRef, containerRef, gameRef, worldProviderRef, eventBusRef, map, onProgress, onWebGPUDetected, calculateDisplayResolution]);
 
   const startAnimationLoop = useCallback(() => {
     const game = gameRef.current;
@@ -639,6 +665,13 @@ export function useWebGPURenderer({
     const renderContext = renderContextRef.current;
 
     if (!game || !camera || !scene || !renderContext) return;
+
+    // Helper to get world provider (uses worldProviderRef if available, falls back to game.world)
+    const getWorldProvider = (): IWorldProvider => worldProviderRef?.current ?? (game.world as unknown as IWorldProvider);
+    // Helper to get game time (uses prop if available, falls back to game.getGameTime())
+    const getGameTimeValue = (): number => getGameTimeProp?.() ?? game.getGameTime();
+    // Helper to check if game is finished (uses prop if available, falls back to game.gameStateSystem)
+    const checkGameFinished = (): boolean => isGameFinishedProp?.() ?? game.gameStateSystem.isGameFinished();
 
     let lastTime = performance.now();
     let lastRenderTime = 0;
@@ -744,11 +777,11 @@ export function useWebGPURenderer({
       watchTowerRendererRef.current?.update(deltaTime);
       placementPreviewRef.current?.update(deltaTime / 1000);
 
-      const gameTime = game.getGameTime();
+      const gameTime = getGameTimeValue();
       environmentRef.current?.update(deltaTime / 1000, gameTime, camera.camera);
       environmentRef.current?.updateShadowCameraPosition(camera.target.x, camera.target.z);
 
-      const entityCount = game.world.getEntityCount();
+      const entityCount = getWorldProvider().getEntityCount();
       environmentRef.current?.setHasMovingEntities(entityCount > 0);
       environmentRef.current?.updateShadows();
 
@@ -783,13 +816,13 @@ export function useWebGPURenderer({
 
       // Throttle zustand store updates
       if (deltaTime > 0) {
-        const isGameFinished = game.gameStateSystem.isGameFinished();
+        const isFinished = checkGameFinished();
         if (Math.floor(currentTime / 1000) !== Math.floor(prevTime / 1000)) {
-          if (!isGameFinished) {
+          if (!isFinished) {
             useGameStore.getState().setGameTime(gameTime);
           }
         }
-        if (isGameFinished && !finalGameTimeUpdatedRef.current) {
+        if (isFinished && !finalGameTimeUpdatedRef.current) {
           finalGameTimeUpdatedRef.current = true;
           useGameStore.getState().setGameTime(gameTime);
         }
@@ -878,7 +911,7 @@ export function useWebGPURenderer({
     };
 
     animationFrameIdRef.current = requestAnimationFrame(animate);
-  }, [gameRef]);
+  }, [gameRef, worldProviderRef, getGameTimeProp, isGameFinishedProp]);
 
   // Handle resize
   useEffect(() => {

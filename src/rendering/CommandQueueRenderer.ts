@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { EventBus } from '@/engine/core/EventBus';
-import { World } from '@/engine/ecs/World';
+import type { IWorldProvider } from '@/engine/ecs/IWorldProvider';
 import { Unit, QueuedCommand } from '@/engine/components/Unit';
 import { Transform } from '@/engine/components/Transform';
 import { Selectable } from '@/engine/components/Selectable';
@@ -22,7 +22,7 @@ interface WaypointVisual {
 export class CommandQueueRenderer {
   private scene: THREE.Scene;
   private eventBus: EventBus;
-  private world: World;
+  private world: IWorldProvider;
   private playerId: string | null;
   private getTerrainHeight: ((x: number, y: number) => number) | null = null;
 
@@ -43,7 +43,7 @@ export class CommandQueueRenderer {
   constructor(
     scene: THREE.Scene,
     eventBus: EventBus,
-    world: World,
+    world: IWorldProvider,
     playerId: string | null = null,
     getTerrainHeight?: (x: number, y: number) => number
   ) {
