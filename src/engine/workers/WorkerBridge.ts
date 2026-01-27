@@ -347,7 +347,7 @@ export class WorkerBridge {
    * Spawn initial entities based on map data.
    * Sends map spawn/resource data to worker for entity creation.
    */
-  public spawnInitialEntities(mapData: MapData): void {
+  public spawnInitialEntities(mapData: MapData, playerSlots?: Array<{ id: string; type: 'human' | 'ai' | 'empty'; faction: string; aiDifficulty?: 'easy' | 'medium' | 'hard' | 'insane' }>): void {
     // Convert expansions to flat resource array
     const resources: Array<{ type: 'mineral' | 'vespene'; x: number; y: number; amount?: number }> = [];
     for (const expansion of mapData.expansions) {
@@ -376,6 +376,7 @@ export class WorkerBridge {
       spawns: mapData.spawns,
       resources,
       watchTowers: mapData.watchTowers,
+      playerSlots,
     };
     this.worker?.postMessage({ type: 'spawnEntities', mapData: spawnData } satisfies MainToWorkerMessage);
   }

@@ -4,12 +4,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useGameStore, CommandTargetMode } from '@/store/gameStore';
 import { useGameSetupStore, getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
-import { Transform } from '@/engine/components/Transform';
-import { Unit } from '@/engine/components/Unit';
-import { Building } from '@/engine/components/Building';
-import { Resource } from '@/engine/components/Resource';
-import { Selectable } from '@/engine/components/Selectable';
-import { Health } from '@/engine/components/Health';
+import { getRenderStateAdapter, getWorkerBridge } from '@/engine/workers';
 import { clamp } from '@/utils/math';
 
 const MINIMAP_SIZE = 192;
@@ -158,11 +153,14 @@ export function Minimap() {
         }
       }
 
+      // Get entities from render state adapter (worker mode)
+      const worldAdapter = getRenderStateAdapter();
+
       // Draw resources
-      const resources = game.world.getEntitiesWith('Transform', 'Resource');
+      const resources = worldAdapter.getEntitiesWith('Transform', 'Resource');
       for (const entity of resources) {
-        const transform = entity.get<Transform>('Transform');
-        const resource = entity.get<Resource>('Resource');
+        const transform = entity.get<{ x: number; y: number }>('Transform');
+        const resource = entity.get<{ resourceType: string }>('Resource');
 
         if (!transform || !resource) continue;
 
@@ -176,15 +174,15 @@ export function Minimap() {
       }
 
       // Draw buildings
-      const buildings = game.world.getEntitiesWith('Transform', 'Building', 'Selectable', 'Health');
+      const buildings = worldAdapter.getEntitiesWith('Transform', 'Building', 'Selectable', 'Health');
       for (const entity of buildings) {
-        const transform = entity.get<Transform>('Transform');
-        const building = entity.get<Building>('Building');
-        const selectable = entity.get<Selectable>('Selectable');
-        const health = entity.get<Health>('Health');
+        const transform = entity.get<{ x: number; y: number }>('Transform');
+        const building = entity.get<{ width: number; height: number; state: string; isComplete?: () => boolean }>('Building');
+        const selectable = entity.get<{ playerId: string }>('Selectable');
+        const health = entity.get<{ current: number; max: number }>('Health');
 
         if (!transform || !building || !selectable || !health) continue;
-        if (health.isDead()) continue;
+        if (health.current <= 0) continue;
 
         // Skip enemy buildings that are not visible due to fog of war (unless spectator)
         const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
@@ -201,7 +199,8 @@ export function Minimap() {
 
         // Building color based on player's assigned color
         const playerHex = getPlayerColor(selectable.playerId);
-        ctx.fillStyle = building.isComplete() ? hexToCSS(playerHex) : hexToCSS(playerHex, 60);
+        const isComplete = building.isComplete?.() ?? building.state === 'complete';
+        ctx.fillStyle = isComplete ? hexToCSS(playerHex) : hexToCSS(playerHex, 60);
         ctx.fillRect(x - w / 2, y - h / 2, w, h);
 
         // Border for selected buildings
@@ -213,14 +212,14 @@ export function Minimap() {
       }
 
       // Draw units
-      const units = game.world.getEntitiesWith('Transform', 'Unit', 'Selectable', 'Health');
+      const units = worldAdapter.getEntitiesWith('Transform', 'Unit', 'Selectable', 'Health');
       for (const entity of units) {
-        const transform = entity.get<Transform>('Transform');
-        const selectable = entity.get<Selectable>('Selectable');
-        const health = entity.get<Health>('Health');
+        const transform = entity.get<{ x: number; y: number }>('Transform');
+        const selectable = entity.get<{ playerId: string }>('Selectable');
+        const health = entity.get<{ current: number; max: number }>('Health');
 
         if (!transform || !selectable || !health) continue;
-        if (health.isDead()) continue;
+        if (health.current <= 0) continue;
 
         // Skip enemy units that are not visible due to fog of war (unless spectator)
         const fogEnabled = useGameSetupStore.getState().fogOfWar;
@@ -325,16 +324,17 @@ export function Minimap() {
 
   // Issue command to minimap position based on current target mode
   const issueCommandAtPosition = useCallback((pos: { x: number; y: number }, mode: CommandTargetMode, shiftKey: boolean) => {
-    const game = Game.getInstance();
-    if (!game) return;
+    const bridge = getWorkerBridge();
+    if (!bridge) return;
 
     const selectedIds = useGameStore.getState().selectedUnits;
     if (selectedIds.length === 0) return;
 
-    // Check if any selected are units (not buildings)
+    // Check if any selected are units (not buildings) using render state adapter
+    const worldAdapter = getRenderStateAdapter();
     const hasUnits = selectedIds.some((id) => {
-      const entity = game.world.getEntity(id);
-      return entity?.get<Unit>('Unit') !== undefined;
+      const entity = worldAdapter.getEntity(id);
+      return entity?.get('Unit') !== undefined;
     });
 
     if (!hasUnits) return;
@@ -345,8 +345,8 @@ export function Minimap() {
     // Map mode to command type
     const commandType = mode === 'attack' ? 'ATTACK' : mode === 'patrol' ? 'PATROL' : 'MOVE';
 
-    game.issueCommand({
-      tick: game.getCurrentTick(),
+    bridge.issueCommand({
+      tick: bridge.currentTick,
       playerId: localPlayer,
       type: commandType,
       entityIds: selectedIds,
@@ -412,23 +412,24 @@ export function Minimap() {
     const pos = screenToMap(e.clientX, e.clientY);
     if (!pos) return;
 
-    const game = Game.getInstance();
-    if (!game) return;
+    const bridge = getWorkerBridge();
+    if (!bridge) return;
 
     const selectedIds = useGameStore.getState().selectedUnits;
     if (selectedIds.length > 0) {
-      // Check if any selected are units (not buildings)
+      // Check if any selected are units (not buildings) using render state adapter
+      const worldAdapter = getRenderStateAdapter();
       const hasUnits = selectedIds.some((id) => {
-        const entity = game.world.getEntity(id);
-        return entity?.get<Unit>('Unit') !== undefined;
+        const entity = worldAdapter.getEntity(id);
+        return entity?.get('Unit') !== undefined;
       });
 
       if (hasUnits) {
         // Issue move command
         const localPlayerForMove = getLocalPlayerId();
         if (localPlayerForMove) {
-          game.issueCommand({
-            tick: game.getCurrentTick(),
+          bridge.issueCommand({
+            tick: bridge.currentTick,
             playerId: localPlayerForMove,
             type: 'MOVE',
             entityIds: selectedIds,

@@ -3,16 +3,12 @@
 import { useGameStore } from '@/store/gameStore';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
-import { Unit } from '@/engine/components/Unit';
-import { Building } from '@/engine/components/Building';
-import { Ability } from '@/engine/components/Ability';
-import { Selectable } from '@/engine/components/Selectable';
+import { getRenderStateAdapter, getWorkerBridge } from '@/engine/workers';
 import { useEffect, useState, memo, useCallback, useMemo } from 'react';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
 import { WALL_DEFINITIONS } from '@/data/buildings/walls';
 import { RESEARCH_DEFINITIONS } from '@/data/research/dominion';
-import { Wall } from '@/engine/components/Wall';
 
 // Icon mappings for commands and units
 const COMMAND_ICONS: Record<string, string> = {
@@ -166,19 +162,18 @@ function CommandCardInner() {
 
   // Subscribe to building state change events to update command menu immediately
   useEffect(() => {
-    const game = Game.getInstance();
-    if (!game) return;
+    const bridge = getWorkerBridge();
+    if (!bridge) return;
 
     const handleBuildingStateChange = () => {
       setBuildingStateVersion((v) => v + 1);
     };
 
-    // Listen to all building flight state change events
-    // eventBus.on returns an unsubscribe function
-    const unsub1 = game.eventBus.on('building:liftOffStart', handleBuildingStateChange);
-    const unsub2 = game.eventBus.on('building:liftOffComplete', handleBuildingStateChange);
-    const unsub3 = game.eventBus.on('building:landingStart', handleBuildingStateChange);
-    const unsub4 = game.eventBus.on('building:landingComplete', handleBuildingStateChange);
+    // Listen to all building flight state change events via worker bridge event bus
+    const unsub1 = bridge.eventBus.on('building:liftOffStart', handleBuildingStateChange);
+    const unsub2 = bridge.eventBus.on('building:liftOffComplete', handleBuildingStateChange);
+    const unsub3 = bridge.eventBus.on('building:landingStart', handleBuildingStateChange);
+    const unsub4 = bridge.eventBus.on('building:landingComplete', handleBuildingStateChange);
 
     return () => {
       unsub1();
@@ -201,21 +196,53 @@ function CommandCardInner() {
   }, [selectedUnits]);
 
   useEffect(() => {
+    const bridge = getWorkerBridge();
+    const worldAdapter = getRenderStateAdapter();
+    // Keep game reference for eventBus.emit (for now, until fully migrated)
     const game = Game.getInstance();
-    if (!game || selectedUnits.length === 0) {
+
+    if (!bridge || selectedUnits.length === 0) {
       setCommands([]);
       return;
     }
 
     const buttons: CommandButton[] = [];
-    const entity = game.world.getEntity(selectedUnits[0]);
+    const entity = worldAdapter.getEntity(selectedUnits[0]);
     if (!entity) {
       setCommands([]);
       return;
     }
 
-    const unit = entity.get<Unit>('Unit');
-    const building = entity.get<Building>('Building');
+    // Get components from adapter (worker mode)
+    const unit = entity.get<{
+      unitId: string;
+      playerId: string;
+      state: string;
+      isWorker: boolean;
+      canRepair?: boolean;
+      canTransform?: boolean;
+      transformModes?: { id: string; name: string; isFlying?: boolean; transformTime?: number }[];
+      currentMode?: string;
+      transformProgress?: number;
+      getCurrentMode?: () => { id: string; name: string };
+    }>('Unit');
+    const building = entity.get<{
+      buildingId: string;
+      playerId: string;
+      state: string;
+      buildProgress: number;
+      width: number;
+      height: number;
+      isFlying?: boolean;
+      canProduce?: string[];
+      canLiftOff?: boolean;
+      canUpgradeTo?: string[];
+      canHaveAddon?: boolean;
+      productionQueue?: { id: string; type: string; progress: number; buildTime: number; supplyAllocated: boolean; produceCount?: number }[];
+      isComplete?: () => boolean;
+      hasAddon?: () => boolean;
+      hasTechLab?: () => boolean;
+    }>('Building');
 
     if (unit) {
       if (menuMode === 'main') {
@@ -235,8 +262,8 @@ function CommandCardInner() {
           action: () => {
             const localPlayer = getLocalPlayerId();
             if (localPlayer) {
-              game.issueCommand({
-                tick: game.getCurrentTick(),
+              bridge.issueCommand({
+                tick: bridge.currentTick,
                 playerId: localPlayer,
                 type: 'STOP',
                 entityIds: selectedUnits,
@@ -253,8 +280,8 @@ function CommandCardInner() {
           action: () => {
             const localPlayer = getLocalPlayerId();
             if (localPlayer) {
-              game.issueCommand({
-                tick: game.getCurrentTick(),
+              bridge.issueCommand({
+                tick: bridge.currentTick,
                 playerId: localPlayer,
                 type: 'HOLD',
                 entityIds: selectedUnits,
@@ -281,8 +308,8 @@ function CommandCardInner() {
         });
 
         // Transform commands for units that can transform (e.g., Valkyrie)
-        if (unit.canTransform && unit.transformModes.length > 0) {
-          const currentMode = unit.getCurrentMode();
+        if (unit.canTransform && unit.transformModes && unit.transformModes.length > 0) {
+          const currentMode = unit.getCurrentMode?.();
           const isTransforming = unit.state === 'transforming';
 
           // Add a button for each available transform mode (except current mode)
@@ -309,31 +336,34 @@ function CommandCardInner() {
               shortcut,
               action: () => {
                 const localPlayer = getLocalPlayerId();
-                if (localPlayer) {
-                  game.issueCommand({
-                    tick: game.getCurrentTick(),
+                if (localPlayer && bridge) {
+                  bridge.issueCommand({
+                    tick: bridge.currentTick,
                     playerId: localPlayer,
                     type: 'TRANSFORM',
                     entityIds: selectedUnits,
-                    targetMode: mode.id,
+                    abilityId: mode.id, // Use abilityId for transform mode
                   });
                 }
               },
               isDisabled: isTransforming,
               tooltip: isTransforming
-                ? `Transforming... (${Math.round(unit.transformProgress * 100)}%)`
+                ? `Transforming... (${Math.round((unit.transformProgress ?? 0) * 100)}%)`
                 : tooltip,
             });
           }
         }
 
         // Unit abilities (e.g., Dreadnought Power Cannon, Warp Jump)
-        const abilityComponent = entity.get<Ability>('Ability');
-        if (abilityComponent) {
+        const abilityComponent = entity.get<{
+          getAbilityList?: () => Array<{ definition: { id: string; name: string; hotkey: string; targetType: string; energyCost?: number; description?: string }; cooldownRemaining?: number; currentCooldown?: number }>;
+          canUseAbility?: (id: string) => boolean;
+        }>('Ability');
+        if (abilityComponent && abilityComponent.getAbilityList) {
           const abilities = abilityComponent.getAbilityList();
           for (const abilityState of abilities) {
             const def = abilityState.definition;
-            const canUse = abilityComponent.canUseAbility(def.id);
+            const canUse = abilityComponent.canUseAbility?.(def.id) ?? true;
             const energyCost = def.energyCost;
 
             buttons.push({
@@ -349,15 +379,15 @@ function CommandCardInner() {
                   useGameStore.getState().setAbilityTargetMode(def.id);
                 } else {
                   // Instant cast (e.g., self-buff)
-                  game.eventBus.emit('command:ability', {
+                  bridge.eventBus.emit('command:ability', {
                     entityIds: selectedUnits,
                     abilityId: def.id,
                   });
                 }
               },
               isDisabled: !canUse,
-              tooltip: def.description + (abilityState.currentCooldown > 0 ? ` (CD: ${Math.ceil(abilityState.currentCooldown)}s)` : ''),
-              cost: energyCost > 0 ? { minerals: 0, vespene: 0, supply: energyCost } : undefined,
+              tooltip: (def.description ?? def.name) + ((abilityState.currentCooldown ?? 0) > 0 ? ` (CD: ${Math.ceil(abilityState.currentCooldown ?? 0)}s)` : ''),
+              cost: (energyCost ?? 0) > 0 ? { minerals: 0, vespene: 0, supply: energyCost ?? 0 } : undefined,
             });
           }
         }
@@ -438,15 +468,16 @@ function CommandCardInner() {
           const localPlayerId = getLocalPlayerId();
           if (!localPlayerId) return { met: false, missing: requirements };
 
-          const playerBuildings = game.world.getEntitiesWith('Building', 'Selectable');
+          const playerBuildings = worldAdapter.getEntitiesWith('Building', 'Selectable');
           const missing: string[] = [];
 
           for (const reqBuildingId of requirements) {
             let found = false;
             for (const buildingEntity of playerBuildings) {
-              const b = buildingEntity.get<Building>('Building')!;
-              const sel = buildingEntity.get<Selectable>('Selectable')!;
-              if (sel.playerId === localPlayerId && b.buildingId === reqBuildingId && b.isComplete()) {
+              const b = buildingEntity.get<{ buildingId: string; state: string; isComplete?: () => boolean }>('Building');
+              const sel = buildingEntity.get<{ playerId: string }>('Selectable');
+              const isComplete = b?.isComplete?.() ?? b?.state === 'complete';
+              if (sel?.playerId === localPlayerId && b?.buildingId === reqBuildingId && isComplete) {
                 found = true;
                 break;
               }
@@ -503,7 +534,7 @@ function CommandCardInner() {
           });
         });
       }
-    } else if (building && !building.isComplete() && building.state !== 'destroyed' && building.state !== 'flying' && building.state !== 'lifting' && building.state !== 'landing') {
+    } else if (building && !(building.isComplete?.() ?? building.state === 'complete') && building.state !== 'destroyed' && building.state !== 'flying' && building.state !== 'lifting' && building.state !== 'landing') {
       // Building under construction - show cancel/demolish button
       buttons.push({
         id: 'demolish',
@@ -511,9 +542,9 @@ function CommandCardInner() {
         shortcut: 'ESC',
         action: () => {
           const localPlayer = getLocalPlayerId();
-          if (localPlayer) {
-            game.issueCommand({
-              tick: game.getCurrentTick(),
+          if (localPlayer && bridge) {
+            bridge.issueCommand({
+              tick: bridge.currentTick,
               playerId: localPlayer,
               type: 'DEMOLISH',
               entityIds: selectedUnits,
@@ -522,26 +553,26 @@ function CommandCardInner() {
         },
         tooltip: 'Cancel construction (refunds 75% of resources spent)',
       });
-    } else if (building && (building.isComplete() || building.state === 'flying' || building.state === 'lifting' || building.state === 'landing')) {
+    } else if (building && ((building.isComplete?.() ?? building.state === 'complete') || building.state === 'flying' || building.state === 'lifting' || building.state === 'landing')) {
       // Show commands for complete OR flying buildings
       const isFlying = building.state === 'flying' || building.state === 'lifting' || building.state === 'landing';
 
       // Check if this is a wall or gate
-      const wall = entity.get<Wall>('Wall');
+      const wall = entity.get<{ isWall?: boolean; isGate?: boolean; gateOpenProgress?: number; gateState?: string; appliedUpgrade?: string; upgradeInProgress?: boolean; mountedTurretId?: string }>('Wall');
       if (wall && !isFlying) {
         // Gate commands
         if (wall.isGate) {
           // Open/Close toggle
           buttons.push({
             id: 'gate_toggle',
-            label: wall.gateOpenProgress > 0.5 ? 'Close' : 'Open',
+            label: (wall.gateOpenProgress ?? 0) > 0.5 ? 'Close' : 'Open',
             shortcut: 'O',
             action: () => {
-              game.eventBus.emit('command:gate_toggle', {
+              bridge.eventBus.emit('command:gate_toggle', {
                 entityIds: selectedUnits,
               });
             },
-            tooltip: wall.gateOpenProgress > 0.5 ? 'Close the gate' : 'Open the gate',
+            tooltip: (wall.gateOpenProgress ?? 0) > 0.5 ? 'Close the gate' : 'Open the gate',
           });
 
           // Lock toggle
@@ -550,7 +581,7 @@ function CommandCardInner() {
             label: wall.gateState === 'locked' ? 'Unlock' : 'Lock',
             shortcut: 'L',
             action: () => {
-              game.eventBus.emit('command:gate_lock', {
+              bridge.eventBus.emit('command:gate_lock', {
                 entityIds: selectedUnits,
               });
             },
@@ -564,7 +595,7 @@ function CommandCardInner() {
               label: 'Auto',
               shortcut: 'A',
               action: () => {
-                game.eventBus.emit('command:gate_auto', {
+                bridge.eventBus.emit('command:gate_auto', {
                   entityIds: selectedUnits,
                 });
               },
@@ -585,7 +616,7 @@ function CommandCardInner() {
               label: 'Reinforce',
               shortcut: 'R',
               action: () => {
-                game.eventBus.emit('command:wall_upgrade', {
+                bridge.eventBus.emit('command:wall_upgrade', {
                   entityIds: selectedUnits,
                   upgradeType: 'reinforced',
                 });
@@ -602,7 +633,7 @@ function CommandCardInner() {
               label: 'Shield',
               shortcut: 'S',
               action: () => {
-                game.eventBus.emit('command:wall_upgrade', {
+                bridge.eventBus.emit('command:wall_upgrade', {
                   entityIds: selectedUnits,
                   upgradeType: 'shielded',
                 });
@@ -619,7 +650,7 @@ function CommandCardInner() {
               label: 'Weapon',
               shortcut: 'W',
               action: () => {
-                game.eventBus.emit('command:wall_upgrade', {
+                bridge.eventBus.emit('command:wall_upgrade', {
                   entityIds: selectedUnits,
                   upgradeType: 'weapon',
                 });
@@ -633,11 +664,11 @@ function CommandCardInner() {
 
       // Get tech-gated units for this building
       const techUnits = RESEARCH_MODULE_UNITS[building.buildingId] || [];
-      const hasTechLab = building.hasAddon() && building.hasTechLab();
+      const hasTechLab = (building.hasAddon?.() ?? false) && (building.hasTechLab?.() ?? false);
 
       // Building commands - train units (basic units from canProduce)
       // Skip training when building is flying
-      if (!isFlying) {
+      if (!isFlying && building.canProduce) {
         building.canProduce.forEach((unitId) => {
           const unitDef = UNIT_DEFINITIONS[unitId];
           if (!unitDef) return;
@@ -653,9 +684,9 @@ function CommandCardInner() {
             action: () => {
               // Play supply alert if queuing while supply blocked (unit will still queue)
               if (!hasSupply) {
-                game.eventBus.emit('alert:supplyBlocked', {});
+                bridge.eventBus.emit('alert:supplyBlocked', {});
               }
-              game.eventBus.emit('command:train', {
+              bridge.eventBus.emit('command:train', {
                 entityIds: selectedUnits,
                 unitType: unitId,
               });
@@ -695,9 +726,9 @@ function CommandCardInner() {
               if (hasTechLab) {
                 // Play supply alert if queuing while supply blocked (unit will still queue)
                 if (!hasSupply) {
-                  game.eventBus.emit('alert:supplyBlocked', {});
+                  bridge.eventBus.emit('alert:supplyBlocked', {});
                 }
-                game.eventBus.emit('command:train', {
+                bridge.eventBus.emit('command:train', {
                   entityIds: selectedUnits,
                   unitType: unitId,
                 });
@@ -710,7 +741,7 @@ function CommandCardInner() {
         });
 
         // Build Research Module addon button (if building supports addons and doesn't have one)
-        if (building.canHaveAddon && !building.hasAddon()) {
+        if (building.canHaveAddon && !(building.hasAddon?.() ?? false)) {
           const moduleDef = BUILDING_DEFINITIONS['research_module'];
           if (moduleDef) {
             const canAffordModule = minerals >= moduleDef.mineralCost && vespene >= moduleDef.vespeneCost;
@@ -720,11 +751,11 @@ function CommandCardInner() {
               label: 'Tech Lab',
               shortcut: 'T',
               action: () => {
-                // Get fresh game instance and selected units to avoid stale closure
-                const currentGame = Game.getInstance();
+                // Get fresh bridge instance and selected units to avoid stale closure
+                const currentBridge = getWorkerBridge();
                 const currentSelectedUnits = useGameStore.getState().selectedUnits;
-                if (currentGame && currentSelectedUnits.length > 0) {
-                  currentGame.eventBus.emit('building:build_addon', {
+                if (currentBridge && currentSelectedUnits.length > 0) {
+                  currentBridge.eventBus.emit('building:build_addon', {
                     buildingId: currentSelectedUnits[0],
                     addonType: 'research_module',
                     playerId: localPlayer,
@@ -793,7 +824,7 @@ function CommandCardInner() {
             }
           }
 
-          const isResearching = building.productionQueue.some(
+          const isResearching = (building.productionQueue ?? []).some(
             (item) => item.type === 'upgrade' && item.id === upgradeId
           );
 
@@ -802,7 +833,7 @@ function CommandCardInner() {
             label: upgrade.name,
             shortcut: upgrade.name.charAt(0).toUpperCase(),
             action: () => {
-              game.eventBus.emit('command:research', {
+              bridge.eventBus.emit('command:research', {
                 entityIds: selectedUnits,
                 upgradeId,
               });
@@ -815,8 +846,8 @@ function CommandCardInner() {
 
         // Building upgrade buttons (e.g., CC -> Orbital/Planetary)
         if (building.canUpgradeTo && building.canUpgradeTo.length > 0) {
-          const isUpgrading = building.productionQueue.some(
-            (item) => item.type === 'upgrade' && building.canUpgradeTo.includes(item.id)
+          const isUpgrading = (building.productionQueue ?? []).some(
+            (item) => item.type === 'upgrade' && (building.canUpgradeTo ?? []).includes(item.id)
           );
 
           building.canUpgradeTo.forEach((upgradeBuildingId) => {
@@ -834,7 +865,7 @@ function CommandCardInner() {
               label: upgradeDef.name,
               shortcut,
               action: () => {
-                game.eventBus.emit('command:upgrade_building', {
+                bridge.eventBus.emit('command:upgrade_building', {
                   entityIds: selectedUnits,
                   upgradeTo: upgradeBuildingId,
                 });
@@ -847,7 +878,7 @@ function CommandCardInner() {
         }
 
         // Rally point for production buildings
-        if (building.canProduce.length > 0) {
+        if ((building.canProduce ?? []).length > 0) {
           buttons.push({
             id: 'rally',
             label: 'Rally',
@@ -867,8 +898,8 @@ function CommandCardInner() {
           action: () => {
             const localPlayer = getLocalPlayerId();
             if (localPlayer) {
-              game.issueCommand({
-                tick: game.getCurrentTick(),
+              bridge.issueCommand({
+                tick: bridge.currentTick,
                 playerId: localPlayer,
                 type: 'DEMOLISH',
                 entityIds: selectedUnits,
@@ -881,7 +912,7 @@ function CommandCardInner() {
 
       // Lift-off button for buildings that can fly (and are complete, not flying)
       if (building.canLiftOff && building.state === 'complete' && !building.isFlying) {
-        const hasQueue = building.productionQueue.length > 0;
+        const hasQueue = (building.productionQueue ?? []).length > 0;
         buttons.push({
           id: 'liftoff',
           label: 'Lift Off',
@@ -919,12 +950,15 @@ function CommandCardInner() {
       }
 
       // Building abilities (e.g., Orbital Command abilities)
-      const abilityComponent = entity.get<Ability>('Ability');
-      if (abilityComponent) {
-        const abilities = abilityComponent.getAbilityList();
+      const buildingAbilityComponent = entity.get<{
+        getAbilityList?: () => Array<{ definition: { id: string; name: string; hotkey: string; targetType: string; energyCost?: number; description?: string }; cooldownRemaining?: number; currentCooldown?: number }>;
+        canUseAbility?: (id: string) => boolean;
+      }>('Ability');
+      if (buildingAbilityComponent && buildingAbilityComponent.getAbilityList) {
+        const abilities = buildingAbilityComponent.getAbilityList();
         for (const abilityState of abilities) {
           const def = abilityState.definition;
-          const canUse = abilityComponent.canUseAbility(def.id);
+          const canUse = buildingAbilityComponent.canUseAbility?.(def.id) ?? true;
           const energyCost = def.energyCost;
 
           buttons.push({
@@ -940,15 +974,15 @@ function CommandCardInner() {
                 useGameStore.getState().setAbilityTargetMode(def.id);
               } else {
                 // Instant cast
-                game.eventBus.emit('command:ability', {
+                bridge.eventBus.emit('command:ability', {
                   entityIds: selectedUnits,
                   abilityId: def.id,
                 });
               }
             },
             isDisabled: !canUse,
-            tooltip: def.description + (abilityState.currentCooldown > 0 ? ` (CD: ${Math.ceil(abilityState.currentCooldown)}s)` : ''),
-            cost: energyCost > 0 ? { minerals: 0, vespene: 0, supply: energyCost } : undefined,
+            tooltip: (def.description ?? def.name) + ((abilityState.currentCooldown ?? 0) > 0 ? ` (CD: ${Math.ceil(abilityState.currentCooldown ?? 0)}s)` : ''),
+            cost: (energyCost ?? 0) > 0 ? { minerals: 0, vespene: 0, supply: energyCost ?? 0 } : undefined,
           });
         }
       }
@@ -972,10 +1006,10 @@ function CommandCardInner() {
       }
       // Hotkey B for Build Basic
       if (e.key.toLowerCase() === 'b' && menuMode === 'main') {
-        const game = Game.getInstance();
-        if (game && selectedUnits.length > 0) {
-          const entity = game.world.getEntity(selectedUnits[0]);
-          const unit = entity?.get<Unit>('Unit');
+        const worldAdapter = getRenderStateAdapter();
+        if (selectedUnits.length > 0) {
+          const entity = worldAdapter.getEntity(selectedUnits[0]);
+          const unit = entity?.get<{ isWorker: boolean }>('Unit');
           if (unit?.isWorker) {
             setMenuMode('build_basic');
             return;
@@ -984,10 +1018,10 @@ function CommandCardInner() {
       }
       // Hotkey V for Build Advanced
       if (e.key.toLowerCase() === 'v' && menuMode === 'main') {
-        const game = Game.getInstance();
-        if (game && selectedUnits.length > 0) {
-          const entity = game.world.getEntity(selectedUnits[0]);
-          const unit = entity?.get<Unit>('Unit');
+        const worldAdapter = getRenderStateAdapter();
+        if (selectedUnits.length > 0) {
+          const entity = worldAdapter.getEntity(selectedUnits[0]);
+          const unit = entity?.get<{ isWorker: boolean }>('Unit');
           if (unit?.isWorker) {
             setMenuMode('build_advanced');
             return;
@@ -996,10 +1030,10 @@ function CommandCardInner() {
       }
       // Hotkey W for Build Walls
       if (e.key.toLowerCase() === 'w' && menuMode === 'main') {
-        const game = Game.getInstance();
-        if (game && selectedUnits.length > 0) {
-          const entity = game.world.getEntity(selectedUnits[0]);
-          const unit = entity?.get<Unit>('Unit');
+        const worldAdapter = getRenderStateAdapter();
+        if (selectedUnits.length > 0) {
+          const entity = worldAdapter.getEntity(selectedUnits[0]);
+          const unit = entity?.get<{ isWorker: boolean }>('Unit');
           if (unit?.isWorker) {
             setMenuMode('build_walls');
             return;
@@ -1031,16 +1065,16 @@ function CommandCardInner() {
   const handleDisabledClick = useCallback((cmd: CommandButton) => {
     if (!cmd.isDisabled || !cmd.cost) return;
 
-    const game = Game.getInstance();
-    if (!game) return;
+    const bridge = getWorkerBridge();
+    if (!bridge) return;
 
     // Check which resource is insufficient and emit appropriate alert
     if (cmd.cost.minerals > 0 && minerals < cmd.cost.minerals) {
-      game.eventBus.emit('alert:notEnoughMinerals', {});
+      bridge.eventBus.emit('alert:notEnoughMinerals', {});
     } else if (cmd.cost.vespene > 0 && vespene < cmd.cost.vespene) {
-      game.eventBus.emit('alert:notEnoughVespene', {});
+      bridge.eventBus.emit('alert:notEnoughVespene', {});
     } else if (cmd.cost.supply && cmd.cost.supply > 0 && supply + cmd.cost.supply > maxSupply) {
-      game.eventBus.emit('alert:supplyBlocked', {});
+      bridge.eventBus.emit('alert:supplyBlocked', {});
     }
   }, [minerals, vespene, supply, maxSupply]);
 

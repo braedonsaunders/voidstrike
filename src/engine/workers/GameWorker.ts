@@ -1079,7 +1079,7 @@ class WorkerGame {
 
   /**
    * Spawn initial entities based on map data.
-   * Creates resources and player bases.
+   * Creates resources and player bases for all players.
    */
   public spawnInitialEntities(mapData: SpawnMapData): void {
     // Spawn resources
@@ -1095,18 +1095,72 @@ class WorkerGame {
       }
     }
 
-    // Initialize player resources
-    this.playerResources.set(this.config.playerId, {
-      minerals: 50,
-      vespene: 0,
-      supply: 0,
-      maxSupply: 11,
-    });
+    // Get active player slots (human or AI)
+    const activeSlots = mapData.playerSlots?.filter(
+      slot => slot.type === 'human' || slot.type === 'ai'
+    ) ?? [];
 
-    // Spawn base for local player at first spawn point
-    if (mapData.spawns && mapData.spawns.length > 0) {
-      const spawn = mapData.spawns[0];
-      this.spawnBase(this.config.playerId, spawn.x, spawn.y);
+    // Track used spawn indices to prevent duplicates
+    const usedSpawnIndices = new Set<number>();
+    const spawns = mapData.spawns ?? [];
+
+    // Spawn bases for each active player
+    for (const slot of activeSlots) {
+      // Find the slot's player number (1-8) from the slot.id (e.g., "player1" -> 1)
+      const playerNumber = parseInt(slot.id.replace('player', ''), 10);
+
+      // Find spawn point for this player
+      let spawnIndex = spawns.findIndex(s => s.playerSlot === playerNumber);
+      if (spawnIndex === -1 || usedSpawnIndices.has(spawnIndex)) {
+        spawnIndex = spawns.findIndex((_, idx) => !usedSpawnIndices.has(idx));
+      }
+
+      if (spawnIndex === -1) {
+        console.warn(`[GameWorker] No available spawn point for ${slot.id}`);
+        continue;
+      }
+
+      const spawn = spawns[spawnIndex];
+      usedSpawnIndices.add(spawnIndex);
+
+      // Initialize player resources
+      this.playerResources.set(slot.id, {
+        minerals: 50,
+        vespene: 0,
+        supply: 0,
+        maxSupply: 11,
+      });
+
+      // Spawn base for this player
+      this.spawnBase(slot.id, spawn.x, spawn.y);
+
+      // Register AI players with the AI system
+      if (slot.type === 'ai' && this.config.aiEnabled) {
+        console.log(`[GameWorker] Registering AI for ${slot.id} (${slot.faction}, ${slot.aiDifficulty})`);
+        this.registerAI(slot.id, slot.aiDifficulty ?? 'medium');
+
+        // Also notify the EnhancedAISystem about this AI player
+        const enhancedAI = this.world.getSystem(EnhancedAISystem);
+        if (enhancedAI) {
+          enhancedAI.registerAI(slot.id, slot.faction, slot.aiDifficulty ?? 'medium');
+        }
+
+        // Register with AIMicroSystem for unit micro behavior
+        if (this.aiMicroSystem) {
+          this.aiMicroSystem.registerAIPlayer(slot.id);
+        }
+      }
+    }
+
+    // Fallback: If no player slots provided, spawn local player at first spawn
+    if (activeSlots.length === 0 && spawns.length > 0) {
+      this.playerResources.set(this.config.playerId, {
+        minerals: 50,
+        vespene: 0,
+        supply: 0,
+        maxSupply: 11,
+      });
+      this.spawnBase(this.config.playerId, spawns[0].x, spawns[0].y);
     }
 
     // Set watch towers if available

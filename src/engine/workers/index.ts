@@ -64,8 +64,17 @@ export {
 // Event Handler
 export { MainThreadEventHandler } from './MainThreadEventHandler';
 
-// Render State Adapter
-export { RenderStateWorldAdapter } from './RenderStateAdapter';
+// Render State Adapter (singleton pattern for UI component access)
+import { RenderStateWorldAdapter } from './RenderStateAdapter';
+export { RenderStateWorldAdapter };
+
+/**
+ * Get the RenderStateWorldAdapter singleton instance.
+ * Use this to access world data in UI components.
+ */
+export function getRenderStateAdapter(): RenderStateWorldAdapter {
+  return RenderStateWorldAdapter.getInstance();
+}
 
 // World Provider Interface (for renderers that accept either World or RenderStateWorldAdapter)
 export type { IEntity, IWorldProvider } from '@/engine/ecs/IWorldProvider';

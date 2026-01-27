@@ -84,7 +84,8 @@ export function WebGPUGameCanvas() {
   const gameRef = useRef<Game | null>(null);
   const workerBridgeRef = useRef<WorkerBridge | null>(null);
   const eventHandlerRef = useRef<MainThreadEventHandler | null>(null);
-  const renderStateAdapterRef = useRef<RenderStateWorldAdapter>(new RenderStateWorldAdapter());
+  // Use singleton pattern for render state adapter so UI components can access it
+  const renderStateAdapterRef = useRef<RenderStateWorldAdapter>(RenderStateWorldAdapter.getInstance());
 
   // Refs for hook consumption - these point to worker mode data sources
   const worldProviderRef = useRef<IWorldProvider | null>(null);
@@ -358,7 +359,14 @@ export function WebGPUGameCanvas() {
 
         // Spawn entities (skip in battle simulator)
         if (!isBattleSimulatorMode() && workerBridgeRef.current) {
-          workerBridgeRef.current.spawnInitialEntities(CURRENT_MAP);
+          // Map player slots to the expected type format
+          const playerSlots = useGameSetupStore.getState().playerSlots.map(slot => ({
+            id: slot.id,
+            type: (slot.type === 'open' || slot.type === 'closed') ? 'empty' as const : slot.type,
+            faction: slot.faction,
+            aiDifficulty: slot.aiDifficulty,
+          }));
+          workerBridgeRef.current.spawnInitialEntities(CURRENT_MAP, playerSlots);
         }
 
         // Re-set player ID on fog of war now that players are registered
@@ -517,7 +525,7 @@ export function WebGPUGameCanvas() {
         WorkerBridge.resetInstance();
         workerBridgeRef.current = null;
       }
-      renderStateAdapterRef.current.clear();
+      RenderStateWorldAdapter.resetInstance();
       worldProviderRef.current = null;
       eventBusRef.current = null;
 
