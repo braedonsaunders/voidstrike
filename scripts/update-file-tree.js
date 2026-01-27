@@ -56,15 +56,6 @@ const INCLUDE_EXTENSIONS = new Set([
 // Maximum depth for tree generation
 const MAX_DEPTH = 5;
 
-// Patterns for files to always show (even in collapsed directories)
-const IMPORTANT_FILES = [
-  /^index\.(ts|tsx|js|jsx)$/,
-  /^page\.(ts|tsx)$/,
-  /^layout\.(ts|tsx)$/,
-  /^README\.md$/,
-  /\.worker\.(ts|js)$/,
-];
-
 /**
  * Check if a path should be excluded
  */
@@ -84,16 +75,9 @@ function shouldIncludeFile(name) {
 }
 
 /**
- * Check if a file is important and should always be shown
- */
-function isImportantFile(name) {
-  return IMPORTANT_FILES.some(pattern => pattern.test(name));
-}
-
-/**
  * Get a short description for known files/directories
  */
-function getDescription(name, fullPath) {
+function getDescription(name) {
   const descriptions = {
     // .claude
     'CLAUDE.md': 'Main instructions file',
@@ -194,7 +178,7 @@ function buildTree(dir, prefix = '', depth = 0) {
     const connector = isLast ? '└── ' : '├── ';
     const childPrefix = isLast ? '    ' : '│   ';
     const fullPath = path.join(dir, entry.name);
-    const desc = getDescription(entry.name, fullPath);
+    const desc = getDescription(entry.name);
     const comment = desc ? ` # ${desc}` : '';
 
     if (entry.isDirectory()) {
@@ -227,7 +211,7 @@ function generateFullTree() {
     const connector = isLast ? '└── ' : '├── ';
     const childPrefix = isLast ? '    ' : '│   ';
     const fullPath = path.join(ROOT_DIR, dir);
-    const desc = getDescription(dir, fullPath);
+    const desc = getDescription(dir);
     const comment = desc ? ` # ${desc}` : '';
 
     lines.push(`${connector}${dir}/${comment}`);
