@@ -462,6 +462,10 @@ class ResourceComponentAdapter {
     return this.amount <= 0;
   }
 
+  public getPercentRemaining(): number {
+    return this.maxAmount > 0 ? this.amount / this.maxAmount : 0;
+  }
+
   public hasRefinery(): boolean {
     return false; // Would need to track this separately
   }
