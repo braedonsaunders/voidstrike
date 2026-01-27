@@ -753,26 +753,11 @@ export class EnvironmentManager {
 
   /**
    * Dispose all resources
+   * CRITICAL: Remove from scene FIRST, then dispose to prevent WebGPU crashes.
+   * If geometry is disposed while mesh is still in scene, WebGPU setIndexBuffer fails.
    */
   public dispose(): void {
-    // Dispose instanced decorations
-    this.trees?.dispose();
-    this.rocks?.dispose();
-    this.crystals?.dispose();
-    this.grass?.dispose();
-    this.pebbles?.dispose();
-
-    // Dispose other resources
-    this.terrain.dispose();
-    this.waterMesh?.dispose();
-    this.mapBorderFog?.dispose();
-    this.particles?.dispose();
-    this.legacyDecorations?.dispose();
-    this.decorationLightManager?.dispose();
-    this.emissiveDecorationManager?.dispose();
-    this.emissiveLightPool?.dispose();
-
-    // Remove from scene
+    // STEP 1: Remove all objects from scene FIRST (prevents WebGPU render crashes)
     this.scene.remove(this.terrain.mesh);
     this.scene.remove(this.ambientLight);
     this.scene.remove(this.directionalLight);
@@ -780,13 +765,6 @@ export class EnvironmentManager {
     this.scene.remove(this.backLight);
     this.scene.remove(this.hemiLight);
 
-    // Dispose environment map
-    if (this.envMap) {
-      this.envMap.dispose();
-      this.scene.environment = null;
-    }
-
-    // Remove groups from scene
     if (this.trees) this.scene.remove(this.trees.group);
     if (this.rocks) this.scene.remove(this.rocks.group);
     if (this.crystals) this.scene.remove(this.crystals.group);
@@ -796,5 +774,27 @@ export class EnvironmentManager {
     if (this.mapBorderFog) this.scene.remove(this.mapBorderFog.mesh);
     if (this.particles) this.scene.remove(this.particles.points);
     if (this.legacyDecorations) this.scene.remove(this.legacyDecorations.group);
+
+    // STEP 2: Now safe to dispose resources (no longer being rendered)
+    this.trees?.dispose();
+    this.rocks?.dispose();
+    this.crystals?.dispose();
+    this.grass?.dispose();
+    this.pebbles?.dispose();
+
+    this.terrain.dispose();
+    this.waterMesh?.dispose();
+    this.mapBorderFog?.dispose();
+    this.particles?.dispose();
+    this.legacyDecorations?.dispose();
+    this.decorationLightManager?.dispose();
+    this.emissiveDecorationManager?.dispose();
+    this.emissiveLightPool?.dispose();
+
+    // Dispose environment map
+    if (this.envMap) {
+      this.envMap.dispose();
+      this.scene.environment = null;
+    }
   }
 }
