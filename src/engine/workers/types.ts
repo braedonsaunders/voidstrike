@@ -321,6 +321,16 @@ export type MainToWorkerMessage =
   | { type: 'spawnEntities'; mapData: SpawnMapData };
 
 /**
+ * Player slot info for spawning
+ */
+export interface PlayerSlotInfo {
+  id: string;
+  type: 'human' | 'ai' | 'empty';
+  faction: string;
+  aiDifficulty?: 'easy' | 'medium' | 'hard' | 'insane';
+}
+
+/**
  * Map data needed for spawning entities in worker
  */
 export interface SpawnMapData {
@@ -343,6 +353,8 @@ export interface SpawnMapData {
     y: number;
     radius: number;
   }>;
+  // Player slots with type and AI difficulty
+  playerSlots?: PlayerSlotInfo[];
 }
 
 /**

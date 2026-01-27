@@ -359,7 +359,14 @@ export function WebGPUGameCanvas() {
 
         // Spawn entities (skip in battle simulator)
         if (!isBattleSimulatorMode() && workerBridgeRef.current) {
-          workerBridgeRef.current.spawnInitialEntities(CURRENT_MAP);
+          // Map player slots to the expected type format
+          const playerSlots = useGameSetupStore.getState().playerSlots.map(slot => ({
+            id: slot.id,
+            type: (slot.type === 'open' || slot.type === 'closed') ? 'empty' as const : slot.type,
+            faction: slot.faction,
+            aiDifficulty: slot.aiDifficulty,
+          }));
+          workerBridgeRef.current.spawnInitialEntities(CURRENT_MAP, playerSlots);
         }
 
         // Re-set player ID on fog of war now that players are registered
