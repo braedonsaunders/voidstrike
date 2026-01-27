@@ -455,9 +455,7 @@ export class FlockingBehavior {
 
   /**
    * Calculate physics push force from nearby units.
-   * SC2-style: units push each other with priority based on movement state.
-   * - Moving units have priority over idle units
-   * - Units don't push through others who have higher priority
+   * Priority-based: moving units push idle units more than vice versa.
    * This creates natural streaming flow through choke points.
    * PERF: Results are cached and only recalculated every PHYSICS_PUSH_THROTTLE_TICKS ticks
    */
@@ -493,7 +491,7 @@ export class FlockingBehavior {
     let forceX = 0;
     let forceY = 0;
 
-    // SC2-style priority: determine if self is "heavy" (moving with purpose) or "light" (idle)
+    // Priority: determine if self is "heavy" (moving with purpose) or "light" (idle)
     const selfIsMoving = selfUnit.state === 'moving' || selfUnit.state === 'attackmoving' ||
                          selfUnit.state === 'patrolling' || selfUnit.state === 'gathering' ||
                          selfUnit.state === 'building';
@@ -521,7 +519,7 @@ export class FlockingBehavior {
         const nx = dx / dist;
         const ny = dy / dist;
 
-        // SC2-style priority: moving units push idle units more than vice versa
+        // Priority: moving units push idle units more than vice versa
         // Idle units yield to moving units by receiving stronger push
         const otherIsMoving = other.state === SpatialUnitState.Moving ||
                               other.state === SpatialUnitState.AttackMoving ||
