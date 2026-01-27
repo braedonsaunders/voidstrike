@@ -158,6 +158,19 @@ export function Minimap() {
 
       // Draw resources
       const resources = worldAdapter.getEntitiesWith('Transform', 'Resource');
+
+      // Debug: log first time we get entities
+      if (resources.length > 0 || worldAdapter.getEntitiesWith('Unit').length > 0) {
+        const logKey = '_minimapDebugLogged';
+        if (!(window as any)[logKey]) {
+          console.log('[Minimap] Got entities from adapter:', {
+            resources: resources.length,
+            buildings: worldAdapter.getEntitiesWith('Building').length,
+            units: worldAdapter.getEntitiesWith('Unit').length,
+          });
+          (window as any)[logKey] = true;
+        }
+      }
       for (const entity of resources) {
         const transform = entity.get<{ x: number; y: number }>('Transform');
         const resource = entity.get<{ resourceType: string }>('Resource');

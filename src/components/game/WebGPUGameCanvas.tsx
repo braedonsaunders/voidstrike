@@ -127,7 +127,19 @@ export function WebGPUGameCanvas() {
   }, []);
 
   // Handle render state updates from worker (only in worker mode)
+  const firstRenderStateLoggedRef = useRef(false);
   const handleRenderState = useCallback((state: RenderState) => {
+    // Debug: log first render state received
+    if (!firstRenderStateLoggedRef.current && (state.units.length > 0 || state.buildings.length > 0 || state.resources.length > 0)) {
+      console.log('[WebGPUGameCanvas] Received first render state:', {
+        tick: state.tick,
+        units: state.units.length,
+        buildings: state.buildings.length,
+        resources: state.resources.length,
+      });
+      firstRenderStateLoggedRef.current = true;
+    }
+
     renderStateAdapterRef.current.updateFromRenderState(state);
     // Update game time in store
     useGameStore.getState().setGameTime(state.gameTime);

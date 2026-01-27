@@ -844,16 +844,35 @@ class WorkerGame {
     }
   }
 
+  // Debug: log first render state only
+  private hasLoggedFirstRenderState = false;
+
   private sendRenderState(): void {
+    const units = this.collectUnitRenderState();
+    const buildings = this.collectBuildingRenderState();
+    const resources = this.collectResourceRenderState();
+    const projectiles = this.collectProjectileRenderState();
+
+    // Debug log first render state
+    if (!this.hasLoggedFirstRenderState && (units.length > 0 || buildings.length > 0 || resources.length > 0)) {
+      console.log('[GameWorker] Sending first render state:', {
+        tick: this.currentTick,
+        units: units.length,
+        buildings: buildings.length,
+        resources: resources.length,
+      });
+      this.hasLoggedFirstRenderState = true;
+    }
+
     const renderState: RenderState = {
       tick: this.currentTick,
       gameTime: this.gameTime,
       gameState: this.state,
       interpolation: this.accumulator / this.tickMs,
-      units: this.collectUnitRenderState(),
-      buildings: this.collectBuildingRenderState(),
-      resources: this.collectResourceRenderState(),
-      projectiles: this.collectProjectileRenderState(),
+      units,
+      buildings,
+      resources,
+      projectiles,
       visionGrids: new Map(), // Vision grids collected by VisionSystem
       playerResources: new Map(this.playerResources),
       selectedEntityIds: [...this.selectedEntityIds],
