@@ -458,6 +458,10 @@ class ResourceComponentAdapter {
     this.maxAmount = data.maxAmount;
   }
 
+  public isDepleted(): boolean {
+    return this.amount <= 0;
+  }
+
   public hasRefinery(): boolean {
     return false; // Would need to track this separately
   }
