@@ -605,15 +605,15 @@ function findWaterPath(
       { halfExtents }
     );
 
-    if (!startResult.success || !startResult.point || !startResult.polyRef) {
+    if (!startResult.success || !startResult.point) {
       return { path: [], found: false };
     }
 
-    if (!endResult.success || !endResult.point || !endResult.polyRef) {
+    if (!endResult.success || !endResult.point) {
       return { path: [], found: false };
     }
 
-    const pathResult = waterNavMeshQuery.computePath(startResult.polyRef, endResult.polyRef, startResult.point, endResult.point);
+    const pathResult = waterNavMeshQuery.computePath(startResult.point, endResult.point, { halfExtents });
 
     if (!pathResult.success || !pathResult.path || pathResult.path.length === 0) {
       return { path: [], found: false };
