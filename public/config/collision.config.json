@@ -90,40 +90,40 @@
   },
 
   "buildingAvoidance": {
-    "_description": "Building avoidance - prevents units from walking into structures",
+    "_description": "Building avoidance - ONLY used for flying units or when crowd unavailable. Ground units using crowd trust the navmesh.",
 
-    "strength": 6.0,
-    "_strength_description": "Base avoidance force. Lower = less fighting with target direction, reduces orbiting.",
+    "strength": 3.0,
+    "_strength_description": "Base avoidance force. Lower than before since navmesh handles most routing now.",
 
-    "hardMargin": 0.1,
-    "_hardMargin_description": "Hard collision margin around buildings (world units).",
+    "hardMargin": 0.3,
+    "_hardMargin_description": "Hard collision margin around buildings (world units). Wider to prevent clipping.",
 
-    "softMargin": 0.5,
-    "_softMargin_description": "Soft avoidance zone for early steering (world units).",
+    "softMargin": 1.0,
+    "_softMargin_description": "Soft avoidance zone for early steering (world units). Wider for smoother turning.",
 
-    "predictionLookahead": 0.2,
-    "_predictionLookahead_description": "How far ahead to predict collisions (seconds).",
+    "predictionLookahead": 0.3,
+    "_predictionLookahead_description": "How far ahead to predict collisions (seconds). Longer for earlier reaction.",
 
-    "predictiveStrengthMultiplier": 0.3,
+    "predictiveStrengthMultiplier": 0.2,
     "_predictiveStrengthMultiplier_description": "Predictive avoidance strength as fraction of base. Lower = less orbiting."
   },
 
   "stuck": {
-    "_description": "Stuck detection and resolution - helps units escape when blocked",
+    "_description": "Stuck detection and resolution - helps units escape when blocked. Less aggressive with navmesh routing.",
 
-    "detectionFrames": 15,
-    "_detectionFrames_description": "Frames of no movement before unit is considered stuck.",
+    "detectionFrames": 30,
+    "_detectionFrames_description": "Frames of no movement before unit is considered stuck. Longer to avoid false positives.",
 
-    "velocityThreshold": 0.08,
-    "_velocityThreshold_description": "Speed below which unit might be stuck.",
+    "velocityThreshold": 0.05,
+    "_velocityThreshold_description": "Speed below which unit might be stuck. Lower threshold for more accurate detection.",
 
-    "nudgeStrength": 2.5,
-    "_nudgeStrength_description": "Force applied to nudge stuck units. Should be strong enough to overcome avoidance.",
+    "nudgeStrength": 1.5,
+    "_nudgeStrength_description": "Force applied to nudge stuck units. Gentler since navmesh handles most routing.",
 
-    "minDistanceToTarget": 1.0,
-    "_minDistanceToTarget_description": "Don't apply stuck detection if closer than this to target.",
+    "minDistanceToTarget": 1.5,
+    "_minDistanceToTarget_description": "Don't apply stuck detection if closer than this to target. Wider to prevent false nudges at destination.",
 
-    "tangentialBias": 0.7,
-    "_tangentialBias_description": "How much to nudge tangentially vs toward target. 1.0 = fully tangential escape."
+    "tangentialBias": 0.5,
+    "_tangentialBias_description": "How much to nudge tangentially vs toward target. Lower = more toward target, avoids random walks."
   }
 }
