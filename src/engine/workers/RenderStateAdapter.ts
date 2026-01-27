@@ -111,6 +111,11 @@ class UnitAdapter {
   public isFlying: boolean;
   public isSubmerged: boolean;
   public isCloaked: boolean;
+  public isWorker: boolean;
+  public isMining: boolean;
+  public isRepairing: boolean;
+  public carryingMinerals: number;
+  public carryingVespene: number;
 
   constructor(data: UnitRenderState) {
     this.unitId = data.unitId;
@@ -120,6 +125,11 @@ class UnitAdapter {
     this.isFlying = data.isFlying;
     this.isSubmerged = data.isSubmerged;
     this.isCloaked = data.isCloaked;
+    this.isWorker = data.isWorker;
+    this.isMining = data.isMining;
+    this.isRepairing = data.isRepairing;
+    this.carryingMinerals = data.carryingMinerals;
+    this.carryingVespene = data.carryingVespene;
   }
 
   public update(data: UnitRenderState): void {
@@ -130,6 +140,11 @@ class UnitAdapter {
     this.isFlying = data.isFlying;
     this.isSubmerged = data.isSubmerged;
     this.isCloaked = data.isCloaked;
+    this.isWorker = data.isWorker;
+    this.isMining = data.isMining;
+    this.isRepairing = data.isRepairing;
+    this.carryingMinerals = data.carryingMinerals;
+    this.carryingVespene = data.carryingVespene;
   }
 
   public isSelected(): boolean {
@@ -174,15 +189,22 @@ class HealthAdapter {
  */
 class SelectableAdapter {
   public isSelected: boolean;
+  public playerId: string;
   public controlGroup: number;
+  // Default visual properties (not in render state, so use sensible defaults)
+  public visualScale: number = 1;
+  public visualHeight: number = 0;
 
   constructor(data: UnitRenderState) {
     this.isSelected = data.isSelected;
-    this.controlGroup = 0; // Not available in render state
+    this.playerId = data.playerId;
+    this.controlGroup = data.controlGroup ?? 0;
   }
 
   public update(data: UnitRenderState): void {
     this.isSelected = data.isSelected;
+    this.playerId = data.playerId;
+    this.controlGroup = data.controlGroup ?? 0;
   }
 }
 
@@ -272,6 +294,8 @@ class BuildingComponentAdapter {
   public height: number;
   public isFlying: boolean;
   public liftProgress: number;
+  // Production queue simulation for renderer compatibility
+  public productionQueue: { progress: number }[];
 
   constructor(data: BuildingRenderState) {
     this.buildingId = data.buildingId;
@@ -283,6 +307,10 @@ class BuildingComponentAdapter {
     this.height = data.height;
     this.isFlying = data.isFlying;
     this.liftProgress = data.liftProgress;
+    // Simulate productionQueue for renderer compatibility
+    this.productionQueue = data.hasProductionQueue
+      ? [{ progress: data.productionProgress }]
+      : [];
   }
 
   public update(data: BuildingRenderState): void {
@@ -295,6 +323,10 @@ class BuildingComponentAdapter {
     this.height = data.height;
     this.isFlying = data.isFlying;
     this.liftProgress = data.liftProgress;
+    // Simulate productionQueue for renderer compatibility
+    this.productionQueue = data.hasProductionQueue
+      ? [{ progress: data.productionProgress }]
+      : [];
   }
 
   public isReady(): boolean {
@@ -327,15 +359,21 @@ class BuildingHealthAdapter {
 
 class BuildingSelectableAdapter {
   public isSelected: boolean;
+  public playerId: string;
   public controlGroup: number;
+  // Default visual properties (not in render state, so use sensible defaults)
+  public visualScale: number = 1;
+  public visualHeight: number = 0;
 
   constructor(data: BuildingRenderState) {
     this.isSelected = data.isSelected;
+    this.playerId = data.playerId;
     this.controlGroup = 0;
   }
 
   public update(data: BuildingRenderState): void {
     this.isSelected = data.isSelected;
+    this.playerId = data.playerId;
   }
 }
 
