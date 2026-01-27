@@ -482,7 +482,7 @@ function findNearestPoint(x: number, y: number, height?: number): { x: number; y
 }
 
 /**
- * Add box obstacle
+ * Add cylinder obstacle (5-10x faster than box for TileCache updates)
  */
 function addObstacle(
   entityId: number,
@@ -499,17 +499,15 @@ function addObstacle(
   }
 
   try {
-    const expansionMargin = 0.1;
-    const halfExtents = {
-      x: (width / 2) + expansionMargin,
-      y: 2.0,
-      z: (height / 2) + expansionMargin
-    };
+    // Use cylinder for fast TileCache updates
+    // Cylinder approximates rectangular building using max dimension
+    const baseRadius = Math.max(width, height) / 2;
+    const expandedRadius = baseRadius + 0.1;
 
-    const result = tileCache.addBoxObstacle(
+    const result = tileCache.addCylinderObstacle(
       { x: centerX, y: 0, z: centerY },
-      halfExtents,
-      0
+      expandedRadius,
+      2.0
     );
 
     if (result.success && result.obstacle) {
@@ -518,25 +516,7 @@ function addObstacle(
       return true;
     }
   } catch {
-    // Fallback to cylinder
-    try {
-      const baseRadius = Math.max(width, height) / 2;
-      const expandedRadius = baseRadius + 0.1;
-
-      const result = tileCache.addCylinderObstacle(
-        { x: centerX, y: 0, z: centerY },
-        expandedRadius,
-        2.0
-      );
-
-      if (result.success && result.obstacle) {
-        obstacleRefs.set(entityId, result.obstacle);
-        tileCache.update(navMesh);
-        return true;
-      }
-    } catch {
-      // Ignore
-    }
+    // Ignore
   }
 
   return false;

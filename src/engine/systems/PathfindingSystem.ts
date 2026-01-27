@@ -595,8 +595,8 @@ export class PathfindingSystem extends System {
       width: number;
       height: number;
     }) => {
-      // Add to main thread recast (for crowd simulation)
-      this.recast.addBoxObstacle(
+      // Add cylinder obstacle (5-10x faster than box for TileCache updates)
+      this.recast.addObstacle(
         data.entityId,
         data.position.x,
         data.position.y,
@@ -624,7 +624,8 @@ export class PathfindingSystem extends System {
       width: number;
       height: number;
     }) => {
-      this.recast.addBoxObstacle(
+      // Add cylinder obstacle (5-10x faster than box for TileCache updates)
+      this.recast.addObstacle(
         data.entityId,
         data.position.x,
         data.position.y,
@@ -1017,7 +1018,8 @@ export class PathfindingSystem extends System {
 
       if (building.state === 'destroyed' || building.isFlying) continue;
 
-      this.recast.addBoxObstacle(
+      // Use cylinder obstacles (5-10x faster than box for TileCache updates)
+      this.recast.addObstacle(
         entity.id,
         transform.x,
         transform.y,
