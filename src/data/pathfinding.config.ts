@@ -63,9 +63,8 @@ export const WALKABLE_HEIGHT = 2.0;
  * Paths maintain this clearance from obstacles.
  * Units of: world units
  *
- * SC2-style: Set wide enough that units following navmesh paths won't need
- * additional steering forces to avoid clipping buildings. This prevents
- * the oscillation issue where steering and pathfinding give conflicting directions.
+ * Set wide enough that units following navmesh paths won't need
+ * additional steering forces to avoid clipping buildings.
  */
 export const WALKABLE_RADIUS = 0.8;
 
