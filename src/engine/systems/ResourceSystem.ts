@@ -43,9 +43,12 @@ export class ResourceSystem extends System {
   }
 
   /**
-   * Get the AI system, lazily initializing if needed
+   * Get the AI system, lazily initializing if needed.
+   * Always re-checks if null since AI system may be registered after ResourceSystem init.
    */
   private getAISystem(): EnhancedAISystem | null {
+    // Always try to get the system if we don't have it cached
+    // This handles the case where EnhancedAISystem is registered after ResourceSystem
     if (!this.aiSystem) {
       this.aiSystem = this.world.getSystem(EnhancedAISystem) || null;
     }
@@ -570,9 +573,20 @@ export class ResourceSystem extends System {
         if (aiSystem && aiSystem.isAIPlayer(workerOwner)) {
           // Credit AI player - this is the ONLY way AI gets resources (simulation-based)
           aiSystem.creditResources(workerOwner, minerals, vespene);
-        } else if (isLocalPlayer(workerOwner)) {
-          // Credit local human player via game store
-          this.game.statePort.addResources(minerals, vespene);
+        } else {
+          // Try to credit local human player
+          // Note: isLocalPlayer uses Zustand which may not work in Web Worker context
+          // In worker mode, we use statePort which handles the communication to main thread
+          try {
+            if (isLocalPlayer(workerOwner)) {
+              // Credit local human player via game store
+              this.game.statePort.addResources(minerals, vespene);
+            }
+          } catch {
+            // In Web Worker context, Zustand stores may not be available
+            // Fall back to using statePort for any non-AI player
+            this.game.statePort.addResources(minerals, vespene);
+          }
         }
       }
 
