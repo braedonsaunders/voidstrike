@@ -587,12 +587,13 @@ export class PathfindingMovement {
         const escapeY =
           Math.abs(escapeUp) < Math.abs(escapeDown) ? escapeUp : escapeDown;
 
-        // Push out with extra buffer to prevent oscillation
-        const pushBuffer = 0.3;
+        // Push exactly to edge - no buffer to prevent oscillation
+        // The navmesh path should keep units away from buildings; this is just a safety net
+        // for edge cases like physics push or teleport placing unit inside building
         if (Math.abs(escapeX) < Math.abs(escapeY)) {
-          transform.x += escapeX + (escapeX > 0 ? pushBuffer : -pushBuffer);
+          transform.x += escapeX;
         } else {
-          transform.y += escapeY + (escapeY > 0 ? pushBuffer : -pushBuffer);
+          transform.y += escapeY;
         }
       }
     }

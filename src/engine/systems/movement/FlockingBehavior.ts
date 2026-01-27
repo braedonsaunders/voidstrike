@@ -455,7 +455,10 @@ export class FlockingBehavior {
 
   /**
    * Calculate physics push force from nearby units.
-   * Units push each other instead of avoiding - creates natural flow.
+   * SC2-style: units push each other with priority based on movement state.
+   * - Moving units have priority over idle units
+   * - Units don't push through others who have higher priority
+   * This creates natural streaming flow through choke points.
    * PERF: Results are cached and only recalculated every PHYSICS_PUSH_THROTTLE_TICKS ticks
    */
   public calculatePhysicsPush(
@@ -490,6 +493,11 @@ export class FlockingBehavior {
     let forceX = 0;
     let forceY = 0;
 
+    // SC2-style priority: determine if self is "heavy" (moving with purpose) or "light" (idle)
+    const selfIsMoving = selfUnit.state === 'moving' || selfUnit.state === 'attackmoving' ||
+                         selfUnit.state === 'patrolling' || selfUnit.state === 'gathering' ||
+                         selfUnit.state === 'building';
+
     for (let i = 0; i < nearbyData.length; i++) {
       const other = nearbyData[i];
       if (other.id === selfId) continue;
@@ -513,6 +521,24 @@ export class FlockingBehavior {
         const nx = dx / dist;
         const ny = dy / dist;
 
+        // SC2-style priority: moving units push idle units more than vice versa
+        // Idle units yield to moving units by receiving stronger push
+        const otherIsMoving = other.state === SpatialUnitState.Moving ||
+                              other.state === SpatialUnitState.AttackMoving ||
+                              other.state === SpatialUnitState.Gathering;
+
+        // Priority multiplier: if I'm idle and they're moving, I get pushed more (yield)
+        // If I'm moving and they're idle, I push them but they don't push me much
+        let priorityMultiplier = 1.0;
+        if (!selfIsMoving && otherIsMoving) {
+          // I'm idle, they're moving - I yield (get pushed more)
+          priorityMultiplier = 1.5;
+        } else if (selfIsMoving && !otherIsMoving) {
+          // I'm moving, they're idle - push through them (they should yield, not me)
+          priorityMultiplier = 0.3;
+        }
+        // If both moving or both idle: equal push (priorityMultiplier = 1.0)
+
         // Calculate push strength based on distance
         let pushStrength: number;
         if (dist < minDist) {
@@ -523,6 +549,9 @@ export class FlockingBehavior {
           const t = (dist - minDist) / collisionConfig.physicsPushRadius;
           pushStrength = collisionConfig.physicsPushStrength * Math.pow(1 - t, collisionConfig.physicsPushFalloff);
         }
+
+        // Apply priority multiplier
+        pushStrength *= priorityMultiplier;
 
         forceX += nx * pushStrength;
         forceY += ny * pushStrength;

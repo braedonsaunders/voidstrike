@@ -115,18 +115,18 @@ const DEFAULT_CONFIG: CollisionConfig = {
     flyingUnitRadius: 0.4,
   },
   buildingAvoidance: {
-    strength: 6.0,
-    hardMargin: 0.1,
-    softMargin: 0.5,
-    predictionLookahead: 0.2,
-    predictiveStrengthMultiplier: 0.3,
+    strength: 3.0,
+    hardMargin: 0.3,
+    softMargin: 1.0,
+    predictionLookahead: 0.3,
+    predictiveStrengthMultiplier: 0.2,
   },
   stuck: {
-    detectionFrames: 15,
-    velocityThreshold: 0.08,
-    nudgeStrength: 2.5,
-    minDistanceToTarget: 1.0,
-    tangentialBias: 0.7,
+    detectionFrames: 30,
+    velocityThreshold: 0.05,
+    nudgeStrength: 1.5,
+    minDistanceToTarget: 1.5,
+    tangentialBias: 0.5,
   },
 };
 

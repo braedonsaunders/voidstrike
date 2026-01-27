@@ -1093,10 +1093,15 @@ export class MovementOrchestrator {
       }
     }
 
-    // Building avoidance
-    this.pathfinding.calculateBuildingAvoidanceForce(entityId, transform, unit, tempBuildingAvoid, finalVx, finalVy);
-    finalVx += tempBuildingAvoid.x;
-    finalVy += tempBuildingAvoid.y;
+    // Building avoidance - ONLY for non-crowd paths (flying units or crowd unavailable)
+    // When using crowd navigation, the navmesh already routes around buildings.
+    // Adding steering forces on top causes oscillation/vibration at building corners.
+    // SC2-style: trust the navmesh for buildings, use boids only for unit-to-unit.
+    if (!USE_RECAST_CROWD || unit.isFlying || !this.pathfinding.isAgentRegistered(entityId)) {
+      this.pathfinding.calculateBuildingAvoidanceForce(entityId, transform, unit, tempBuildingAvoid, finalVx, finalVy);
+      finalVx += tempBuildingAvoid.x;
+      finalVy += tempBuildingAvoid.y;
+    }
 
     // Physics pushing
     if (!unit.isFlying) {

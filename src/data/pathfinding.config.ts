@@ -62,8 +62,12 @@ export const WALKABLE_HEIGHT = 2.0;
  * Agent collision radius for pathfinding.
  * Paths maintain this clearance from obstacles.
  * Units of: world units
+ *
+ * SC2-style: Set wide enough that units following navmesh paths won't need
+ * additional steering forces to avoid clipping buildings. This prevents
+ * the oscillation issue where steering and pathfinding give conflicting directions.
  */
-export const WALKABLE_RADIUS = 0.6;
+export const WALKABLE_RADIUS = 0.8;
 
 /**
  * Cell size for navmesh generation.
