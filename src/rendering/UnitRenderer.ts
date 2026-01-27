@@ -911,6 +911,12 @@ export class UnitRenderer {
       }
       this.cullingService.performCulling(this.camera);
 
+      // Update mesh visibility (and validate) after culling, before rendering
+      // This catches any disposed geometry before it causes WebGPU crashes
+      if (this.gpuIndirectRenderer && this.gpuIndirectInitialized) {
+        this.gpuIndirectRenderer.updateMeshVisibility();
+      }
+
       // Log culling status periodically (every 300 frames ~5 seconds)
       if (this.frameCount % 300 === 1) {
         const stats = this.getGPURenderingStats();
