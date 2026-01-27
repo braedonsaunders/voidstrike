@@ -272,6 +272,8 @@ class BuildingComponentAdapter {
   public height: number;
   public isFlying: boolean;
   public liftProgress: number;
+  // Production queue simulation for renderer compatibility
+  public productionQueue: { progress: number }[];
 
   constructor(data: BuildingRenderState) {
     this.buildingId = data.buildingId;
@@ -283,6 +285,10 @@ class BuildingComponentAdapter {
     this.height = data.height;
     this.isFlying = data.isFlying;
     this.liftProgress = data.liftProgress;
+    // Simulate productionQueue for renderer compatibility
+    this.productionQueue = data.hasProductionQueue
+      ? [{ progress: data.productionProgress }]
+      : [];
   }
 
   public update(data: BuildingRenderState): void {
@@ -295,6 +301,10 @@ class BuildingComponentAdapter {
     this.height = data.height;
     this.isFlying = data.isFlying;
     this.liftProgress = data.liftProgress;
+    // Simulate productionQueue for renderer compatibility
+    this.productionQueue = data.hasProductionQueue
+      ? [{ progress: data.productionProgress }]
+      : [];
   }
 
   public isReady(): boolean {
