@@ -3,16 +3,22 @@
  *
  * Offloads path computation to a separate thread to prevent main thread blocking.
  * Uses recast-navigation WASM for navmesh queries.
+ * Supports both ground and water navmeshes for naval units.
  *
  * Messages:
  *   Input:  { type: 'init' } - Initialize WASM module
  *   Input:  { type: 'loadNavMesh', data: Uint8Array } - Load navmesh from binary
+ *   Input:  { type: 'loadNavMeshFromGeometry', positions, indices } - Generate navmesh
+ *   Input:  { type: 'loadWaterNavMesh', positions, indices } - Load water navmesh for naval units
  *   Input:  { type: 'findPath', requestId, startX, startY, endX, endY, agentRadius }
+ *   Input:  { type: 'findWaterPath', requestId, startX, startY, endX, endY, agentRadius }
  *   Input:  { type: 'addObstacle', entityId, centerX, centerY, width, height }
  *   Input:  { type: 'removeObstacle', entityId }
  *   Output: { type: 'initialized', success: boolean }
  *   Output: { type: 'navMeshLoaded', success: boolean }
+ *   Output: { type: 'waterNavMeshLoaded', success: boolean }
  *   Output: { type: 'pathResult', requestId, path, found }
+ *   Output: { type: 'waterPathResult', requestId, path, found }
  */
 
 import {
@@ -101,6 +107,29 @@ interface FindNearestPointMessage {
   height?: number;
 }
 
+interface LoadWaterNavMeshMessage {
+  type: 'loadWaterNavMesh';
+  positions: Float32Array;
+  indices: Uint32Array;
+}
+
+interface FindWaterPathMessage {
+  type: 'findWaterPath';
+  requestId: number;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  agentRadius: number;
+}
+
+interface IsWaterWalkableMessage {
+  type: 'isWaterWalkable';
+  requestId: number;
+  x: number;
+  y: number;
+}
+
 type WorkerMessage =
   | InitMessage
   | LoadNavMeshMessage
@@ -109,9 +138,12 @@ type WorkerMessage =
   | AddObstacleMessage
   | RemoveObstacleMessage
   | IsWalkableMessage
-  | FindNearestPointMessage;
+  | FindNearestPointMessage
+  | LoadWaterNavMeshMessage
+  | FindWaterPathMessage
+  | IsWaterWalkableMessage;
 
-// State
+// Ground navmesh state
 let navMesh: NavMesh | null = null;
 let navMeshQuery: NavMeshQuery | null = null;
 let tileCache: TileCache | null = null;
@@ -119,6 +151,11 @@ let initialized = false;
 let heightMap: Float32Array | null = null;
 let heightMapWidth = 0;
 let heightMapHeight = 0;
+
+// Water navmesh state (for naval units)
+let waterNavMesh: NavMesh | null = null;
+let waterNavMeshQuery: NavMeshQuery | null = null;
+const WATER_SURFACE_HEIGHT = 0.15;
 
 function getQueryHalfExtents(searchRadius: number): { x: number; y: number; z: number } {
   const heightTolerance = heightMap ? WALKABLE_HEIGHT_TOLERANCE * 1.5 : 20;
@@ -163,8 +200,13 @@ function loadNavMesh(data: Uint8Array): boolean {
     heightMap = null;
     heightMapWidth = 0;
     heightMapHeight = 0;
-    // Note: TileCache is not exported/imported, so dynamic obstacles won't work
-    // with pre-exported navmesh. Use loadNavMeshFromGeometry for full support.
+    // LIMITATION: TileCache state cannot be serialized/deserialized with recast-navigation-js.
+    // Pre-exported navmesh files only contain the static navmesh geometry.
+    // Dynamic obstacles (buildings) require TileCache, which is only available when
+    // generating the navmesh at runtime via loadNavMeshFromGeometry().
+    //
+    // Recommended approach: Always use loadNavMeshFromGeometry() for games with buildings.
+    // Pre-exported navmesh is only suitable for static maps with no destructible obstacles.
     tileCache = null;
 
     return true;
@@ -519,6 +561,114 @@ function removeObstacle(entityId: number): boolean {
   }
 }
 
+// ==================== WATER NAVMESH FUNCTIONS ====================
+
+/**
+ * Load water navmesh from geometry (for naval units)
+ */
+function loadWaterNavMesh(positions: Float32Array, indices: Uint32Array): boolean {
+  if (!initialized) {
+    console.error('[PathfindingWorker] WASM not initialized');
+    return false;
+  }
+
+  if (DEBUG) {
+    console.log('[PathfindingWorker] Generating water navmesh:', {
+      vertices: positions.length / 3,
+      triangles: indices.length / 3,
+    });
+  }
+
+  try {
+    // Use solo navmesh for water (no dynamic obstacles needed on water)
+    const result = generateSoloNavMesh(positions, indices, SOLO_NAVMESH_CONFIG);
+
+    if (result.success && result.navMesh) {
+      waterNavMesh = result.navMesh;
+      waterNavMeshQuery = new NavMeshQuery(waterNavMesh);
+      if (DEBUG) console.log('[PathfindingWorker] Water navmesh generated successfully');
+      return true;
+    }
+
+    console.error('[PathfindingWorker] Water navmesh generation failed');
+    return false;
+  } catch (error) {
+    console.error('[PathfindingWorker] Error generating water navmesh:', error);
+    return false;
+  }
+}
+
+/**
+ * Find path on water navmesh (for naval units)
+ */
+function findWaterPath(
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number,
+  agentRadius: number
+): { path: Array<{ x: number; y: number }>; found: boolean } {
+  if (!waterNavMeshQuery) {
+    return { path: [], found: false };
+  }
+
+  try {
+    const halfExtents = { x: 5, y: 2, z: 5 };
+
+    const startResult = waterNavMeshQuery.findClosestPoint(
+      { x: startX, y: WATER_SURFACE_HEIGHT, z: startY },
+      { halfExtents }
+    );
+
+    const endResult = waterNavMeshQuery.findClosestPoint(
+      { x: endX, y: WATER_SURFACE_HEIGHT, z: endY },
+      { halfExtents }
+    );
+
+    if (!startResult.success || !startResult.point || !startResult.polyRef) {
+      return { path: [], found: false };
+    }
+
+    if (!endResult.success || !endResult.point || !endResult.polyRef) {
+      return { path: [], found: false };
+    }
+
+    const pathResult = waterNavMeshQuery.computePath(startResult.polyRef, endResult.polyRef, startResult.point, endResult.point);
+
+    if (!pathResult.success || !pathResult.path || pathResult.path.length === 0) {
+      return { path: [], found: false };
+    }
+
+    // Convert to 2D path
+    const path = pathResult.path.map((p: { x: number; z: number }) => ({ x: p.x, y: p.z }));
+    return { path, found: true };
+  } catch {
+    return { path: [], found: false };
+  }
+}
+
+/**
+ * Check if point is on water navmesh
+ */
+function isWaterWalkable(x: number, y: number): boolean {
+  if (!waterNavMeshQuery) return false;
+
+  try {
+    const halfExtents = { x: 2, y: 2, z: 2 };
+    const result = waterNavMeshQuery.findClosestPoint(
+      { x, y: WATER_SURFACE_HEIGHT, z: y },
+      { halfExtents }
+    );
+
+    if (!result.success || !result.point) return false;
+
+    const dist = distance(x, y, result.point.x, result.point.z);
+    return dist < WALKABLE_DISTANCE_TOLERANCE;
+  } catch {
+    return false;
+  }
+}
+
 // Message handler
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
   const message = event.data;
@@ -599,6 +749,39 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         type: 'findNearestPointResult',
         requestId: message.requestId,
         point,
+      });
+      break;
+    }
+
+    case 'loadWaterNavMesh': {
+      const success = loadWaterNavMesh(message.positions, message.indices);
+      self.postMessage({ type: 'waterNavMeshLoaded', success });
+      break;
+    }
+
+    case 'findWaterPath': {
+      const result = findWaterPath(
+        message.startX,
+        message.startY,
+        message.endX,
+        message.endY,
+        message.agentRadius
+      );
+      self.postMessage({
+        type: 'waterPathResult',
+        requestId: message.requestId,
+        path: result.path,
+        found: result.found,
+      });
+      break;
+    }
+
+    case 'isWaterWalkable': {
+      const walkable = isWaterWalkable(message.x, message.y);
+      self.postMessage({
+        type: 'isWaterWalkableResult',
+        requestId: message.requestId,
+        walkable,
       });
       break;
     }

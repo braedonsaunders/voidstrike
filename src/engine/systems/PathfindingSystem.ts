@@ -725,6 +725,7 @@ export class PathfindingSystem extends System {
     if (!entity) return;
 
     const unit = entity.get<Unit>('Unit');
+    const transform = entity.get<Transform>('Transform');
     if (!unit) return;
 
     unit.path = [];
@@ -734,25 +735,58 @@ export class PathfindingSystem extends System {
       unit.targetX = null;
       unit.targetY = null;
       unit.state = 'idle';
-    } else if (unit.state === 'building') {
-      // FIX: Don't cancel building assignments when path fails!
-      // Workers targeting a building they're constructing will have the path blocked
-      // by the building obstacle. BuildingPlacementSystem will keep setting their
-      // target, and they'll eventually path to a nearby walkable point.
-      // Only clear path state, NOT the target or building assignment.
-      // This prevents the race condition where:
-      // 1. Building placed, obstacle added to navmesh
-      // 2. Worker tries to path to building center (blocked)
-      // 3. Path fails, worker's building assignment incorrectly cancelled
-    } else if (unit.state === 'gathering') {
-      // FIX: Same as building workers - don't cancel gather assignments when path fails!
-      // ResourceSystem will keep setting the target, and the worker will eventually
-      // path to a nearby walkable point or use direct movement.
-      // Only clear targetX/targetY so a new path can be requested on next update.
-      unit.targetX = null;
-      unit.targetY = null;
-      // DON'T clear gatherTargetId - let ResourceSystem reassign the target
-      // DON'T change state to idle - worker should keep trying to gather
+    } else if (unit.state === 'building' && unit.constructingBuildingId !== null && transform) {
+      // Path to building center failed (blocked by building obstacle).
+      // Calculate a valid interaction point on the building perimeter instead.
+      const buildingEntity = this.world.getEntity(unit.constructingBuildingId);
+      if (buildingEntity) {
+        const buildingTransform = buildingEntity.get<Transform>('Transform');
+        const building = buildingEntity.get<Building>('Building');
+        if (buildingTransform && building) {
+          const interactionPoint = this.calculateInteractionPoint(
+            buildingTransform.x,
+            buildingTransform.y,
+            building.width,
+            building.height,
+            transform.x,
+            transform.y,
+            3.0 // Construction range
+          );
+          if (interactionPoint) {
+            unit.targetX = interactionPoint.x;
+            unit.targetY = interactionPoint.y;
+            // Don't clear constructingBuildingId - worker should continue to construction site
+            debugPathfinding.log(
+              `[PathfindingSystem] Worker ${entityId} rerouted to interaction point (${interactionPoint.x.toFixed(1)}, ${interactionPoint.y.toFixed(1)}) for building ${unit.constructingBuildingId}`
+            );
+          }
+        }
+      }
+    } else if (unit.state === 'gathering' && unit.gatherTargetId !== null && transform) {
+      // Path to resource failed. Calculate interaction point for the resource.
+      const resourceEntity = this.world.getEntity(unit.gatherTargetId);
+      if (resourceEntity) {
+        const resourceTransform = resourceEntity.get<Transform>('Transform');
+        if (resourceTransform) {
+          const interactionPoint = this.calculateInteractionPoint(
+            resourceTransform.x,
+            resourceTransform.y,
+            0, // Resources are point targets
+            0,
+            transform.x,
+            transform.y,
+            2.0 // Gathering range
+          );
+          if (interactionPoint) {
+            unit.targetX = interactionPoint.x;
+            unit.targetY = interactionPoint.y;
+            // Don't clear gatherTargetId - worker should continue to resource
+            debugPathfinding.log(
+              `[PathfindingSystem] Worker ${entityId} rerouted to interaction point (${interactionPoint.x.toFixed(1)}, ${interactionPoint.y.toFixed(1)}) for resource ${unit.gatherTargetId}`
+            );
+          }
+        }
+      }
     } else {
       unit.targetX = null;
       unit.targetY = null;
@@ -1188,5 +1222,116 @@ export class PathfindingSystem extends System {
       this.addDecorationObstacles(this.pendingDecorations);
       this.pendingDecorations = null;
     }
+  }
+
+  // ==================== INTERACTION POINT CALCULATION ====================
+
+  /**
+   * Calculate a valid navmesh point where a unit can stand to interact with a building/resource.
+   *
+   * The problem: Buildings are navmesh obstacles, so paths to their centers fail.
+   * The solution: Calculate a point on the building's perimeter that IS on the navmesh.
+   *
+   * @param targetX - Center X of the building/resource
+   * @param targetY - Center Y of the building/resource
+   * @param targetWidth - Width of the building (use 0 for point targets like resources)
+   * @param targetHeight - Height of the building (use 0 for point targets)
+   * @param workerX - Worker's current X position
+   * @param workerY - Worker's current Y position
+   * @param interactionRange - How close the worker needs to be (default 2.0)
+   * @returns Valid navmesh point, or null if none found
+   */
+  public calculateInteractionPoint(
+    targetX: number,
+    targetY: number,
+    targetWidth: number,
+    targetHeight: number,
+    workerX: number,
+    workerY: number,
+    interactionRange: number = 2.0
+  ): { x: number; y: number } | null {
+    // Calculate direction from target to worker
+    const dx = workerX - targetX;
+    const dy = workerY - targetY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < 0.01) {
+      // Worker is at center - pick arbitrary direction
+      return this.findValidPerimeterPoint(targetX, targetY, targetWidth, targetHeight, 1, 0, interactionRange);
+    }
+
+    // Normalize direction
+    const dirX = dx / dist;
+    const dirY = dy / dist;
+
+    // First try: point on perimeter in direction of worker
+    const result = this.findValidPerimeterPoint(targetX, targetY, targetWidth, targetHeight, dirX, dirY, interactionRange);
+    if (result) return result;
+
+    // Second try: sample points around the perimeter
+    const angles = [0, Math.PI / 4, Math.PI / 2, 3 * Math.PI / 4, Math.PI, -3 * Math.PI / 4, -Math.PI / 2, -Math.PI / 4];
+    for (const angle of angles) {
+      const sampleDirX = Math.cos(angle);
+      const sampleDirY = Math.sin(angle);
+      const sampleResult = this.findValidPerimeterPoint(targetX, targetY, targetWidth, targetHeight, sampleDirX, sampleDirY, interactionRange);
+      if (sampleResult) return sampleResult;
+    }
+
+    // Fallback: use navmesh nearest point query
+    const halfW = targetWidth / 2 + interactionRange;
+    const halfH = targetHeight / 2 + interactionRange;
+    const fallbackX = targetX + dirX * halfW;
+    const fallbackY = targetY + dirY * halfH;
+
+    return this.recast.findNearestPoint(fallbackX, fallbackY);
+  }
+
+  /**
+   * Find a valid navmesh point on the building perimeter in a given direction.
+   */
+  private findValidPerimeterPoint(
+    centerX: number,
+    centerY: number,
+    width: number,
+    height: number,
+    dirX: number,
+    dirY: number,
+    interactionRange: number
+  ): { x: number; y: number } | null {
+    // Calculate point outside the building + interaction margin
+    const halfW = width / 2 + interactionRange;
+    const halfH = height / 2 + interactionRange;
+
+    // Project direction onto perimeter (rectangular)
+    let pointX: number;
+    let pointY: number;
+
+    if (Math.abs(dirX) > Math.abs(dirY)) {
+      // Hit left/right edge
+      pointX = centerX + (dirX > 0 ? halfW : -halfW);
+      pointY = centerY + dirY * halfH * (Math.abs(dirY) / Math.abs(dirX));
+      pointY = clamp(pointY, centerY - halfH, centerY + halfH);
+    } else {
+      // Hit top/bottom edge
+      pointY = centerY + (dirY > 0 ? halfH : -halfH);
+      pointX = centerX + dirX * halfW * (Math.abs(dirX) / Math.max(Math.abs(dirY), 0.01));
+      pointX = clamp(pointX, centerX - halfW, centerX + halfW);
+    }
+
+    // Check if this point is on the navmesh
+    if (this.recast.isWalkable(pointX, pointY)) {
+      return { x: pointX, y: pointY };
+    }
+
+    // Try navmesh nearest point from this position
+    return this.recast.findNearestPoint(pointX, pointY);
+  }
+
+  /**
+   * Get the PathfindingSystem's RecastNavigation instance.
+   * Used by other systems that need to calculate interaction points.
+   */
+  public getRecast(): RecastNavigation {
+    return this.recast;
   }
 }
