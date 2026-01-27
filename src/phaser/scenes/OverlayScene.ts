@@ -156,7 +156,8 @@ export class OverlayScene extends Phaser.Scene {
   private resourceOverlayGraphics!: Phaser.GameObjects.Graphics;
 
   constructor() {
-    super({ key: 'OverlayScene' });
+    // Set active: false to prevent auto-start before eventBus is passed
+    super({ key: 'OverlayScene', active: false });
   }
 
   // Check if we're in spectator mode (no human player)
@@ -165,10 +166,17 @@ export class OverlayScene extends Phaser.Scene {
   }
 
   init(data: { eventBus: EventBus }): void {
-    this.eventBus = data.eventBus;
+    this.eventBus = data?.eventBus ?? null;
+    if (!this.eventBus) {
+      console.warn('[OverlayScene] init called without eventBus - scene will have limited functionality');
+    } else {
+      console.log('[OverlayScene] Initialized with eventBus');
+    }
   }
 
   create(): void {
+    console.log('[OverlayScene] create() called, eventBus:', this.eventBus ? 'present' : 'missing');
+
     // Create graphics layers (back to front)
     this.threatZoneGraphics = this.add.graphics();
     this.threatZoneGraphics.setDepth(10);
@@ -243,7 +251,11 @@ export class OverlayScene extends Phaser.Scene {
   }
 
   private setupEventListeners(): void {
-    if (!this.eventBus) return;
+    if (!this.eventBus) {
+      console.warn('[OverlayScene] setupEventListeners skipped - no eventBus');
+      return;
+    }
+    console.log('[OverlayScene] Setting up event listeners');
 
     // Combat events increase intensity (only for human player)
     this.registerEvent('combat:attack', (data: {
