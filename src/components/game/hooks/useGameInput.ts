@@ -8,6 +8,8 @@
 import type { RefObject, MutableRefObject, MouseEvent as ReactMouseEvent } from 'react';
 import { useRef, useCallback, useEffect, useState } from 'react';
 import { Game } from '@/engine/core/Game';
+import type { IWorldProvider } from '@/engine/ecs/IWorldProvider';
+import type { EventBus } from '@/engine/core/EventBus';
 import { RTSCamera } from '@/rendering/Camera';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
 import { WallPlacementPreview } from '@/rendering/WallPlacementPreview';
@@ -29,6 +31,10 @@ export interface UseGameInputProps {
   containerRef: RefObject<HTMLDivElement | null>;
   cameraRef: MutableRefObject<RTSCamera | null>;
   gameRef: MutableRefObject<Game | null>;
+  /** World provider for entity queries - if provided, uses this instead of game.world */
+  worldProviderRef?: MutableRefObject<IWorldProvider | null>;
+  /** Event bus for emitting commands - if provided, uses this instead of game.eventBus */
+  eventBusRef?: MutableRefObject<EventBus | null>;
   placementPreviewRef: MutableRefObject<BuildingPlacementPreview | null>;
   wallPlacementPreviewRef: MutableRefObject<WallPlacementPreview | null>;
   overlayManagerRef: MutableRefObject<TSLGameOverlayManager | null>;
@@ -51,37 +57,37 @@ export interface UseGameInputReturn {
 
 // Helper to find entity at a screen position using screen-space distance
 // This correctly handles air units by projecting their visual position to screen space
-// PERF: Uses spatial grid queries (O(1) average) instead of O(n) full entity iteration
+// Uses IWorldProvider interface for both worker mode and direct game.world mode
 function findEntityAtScreenPosition(
-  game: Game,
+  world: IWorldProvider,
   screenX: number,
   screenY: number,
   camera: RTSCamera
-) {
+): { entity: ReturnType<IWorldProvider['getEntity']> } | null {
   // Screen-space click radii in pixels
   const resourceScreenRadius = 40;
   const unitScreenRadius = 35;
   const buildingScreenRadius = 50;
 
-  // Convert screen position to world coordinates for spatial query
+  // Convert screen position to world coordinates
   const worldPos = camera.screenToWorld(screenX, screenY);
   if (!worldPos) return null;
 
   // Calculate world-space search radius based on camera zoom
-  // A pixel on screen corresponds to roughly (1/zoom) world units
   const zoom = camera.getZoom?.() ?? 1;
   const maxScreenRadius = Math.max(resourceScreenRadius, unitScreenRadius, buildingScreenRadius);
-  // Use generous world radius to ensure we capture all potential candidates
   const worldSearchRadius = (maxScreenRadius / zoom) * 1.5 + 5;
 
-  let closestEntity: { entity: ReturnType<typeof game.world.getEntity>; distance: number } | null = null;
+  type ClickCandidate = { entity: NonNullable<ReturnType<IWorldProvider['getEntity']>>; distance: number };
+  let closestEntity: ClickCandidate | null = null;
 
-  // Check resources - use archetype query since resources aren't in spatial grid
-  // Resources are typically static and fewer in number
-  const resources = game.world.getEntitiesWith('Resource', 'Transform');
+  // Check resources using IWorldProvider query
+  const resources = world.getEntitiesWith('Resource', 'Transform');
   for (const entity of resources) {
-    const transform = entity.get<Transform>('Transform')!;
-    // Early world-space distance check to skip distant resources
+    const transform = entity.get<Transform>('Transform');
+    if (!transform) continue;
+
+    // Early world-space distance check
     const worldDx = transform.x - worldPos.x;
     const worldDz = transform.y - worldPos.z;
     if (worldDx * worldDx + worldDz * worldDz > worldSearchRadius * worldSearchRadius) continue;
@@ -100,17 +106,19 @@ function findEntityAtScreenPosition(
     }
   }
 
-  // Query unit spatial grid - O(1) average instead of O(n)
-  const unitCandidates = game.world.unitGrid.queryRadius(worldPos.x, worldPos.z, worldSearchRadius);
-  for (const idx of unitCandidates) {
-    const entity = game.world.getEntityByIndex(idx);
-    if (!entity) continue;
-
+  // Check units using IWorldProvider query (brute-force, but typically <500 entities)
+  const units = world.getEntitiesWith('Unit', 'Transform');
+  for (const entity of units) {
     const transform = entity.get<Transform>('Transform');
     const health = entity.get<Health>('Health');
     const selectable = entity.get<Selectable>('Selectable');
     if (!transform || !health || !selectable) continue;
-    if (health.isDead()) continue;
+    if (health.isDead?.() || (health as { current?: number }).current === 0) continue;
+
+    // Early world-space distance check
+    const worldDx = transform.x - worldPos.x;
+    const worldDz = transform.y - worldPos.z;
+    if (worldDx * worldDx + worldDz * worldDz > worldSearchRadius * worldSearchRadius) continue;
 
     // Get terrain height and add visual height for flying units
     const getTerrainHeight = camera.getTerrainHeightFunction();
@@ -137,28 +145,30 @@ function findEntityAtScreenPosition(
     }
   }
 
-  // If we found a unit, return it (units have priority)
+  // If we found a unit, return it (units have priority over buildings/resources)
   if (closestEntity) {
     const unit = closestEntity.entity?.get<Unit>('Unit');
     if (unit) {
-      return { entity: closestEntity.entity! };
+      return { entity: closestEntity.entity };
     }
   }
 
-  // Query building spatial grid - O(1) average instead of O(n)
-  const buildingCandidates = game.world.buildingGrid.queryRadius(worldPos.x, worldPos.z, worldSearchRadius);
-  for (const idx of buildingCandidates) {
-    const entity = game.world.getEntityByIndex(idx);
-    if (!entity) continue;
-
+  // Check buildings using IWorldProvider query
+  const buildings = world.getEntitiesWith('Building', 'Transform');
+  for (const entity of buildings) {
     const transform = entity.get<Transform>('Transform');
     const health = entity.get<Health>('Health');
     const selectable = entity.get<Selectable>('Selectable');
     const building = entity.get<Building>('Building');
     if (!transform || !health || !selectable || !building) continue;
-    if (health.isDead()) continue;
+    if (health.isDead?.() || (health as { current?: number }).current === 0) continue;
 
-    // Flying buildings also need height consideration
+    // Early world-space distance check
+    const worldDx = transform.x - worldPos.x;
+    const worldDz = transform.y - worldPos.z;
+    if (worldDx * worldDx + worldDz * worldDz > worldSearchRadius * worldSearchRadius) continue;
+
+    // Flying buildings need height consideration
     const getTerrainHeightFn = camera.getTerrainHeightFunction();
     const terrainHeight = getTerrainHeightFn?.(transform.x, transform.y) ?? 0;
     const visualHeight = building.isFlying && building.state === 'flying' ? (selectable.visualHeight ?? 0) : 0;
@@ -181,18 +191,33 @@ function findEntityAtScreenPosition(
     }
   }
 
-  return closestEntity ? { entity: closestEntity.entity! } : null;
+  return closestEntity ? { entity: closestEntity.entity } : null;
 }
 
 export function useGameInput({
   containerRef,
   cameraRef,
   gameRef,
+  worldProviderRef,
+  eventBusRef,
   placementPreviewRef,
   wallPlacementPreviewRef,
   overlayManagerRef,
   lastControlGroupTap,
 }: UseGameInputProps): UseGameInputReturn {
+  // Helper to get world provider (from worker mode or direct game.world)
+  const getWorldProvider = useCallback((): IWorldProvider | null => {
+    if (worldProviderRef?.current) return worldProviderRef.current;
+    const game = gameRef.current;
+    if (game?.world) return game.world as unknown as IWorldProvider;
+    return null;
+  }, [worldProviderRef, gameRef]);
+
+  // Helper to get event bus (from worker mode or direct game.eventBus)
+  const getEventBus = useCallback((): EventBus | null => {
+    if (eventBusRef?.current) return eventBusRef.current;
+    return gameRef.current?.eventBus ?? null;
+  }, [eventBusRef, gameRef]);
   // Selection state
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectionStart, setSelectionStart] = useState({ x: 0, y: 0 });
@@ -254,15 +279,17 @@ export function useGameInput({
       const coords = getContainerCoords(e);
       const camera = cameraRef.current;
       const worldPos = camera?.screenToWorld(coords.x, coords.y);
-      if (!worldPos || !gameRef.current || !camera) return;
+      const world = getWorldProvider();
+      const eventBus = getEventBus();
+      const game = gameRef.current;
+      if (!worldPos || !camera || !world || !eventBus) return;
 
       const selectedUnits = useGameStore.getState().selectedUnits;
-      const game = gameRef.current;
 
       // Handle rally point mode
       if (isSettingRallyPoint) {
         for (const buildingId of selectedUnits) {
-          game.eventBus.emit('rally:set', {
+          eventBus.emit('rally:set', {
             buildingId,
             x: worldPos.x,
             y: worldPos.z,
@@ -274,17 +301,18 @@ export function useGameInput({
 
       // Handle repair mode
       if (isRepairMode) {
-        const clickedEntity = findEntityAtScreenPosition(game, coords.x, coords.y, camera);
-        if (clickedEntity) {
+        const clickedEntity = findEntityAtScreenPosition(world, coords.x, coords.y, camera);
+        if (clickedEntity && clickedEntity.entity) {
           const building = clickedEntity.entity.get<Building>('Building');
           const unit = clickedEntity.entity.get<Unit>('Unit');
           const health = clickedEntity.entity.get<Health>('Health');
           const selectable = clickedEntity.entity.get<Selectable>('Selectable');
 
           const localPlayer = getLocalPlayerId();
-          if (localPlayer && selectable?.playerId === localPlayer && health && !health.isDead()) {
+          const isDead = health?.isDead?.() || (health as { current?: number })?.current === 0;
+          if (localPlayer && selectable?.playerId === localPlayer && health && !isDead) {
             if (building || unit?.isMechanical) {
-              game.eventBus.emit('command:repair', {
+              eventBus.emit('command:repair', {
                 entityIds: selectedUnits,
                 targetId: clickedEntity.entity.id,
               });
@@ -298,7 +326,7 @@ export function useGameInput({
       }
 
       // Handle landing mode
-      if (isLandingMode && landingBuildingId) {
+      if (isLandingMode && landingBuildingId && game) {
         if (placementPreviewRef.current) {
           const snappedPos = placementPreviewRef.current.getSnappedPosition();
           const isValid = placementPreviewRef.current.isPlacementValid();
@@ -322,17 +350,17 @@ export function useGameInput({
       // Handle normal right-click commands
       if (selectedUnits.length > 0) {
         const queue = e.shiftKey;
-        const clickedEntity = findEntityAtScreenPosition(game, coords.x, coords.y, camera);
+        const clickedEntity = findEntityAtScreenPosition(world, coords.x, coords.y, camera);
 
-        if (clickedEntity) {
+        if (clickedEntity && clickedEntity.entity) {
           const resource = clickedEntity.entity.get<Resource>('Resource');
           const selectable = clickedEntity.entity.get<Selectable>('Selectable');
           const health = clickedEntity.entity.get<Health>('Health');
 
           // Gather command
-          if (resource) {
+          if (resource && game) {
             const workerIds = selectedUnits.filter((id: number) => {
-              const entity = game.world.getEntity(id);
+              const entity = world.getEntity(id);
               const unit = entity?.get<Unit>('Unit');
               return unit?.isWorker;
             });
@@ -353,8 +381,9 @@ export function useGameInput({
 
           // Attack enemy
           const localPlayerId = getLocalPlayerId();
-          if (selectable && localPlayerId && selectable.playerId !== localPlayerId && health && !health.isDead()) {
-            game.eventBus.emit('command:attack', {
+          const isDead = health?.isDead?.() || (health as { current?: number })?.current === 0;
+          if (selectable && localPlayerId && selectable.playerId !== localPlayerId && health && !isDead) {
+            eventBus.emit('command:attack', {
               entityIds: selectedUnits,
               targetEntityId: clickedEntity.entity.id,
               queue,
@@ -371,13 +400,13 @@ export function useGameInput({
               building.state === 'constructing'
             ) {
               const workerIds = selectedUnits.filter((id: number) => {
-                const entity = game.world.getEntity(id);
+                const entity = world.getEntity(id);
                 const unit = entity?.get<Unit>('Unit');
                 return unit?.isWorker;
               });
 
               if (workerIds.length > 0) {
-                game.eventBus.emit('command:resume_construction', {
+                eventBus.emit('command:resume_construction', {
                   workerId: workerIds[0],
                   buildingId: clickedEntity.entity.id,
                 });
@@ -393,7 +422,7 @@ export function useGameInput({
         const unitIds: number[] = [];
 
         for (const id of selectedUnits) {
-          const entity = game.world.getEntity(id);
+          const entity = world.getEntity(id);
           const building = entity?.get<Building>('Building');
           const unit = entity?.get<Unit>('Unit');
 
@@ -409,7 +438,7 @@ export function useGameInput({
         // Move flying buildings
         if (flyingBuildingIds.length > 0) {
           for (const buildingId of flyingBuildingIds) {
-            game.eventBus.emit('command:flyingBuildingMove', {
+            eventBus.emit('command:flyingBuildingMove', {
               buildingId,
               targetPosition: { x: worldPos.x, y: worldPos.z },
             });
@@ -419,14 +448,14 @@ export function useGameInput({
         // Set rally point for grounded production buildings
         if (groundedProductionBuildingIds.length > 0 && flyingBuildingIds.length === 0 && unitIds.length === 0) {
           let targetId: number | undefined;
-          if (clickedEntity) {
+          if (clickedEntity && clickedEntity.entity) {
             const resource = clickedEntity.entity.get<Resource>('Resource');
             if (resource) {
               targetId = clickedEntity.entity.id;
             }
           }
           for (const buildingId of groundedProductionBuildingIds) {
-            game.eventBus.emit('rally:set', {
+            eventBus.emit('rally:set', {
               buildingId,
               x: worldPos.x,
               y: worldPos.z,
@@ -436,7 +465,7 @@ export function useGameInput({
         }
 
         // Move units
-        if (unitIds.length > 0) {
+        if (unitIds.length > 0 && game) {
           const localPlayer = getLocalPlayerId();
           if (localPlayer) {
             game.issueCommand({
@@ -447,7 +476,7 @@ export function useGameInput({
               targetPosition: { x: worldPos.x, y: worldPos.z },
               queue,
             });
-            game.eventBus.emit('command:moveGround', {
+            eventBus.emit('command:moveGround', {
               targetPosition: { x: worldPos.x, y: worldPos.z },
               playerId: localPlayer,
             });
@@ -465,6 +494,8 @@ export function useGameInput({
       isLandingMode,
       landingBuildingId,
       getContainerCoords,
+      getWorldProvider,
+      getEventBus,
       cameraRef,
       gameRef,
       wallPlacementPreviewRef,
@@ -476,24 +507,27 @@ export function useGameInput({
   const handleMouseDown = useCallback(
     (e: ReactMouseEvent) => {
       const coords = getContainerCoords(e);
+      const world = getWorldProvider();
+      const eventBus = getEventBus();
+      const game = gameRef.current;
 
       if (e.button === 0) {
         // Left click
         if (commandTargetMode === 'attack') {
           const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
-          if (worldPos && gameRef.current) {
+          if (worldPos && game && eventBus) {
             const selectedUnits = useGameStore.getState().selectedUnits;
             const localPlayer = getLocalPlayerId();
             if (selectedUnits.length > 0 && localPlayer) {
-              gameRef.current.issueCommand({
-                tick: gameRef.current.getCurrentTick(),
+              game.issueCommand({
+                tick: game.getCurrentTick(),
                 playerId: localPlayer,
                 type: 'ATTACK',
                 entityIds: selectedUnits,
                 targetPosition: { x: worldPos.x, y: worldPos.z },
                 queue: e.shiftKey,
               });
-              gameRef.current.eventBus.emit('command:attackGround', {
+              eventBus.emit('command:attackGround', {
                 targetPosition: { x: worldPos.x, y: worldPos.z },
                 playerId: localPlayer,
               });
@@ -502,12 +536,12 @@ export function useGameInput({
           if (!e.shiftKey) useGameStore.getState().setCommandTargetMode(null);
         } else if (commandTargetMode === 'patrol') {
           const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
-          if (worldPos && gameRef.current) {
+          if (worldPos && game) {
             const selectedUnits = useGameStore.getState().selectedUnits;
             const localPlayer = getLocalPlayerId();
             if (selectedUnits.length > 0 && localPlayer) {
-              gameRef.current.issueCommand({
-                tick: gameRef.current.getCurrentTick(),
+              game.issueCommand({
+                tick: game.getCurrentTick(),
                 playerId: localPlayer,
                 type: 'PATROL',
                 entityIds: selectedUnits,
@@ -519,19 +553,19 @@ export function useGameInput({
           if (!e.shiftKey) useGameStore.getState().setCommandTargetMode(null);
         } else if (commandTargetMode === 'move') {
           const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
-          if (worldPos && gameRef.current) {
+          if (worldPos && game && eventBus) {
             const selectedUnits = useGameStore.getState().selectedUnits;
             const localPlayer = getLocalPlayerId();
             if (selectedUnits.length > 0 && localPlayer) {
-              gameRef.current.issueCommand({
-                tick: gameRef.current.getCurrentTick(),
+              game.issueCommand({
+                tick: game.getCurrentTick(),
                 playerId: localPlayer,
                 type: 'MOVE',
                 entityIds: selectedUnits,
                 targetPosition: { x: worldPos.x, y: worldPos.z },
                 queue: e.shiftKey,
               });
-              gameRef.current.eventBus.emit('command:moveGround', {
+              eventBus.emit('command:moveGround', {
                 targetPosition: { x: worldPos.x, y: worldPos.z },
                 playerId: localPlayer,
               });
@@ -540,20 +574,20 @@ export function useGameInput({
           if (!e.shiftKey) useGameStore.getState().setCommandTargetMode(null);
         } else if (abilityTargetMode) {
           const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
-          if (worldPos && gameRef.current && cameraRef.current) {
+          if (worldPos && game && cameraRef.current && world) {
             const selectedUnits = useGameStore.getState().selectedUnits;
-            const clickedEntity = findEntityAtScreenPosition(gameRef.current, coords.x, coords.y, cameraRef.current);
+            const clickedEntity = findEntityAtScreenPosition(world, coords.x, coords.y, cameraRef.current);
             const localPlayer = getLocalPlayerId();
 
             if (localPlayer) {
-              gameRef.current.issueCommand({
-                tick: gameRef.current.getCurrentTick(),
+              game.issueCommand({
+                tick: game.getCurrentTick(),
                 playerId: localPlayer,
                 type: 'ABILITY',
                 entityIds: selectedUnits,
                 abilityId: abilityTargetMode,
                 targetPosition: { x: worldPos.x, y: worldPos.z },
-                targetEntityId: clickedEntity?.entity.id,
+                targetEntityId: clickedEntity?.entity?.id,
               });
             }
           }
@@ -564,14 +598,14 @@ export function useGameInput({
             wallPlacementPreviewRef.current.startLine(worldPos.x, worldPos.z);
           }
         } else if (isLandingMode && landingBuildingId) {
-          if (placementPreviewRef.current && gameRef.current) {
+          if (placementPreviewRef.current && game) {
             const snappedPos = placementPreviewRef.current.getSnappedPosition();
             const isValid = placementPreviewRef.current.isPlacementValid();
             const localPlayer = getLocalPlayerId();
 
             if (isValid && localPlayer) {
-              gameRef.current.issueCommand({
-                tick: gameRef.current.getCurrentTick(),
+              game.issueCommand({
+                tick: game.getCurrentTick(),
                 playerId: localPlayer,
                 type: 'LAND',
                 entityIds: [landingBuildingId],
@@ -585,9 +619,9 @@ export function useGameInput({
           const snappedPos = placementPreviewRef.current.getSnappedPosition();
           const isValid = placementPreviewRef.current.isPlacementValid();
 
-          if (isValid && gameRef.current) {
+          if (isValid && eventBus) {
             const selectedUnits = useGameStore.getState().selectedUnits;
-            gameRef.current.eventBus.emit('building:place', {
+            eventBus.emit('building:place', {
               buildingType,
               position: { x: snappedPos.x, y: snappedPos.y },
               workerId: selectedUnits.length > 0 ? selectedUnits[0] : undefined,
@@ -607,8 +641,8 @@ export function useGameInput({
           }
         } else if (isBattleSimulatorMode()) {
           const worldPos = cameraRef.current?.screenToWorld(coords.x, coords.y);
-          if (worldPos && gameRef.current) {
-            gameRef.current.eventBus.emit('simulator:spawn', {
+          if (worldPos && eventBus) {
+            eventBus.emit('simulator:spawn', {
               worldX: worldPos.x,
               worldY: worldPos.z,
             });
@@ -625,6 +659,8 @@ export function useGameInput({
     },
     [
       getContainerCoords,
+      getWorldProvider,
+      getEventBus,
       commandTargetMode,
       abilityTargetMode,
       isWallPlacementMode,
@@ -684,17 +720,17 @@ export function useGameInput({
   const handleMouseUp = useCallback(
     (e: ReactMouseEvent) => {
       const coords = getContainerCoords(e);
+      const eventBus = getEventBus();
 
       // Handle wall placement finish
       if (e.button === 0 && isWallPlacementMode && wallPlacementPreviewRef.current?.isCurrentlyDrawing()) {
         const result = wallPlacementPreviewRef.current.finishLine();
-        const game = gameRef.current;
 
-        if (game && result.positions.length > 0) {
+        if (eventBus && result.positions.length > 0) {
           const store = useGameStore.getState();
           const wallBuildingType = store.buildingType || 'wall_segment';
 
-          game.eventBus.emit('wall:place_line', {
+          eventBus.emit('wall:place_line', {
             positions: result.positions,
             buildingType: wallBuildingType,
             playerId: getLocalPlayerId(),
@@ -711,15 +747,14 @@ export function useGameInput({
       if (e.button === 0 && isSelecting) {
         setIsSelecting(false);
 
-        const game = gameRef.current;
-        if (game) {
+        if (eventBus) {
           const screenDx = Math.abs(selectionEnd.x - selectionStart.x);
           const screenDy = Math.abs(selectionEnd.y - selectionStart.y);
           const MIN_BOX_DRAG = 10;
 
           if (screenDx > MIN_BOX_DRAG || screenDy > MIN_BOX_DRAG) {
             // Box selection
-            game.eventBus.emit('selection:boxScreen', {
+            eventBus.emit('selection:boxScreen', {
               screenStartX: selectionStart.x,
               screenStartY: selectionStart.y,
               screenEndX: selectionEnd.x,
@@ -743,7 +778,7 @@ export function useGameInput({
 
             lastClickRef.current = { time: now, x: coords.x, y: coords.y };
 
-            game.eventBus.emit('selection:clickScreen', {
+            eventBus.emit('selection:clickScreen', {
               screenX: coords.x,
               screenY: coords.y,
               additive: e.shiftKey,
@@ -756,12 +791,12 @@ export function useGameInput({
     },
     [
       getContainerCoords,
+      getEventBus,
       isWallPlacementMode,
       isSelecting,
       selectionStart,
       selectionEnd,
       wallPlacementPreviewRef,
-      gameRef,
     ]
   );
 
@@ -784,8 +819,8 @@ export function useGameInput({
 
       setIsSelecting(false);
 
-      const game = gameRef.current;
-      if (!game) return;
+      const eventBus = getEventBus();
+      if (!eventBus) return;
 
       const coords = getContainerCoords(e);
       const finalEndX = coords.x;
@@ -796,7 +831,7 @@ export function useGameInput({
       const MIN_BOX_DRAG = 10;
 
       if (screenDx > MIN_BOX_DRAG || screenDy > MIN_BOX_DRAG) {
-        game.eventBus.emit('selection:boxScreen', {
+        eventBus.emit('selection:boxScreen', {
           screenStartX: selectionStart.x,
           screenStartY: selectionStart.y,
           screenEndX: finalEndX,
@@ -819,7 +854,7 @@ export function useGameInput({
 
         lastClickRef.current = { time: now, x: coords.x, y: coords.y };
 
-        game.eventBus.emit('selection:clickScreen', {
+        eventBus.emit('selection:clickScreen', {
           screenX: coords.x,
           screenY: coords.y,
           additive: e.shiftKey,
@@ -836,17 +871,17 @@ export function useGameInput({
       document.removeEventListener('mousemove', handleDocumentMouseMove);
       document.removeEventListener('mouseup', handleDocumentMouseUp);
     };
-  }, [isSelecting, selectionStart, getContainerCoords, gameRef]);
+  }, [isSelecting, selectionStart, getContainerCoords, getEventBus]);
 
   // Keyboard handlers
   useEffect(() => {
-    const game = gameRef.current;
-    if (!game) return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === 'INPUT') return;
 
       const key = e.key.toLowerCase();
+      const world = getWorldProvider();
+      const eventBus = getEventBus();
+      const game = gameRef.current;
 
       switch (key) {
         case 'escape': {
@@ -872,14 +907,14 @@ export function useGameInput({
             wallPlacementPreviewRef.current?.cancelLine();
             useGameStore.getState().setWallPlacementMode(false);
           } else if (isBuilding) useGameStore.getState().setBuildingMode(null);
-          else game.eventBus.emit('selection:clear');
+          else eventBus?.emit('selection:clear');
           break;
         }
         case 'l': {
           const store = useGameStore.getState();
           const localPlayer = getLocalPlayerId();
-          if (store.selectedUnits.length > 0 && localPlayer) {
-            const firstEntity = game.world.getEntity(store.selectedUnits[0]);
+          if (store.selectedUnits.length > 0 && localPlayer && world && game) {
+            const firstEntity = world.getEntity(store.selectedUnits[0]);
             const building = firstEntity?.get<Building>('Building');
             if (building?.canLiftOff) {
               if (building.isFlying && building.state === 'flying') {
@@ -899,8 +934,8 @@ export function useGameInput({
         }
         case 'r': {
           const store = useGameStore.getState();
-          if (store.selectedUnits.length > 0) {
-            const firstEntity = game.world.getEntity(store.selectedUnits[0]);
+          if (store.selectedUnits.length > 0 && world) {
+            const firstEntity = world.getEntity(store.selectedUnits[0]);
             const unit = firstEntity?.get<Unit>('Unit');
             const building = firstEntity?.get<Building>('Building');
 
@@ -951,7 +986,7 @@ export function useGameInput({
         case 's': {
           const selectedUnits = useGameStore.getState().selectedUnits;
           const localPlayer = getLocalPlayerId();
-          if (selectedUnits.length > 0 && localPlayer) {
+          if (selectedUnits.length > 0 && localPlayer && game) {
             game.issueCommand({
               tick: game.getCurrentTick(),
               playerId: localPlayer,
@@ -964,7 +999,7 @@ export function useGameInput({
         case 'h': {
           const selectedUnits = useGameStore.getState().selectedUnits;
           const localPlayer = getLocalPlayerId();
-          if (selectedUnits.length > 0 && localPlayer) {
+          if (selectedUnits.length > 0 && localPlayer && game) {
             game.issueCommand({
               tick: game.getCurrentTick(),
               playerId: localPlayer,
@@ -1019,12 +1054,12 @@ export function useGameInput({
           store.setControlGroup(groupNumber, Array.from(combinedSet));
         } else {
           const group = store.controlGroups.get(groupNumber);
-          if (group && group.length > 0) {
+          if (group && group.length > 0 && world) {
             const now = Date.now();
             const lastTap = lastControlGroupTap.current;
 
             if (lastTap && lastTap.group === groupNumber && now - lastTap.time < 300) {
-              const firstEntity = game.world.getEntity(group[0]);
+              const firstEntity = world.getEntity(group[0]);
               const transform = firstEntity?.get<Transform>('Transform');
               if (transform && camera) {
                 camera.setPosition(transform.x, transform.y);
@@ -1042,6 +1077,8 @@ export function useGameInput({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     gameRef,
+    getWorldProvider,
+    getEventBus,
     cameraRef,
     wallPlacementPreviewRef,
     overlayManagerRef,

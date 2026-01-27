@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World } from '@/engine/ecs/World';
+import type { IWorldProvider, IEntity } from '@/engine/ecs/IWorldProvider';
 import { Transform } from '@/engine/components/Transform';
 import { Resource, OPTIMAL_WORKERS_PER_MINERAL, OPTIMAL_WORKERS_PER_VESPENE } from '@/engine/components/Resource';
 import { Unit } from '@/engine/components/Unit';
@@ -60,7 +60,7 @@ const MINERAL_LINE_GROUPING_DISTANCE = 15;
 
 export class ResourceRenderer {
   private scene: THREE.Scene;
-  private world: World;
+  private world: IWorldProvider;
   private terrain: Terrain | null;
 
   // Instanced mesh groups: one per resource type
@@ -108,11 +108,11 @@ export class ResourceRenderer {
   private readonly _workerCountCache: Map<number, number> = new Map();
 
   // PERF: Cached and sorted entity list - only rebuild when entity set changes
-  private _cachedSortedEntities: { id: number; entity: import('@/engine/ecs/Entity').Entity }[] = [];
+  private _cachedSortedEntities: { id: number; entity: IEntity }[] = [];
   private _lastEntityCount: number = -1;
   private _lastEntityIdSum: number = 0; // Checksum to detect entity changes
 
-  constructor(scene: THREE.Scene, world: World, terrain?: Terrain) {
+  constructor(scene: THREE.Scene, world: IWorldProvider, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
     this.terrain = terrain ?? null;

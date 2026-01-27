@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World } from '@/engine/ecs/World';
+import type { IWorldProvider, IEntity } from '@/engine/ecs/IWorldProvider';
 import { Transform } from '@/engine/components/Transform';
 import { Building } from '@/engine/components/Building';
 import { Health } from '@/engine/components/Health';
@@ -104,7 +104,7 @@ const MAX_SELECTION_RING_INSTANCES = BUILDING_RENDERER.MAX_SELECTION_RING_INSTAN
 
 export class BuildingRenderer {
   private scene: THREE.Scene;
-  private world: World;
+  private world: IWorldProvider;
   private visionSystem: VisionSystem | null;
   private terrain: Terrain | null;
   private playerId: string | null = null;
@@ -127,7 +127,7 @@ export class BuildingRenderer {
   private cullingService: CullingService | null = null;
 
   // PERF: Cached sorted entity list to avoid spread+sort every frame
-  private cachedSortedEntities: import('@/engine/ecs/Entity').Entity[] = [];
+  private cachedSortedEntities: IEntity[] = [];
   private cachedEntityCount: number = -1;
 
   // Shared materials
@@ -168,7 +168,7 @@ export class BuildingRenderer {
   // Fallback elevation heights when terrain isn't available
   private static readonly ELEVATION_HEIGHTS = BUILDING_RENDERER.ELEVATION_HEIGHTS;
 
-  constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
+  constructor(scene: THREE.Scene, world: IWorldProvider, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
     this.visionSystem = visionSystem ?? null;

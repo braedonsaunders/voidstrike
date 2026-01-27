@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { World } from '@/engine/ecs/World';
+import type { IWorldProvider, IEntity } from '@/engine/ecs/IWorldProvider';
 import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
 import { Health } from '@/engine/components/Health';
@@ -96,7 +96,7 @@ const DEFAULT_ANIMATION_MAPPINGS: AnimationMappingConfig = {
 
 export class UnitRenderer {
   private scene: THREE.Scene;
-  private world: World;
+  private world: IWorldProvider;
   private visionSystem: VisionSystem | null;
   private terrain: Terrain | null;
   private playerId: string | null = null;
@@ -143,7 +143,7 @@ export class UnitRenderer {
   private readonly smoothRotation: SmoothRotation = new SmoothRotation(UNIT_RENDERER.ROTATION_SMOOTH_FACTOR);
 
   // PERF: Cached sorted entity list to avoid spread+sort every frame
-  private cachedSortedEntities: import('@/engine/ecs/Entity').Entity[] = [];
+  private cachedSortedEntities: IEntity[] = [];
   private cachedEntityCount: number = -1; // Track count to detect changes
 
   // Unified Culling Service (handles both GPU and CPU culling paths)
@@ -157,7 +157,7 @@ export class UnitRenderer {
   // Track unit type geometries registered with GPU indirect renderer
   private gpuRegisteredUnitTypes: Set<string> = new Set();
 
-  constructor(scene: THREE.Scene, world: World, visionSystem?: VisionSystem, terrain?: Terrain) {
+  constructor(scene: THREE.Scene, world: IWorldProvider, visionSystem?: VisionSystem, terrain?: Terrain) {
     this.scene = scene;
     this.world = world;
     this.visionSystem = visionSystem ?? null;
