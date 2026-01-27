@@ -16,6 +16,19 @@
  * │  (terrain, units, buildings, 3D FX)    │
  * └────────────────────────────────────────┘
  *
+ * Game Logic Architecture (Worker Mode):
+ * ┌────────────────────────────────────────┐
+ * │            Web Worker                  │
+ * │  (ECS, AI, Physics - NOT throttled)    │
+ * │                                        │
+ * │  ↓ RenderState snapshots               │
+ * ├────────────────────────────────────────┤
+ * │           Main Thread                  │
+ * │  (Rendering, Audio, Input)             │
+ * │                                        │
+ * │  ↑ GameCommands (user input)           │
+ * └────────────────────────────────────────┘
+ *
  * This component is a thin orchestrator that delegates to specialized hooks:
  * - useWebGPURenderer: Renderer setup, scene, and game loop
  * - useGameInput: Mouse and keyboard input handling
@@ -27,6 +40,13 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import * as Phaser from 'phaser';
 
 import { Game } from '@/engine/core/Game';
+import {
+  WorkerBridge,
+  MainThreadEventHandler,
+  RenderStateWorldAdapter,
+  type RenderState,
+  type GameEvent,
+} from '@/engine/workers';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, getLocalPlayerId, isSpectatorMode, isBattleSimulatorMode } from '@/store/gameSetupStore';
 import { useMultiplayerStore, isMultiplayerMode } from '@/store/multiplayerStore';
@@ -46,6 +66,12 @@ import { useWebGPURenderer, useGameInput, useCameraControl, usePostProcessing } 
 // Map reference
 let CURRENT_MAP: MapData = DEFAULT_MAP;
 
+// Feature flag: enable worker mode for game logic
+// Worker mode moves all game logic to a Web Worker for:
+// 1. Anti-throttling when tab is inactive
+// 2. Better performance (parallel execution)
+const USE_WORKER_MODE = true;
+
 export function WebGPUGameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const threeCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -57,8 +83,11 @@ export function WebGPUGameCanvas() {
   const phaserLoopWorkerRef = useRef<Worker | null>(null);
   const lastPhaserUpdateTimeRef = useRef<number>(0);
 
-  // Game engine ref
+  // Game engine refs - supports both worker and non-worker modes
   const gameRef = useRef<Game | null>(null);
+  const workerBridgeRef = useRef<WorkerBridge | null>(null);
+  const eventHandlerRef = useRef<MainThreadEventHandler | null>(null);
+  const renderStateAdapterRef = useRef<RenderStateWorldAdapter>(new RenderStateWorldAdapter());
 
   // Event listener cleanup
   const eventUnsubscribersRef = useRef<(() => void)[]>([]);
@@ -93,6 +122,38 @@ export function WebGPUGameCanvas() {
   // WebGPU detection callback
   const handleWebGPUDetected = useCallback((detected: boolean) => {
     setIsWebGPU(detected);
+  }, []);
+
+  // Handle render state updates from worker (only in worker mode)
+  const handleRenderState = useCallback((state: RenderState) => {
+    renderStateAdapterRef.current.updateFromRenderState(state);
+    // Update game time in store
+    useGameStore.getState().setGameTime(state.gameTime);
+  }, []);
+
+  // Handle game events from worker (only in worker mode)
+  const handleGameEvent = useCallback((event: GameEvent) => {
+    // Events are dispatched through eventBus by MainThreadEventHandler
+  }, []);
+
+  // Handle game over
+  const handleGameOver = useCallback((winnerId: string | null, reason: string) => {
+    debugInitialization.log(`[WebGPUGameCanvas] Game over: winner=${winnerId}, reason=${reason}`);
+    // Notify UI of game over
+    const message = winnerId
+      ? `Game over! ${winnerId === getLocalPlayerId() ? 'Victory!' : 'Defeat!'}`
+      : `Game over: ${reason}`;
+    useUIStore.getState().addNotification(
+      winnerId === getLocalPlayerId() ? 'success' : 'warning',
+      message,
+      10000
+    );
+  }, []);
+
+  // Handle worker errors
+  const handleWorkerError = useCallback((message: string, stack?: string) => {
+    console.error('[GameWorker Error]', message, stack);
+    useUIStore.getState().addNotification('error', `Game error: ${message}`, 5000);
   }, []);
 
   // Initialize renderer hook
@@ -141,8 +202,11 @@ export function WebGPUGameCanvas() {
     useGameStore.getState().setGameReady(true);
 
     setTimeout(() => {
-      if (gameRef.current?.eventBus) {
-        gameRef.current.eventBus.emit('game:countdown');
+      const eventBus = USE_WORKER_MODE
+        ? workerBridgeRef.current?.eventBus
+        : gameRef.current?.eventBus;
+      if (eventBus) {
+        eventBus.emit('game:countdown');
       }
     }, 50);
 
@@ -209,69 +273,132 @@ export function WebGPUGameCanvas() {
         const localPlayerId = getLocalPlayerId();
         const isMultiplayer = isMultiplayerMode();
 
-        const game = Game.getInstance({
-          mapWidth,
-          mapHeight,
-          tickRate: 20,
-          isMultiplayer,
-          playerId: localPlayerId ?? 'spectator',
-          aiEnabled: !isBattleSimulatorMode() && !isMultiplayer,
-        });
-        gameRef.current = game;
+        if (USE_WORKER_MODE) {
+          // WORKER MODE: Game logic runs in Web Worker (anti-throttled)
+          debugInitialization.log('[WebGPUGameCanvas] Initializing in WORKER MODE (anti-throttled)');
 
-        // Set up multiplayer command synchronization
-        if (isMultiplayer) {
-          const multiplayerStore = useMultiplayerStore.getState();
+          const bridge = WorkerBridge.getInstance({
+            config: {
+              mapWidth,
+              mapHeight,
+              tickRate: 20,
+              isMultiplayer,
+              playerId: localPlayerId ?? 'spectator',
+              aiEnabled: !isBattleSimulatorMode() && !isMultiplayer,
+              aiDifficulty: 'medium',
+            },
+            playerId: localPlayerId ?? 'spectator',
+            onRenderState: handleRenderState,
+            onGameEvent: handleGameEvent,
+            onGameOver: handleGameOver,
+            onError: handleWorkerError,
+          });
+          workerBridgeRef.current = bridge;
 
-          const commandTypes = [
-            'command:move',
-            'command:attack',
-            'command:patrol',
-            'command:stop',
-            'command:holdPosition',
-            'command:build',
-            'command:train',
-            'command:research',
-            'command:ability',
-            'command:gather',
-            'command:repair',
-            'command:heal',
-            'command:transform',
-            'command:cloak',
-            'command:load',
-            'command:unload',
-            'command:loadBunker',
-            'command:unloadBunker',
-            'command:liftOff',
-            'command:land',
-            'command:demolish',
-          ];
+          // Create main thread event handler for audio/effects
+          const eventHandler = new MainThreadEventHandler(bridge);
+          eventHandlerRef.current = eventHandler;
 
-          for (const cmdType of commandTypes) {
-            const unsubscribe = game.eventBus.on(cmdType, (data: unknown) => {
-              const cmd = data as { playerId?: string };
-              if (cmd.playerId === localPlayerId) {
-                multiplayerStore.sendMessage({
-                  type: 'command',
-                  commandType: cmdType,
-                  data,
-                  tick: game.getCurrentTick(),
-                });
-              }
-            });
-            eventUnsubscribersRef.current.push(unsubscribe);
+          // Battle effects are handled through the eventBus
+          // The MainThreadEventHandler dispatches events which BattleEffectsRenderer
+          // subscribes to via its constructor
+
+          // Initialize the worker
+          await bridge.initialize();
+
+          // Set terrain data
+          bridge.setTerrainGrid(CURRENT_MAP.terrain);
+
+          // Multiplayer: Remote player quit
+          eventUnsubscribersRef.current.push(
+            bridge.eventBus.on('multiplayer:playerQuit', () => {
+              debugNetworking.log('[Game] Remote player quit the game');
+              useUIStore.getState().addNotification('warning', 'Remote player has left the game', 10000);
+            })
+          );
+
+          // Also create a minimal Game instance for components that still need it
+          // This is a transitional measure - ideally everything would use WorkerBridge
+          const game = Game.getInstance({
+            mapWidth,
+            mapHeight,
+            tickRate: 20,
+            isMultiplayer,
+            playerId: localPlayerId ?? 'spectator',
+            aiEnabled: false, // AI runs in worker
+          });
+          gameRef.current = game;
+
+          // Don't start the game loop - worker handles that
+          // The game is created but not started; worker runs the actual logic
+        } else {
+          // NON-WORKER MODE: Traditional main thread game logic
+          debugInitialization.log('[WebGPUGameCanvas] Initializing in MAIN THREAD MODE');
+
+          const game = Game.getInstance({
+            mapWidth,
+            mapHeight,
+            tickRate: 20,
+            isMultiplayer,
+            playerId: localPlayerId ?? 'spectator',
+            aiEnabled: !isBattleSimulatorMode() && !isMultiplayer,
+          });
+          gameRef.current = game;
+
+          // Set up multiplayer command synchronization
+          if (isMultiplayer) {
+            const multiplayerStore = useMultiplayerStore.getState();
+
+            const commandTypes = [
+              'command:move',
+              'command:attack',
+              'command:patrol',
+              'command:stop',
+              'command:holdPosition',
+              'command:build',
+              'command:train',
+              'command:research',
+              'command:ability',
+              'command:gather',
+              'command:repair',
+              'command:heal',
+              'command:transform',
+              'command:cloak',
+              'command:load',
+              'command:unload',
+              'command:loadBunker',
+              'command:unloadBunker',
+              'command:liftOff',
+              'command:land',
+              'command:demolish',
+            ];
+
+            for (const cmdType of commandTypes) {
+              const unsubscribe = game.eventBus.on(cmdType, (data: unknown) => {
+                const cmd = data as { playerId?: string };
+                if (cmd.playerId === localPlayerId) {
+                  multiplayerStore.sendMessage({
+                    type: 'command',
+                    commandType: cmdType,
+                    data,
+                    tick: game.getCurrentTick(),
+                  });
+                }
+              });
+              eventUnsubscribersRef.current.push(unsubscribe);
+            }
+
+            debugNetworking.log('[Multiplayer] Command sync enabled');
           }
 
-          debugNetworking.log('[Multiplayer] Command sync enabled');
+          // Multiplayer: Remote player quit
+          eventUnsubscribersRef.current.push(
+            game.eventBus.on('multiplayer:playerQuit', () => {
+              debugNetworking.log('[Game] Remote player quit the game');
+              useUIStore.getState().addNotification('warning', 'Remote player has left the game', 10000);
+            })
+          );
         }
-
-        // Multiplayer: Remote player quit
-        eventUnsubscribersRef.current.push(
-          game.eventBus.on('multiplayer:playerQuit', () => {
-            debugNetworking.log('[Game] Remote player quit the game');
-            useUIStore.getState().addNotification('warning', 'Remote player has left the game', 10000);
-          })
-        );
 
         // Initialize renderer (which creates all sub-renderers)
         const success = await initializeRenderer();
@@ -283,11 +410,17 @@ export function WebGPUGameCanvas() {
 
         // Spawn entities (skip in battle simulator)
         if (!isBattleSimulatorMode()) {
-          spawnInitialEntities(game, CURRENT_MAP);
+          if (USE_WORKER_MODE && workerBridgeRef.current) {
+            workerBridgeRef.current.spawnInitialEntities(CURRENT_MAP);
+          } else if (gameRef.current) {
+            spawnInitialEntities(gameRef.current, CURRENT_MAP);
+          }
         }
 
-        // Force initial vision update
-        game.visionSystem.forceUpdate();
+        // Force initial vision update (non-worker mode only)
+        if (!USE_WORKER_MODE && gameRef.current) {
+          gameRef.current.visionSystem.forceUpdate();
+        }
 
         // Re-set player ID on fog of war now that players are registered
         if (refs.fogOfWar.current && localPlayerId) {
@@ -295,7 +428,11 @@ export function WebGPUGameCanvas() {
         }
 
         // Initialize audio
-        await game.audioSystem.initialize(refs.camera.current?.camera!, CURRENT_MAP.biome);
+        if (USE_WORKER_MODE && eventHandlerRef.current) {
+          await eventHandlerRef.current.startGameplayMusic();
+        } else if (gameRef.current) {
+          await gameRef.current.audioSystem.initialize(refs.camera.current?.camera!, CURRENT_MAP.biome);
+        }
 
         setLoadingStatus('Initializing overlay system');
         setLoadingProgress(80);
@@ -312,7 +449,11 @@ export function WebGPUGameCanvas() {
     };
 
     const initializePhaserOverlay = () => {
-      if (!phaserContainerRef.current || !gameRef.current) return;
+      const eventBus = USE_WORKER_MODE
+        ? workerBridgeRef.current?.eventBus
+        : gameRef.current?.eventBus;
+
+      if (!phaserContainerRef.current || !eventBus) return;
 
       const phaserWidth = containerRef.current?.clientWidth ?? window.innerWidth;
       const phaserHeight = containerRef.current?.clientHeight ?? window.innerHeight;
@@ -346,18 +487,20 @@ export function WebGPUGameCanvas() {
         const scene = phaserGame.scene.getScene('OverlayScene') as OverlayScene;
         overlaySceneRef.current = scene;
 
-        if (gameRef.current) {
-          phaserGame.scene.start('OverlayScene', { eventBus: gameRef.current.eventBus });
+        phaserGame.scene.start('OverlayScene', { eventBus });
 
-          if (refs.environment.current) {
-            const terrain = refs.environment.current.terrain;
-            scene.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
-          }
-
-          setTimeout(() => {
-            gameRef.current?.start();
-          }, 100);
+        if (refs.environment.current) {
+          const terrain = refs.environment.current.terrain;
+          scene.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
         }
+
+        setTimeout(() => {
+          if (USE_WORKER_MODE) {
+            workerBridgeRef.current?.start();
+          } else {
+            gameRef.current?.start();
+          }
+        }, 100);
 
         // Initialize Phaser loop worker for background tab immunity (ES module for Next.js 16+ Turbopack)
         try {
@@ -432,12 +575,28 @@ export function WebGPUGameCanvas() {
 
       phaserGameRef.current?.destroy(true);
 
+      // Cleanup based on mode
+      if (USE_WORKER_MODE) {
+        if (eventHandlerRef.current) {
+          eventHandlerRef.current.stopGameplayMusic();
+          eventHandlerRef.current.dispose();
+          eventHandlerRef.current = null;
+        }
+        if (workerBridgeRef.current) {
+          WorkerBridge.resetInstance();
+          workerBridgeRef.current = null;
+        }
+        renderStateAdapterRef.current.clear();
+      }
+
       if (gameRef.current) {
-        gameRef.current.audioSystem.dispose();
+        if (!USE_WORKER_MODE) {
+          gameRef.current.audioSystem.dispose();
+        }
         Game.resetInstance();
       }
     };
-  }, [initializeRenderer, refs.camera, refs.environment, refs.fogOfWar]);
+  }, [initializeRenderer, refs.camera, refs.environment, refs.fogOfWar, refs.battleEffects, handleRenderState, handleGameEvent, handleGameOver, handleWorkerError]);
 
   // Building placement preview
   useEffect(() => {
@@ -471,12 +630,21 @@ export function WebGPUGameCanvas() {
 
   // Landing mode preview
   useEffect(() => {
-    if (refs.placementPreview.current && gameRef.current) {
+    if (refs.placementPreview.current) {
       if (isLandingMode && landingBuildingId) {
-        const entity = gameRef.current.world.getEntity(landingBuildingId);
-        const building = entity?.get<import('@/engine/components/Building').Building>('Building');
-        if (building) {
-          refs.placementPreview.current.startPlacement(building.buildingId);
+        // Get building type from game or render state
+        let buildingId: string | undefined;
+        if (USE_WORKER_MODE) {
+          const building = renderStateAdapterRef.current.getEntity(landingBuildingId);
+          buildingId = building?.get<{ buildingId: string }>('Building')?.buildingId;
+        } else if (gameRef.current) {
+          const entity = gameRef.current.world.getEntity(landingBuildingId);
+          const building = entity?.get<import('@/engine/components/Building').Building>('Building');
+          buildingId = building?.buildingId;
+        }
+
+        if (buildingId) {
+          refs.placementPreview.current.startPlacement(buildingId);
         }
       } else if (!isBuilding) {
         refs.placementPreview.current.stopPlacement();
