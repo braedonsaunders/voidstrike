@@ -906,7 +906,8 @@ export class TSLGameOverlayManager {
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const health = entity.get<Health>('Health')!;
-      if (selectable.playerId === localPlayerId || health.isDead()) continue;
+      // Note: In worker mode, components are plain objects, not class instances
+      if (selectable.playerId === localPlayerId || health.current <= 0) continue;
 
       const transform = entity.get<Transform>('Transform')!;
       const unit = entity.get<Unit>('Unit')!;
@@ -940,7 +941,8 @@ export class TSLGameOverlayManager {
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const health = entity.get<Health>('Health')!;
-      if (selectable.playerId === localPlayerId || health.isDead()) continue;
+      // Note: In worker mode, components are plain objects, not class instances
+      if (selectable.playerId === localPlayerId || health.current <= 0) continue;
 
       const building = entity.get<Building>('Building')!;
       if (!building.canAttack) continue;
