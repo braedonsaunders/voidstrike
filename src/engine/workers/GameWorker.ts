@@ -444,6 +444,12 @@ class WorkerGame {
   public start(): void {
     if (this.state === 'running') return;
 
+    console.log('[GameWorker] Starting game loop. Entity counts:', {
+      units: this.world.getEntitiesWith('Unit').length,
+      buildings: this.world.getEntitiesWith('Building').length,
+      resources: this.world.getEntitiesWith('Resource').length,
+    });
+
     this.state = 'running';
     this.lastTickTime = performance.now();
     this.accumulator = 0;
@@ -1082,6 +1088,12 @@ class WorkerGame {
    * Creates resources and player bases for all players.
    */
   public spawnInitialEntities(mapData: SpawnMapData): void {
+    console.log('[GameWorker] spawnInitialEntities called:', {
+      resourceCount: mapData.resources?.length ?? 0,
+      spawnCount: mapData.spawns?.length ?? 0,
+      playerSlotCount: mapData.playerSlots?.length ?? 0,
+    });
+
     // Spawn resources
     if (mapData.resources) {
       for (const resourceDef of mapData.resources) {
@@ -1093,6 +1105,7 @@ class WorkerGame {
             resourceDef.amount ?? (resourceDef.type === 'mineral' ? 1500 : 2500)
           ));
       }
+      console.log('[GameWorker] Spawned', mapData.resources.length, 'resources');
     }
 
     // Get active player slots (human or AI)

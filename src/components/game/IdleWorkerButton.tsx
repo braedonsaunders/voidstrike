@@ -15,13 +15,11 @@ export function IdleWorkerButton() {
   const lastTickRef = useRef(-1);
   const cachedCountRef = useRef(0);
 
-  // Don't render for spectators
-  if (isSpectator) {
-    return null;
-  }
-
   // Update idle worker count via event-driven approach + throttled polling
+  // Note: Hooks must be called unconditionally, so spectator check is after all hooks
   useEffect(() => {
+    // Skip for spectators
+    if (isSpectator) return;
     const bridge = getWorkerBridge();
     if (!bridge) return;
 
@@ -76,7 +74,7 @@ export function IdleWorkerButton() {
       unsubDied();
       clearInterval(interval);
     };
-  }, [playerId]);
+  }, [playerId, isSpectator]);
 
   const handleClick = useCallback(() => {
     const worldAdapter = getRenderStateAdapter();
@@ -121,6 +119,11 @@ export function IdleWorkerButton() {
   useEffect(() => {
     setLastSelectedIndex(0);
   }, [idleWorkerCount]);
+
+  // Don't render for spectators (check after all hooks to satisfy React rules)
+  if (isSpectator) {
+    return null;
+  }
 
   if (idleWorkerCount === 0) {
     return null; // Don't show button if no idle workers
