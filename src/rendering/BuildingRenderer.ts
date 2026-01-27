@@ -338,13 +338,14 @@ export class BuildingRenderer {
    * Requirements: completed, not selected, not damaged (<100% health), visible, not flying
    */
   private canUseInstancing(building: Building, health: Health | undefined, selectable: Selectable | undefined): boolean {
-    if (!building.isComplete()) return false;
+    // Note: In worker mode, components are plain objects, not class instances
+    if (building.state !== 'complete') return false;
     if (selectable?.isSelected) return false;
-    if (health && health.getHealthPercent() < 1) return false;
+    if (health && (health.current / health.max) < 1) return false;
     // Buildings with production queue shouldn't use instancing (need progress bar)
     if (building.productionQueue.length > 0) return false;
     // Flying buildings need individual rendering for height offset
-    if (building.isFlying || building.state === 'lifting' || building.state === 'landing') return false;
+    if (building.isFlying) return false;
     return true;
   }
 
@@ -658,7 +659,7 @@ export class BuildingRenderer {
       if (!meshData) {
         meshData = this.createBuildingMesh(building, ownerId);
         // Initialize wasComplete based on actual building state
-        meshData.wasComplete = building.isComplete();
+        meshData.wasComplete = building.state === 'complete';
         // PERF: Initialize cached terrain height
         meshData.cachedTerrainHeight = terrainHeight;
         meshData.lastX = transform.x;
@@ -670,7 +671,7 @@ export class BuildingRenderer {
         this.scene.add(meshData.progressBar);
 
         // If building is already complete, ensure materials are correct immediately
-        if (building.isComplete()) {
+        if (building.state === 'complete') {
           this.resetBuildingMaterials(meshData.group);
         }
       }
@@ -900,7 +901,8 @@ export class BuildingRenderer {
 
       // Update health bar and fire effects (for all non-constructing states)
       if (health && shouldShowComplete) {
-        const healthPercent = health.getHealthPercent();
+        // Note: In worker mode, components are plain objects, not class instances
+        const healthPercent = health.current / health.max;
         // Use the actual 3D model height (meshData.buildingHeight) instead of grid cells (building.height)
         meshData.healthBar.position.set(transform.x, terrainHeight + meshData.buildingHeight + flyingOffset + 0.5, transform.y);
         meshData.healthBar.visible = healthPercent < 1;
@@ -958,7 +960,7 @@ export class BuildingRenderer {
       // Position above health bar to avoid overlap (health bar is at +0.5, progress at +0.75)
       // Use the actual 3D model height (meshData.buildingHeight) instead of grid cells (building.height)
       if (isOwned) {
-        if (!building.isComplete()) {
+        if (building.state !== 'complete') {
           meshData.progressBar.position.set(transform.x, terrainHeight + meshData.buildingHeight + flyingOffset + 0.75, transform.y);
           meshData.progressBar.visible = true;
           this.updateProgressBar(meshData.progressBar, building.buildProgress, true);
@@ -969,7 +971,9 @@ export class BuildingRenderer {
         } else if (building.productionQueue.length > 0) {
           meshData.progressBar.position.set(transform.x, terrainHeight + meshData.buildingHeight + flyingOffset + 0.75, transform.y);
           meshData.progressBar.visible = true;
-          this.updateProgressBar(meshData.progressBar, building.getProductionProgress(), false);
+          // Note: In worker mode, components are plain objects
+          const productionProgress = building.productionQueue[0]?.progress ?? 0;
+          this.updateProgressBar(meshData.progressBar, productionProgress, false);
           // Billboard: make progress bar face the camera
           if (this.camera) {
             meshData.progressBar.lookAt(this.camera.position);
@@ -2274,7 +2278,8 @@ export class BuildingRenderer {
   private updateHealthBar(healthBar: THREE.Group, health: Health): void {
     const fill = healthBar.getObjectByName('fill') as THREE.Mesh;
     if (fill) {
-      const percent = health.getHealthPercent();
+      // Note: In worker mode, components are plain objects, not class instances
+      const percent = health.current / health.max;
       fill.scale.x = percent;
       fill.position.x = (percent - 1);
 

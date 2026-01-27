@@ -99,7 +99,8 @@ export class HealthBarRenderer {
     const fill = healthBar.getObjectByName('healthFill') as THREE.Mesh;
 
     if (fill) {
-      const percent = health.getHealthPercent();
+      // Note: In worker mode, components are plain objects, not class instances
+      const percent = health.current / health.max;
       fill.scale.x = percent;
       fill.position.x = (percent - 1) / 2;
 

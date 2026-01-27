@@ -986,7 +986,8 @@ export class UnitRenderer {
       }
 
       // Skip dead units
-      if (health && health.isDead()) {
+      // Note: In worker mode, components are plain objects, not class instances
+      if (health && health.current <= 0) {
         shouldShow = false;
       }
 
@@ -1132,7 +1133,8 @@ export class UnitRenderer {
 
       // Health bar - only show if damaged, positioned above the unit model (kept individual)
       if (health) {
-        const healthPercent = health.getHealthPercent();
+        // Note: In worker mode, components are plain objects, not class instances
+        const healthPercent = health.current / health.max;
         overlay.healthBar.visible = healthPercent < 1;
         if (overlay.healthBar.visible) {
           // Position health bar above the unit model
