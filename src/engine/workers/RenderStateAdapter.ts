@@ -445,17 +445,20 @@ class ResourceComponentAdapter {
   public resourceType: string;
   public amount: number;
   public maxAmount: number;
+  private _hasExtractor: boolean;
 
   constructor(data: ResourceRenderState) {
     this.resourceType = data.resourceType;
     this.amount = data.amount;
     this.maxAmount = data.maxAmount;
+    this._hasExtractor = data.hasExtractor;
   }
 
   public update(data: ResourceRenderState): void {
     this.resourceType = data.resourceType;
     this.amount = data.amount;
     this.maxAmount = data.maxAmount;
+    this._hasExtractor = data.hasExtractor;
   }
 
   public isDepleted(): boolean {
@@ -466,8 +469,12 @@ class ResourceComponentAdapter {
     return this.maxAmount > 0 ? this.amount / this.maxAmount : 0;
   }
 
+  public hasExtractor(): boolean {
+    return this._hasExtractor;
+  }
+
   public hasRefinery(): boolean {
-    return false; // Would need to track this separately
+    return this._hasExtractor;
   }
 
   public getDepletionPercent(): number {
