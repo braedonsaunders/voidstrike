@@ -185,11 +185,26 @@ export class WorkerBridge {
   // WORKER MESSAGE HANDLING
   // ============================================================================
 
+  // Debug: track first render state message
+  private hasLoggedFirstRenderState = false;
+
   private handleWorkerMessage(event: MessageEvent<WorkerToMainMessage>): void {
     const message = event.data;
 
     switch (message.type) {
       case 'renderState':
+        // Debug: log first render state with entities
+        if (!this.hasLoggedFirstRenderState &&
+            (message.state.units.length > 0 || message.state.buildings.length > 0 || message.state.resources.length > 0)) {
+          console.log('[WorkerBridge] First renderState message received:', {
+            tick: message.state.tick,
+            units: message.state.units.length,
+            buildings: message.state.buildings.length,
+            resources: message.state.resources.length,
+            hasCallback: !!this.onRenderState,
+          });
+          this.hasLoggedFirstRenderState = true;
+        }
         this._renderState = message.state;
         this.onRenderState?.(message.state);
         break;

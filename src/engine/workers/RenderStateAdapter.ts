@@ -552,10 +552,24 @@ export class RenderStateWorldAdapter implements IWorldProvider {
     return RenderStateWorldAdapter.instance !== null;
   }
 
+  // Debug: log first update only
+  private hasLoggedFirstUpdate = false;
+
   /**
    * Update the adapter with new render state from the worker
    */
   public updateFromRenderState(state: RenderState): void {
+    // Debug: log first significant update
+    if (!this.hasLoggedFirstUpdate && (state.units.length > 0 || state.buildings.length > 0 || state.resources.length > 0)) {
+      console.log('[RenderStateWorldAdapter] First update received:', {
+        tick: state.tick,
+        units: state.units.length,
+        buildings: state.buildings.length,
+        resources: state.resources.length,
+      });
+      this.hasLoggedFirstUpdate = true;
+    }
+
     this.currentRenderState = state;
 
     // Update unit entities
