@@ -10,7 +10,21 @@ VOIDSTRIKE is a browser-based RTS game built with Next.js 14, Three.js r182, and
 
 DO NOT CREATE MD FILES UNLESS EXPLICITLY TOLD TO DO SO.
 
+NEVER CODE UNLESS EXPLICITLY ASKED. Before writing any code:
+1. Demonstrate understanding of the problem/request
+2. Present a clear plan with specific files/changes
+3. Offer alternatives or tradeoffs if applicable
+4. Wait for approval before implementing
+
+Only after user confirms should you begin coding. This prevents wasted effort and ensures alignment.
+
 ALWAYS WRITE REFERENCE QUALITY PRODUCTION READY CODE. NEVER LEAVE THINGS INCOMPLETE, CREATE STUBS, ETC.
+
+UPDATE TESTS WHEN APPROPRIATE:
+- When modifying existing functionality → update related tests
+- When adding new features → add tests for the new code
+- When fixing bugs → add regression tests to prevent recurrence
+- Run `npm test` to verify tests pass before committing
 
 IF YOU NEED MORE CONTEXT, DO NOT CODE UNTIL YOU FIND IT. DO FREQUENT RESEARCH FOR THE LATEST TECHNIQUES
 
@@ -35,6 +49,7 @@ Load relevant documentation based on your current task. Don't load everything—
 | **Models** | `docs/reference/models.md` | 3D models, GLTF specs, model requirements |
 | **Textures** | `docs/reference/textures.md` | Texture specs, UV mapping, material setup |
 | **Security** | `docs/security/SECURITY_AUDIT.md` | Security review, vulnerability assessment |
+| **Testing** | `docs/TESTING.md` | Test framework, coverage reports, testing patterns |
 
 ### Project Management (in `.claude/`)
 
@@ -65,6 +80,8 @@ Load relevant documentation based on your current task. Don't load everything—
 4. **`docs/architecture/rendering.md`** - When adding shaders, effects, or graphics features
 
 5. **`docs/architecture/networking.md`** - When changing multiplayer or networking code
+
+6. **`tests/`** - Update or add tests for any modified or new functionality
 
 ### Use templates for consistency:
 - New ECS system → `.claude/templates/system.md`
@@ -198,12 +215,25 @@ Acceptable: `// CRITICAL:`, `// Note:`, `// TODO:`, brief JSDoc
 
 ## Testing
 
-Before committing:
+**Always run tests before committing:**
 ```bash
 npm run type-check  # TypeScript validation
 npm run lint        # Code style
+npm test            # Run test suite
 npm run dev         # Browser test
 ```
+
+**When to update tests:**
+- Modified a system/component → Update its corresponding test file in `tests/`
+- Added new functionality → Create tests covering the new code paths
+- Fixed a bug → Add a regression test that would have caught it
+- Changed public API → Update tests to match new signatures
+
+**Test file locations mirror source:**
+- `src/engine/systems/CombatSystem.ts` → `tests/engine/systems/CombatSystem.test.ts`
+- `src/engine/ai/BehaviorTree.ts` → `tests/engine/ai/BehaviorTree.test.ts`
+
+See `docs/TESTING.md` for detailed testing patterns and coverage requirements.
 
 ## Commits
 
