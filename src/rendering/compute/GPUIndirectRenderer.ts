@@ -181,13 +181,20 @@ export class GPUIndirectRenderer {
     // Clone attributes from source geometry to avoid sharing disposal lifecycle.
     // Setting by reference causes WebGPU "setIndexBuffer" errors when the source
     // geometry is disposed elsewhere while this geometry is still in use.
+    // CRITICAL: Mark cloned attributes as needsUpdate to force WebGPU to create
+    // fresh GPU buffers. Without this, WebGPU may lazily share buffers with the
+    // source geometry, which become invalid when the source is disposed.
     for (const name of Object.keys(geometry.attributes)) {
-      instancedGeometry.setAttribute(name, geometry.attributes[name].clone());
+      const clonedAttr = geometry.attributes[name].clone();
+      clonedAttr.needsUpdate = true;
+      instancedGeometry.setAttribute(name, clonedAttr);
     }
 
     // Clone index if present - critical to avoid shared buffer disposal issues
     if (geometry.index) {
-      instancedGeometry.setIndex(geometry.index.clone());
+      const clonedIndex = geometry.index.clone();
+      clonedIndex.needsUpdate = true;
+      instancedGeometry.setIndex(clonedIndex);
     }
 
     // Create per-instance position offset attribute (vec3)
@@ -463,10 +470,20 @@ export class GPUIndirectRenderer {
   /**
    * Update mesh visibility based on instance counts
    * Hides meshes with 0 instances to avoid GPU overhead
-   * Also hides invalid meshes to prevent rendering crashes
+   * Also validates and hides invalid meshes to prevent rendering crashes
    */
   updateMeshVisibility(): void {
-    for (const [, data] of this.indirectMeshes) {
+    for (const [key, data] of this.indirectMeshes) {
+      // Quick validation check every frame to catch disposed geometry before render
+      if (data.isValid) {
+        const index = data.geometry.index;
+        // Check if index buffer was disposed (array becomes null after dispose)
+        if (data.indexCount > 0 && (!index || !index.array)) {
+          data.isValid = false;
+          debugShaders.warn(`[GPUIndirectRenderer] Mesh geometry invalidated during visibility update: ${key}`);
+        }
+      }
+
       // Never show invalid meshes
       if (!data.isValid) {
         data.mesh.visible = false;
