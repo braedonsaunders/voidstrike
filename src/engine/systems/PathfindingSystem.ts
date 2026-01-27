@@ -1328,12 +1328,4 @@ export class PathfindingSystem extends System {
     // Try navmesh nearest point from this position
     return this.recast.findNearestPoint(pointX, pointY);
   }
-
-  /**
-   * Get the PathfindingSystem's RecastNavigation instance.
-   * Used by other systems that need to calculate interaction points.
-   */
-  public getRecast(): RecastNavigation {
-    return this.recast;
-  }
 }
