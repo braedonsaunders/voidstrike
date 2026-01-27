@@ -111,6 +111,11 @@ class UnitAdapter {
   public isFlying: boolean;
   public isSubmerged: boolean;
   public isCloaked: boolean;
+  public isWorker: boolean;
+  public isMining: boolean;
+  public isRepairing: boolean;
+  public carryingMinerals: number;
+  public carryingVespene: number;
 
   constructor(data: UnitRenderState) {
     this.unitId = data.unitId;
@@ -120,6 +125,11 @@ class UnitAdapter {
     this.isFlying = data.isFlying;
     this.isSubmerged = data.isSubmerged;
     this.isCloaked = data.isCloaked;
+    this.isWorker = data.isWorker;
+    this.isMining = data.isMining;
+    this.isRepairing = data.isRepairing;
+    this.carryingMinerals = data.carryingMinerals;
+    this.carryingVespene = data.carryingVespene;
   }
 
   public update(data: UnitRenderState): void {
@@ -130,6 +140,11 @@ class UnitAdapter {
     this.isFlying = data.isFlying;
     this.isSubmerged = data.isSubmerged;
     this.isCloaked = data.isCloaked;
+    this.isWorker = data.isWorker;
+    this.isMining = data.isMining;
+    this.isRepairing = data.isRepairing;
+    this.carryingMinerals = data.carryingMinerals;
+    this.carryingVespene = data.carryingVespene;
   }
 
   public isSelected(): boolean {
