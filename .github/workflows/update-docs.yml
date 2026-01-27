@@ -1,0 +1,47 @@
+name: Update Documentation
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'wasm/**'
+      - 'public/**'
+      - 'tests/**'
+      - '.claude/**'
+      - 'docs/**'
+
+jobs:
+  update-file-tree:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Update file tree
+        run: node scripts/update-file-tree.js
+
+      - name: Check for changes
+        id: git-check
+        run: |
+          git diff --quiet docs/architecture/OVERVIEW.md || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push if changed
+        if: steps.git-check.outputs.changed == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add docs/architecture/OVERVIEW.md
+          git commit -m "docs: auto-update file tree structure"
+          git push
