@@ -444,13 +444,14 @@ class ResourceTransformAdapter {
   constructor(data: ResourceRenderState) {
     this.x = data.x;
     this.y = data.y;
-    this.z = 0;
+    this.z = data.z ?? 0;
     this.rotation = 0;
   }
 
   public update(data: ResourceRenderState): void {
     this.x = data.x;
     this.y = data.y;
+    this.z = data.z ?? 0;
   }
 }
 
@@ -524,6 +525,8 @@ export class RenderStateWorldAdapter implements IWorldProvider {
   private resourceEntities: Map<number, ResourceEntityAdapter> = new Map();
 
   private currentRenderState: RenderState | null = null;
+  private _isReady = false;
+  private _updateCount = 0;
 
   /**
    * Get the singleton instance (creates one if needed)
@@ -556,75 +559,116 @@ export class RenderStateWorldAdapter implements IWorldProvider {
   private hasLoggedFirstUpdate = false;
 
   /**
+   * Check if the adapter has received at least one render state with entities
+   */
+  public isReady(): boolean {
+    return this._isReady;
+  }
+
+  /**
+   * Get the number of updates received (for debugging)
+   */
+  public getUpdateCount(): number {
+    return this._updateCount;
+  }
+
+  /**
+   * Get entity counts (for debugging)
+   */
+  public getEntityCounts(): { units: number; buildings: number; resources: number } {
+    return {
+      units: this.unitEntities.size,
+      buildings: this.buildingEntities.size,
+      resources: this.resourceEntities.size,
+    };
+  }
+
+  /**
    * Update the adapter with new render state from the worker
    */
   public updateFromRenderState(state: RenderState): void {
-    // Debug: log first significant update
-    if (!this.hasLoggedFirstUpdate && (state.units.length > 0 || state.buildings.length > 0 || state.resources.length > 0)) {
-      console.log('[RenderStateWorldAdapter] First update received:', {
-        tick: state.tick,
-        units: state.units.length,
-        buildings: state.buildings.length,
-        resources: state.resources.length,
-      });
-      this.hasLoggedFirstUpdate = true;
-    }
+    try {
+      this._updateCount++;
 
-    this.currentRenderState = state;
+      // Debug: log first significant update
+      if (!this.hasLoggedFirstUpdate && (state.units.length > 0 || state.buildings.length > 0 || state.resources.length > 0)) {
+        console.log('[RenderStateWorldAdapter] First update received:', {
+          tick: state.tick,
+          units: state.units.length,
+          buildings: state.buildings.length,
+          resources: state.resources.length,
+        });
+        this.hasLoggedFirstUpdate = true;
+      }
 
-    // Update unit entities
-    const seenUnitIds = new Set<number>();
-    for (const unitData of state.units) {
-      seenUnitIds.add(unitData.id);
-      let adapter = this.unitEntities.get(unitData.id);
-      if (adapter) {
-        adapter.update(unitData);
-      } else {
-        adapter = new UnitEntityAdapter(unitData);
-        this.unitEntities.set(unitData.id, adapter);
-      }
-    }
-    // Remove stale units
-    for (const id of this.unitEntities.keys()) {
-      if (!seenUnitIds.has(id)) {
-        this.unitEntities.delete(id);
-      }
-    }
+      this.currentRenderState = state;
 
-    // Update building entities
-    const seenBuildingIds = new Set<number>();
-    for (const buildingData of state.buildings) {
-      seenBuildingIds.add(buildingData.id);
-      let adapter = this.buildingEntities.get(buildingData.id);
-      if (adapter) {
-        adapter.update(buildingData);
-      } else {
-        adapter = new BuildingEntityAdapter(buildingData);
-        this.buildingEntities.set(buildingData.id, adapter);
+      // Update unit entities
+      const seenUnitIds = new Set<number>();
+      for (const unitData of state.units) {
+        seenUnitIds.add(unitData.id);
+        let adapter = this.unitEntities.get(unitData.id);
+        if (adapter) {
+          adapter.update(unitData);
+        } else {
+          adapter = new UnitEntityAdapter(unitData);
+          this.unitEntities.set(unitData.id, adapter);
+        }
       }
-    }
-    for (const id of this.buildingEntities.keys()) {
-      if (!seenBuildingIds.has(id)) {
-        this.buildingEntities.delete(id);
+      // Remove stale units
+      for (const id of this.unitEntities.keys()) {
+        if (!seenUnitIds.has(id)) {
+          this.unitEntities.delete(id);
+        }
       }
-    }
 
-    // Update resource entities
-    const seenResourceIds = new Set<number>();
-    for (const resourceData of state.resources) {
-      seenResourceIds.add(resourceData.id);
-      let adapter = this.resourceEntities.get(resourceData.id);
-      if (adapter) {
-        adapter.update(resourceData);
-      } else {
-        adapter = new ResourceEntityAdapter(resourceData);
-        this.resourceEntities.set(resourceData.id, adapter);
+      // Update building entities
+      const seenBuildingIds = new Set<number>();
+      for (const buildingData of state.buildings) {
+        seenBuildingIds.add(buildingData.id);
+        let adapter = this.buildingEntities.get(buildingData.id);
+        if (adapter) {
+          adapter.update(buildingData);
+        } else {
+          adapter = new BuildingEntityAdapter(buildingData);
+          this.buildingEntities.set(buildingData.id, adapter);
+        }
       }
-    }
-    for (const id of this.resourceEntities.keys()) {
-      if (!seenResourceIds.has(id)) {
-        this.resourceEntities.delete(id);
+      for (const id of this.buildingEntities.keys()) {
+        if (!seenBuildingIds.has(id)) {
+          this.buildingEntities.delete(id);
+        }
       }
+
+      // Update resource entities
+      const seenResourceIds = new Set<number>();
+      for (const resourceData of state.resources) {
+        seenResourceIds.add(resourceData.id);
+        let adapter = this.resourceEntities.get(resourceData.id);
+        if (adapter) {
+          adapter.update(resourceData);
+        } else {
+          adapter = new ResourceEntityAdapter(resourceData);
+          this.resourceEntities.set(resourceData.id, adapter);
+        }
+      }
+      for (const id of this.resourceEntities.keys()) {
+        if (!seenResourceIds.has(id)) {
+          this.resourceEntities.delete(id);
+        }
+      }
+
+      // Mark as ready once we have entities
+      if (!this._isReady && (this.unitEntities.size > 0 || this.buildingEntities.size > 0 || this.resourceEntities.size > 0)) {
+        this._isReady = true;
+        console.log('[RenderStateWorldAdapter] Adapter is now ready with entities:', {
+          units: this.unitEntities.size,
+          buildings: this.buildingEntities.size,
+          resources: this.resourceEntities.size,
+        });
+      }
+    } catch (error) {
+      console.error('[RenderStateWorldAdapter] Error updating from render state:', error);
     }
   }
 
@@ -697,5 +741,8 @@ export class RenderStateWorldAdapter implements IWorldProvider {
     this.buildingEntities.clear();
     this.resourceEntities.clear();
     this.currentRenderState = null;
+    this._isReady = false;
+    this._updateCount = 0;
+    this.hasLoggedFirstUpdate = false;
   }
 }

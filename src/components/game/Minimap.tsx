@@ -156,12 +156,30 @@ export function Minimap() {
       // Get entities from render state adapter (worker mode)
       const worldAdapter = getRenderStateAdapter();
 
+      // Debug: log adapter state periodically until entities are found
+      const logKey = '_minimapDebugLogged';
+      const adapterCheckKey = '_minimapAdapterCheckCount';
+      if (!(window as any)[logKey]) {
+        // Count checks to avoid spam
+        (window as any)[adapterCheckKey] = ((window as any)[adapterCheckKey] ?? 0) + 1;
+        const checkCount = (window as any)[adapterCheckKey];
+
+        // Log every 30 frames (about 2 seconds at 15fps) until entities are found
+        if (checkCount % 30 === 1) {
+          const counts = worldAdapter.getEntityCounts();
+          console.log('[Minimap] Checking adapter state:', {
+            isReady: worldAdapter.isReady(),
+            updateCount: worldAdapter.getUpdateCount(),
+            ...counts,
+          });
+        }
+      }
+
       // Draw resources
       const resources = worldAdapter.getEntitiesWith('Transform', 'Resource');
 
       // Debug: log first time we get entities
       if (resources.length > 0 || worldAdapter.getEntitiesWith('Unit').length > 0) {
-        const logKey = '_minimapDebugLogged';
         if (!(window as any)[logKey]) {
           console.log('[Minimap] Got entities from adapter:', {
             resources: resources.length,
