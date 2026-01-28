@@ -246,6 +246,7 @@ voidstrike/
 │   │   │   │   └── MockStatePort.ts
 │   │   │   ├── EventBus.ts # Event system
 │   │   │   ├── Game.ts # Main game class
+│   │   │   ├── GameCommand.ts
 │   │   │   ├── GameLoop.ts # Fixed timestep loop
 │   │   │   ├── GameStatePort.ts
 │   │   │   ├── PerformanceMonitor.ts
@@ -418,11 +419,13 @@ voidstrike/
 │   │   └── three-webgpu.d.ts
 │   ├── utils/ # Utility functions
 │   │   ├── debugLogger.ts
+│   │   ├── EntityValidator.ts
 │   │   ├── FixedPoint.ts
 │   │   ├── gameSetup.ts
 │   │   ├── math.ts
 │   │   ├── overlayCache.ts
 │   │   ├── storage.ts
+│   │   ├── ThrottledCache.ts
 │   │   └── VectorPool.ts
 │   └── workers/ # Web Workers
 │       ├── ai-decisions.worker.ts
