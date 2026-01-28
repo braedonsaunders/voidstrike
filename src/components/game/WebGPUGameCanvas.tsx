@@ -431,7 +431,8 @@ export function WebGPUGameCanvas() {
           pixelArt: false,
           antialias: true,
         },
-        scene: [OverlayScene],
+        // Don't include OverlayScene here - we add it manually with eventBus data
+        scene: [],
         input: {
           mouse: {
             preventDefaultWheel: false,
@@ -443,10 +444,11 @@ export function WebGPUGameCanvas() {
       phaserGameRef.current = phaserGame;
 
       phaserGame.events.once('ready', () => {
+        // Add and start the scene with eventBus data in one call
+        // This prevents the double-initialization that occurred when scene was in config
+        phaserGame.scene.add('OverlayScene', OverlayScene, true, { eventBus });
         const scene = phaserGame.scene.getScene('OverlayScene') as OverlayScene;
         overlaySceneRef.current = scene;
-
-        phaserGame.scene.start('OverlayScene', { eventBus });
 
         if (refs.environment.current) {
           const terrain = refs.environment.current.terrain;
