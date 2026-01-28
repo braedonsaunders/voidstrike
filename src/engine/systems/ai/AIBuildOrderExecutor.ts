@@ -401,6 +401,7 @@ export class AIBuildOrderExecutor {
 
   /**
    * Find a suitable spot to place a building.
+   * Searches in expanding rings around the base with increasing density.
    */
   private findBuildingSpot(
     playerId: string,
@@ -412,19 +413,27 @@ export class AIBuildOrderExecutor {
     const offsets: Array<{ x: number; y: number }> = [];
 
     // Generate offsets in expanding rings around the base
-    for (let radius = 6; radius <= 20; radius += 3) {
-      for (let angle = 0; angle < 8; angle++) {
-        const theta = (angle * Math.PI * 2) / 8 + this.coordinator.getRandom().next() * 0.5;
+    // Expanded range: 5-40 units with more angles per ring for better coverage
+    for (let radius = 5; radius <= 40; radius += 2) {
+      // More angles at larger radii for better coverage
+      const angleCount = radius <= 12 ? 8 : radius <= 24 ? 12 : 16;
+      for (let angle = 0; angle < angleCount; angle++) {
+        const theta = (angle * Math.PI * 2) / angleCount + this.coordinator.getRandom().next() * 0.3;
         const x = Math.round(Math.cos(theta) * radius);
         const y = Math.round(Math.sin(theta) * radius);
         offsets.push({ x, y });
       }
     }
 
-    // Shuffle offsets for variety
-    for (let i = offsets.length - 1; i > 0; i--) {
-      const j = Math.floor(this.coordinator.getRandom().next() * (i + 1));
-      [offsets[i], offsets[j]] = [offsets[j], offsets[i]];
+    // Shuffle offsets for variety (but keep closer positions biased toward front)
+    // Shuffle in chunks to prefer closer positions while still adding variety
+    const chunkSize = 24;
+    for (let chunkStart = 0; chunkStart < offsets.length; chunkStart += chunkSize) {
+      const chunkEnd = Math.min(chunkStart + chunkSize, offsets.length);
+      for (let i = chunkEnd - 1; i > chunkStart; i--) {
+        const j = chunkStart + Math.floor(this.coordinator.getRandom().next() * (i - chunkStart + 1));
+        [offsets[i], offsets[j]] = [offsets[j], offsets[i]];
+      }
     }
 
     // Try each offset until we find a valid spot
