@@ -190,8 +190,8 @@ export function Minimap() {
         }
       }
       for (const entity of resources) {
-        const transform = entity.get<{ x: number; y: number }>('Transform');
-        const resource = entity.get<{ resourceType: string }>('Resource');
+        const transform = entity.get('Transform') as { x: number; y: number } | undefined;
+        const resource = entity.get('Resource') as { resourceType: string } | undefined;
 
         if (!transform || !resource) continue;
 
@@ -207,10 +207,10 @@ export function Minimap() {
       // Draw buildings
       const buildings = worldAdapter.getEntitiesWith('Transform', 'Building', 'Selectable', 'Health');
       for (const entity of buildings) {
-        const transform = entity.get<{ x: number; y: number }>('Transform');
-        const building = entity.get<{ width: number; height: number; state: string; isComplete?: () => boolean }>('Building');
-        const selectable = entity.get<{ playerId: string }>('Selectable');
-        const health = entity.get<{ current: number; max: number }>('Health');
+        const transform = entity.get('Transform') as { x: number; y: number } | undefined;
+        const building = entity.get('Building') as { width: number; height: number; state: string; isComplete?: () => boolean } | undefined;
+        const selectable = entity.get('Selectable') as { playerId: string } | undefined;
+        const health = entity.get('Health') as { current: number; max: number } | undefined;
 
         if (!transform || !building || !selectable || !health) continue;
         if (health.current <= 0) continue;
@@ -245,9 +245,9 @@ export function Minimap() {
       // Draw units
       const units = worldAdapter.getEntitiesWith('Transform', 'Unit', 'Selectable', 'Health');
       for (const entity of units) {
-        const transform = entity.get<{ x: number; y: number }>('Transform');
-        const selectable = entity.get<{ playerId: string }>('Selectable');
-        const health = entity.get<{ current: number; max: number }>('Health');
+        const transform = entity.get('Transform') as { x: number; y: number } | undefined;
+        const selectable = entity.get('Selectable') as { playerId: string } | undefined;
+        const health = entity.get('Health') as { current: number; max: number } | undefined;
 
         if (!transform || !selectable || !health) continue;
         if (health.current <= 0) continue;
