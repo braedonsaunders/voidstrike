@@ -13,6 +13,8 @@ import {
   UtilityScore,
   FactionAIConfig,
 } from '@/data/ai/aiConfig';
+import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
+import '@/data/ai/factions/dominion';
 
 // Helper to create minimal test state
 function createTestState(overrides: Partial<AIStateSnapshot> = {}): AIStateSnapshot {
@@ -508,5 +510,27 @@ describe('faction config registry', () => {
     const factions = getRegisteredFactions();
 
     expect(factions).toContain('registered-faction');
+  });
+});
+
+describe('dominion AI macro rules', () => {
+  it('requires full supply cache cost for supply rules', () => {
+    const config = getFactionAIConfig('dominion');
+    expect(config).toBeDefined();
+
+    const supplyCost = BUILDING_DEFINITIONS.supply_cache.mineralCost;
+    const supplyRules = config!.macroRules.filter(
+      rule => rule.action.type === 'build' && rule.action.targetId === 'supply_cache'
+    );
+
+    expect(supplyRules.length).toBeGreaterThan(0);
+
+    for (const rule of supplyRules) {
+      const mineralCondition = rule.conditions.find(
+        condition => condition.type === 'minerals' && condition.operator === '>='
+      );
+      expect(mineralCondition).toBeDefined();
+      expect(mineralCondition!.value).toBeGreaterThanOrEqual(supplyCost);
+    }
   });
 });

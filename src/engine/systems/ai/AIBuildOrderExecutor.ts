@@ -111,6 +111,53 @@ export class AIBuildOrderExecutor {
       }
     }
 
+    // Check resources and supply before attempting (avoid counting as failure)
+    if (step.type === 'building') {
+      const buildingDef = BUILDING_DEFINITIONS[step.id];
+      if (buildingDef &&
+          (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost)) {
+        if (shouldLog) {
+          debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for resources for ${step.id} (need ${buildingDef.mineralCost}M/${buildingDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+        }
+        return;
+      }
+    }
+
+    if (step.type === 'unit') {
+      const unitDef = UNIT_DEFINITIONS[step.id];
+      if (unitDef) {
+        if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) {
+          if (shouldLog) {
+            debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for resources for ${step.id} (need ${unitDef.mineralCost}M/${unitDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+          }
+          return;
+        }
+        if (ai.supply + unitDef.supplyCost > ai.maxSupply) {
+          if (shouldLog) {
+            debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for supply for ${step.id} (${ai.supply}+${unitDef.supplyCost} > ${ai.maxSupply})`);
+          }
+          return;
+        }
+      }
+    }
+
+    if (step.type === 'research') {
+      const researchDef = RESEARCH_DEFINITIONS[step.id];
+      if (ai.researchInProgress.has(step.id)) {
+        if (shouldLog) {
+          debugAI.log(`[AIBuildOrder] ${ai.playerId}: Research already in progress: ${step.id}`);
+        }
+        return;
+      }
+      if (researchDef &&
+          (ai.minerals < researchDef.mineralCost || ai.vespene < researchDef.vespeneCost)) {
+        if (shouldLog) {
+          debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for resources for research ${step.id} (need ${researchDef.mineralCost}M/${researchDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+        }
+        return;
+      }
+    }
+
     // Execute the step
     let success = this.executeBuildOrderStep(ai, step);
 
@@ -330,8 +377,8 @@ export class AIBuildOrderExecutor {
       return false;
     }
 
-    // Check building requirements BEFORE deducting resources
-    // This prevents resource loss when placement is rejected by BuildingPlacementSystem
+    // Check building requirements BEFORE attempting placement
+    // This prevents invalid build attempts and resource churn
     if (buildingDef.requirements && buildingDef.requirements.length > 0) {
       for (const reqBuildingId of buildingDef.requirements) {
         const requiredCount = ai.buildingCounts.get(reqBuildingId) || 0;
@@ -354,7 +401,7 @@ export class AIBuildOrderExecutor {
     }
 
     const economyManager = this.getEconomyManager();
-    const workerId = economyManager.findAvailableWorker(ai.playerId);
+    const workerId = economyManager.findAvailableWorkerNotBuilding(ai.playerId);
     if (workerId === null) {
       if (shouldLog) {
         debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - no available worker for ${buildingType}`);
@@ -383,9 +430,7 @@ export class AIBuildOrderExecutor {
       }
     }
 
-    ai.minerals -= buildingDef.mineralCost;
-    ai.vespene -= buildingDef.vespeneCost;
-
+    // Resources are deducted in BuildingPlacementSystem after placement validation
     this.game.eventBus.emit('building:place', {
       buildingType,
       position: buildPos,
@@ -439,7 +484,8 @@ export class AIBuildOrderExecutor {
     // Try each offset until we find a valid spot
     for (const offset of offsets) {
       const pos = { x: basePos.x + offset.x, y: basePos.y + offset.y };
-      if (this.game.isValidBuildingPlacement(pos.x, pos.y, width, height, excludeEntityId)) {
+      // Skip unit collision checks to match placement system (units will be pushed away)
+      if (this.game.isValidBuildingPlacement(pos.x, pos.y, width, height, excludeEntityId, true)) {
         return pos;
       }
     }
@@ -476,10 +522,7 @@ export class AIBuildOrderExecutor {
       if (!building.canHaveAddon) continue;
       if (building.hasAddon()) continue;
 
-      // Found a valid building - deduct resources and emit event
-      ai.minerals -= addonDef.mineralCost;
-      ai.vespene -= addonDef.vespeneCost;
-
+      // Found a valid building - emit event (resources deducted on placement)
       this.game.eventBus.emit('building:build_addon', {
         buildingId: entity.id,
         addonType,
@@ -766,14 +809,12 @@ export class AIBuildOrderExecutor {
     }
 
     const economyManager = this.getEconomyManager();
-    const workerId = economyManager.findAvailableWorker(ai.playerId);
+    const workerId = economyManager.findAvailableWorkerNotBuilding(ai.playerId);
     if (workerId === null) {
       return false;
     }
 
-    ai.minerals -= buildingDef.mineralCost;
-    ai.vespene -= buildingDef.vespeneCost;
-
+    // Resources are deducted in BuildingPlacementSystem after placement validation
     this.game.eventBus.emit('building:place', {
       buildingType: expansionType,
       position: expansionLocation,
