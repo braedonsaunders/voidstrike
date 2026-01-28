@@ -17,6 +17,8 @@ import { AIMicroSystem } from '../systems/AIMicroSystem';
 import { ChecksumSystem } from '../systems/ChecksumSystem';
 
 import { debugInitialization, debugPerformance, debugNetworking } from '@/utils/debugLogger';
+import { validateEntity } from '@/utils/EntityValidator';
+import { dispatchCommand, type GameCommand } from './GameCommand';
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
 import { Unit } from '../components/Unit';
@@ -94,8 +96,31 @@ export class Game {
   public saveLoadSystem: SaveLoadSystem;
   public pathfindingSystem: PathfindingSystem;
   public aiMicroSystem: AIMicroSystem;
-  public selectionSystem!: SelectionSystem;
-  public projectileSystem!: ProjectileSystem;
+  // Systems assigned during initializeSystems() - null until then
+  private _selectionSystem: SelectionSystem | null = null;
+  private _projectileSystem: ProjectileSystem | null = null;
+
+  /**
+   * Get the SelectionSystem instance.
+   * @throws Error if accessed before system initialization
+   */
+  public get selectionSystem(): SelectionSystem {
+    if (!this._selectionSystem) {
+      throw new Error('[Game] SelectionSystem accessed before initialization');
+    }
+    return this._selectionSystem;
+  }
+
+  /**
+   * Get the ProjectileSystem instance.
+   * @throws Error if accessed before system initialization
+   */
+  public get projectileSystem(): ProjectileSystem {
+    if (!this._projectileSystem) {
+      throw new Error('[Game] ProjectileSystem accessed before initialization');
+    }
+    return this._projectileSystem;
+  }
 
   // Determinism and multiplayer sync systems (only active in multiplayer)
   public checksumSystem: ChecksumSystem | null = null;
@@ -413,9 +438,9 @@ export class Game {
 
       // Capture references to systems that are accessed elsewhere
       if (system.name === 'SelectionSystem') {
-        this.selectionSystem = system as SelectionSystem;
+        this._selectionSystem = system as SelectionSystem;
       } else if (system.name === 'ProjectileSystem') {
-        this.projectileSystem = system as ProjectileSystem;
+        this._projectileSystem = system as ProjectileSystem;
       }
     }
 
@@ -772,7 +797,7 @@ export class Game {
     // Check for overlapping buildings (no buffer - buildings can touch but not overlap)
     for (const buildingId of nearbyBuildingIds) {
       const entity = this.world.getEntity(buildingId);
-      if (!entity) continue;
+      if (!validateEntity(entity, buildingId, 'Game.isValidBuildingPlacement:building', this.currentTick)) continue;
 
       const transform = entity.get<Transform>('Transform');
       const building = entity.get<Building>('Building');
@@ -827,7 +852,7 @@ export class Game {
         }
 
         const entity = this.world.getEntity(unitId);
-        if (!entity) continue;
+        if (!validateEntity(entity, unitId, 'Game.isValidBuildingPlacement:unit', this.currentTick)) continue;
 
         const transform = entity.get<Transform>('Transform');
         if (!transform) continue;
@@ -1089,246 +1114,10 @@ export class Game {
       return;
     }
 
-    this.eventBus.emit('command:received', command);
-
-    switch (command.type) {
-      case 'MOVE':
-        this.eventBus.emit('command:move', command);
-        break;
-      case 'ATTACK':
-        this.eventBus.emit('command:attack', command);
-        break;
-      case 'ATTACK_MOVE':
-        this.eventBus.emit('command:attackMove', command);
-        break;
-      case 'BUILD':
-        this.eventBus.emit('command:build', command);
-        break;
-      case 'TRAIN':
-        this.eventBus.emit('command:train', command);
-        break;
-      case 'ABILITY':
-        this.eventBus.emit('command:ability', command);
-        break;
-      case 'STOP':
-        this.eventBus.emit('command:stop', command);
-        break;
-      case 'HOLD':
-        this.eventBus.emit('command:hold', command);
-        break;
-      case 'RESEARCH':
-        this.eventBus.emit('command:research', command);
-        break;
-      case 'PATROL':
-        this.eventBus.emit('command:patrol', command);
-        break;
-      case 'TRANSFORM':
-        this.eventBus.emit('command:transform', {
-          entityIds: command.entityIds,
-          targetMode: command.targetMode,
-        });
-        break;
-      case 'CLOAK':
-        this.eventBus.emit('command:cloak', {
-          entityIds: command.entityIds,
-        });
-        break;
-      case 'LOAD':
-        this.eventBus.emit('command:load', {
-          transportId: command.transportId,
-          unitIds: command.entityIds,
-        });
-        break;
-      case 'UNLOAD':
-        this.eventBus.emit('command:unload', {
-          transportId: command.transportId,
-          position: command.targetPosition,
-          unitId: command.targetEntityId,
-        });
-        break;
-      case 'LOAD_BUNKER':
-        this.eventBus.emit('command:loadBunker', {
-          bunkerId: command.bunkerId,
-          unitIds: command.entityIds,
-        });
-        break;
-      case 'UNLOAD_BUNKER':
-        this.eventBus.emit('command:unloadBunker', {
-          bunkerId: command.bunkerId,
-          unitId: command.targetEntityId,
-        });
-        break;
-      case 'HEAL':
-        this.eventBus.emit('command:heal', {
-          healerId: command.entityIds[0],
-          targetId: command.targetEntityId,
-        });
-        break;
-      case 'REPAIR':
-        this.eventBus.emit('command:repair', {
-          repairerId: command.entityIds[0],
-          targetId: command.targetEntityId,
-        });
-        break;
-      case 'DEMOLISH':
-        this.eventBus.emit('command:demolish', {
-          entityIds: command.entityIds,
-        });
-        break;
-      case 'LIFTOFF':
-        this.eventBus.emit('command:liftOff', {
-          buildingId: command.buildingId ?? command.entityIds[0],
-          playerId: command.playerId,
-        });
-        break;
-      case 'LAND':
-        this.eventBus.emit('command:land', {
-          buildingId: command.buildingId ?? command.entityIds[0],
-          position: command.targetPosition,
-          playerId: command.playerId,
-        });
-        break;
-      case 'RALLY':
-        this.eventBus.emit('command:rally', {
-          buildingId: command.buildingId ?? command.entityIds[0],
-          targetPosition: command.targetPosition,
-          targetEntityId: command.targetEntityId,
-          playerId: command.playerId,
-        });
-        break;
-      case 'GATHER':
-        this.eventBus.emit('command:gather', {
-          entityIds: command.entityIds,
-          targetEntityId: command.targetEntityId,
-          playerId: command.playerId,
-          queue: command.queue,
-        });
-        break;
-      case 'CANCEL_PRODUCTION':
-        this.eventBus.emit('production:cancel', {
-          entityId: command.entityIds[0],
-          queueIndex: command.queueIndex ?? 0,
-          playerId: command.playerId,
-        });
-        break;
-      case 'CANCEL_RESEARCH':
-        this.eventBus.emit('research:cancel', {
-          entityId: command.entityIds[0],
-          playerId: command.playerId,
-        });
-        break;
-      case 'CANCEL_BUILDING':
-        this.eventBus.emit('building:cancel', {
-          entityId: command.entityIds[0],
-          playerId: command.playerId,
-        });
-        break;
-      case 'QUEUE_REORDER':
-        this.eventBus.emit('production:reorder', {
-          entityId: command.entityIds[0],
-          queueIndex: command.queueIndex ?? 0,
-          newQueueIndex: command.newQueueIndex ?? 0,
-          playerId: command.playerId,
-        });
-        break;
-      case 'SUPPLY_DEPOT_LOWER':
-        this.eventBus.emit('command:lowerSupplyDepot', {
-          buildingId: command.entityIds[0],
-          lower: true,
-          playerId: command.playerId,
-        });
-        break;
-      case 'SUPPLY_DEPOT_RAISE':
-        this.eventBus.emit('command:lowerSupplyDepot', {
-          buildingId: command.entityIds[0],
-          lower: false,
-          playerId: command.playerId,
-        });
-        break;
-      case 'SET_AUTOCAST':
-        this.eventBus.emit('ability:setAutocast', {
-          entityId: command.entityIds[0],
-          abilityId: command.abilityId,
-          enabled: command.autocastEnabled ?? false,
-          playerId: command.playerId,
-        });
-        break;
-      case 'BUILD_WALL':
-        this.eventBus.emit('wall:build', {
-          segments: command.wallSegments ?? [],
-          playerId: command.playerId,
-        });
-        break;
-      case 'ADDON_LIFT':
-        this.eventBus.emit('addon:lift', {
-          buildingId: command.buildingId ?? command.entityIds[0],
-          playerId: command.playerId,
-        });
-        break;
-      case 'ADDON_LAND':
-        this.eventBus.emit('addon:land', {
-          buildingId: command.buildingId ?? command.entityIds[0],
-          targetPosition: command.targetPosition,
-          playerId: command.playerId,
-        });
-        break;
-    }
+    // Dispatch command to appropriate event handlers via shared dispatcher
+    dispatchCommand(this.eventBus, command);
   }
 }
 
-export interface GameCommand {
-  tick: number;
-  playerId: string;
-  type:
-    | 'MOVE'
-    | 'ATTACK'
-    | 'ATTACK_MOVE'
-    | 'BUILD'
-    | 'TRAIN'
-    | 'ABILITY'
-    | 'STOP'
-    | 'HOLD'
-    | 'RESEARCH'
-    | 'TRANSFORM'
-    | 'CLOAK'
-    | 'LOAD'
-    | 'UNLOAD'
-    | 'LOAD_BUNKER'
-    | 'UNLOAD_BUNKER'
-    | 'HEAL'
-    | 'REPAIR'
-    | 'PATROL'
-    | 'DEMOLISH'
-    | 'LIFTOFF'
-    | 'LAND'
-    | 'RALLY'
-    | 'GATHER'
-    // New command types for 100% multiplayer sync
-    | 'CANCEL_PRODUCTION'
-    | 'CANCEL_RESEARCH'
-    | 'CANCEL_BUILDING'
-    | 'QUEUE_REORDER'
-    | 'SUPPLY_DEPOT_LOWER'
-    | 'SUPPLY_DEPOT_RAISE'
-    | 'SET_AUTOCAST'
-    | 'BUILD_WALL'
-    | 'ADDON_LIFT'
-    | 'ADDON_LAND';
-  entityIds: number[];
-  targetPosition?: { x: number; y: number };
-  targetEntityId?: number;
-  buildingType?: string;
-  unitType?: string;
-  abilityId?: string;
-  upgradeId?: string;
-  targetMode?: string; // For transform
-  transportId?: number; // For load/unload
-  bunkerId?: number; // For bunker load/unload
-  buildingId?: number; // For liftoff/land
-  // New fields for additional commands
-  queueIndex?: number; // For cancel/reorder production
-  newQueueIndex?: number; // For queue reorder (move to position)
-  autocastEnabled?: boolean; // For SET_AUTOCAST
-  wallSegments?: Array<{ x: number; y: number }>; // For BUILD_WALL
-  queue?: boolean; // For shift-click command chaining
-}
+// Re-export GameCommand for backwards compatibility
+export type { GameCommand } from './GameCommand';

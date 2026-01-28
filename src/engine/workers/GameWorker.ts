@@ -61,10 +61,10 @@ import type {
   BuildingRenderState,
   ResourceRenderState,
   ProjectileRenderState,
-  GameCommand,
   SpawnMapData,
 } from './types';
 import type { GameConfig, GameState, TerrainCell } from '../core/Game';
+import { dispatchCommand, type GameCommand } from '../core/GameCommand';
 
 // ============================================================================
 // WORKER GAME CLASS
@@ -81,14 +81,27 @@ class WorkerGame {
   public eventBus: EventBus;
   public config: GameConfig;
 
-  // Direct system references
-  public visionSystem!: VisionSystem;
-  public gameStateSystem!: GameStateSystem;
-  public saveLoadSystem!: SaveLoadSystem;
-  public pathfindingSystem!: PathfindingSystem;
-  public aiMicroSystem!: AIMicroSystem;
-  public projectileSystem!: ProjectileSystem;
+  // Direct system references (initialized in constructor before initializeSystems)
+  public visionSystem: VisionSystem;
+  public gameStateSystem: GameStateSystem;
+  public saveLoadSystem: SaveLoadSystem;
+  public pathfindingSystem: PathfindingSystem;
+  public aiMicroSystem: AIMicroSystem;
   public checksumSystem: ChecksumSystem | null = null;
+
+  // System assigned during initializeSystems() - null until then
+  private _projectileSystem: ProjectileSystem | null = null;
+
+  /**
+   * Get the ProjectileSystem instance.
+   * @throws Error if accessed before system initialization
+   */
+  public get projectileSystem(): ProjectileSystem {
+    if (!this._projectileSystem) {
+      throw new Error('[WorkerGame] ProjectileSystem accessed before initialization');
+    }
+    return this._projectileSystem;
+  }
 
   // Terrain
   private terrainGrid: TerrainCell[][] | null = null;
@@ -307,7 +320,7 @@ class WorkerGame {
 
       // Capture references to systems that are accessed elsewhere
       if (system.name === 'ProjectileSystem') {
-        this.projectileSystem = system as ProjectileSystem;
+        this._projectileSystem = system as ProjectileSystem;
       }
     }
   }
@@ -565,198 +578,8 @@ class WorkerGame {
   }
 
   public processCommand(command: GameCommand): void {
-    // Emit command event for systems to handle
-    this.eventBus.emit('command', command);
-
-    // Process command based on type
-    switch (command.type) {
-      case 'MOVE':
-        this.processMove(command);
-        break;
-      case 'ATTACK':
-        this.processAttack(command);
-        break;
-      case 'ATTACK_MOVE':
-        this.processAttackMove(command);
-        break;
-      case 'STOP':
-        this.processStop(command);
-        break;
-      case 'HOLD':
-        this.processHold(command);
-        break;
-      case 'PATROL':
-        this.processPatrol(command);
-        break;
-      case 'BUILD':
-        this.processBuild(command);
-        break;
-      case 'TRAIN':
-        this.processTrain(command);
-        break;
-      case 'RESEARCH':
-        this.processResearch(command);
-        break;
-      case 'ABILITY':
-        this.processAbility(command);
-        break;
-      case 'GATHER':
-        this.processGather(command);
-        break;
-      case 'RALLY':
-        this.processRally(command);
-        break;
-      case 'CANCEL_PRODUCTION':
-        this.processCancelProduction(command);
-        break;
-      case 'TRANSFORM':
-        this.processTransform(command);
-        break;
-      case 'REPAIR':
-        this.processRepair(command);
-        break;
-      case 'LIFTOFF':
-        this.processLiftoff(command);
-        break;
-      case 'LAND':
-        this.processLand(command);
-        break;
-    }
-  }
-
-  // Command handlers - delegate to eventBus for systems to process
-  private processMove(command: GameCommand): void {
-    if (!command.targetPosition) return;
-    this.eventBus.emit('command:move', {
-      entityIds: command.entityIds,
-      targetX: command.targetPosition.x,
-      targetY: command.targetPosition.y,
-      shiftHeld: command.shiftHeld,
-    });
-  }
-
-  private processAttack(command: GameCommand): void {
-    this.eventBus.emit('command:attack', {
-      entityIds: command.entityIds,
-      targetEntityId: command.targetEntityId,
-      targetPosition: command.targetPosition,
-      shiftHeld: command.shiftHeld,
-    });
-  }
-
-  private processAttackMove(command: GameCommand): void {
-    if (!command.targetPosition) return;
-    this.eventBus.emit('command:attackmove', {
-      entityIds: command.entityIds,
-      targetX: command.targetPosition.x,
-      targetY: command.targetPosition.y,
-      shiftHeld: command.shiftHeld,
-    });
-  }
-
-  private processStop(command: GameCommand): void {
-    this.eventBus.emit('command:stop', { entityIds: command.entityIds });
-  }
-
-  private processHold(command: GameCommand): void {
-    this.eventBus.emit('command:hold', { entityIds: command.entityIds });
-  }
-
-  private processPatrol(command: GameCommand): void {
-    if (!command.targetPosition) return;
-    this.eventBus.emit('command:patrol', {
-      entityIds: command.entityIds,
-      targetX: command.targetPosition.x,
-      targetY: command.targetPosition.y,
-      shiftHeld: command.shiftHeld,
-    });
-  }
-
-  private processBuild(command: GameCommand): void {
-    if (!command.buildingType || !command.targetPosition) return;
-    this.eventBus.emit('command:build', {
-      entityIds: command.entityIds,
-      buildingType: command.buildingType,
-      targetX: command.targetPosition.x,
-      targetY: command.targetPosition.y,
-      playerId: command.playerId,
-    });
-  }
-
-  private processTrain(command: GameCommand): void {
-    if (!command.unitType) return;
-    this.eventBus.emit('command:train', {
-      entityIds: command.entityIds,
-      unitType: command.unitType,
-      playerId: command.playerId,
-    });
-  }
-
-  private processResearch(command: GameCommand): void {
-    if (!command.upgradeId) return;
-    this.eventBus.emit('command:research', {
-      entityIds: command.entityIds,
-      upgradeId: command.upgradeId,
-      playerId: command.playerId,
-    });
-  }
-
-  private processAbility(command: GameCommand): void {
-    this.eventBus.emit('command:ability', {
-      entityIds: command.entityIds,
-      abilityId: command.abilityId,
-      targetEntityId: command.targetEntityId,
-      targetPosition: command.targetPosition,
-    });
-  }
-
-  private processGather(command: GameCommand): void {
-    this.eventBus.emit('command:gather', {
-      entityIds: command.entityIds,
-      targetEntityId: command.targetEntityId,
-      shiftHeld: command.shiftHeld,
-    });
-  }
-
-  private processRally(command: GameCommand): void {
-    this.eventBus.emit('command:rally', {
-      entityIds: command.entityIds,
-      targetPosition: command.targetPosition,
-      targetEntityId: command.targetEntityId,
-    });
-  }
-
-  private processCancelProduction(command: GameCommand): void {
-    this.eventBus.emit('command:cancelproduction', {
-      entityIds: command.entityIds,
-      queueIndex: command.queueIndex,
-    });
-  }
-
-  private processTransform(command: GameCommand): void {
-    this.eventBus.emit('command:transform', {
-      entityIds: command.entityIds,
-    });
-  }
-
-  private processRepair(command: GameCommand): void {
-    this.eventBus.emit('command:repair', {
-      entityIds: command.entityIds,
-      targetEntityId: command.targetEntityId,
-    });
-  }
-
-  private processLiftoff(command: GameCommand): void {
-    this.eventBus.emit('command:liftoff', {
-      entityIds: command.entityIds,
-    });
-  }
-
-  private processLand(command: GameCommand): void {
-    this.eventBus.emit('command:land', {
-      entityIds: command.entityIds,
-      targetPosition: command.targetPosition,
-    });
+    // Dispatch command to appropriate event handlers via shared dispatcher
+    dispatchCommand(this.eventBus, command);
   }
 
   // ============================================================================
