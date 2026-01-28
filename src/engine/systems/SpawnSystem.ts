@@ -61,6 +61,9 @@ export class SpawnSystem extends System {
     // Create the entity
     const entity = this.world.createEntity();
 
+    // Diagnostic: confirm entity creation
+    console.log(`[SpawnSystem] Created ${unitType} entity #${entity.id} at (${x.toFixed(1)}, ${y.toFixed(1)}) for ${playerId}`);
+
     // Calculate visual properties for selection
     // Flying units need visualHeight to match their rendered position
     const isFlying = definition.isFlying ?? false;
