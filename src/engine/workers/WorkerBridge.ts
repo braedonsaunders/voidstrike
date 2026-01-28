@@ -28,7 +28,6 @@ import { deserializeRenderState } from './types';
 import { RenderStateWorldAdapter } from './RenderStateAdapter';
 import type { MapData } from '@/data/maps';
 import type { GameConfig, GameState, TerrainCell } from '../core/Game';
-import type { AIDifficulty } from '../systems/EnhancedAISystem';
 import type { DebugSettings } from '@/store/uiStore';
 import { EventBus } from '../core/EventBus';
 import {
@@ -374,14 +373,6 @@ export class WorkerBridge {
 
   public setDecorationCollisions(collisions: Array<{ x: number; z: number; radius: number }>): void {
     this.worker?.postMessage({ type: 'setDecorations', collisions } satisfies MainToWorkerMessage);
-  }
-
-  // ============================================================================
-  // AI
-  // ============================================================================
-
-  public registerAI(playerId: string, difficulty: AIDifficulty): void {
-    this.worker?.postMessage({ type: 'registerAI', playerId, difficulty } satisfies MainToWorkerMessage);
   }
 
   // ============================================================================

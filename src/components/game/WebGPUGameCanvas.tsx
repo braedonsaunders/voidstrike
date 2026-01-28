@@ -56,7 +56,6 @@ import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
 import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
 import { DebugMenuPanel } from './DebugMenuPanel';
-import { spawnInitialEntities } from '@/utils/gameSetup';
 import { ALL_MAPS, DEFAULT_MAP, MapData, getMapById } from '@/data/maps';
 import { OverlayScene } from '@/phaser/scenes/OverlayScene';
 import { debugInitialization, debugNetworking } from '@/utils/debugLogger';

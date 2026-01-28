@@ -11,7 +11,6 @@ import type { BuildingState, AddonType, ProductionQueueItem } from '../component
 import type { ResourceType } from '../components/Resource';
 import type { ArmorType } from '../components/Health';
 import type { GameState, TerrainCell, GameConfig } from '../core/Game';
-import type { AIDifficulty } from '../systems/EnhancedAISystem';
 import type { GameCommand } from '../core/GameCommand';
 import type { DebugSettings } from '@/store/uiStore';
 
@@ -368,7 +367,6 @@ export type MainToWorkerMessage =
   | { type: 'setNavMesh'; positions: Float32Array; indices: Uint32Array }
   | { type: 'setWaterNavMesh'; positions: Float32Array; indices: Uint32Array }
   | { type: 'setDecorations'; collisions: Array<{ x: number; z: number; radius: number }> }
-  | { type: 'registerAI'; playerId: string; difficulty: AIDifficulty }
   | { type: 'multiplayerCommand'; command: GameCommand; fromPeerId: string }
   | { type: 'networkPause'; paused: boolean }
   | { type: 'requestChecksum' }

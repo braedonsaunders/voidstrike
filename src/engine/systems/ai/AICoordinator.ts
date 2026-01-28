@@ -258,6 +258,12 @@ export class AICoordinator extends System {
     difficulty: AIDifficulty = 'medium',
     personality: AIPersonality = 'balanced'
   ): void {
+    // Idempotency check: prevent duplicate registrations that would reset AI state
+    if (this.aiPlayers.has(playerId)) {
+      console.log(`[AICoordinator] AI ${playerId} already registered, skipping duplicate registration`);
+      return;
+    }
+
     // Always log AI registration (bypasses debug settings for diagnostics)
     console.log(`[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
     debugAI.log(`[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
