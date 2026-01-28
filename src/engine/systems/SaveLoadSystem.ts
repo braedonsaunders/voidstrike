@@ -9,6 +9,13 @@ import { Ability } from '../components/Ability';
 import { Resource } from '../components/Resource';
 import { debugInitialization } from '@/utils/debugLogger';
 
+/**
+ * Check if localStorage is available (not available in Web Workers)
+ */
+function isLocalStorageAvailable(): boolean {
+  return typeof localStorage !== 'undefined';
+}
+
 export interface SavedEntity {
   id: number;
   components: Record<string, unknown>;
@@ -83,6 +90,11 @@ export class SaveLoadSystem extends System {
   }
 
   public saveGame(slot: number = 0, name?: string): boolean {
+    // Skip save in worker context (no localStorage)
+    if (!isLocalStorageAvailable()) {
+      return false;
+    }
+
     try {
       const saveState = this.serializeGameState();
       const saveKey = `voidstrike_save_${slot}`;
@@ -111,6 +123,12 @@ export class SaveLoadSystem extends System {
   }
 
   public loadGame(slot: number = 0): boolean {
+    // Skip load in worker context (no localStorage)
+    if (!isLocalStorageAvailable()) {
+      this.game.eventBus.emit('load:failed', { error: 'Save/load not available in worker' });
+      return false;
+    }
+
     try {
       const saveKey = `voidstrike_save_${slot}`;
       const saveDataJson = localStorage.getItem(saveKey);
@@ -152,6 +170,14 @@ export class SaveLoadSystem extends System {
   public getSaveSlots(): Array<{ slot: number; name: string; savedAt: number } | null> {
     const slots: Array<{ slot: number; name: string; savedAt: number } | null> = [];
 
+    // Return empty slots in worker context (no localStorage)
+    if (!isLocalStorageAvailable()) {
+      for (let i = 0; i < MAX_SAVE_SLOTS; i++) {
+        slots.push(null);
+      }
+      return slots;
+    }
+
     for (let i = 0; i < MAX_SAVE_SLOTS; i++) {
       const saveKey = `voidstrike_save_${i}`;
       const saveDataJson = localStorage.getItem(saveKey);
@@ -176,6 +202,11 @@ export class SaveLoadSystem extends System {
   }
 
   public deleteSave(slot: number): boolean {
+    // Skip delete in worker context (no localStorage)
+    if (!isLocalStorageAvailable()) {
+      return false;
+    }
+
     try {
       const saveKey = `voidstrike_save_${slot}`;
       localStorage.removeItem(saveKey);
