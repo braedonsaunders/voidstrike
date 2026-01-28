@@ -786,6 +786,10 @@ Browsers throttle `requestAnimationFrame` and `setInterval` to ~1fps when tabs a
 
 When tab is visible, Phaser uses its normal RAF-based loop. When hidden, the worker takes over to keep overlay state synchronized with game state.
 
+### Debug Logging (Worker Mode)
+
+Debug categories are toggled in the Options menu and forwarded to the game worker via `WorkerBridge` (`setDebugSettings`). Worker-side systems use `debugLogger` with worker-local settings so AI/pathfinding logs respect the same category filters as the main thread.
+
 ### Performance Workers
 
 Vision and AI workers offload computation from the main thread:

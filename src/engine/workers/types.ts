@@ -13,6 +13,7 @@ import type { ArmorType } from '../components/Health';
 import type { GameState, TerrainCell, GameConfig } from '../core/Game';
 import type { AIDifficulty } from '../systems/EnhancedAISystem';
 import type { GameCommand } from '../core/GameCommand';
+import type { DebugSettings } from '@/store/uiStore';
 
 // ============================================================================
 // RENDER STATE - Data transferred from worker to main thread for rendering
@@ -361,6 +362,7 @@ export type MainToWorkerMessage =
   | { type: 'stop' }
   | { type: 'pause' }
   | { type: 'resume' }
+  | { type: 'setDebugSettings'; settings: DebugSettings }
   | { type: 'command'; command: GameCommand }
   | { type: 'setTerrain'; terrain: TerrainCell[][] }
   | { type: 'setNavMesh'; positions: Float32Array; indices: Uint32Array }

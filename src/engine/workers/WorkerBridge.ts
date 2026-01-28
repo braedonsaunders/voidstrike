@@ -29,6 +29,7 @@ import { RenderStateWorldAdapter } from './RenderStateAdapter';
 import type { MapData } from '@/data/maps';
 import type { GameConfig, GameState, TerrainCell } from '../core/Game';
 import type { AIDifficulty } from '../systems/EnhancedAISystem';
+import type { DebugSettings } from '@/store/uiStore';
 import { EventBus } from '../core/EventBus';
 import {
   isMultiplayerMode,
@@ -381,6 +382,14 @@ export class WorkerBridge {
 
   public registerAI(playerId: string, difficulty: AIDifficulty): void {
     this.worker?.postMessage({ type: 'registerAI', playerId, difficulty } satisfies MainToWorkerMessage);
+  }
+
+  // ============================================================================
+  // DEBUG SETTINGS
+  // ============================================================================
+
+  public setDebugSettings(settings: DebugSettings): void {
+    this.worker?.postMessage({ type: 'setDebugSettings', settings } satisfies MainToWorkerMessage);
   }
 
   // ============================================================================
