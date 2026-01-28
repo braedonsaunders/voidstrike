@@ -16,6 +16,7 @@ import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/da
 import { SpatialEntityData, SpatialUnitState } from '../core/SpatialGrid';
 import { findBestTarget as findBestTargetShared, DEFAULT_SCORING_CONFIG } from '../combat/TargetAcquisition';
 import { distance, clamp } from '@/utils/math';
+import { ThrottledCache } from '@/utils/ThrottledCache';
 
 // PERF: Reusable event payload objects to avoid allocation per attack
 const attackEventPayload = {
@@ -75,20 +76,33 @@ export class CombatSystem extends System {
   public readonly name = 'CombatSystem';
   // Priority is set by SystemRegistry based on dependencies (runs after MovementSystem, VisionSystem)
 
-  // Track last under attack alert time per player
-  private lastUnderAttackAlert: Map<string, number> = new Map();
+  // Track last under attack alert time per player (uses game time in seconds)
+  private readonly underAttackAlertThrottle = new ThrottledCache<string>({
+    cooldown: COMBAT_CONFIG.underAttackCooldown,
+    maxEntries: 16,
+  });
 
   // Target acquisition throttling - don't search every frame
-  private lastTargetSearchTick: Map<number, number> = new Map();
   private readonly TARGET_SEARCH_INTERVAL = 3; // Search every 3 ticks (~150ms) for sight-range search
   private readonly IMMEDIATE_SEARCH_INTERVAL = 1; // Search every 1 tick (~50ms) for attack-range search
 
-  // Cache current targets to avoid re-searching
-  private cachedTargets: Map<number, { targetId: number; validUntilTick: number }> = new Map();
-  private readonly TARGET_CACHE_DURATION = 10; // Cache valid for 10 ticks (~0.5 sec)
+  // Throttle for sight-range target search (uses ticks)
+  private readonly targetSearchThrottle = new ThrottledCache<number>({
+    cooldown: 3, // TARGET_SEARCH_INTERVAL
+    maxEntries: 1000,
+  });
 
-  // Separate throttle tracking for immediate attack-range checks
-  private lastImmediateSearchTick: Map<number, number> = new Map();
+  // Throttle for immediate attack-range search (uses ticks)
+  private readonly immediateSearchThrottle = new ThrottledCache<number>({
+    cooldown: 1, // IMMEDIATE_SEARCH_INTERVAL
+    maxEntries: 1000,
+  });
+
+  // Cache current targets to avoid re-searching
+  private readonly targetCache = new ThrottledCache<number, number>({
+    cooldown: 10, // TARGET_CACHE_DURATION - cache valid for 10 ticks (~0.5 sec)
+    maxEntries: 1000,
+  });
 
   // PERF: Combat zone tracking - units with enemies nearby
   // Units NOT in this set can skip target acquisition entirely when idle
@@ -312,9 +326,9 @@ export class CombatSystem extends System {
    * Clean up target caches when a unit dies to prevent memory leaks
    */
   private handleUnitDeath(data: { entityId: number }): void {
-    this.cachedTargets.delete(data.entityId);
-    this.lastTargetSearchTick.delete(data.entityId);
-    this.lastImmediateSearchTick.delete(data.entityId);
+    this.targetCache.delete(data.entityId);
+    this.targetSearchThrottle.delete(data.entityId);
+    this.immediateSearchThrottle.delete(data.entityId);
     // PERF: Clean up combat zone tracking
     this.combatAwareUnits.delete(data.entityId);
     this.combatZoneCheckTick.delete(data.entityId);
@@ -771,11 +785,10 @@ export class CombatSystem extends System {
     currentTick: number
   ): number | null {
     // Light throttle - check every tick (~50ms) instead of every frame
-    const lastSearch = this.lastImmediateSearchTick.get(selfId) || 0;
-    if (currentTick - lastSearch < this.IMMEDIATE_SEARCH_INTERVAL) {
+    if (!this.immediateSearchThrottle.canExecute(selfId, currentTick)) {
       return null;
     }
-    this.lastImmediateSearchTick.set(selfId, currentTick);
+    this.immediateSearchThrottle.markExecuted(selfId, currentTick);
 
     // Get self's player ID
     const selfEntity = this.world.getEntity(selfId);
@@ -809,38 +822,34 @@ export class CombatSystem extends System {
     selfUnit: Unit,
     currentTick: number
   ): number | null {
-    // Check cache first
-    const cached = this.cachedTargets.get(selfId);
-    if (cached && cached.validUntilTick > currentTick) {
-      // Verify cached target is still valid
-      const targetEntity = this.world.getEntity(cached.targetId);
+    // Check cache first - returns cached target if still valid
+    const cachedTargetId = this.targetCache.getIfValid(selfId, currentTick);
+    if (cachedTargetId !== undefined) {
+      // Verify cached target is still valid (alive and exists)
+      const targetEntity = this.world.getEntity(cachedTargetId);
       if (targetEntity && !targetEntity.isDestroyed()) {
         const targetHealth = targetEntity.get<Health>('Health');
         if (targetHealth && !targetHealth.isDead()) {
-          return cached.targetId;
+          return cachedTargetId;
         }
       }
       // Cached target invalid, remove it and allow immediate re-search
-      this.cachedTargets.delete(selfId);
-      this.lastTargetSearchTick.delete(selfId); // Allow immediate re-targeting
+      this.targetCache.delete(selfId);
+      this.targetSearchThrottle.delete(selfId); // Allow immediate re-targeting
     }
 
     // Check if enough time has passed since last search
-    const lastSearch = this.lastTargetSearchTick.get(selfId) || 0;
-    if (currentTick - lastSearch < this.TARGET_SEARCH_INTERVAL) {
+    if (!this.targetSearchThrottle.canExecute(selfId, currentTick)) {
       return null; // Not time to search yet
     }
 
     // Perform the search
-    this.lastTargetSearchTick.set(selfId, currentTick);
+    this.targetSearchThrottle.markExecuted(selfId, currentTick);
     const target = this.findBestTargetSpatial(selfId, selfTransform, selfUnit);
 
     // Cache the result
     if (target !== null) {
-      this.cachedTargets.set(selfId, {
-        targetId: target,
-        validUntilTick: currentTick + this.TARGET_CACHE_DURATION,
-      });
+      this.targetCache.set(selfId, target, currentTick);
     }
 
     return target;
@@ -1176,13 +1185,12 @@ export class CombatSystem extends System {
     if (!targetSelectable) return;
 
     const playerId = targetSelectable.playerId;
-    const lastAlert = this.lastUnderAttackAlert.get(playerId) || 0;
 
-    // Check cooldown (using data-driven config)
-    if (gameTime - lastAlert < COMBAT_CONFIG.underAttackCooldown) return;
+    // Check cooldown (using ThrottledCache with game time)
+    if (!this.underAttackAlertThrottle.canExecute(playerId, gameTime)) return;
 
     // Update last alert time
-    this.lastUnderAttackAlert.set(playerId, gameTime);
+    this.underAttackAlertThrottle.markExecuted(playerId, gameTime);
 
     // Emit under attack alert - PERF: Use pooled payload
     underAttackPayload.playerId = playerId;
