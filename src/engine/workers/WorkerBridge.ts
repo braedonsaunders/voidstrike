@@ -24,6 +24,7 @@ import type {
   ProjectileRenderState,
   SpawnMapData,
 } from './types';
+import { deserializeRenderState } from './types';
 import type { MapData } from '@/data/maps';
 import type { GameConfig, GameState, TerrainCell } from '../core/Game';
 import type { AIDifficulty } from '../systems/EnhancedAISystem';
@@ -193,20 +194,23 @@ export class WorkerBridge {
 
     switch (message.type) {
       case 'renderState':
+        // Deserialize the render state (converts array tuples back to Maps)
+        const renderState = deserializeRenderState(message.state);
+
         // Debug: log first render state with entities
         if (!this.hasLoggedFirstRenderState &&
-            (message.state.units.length > 0 || message.state.buildings.length > 0 || message.state.resources.length > 0)) {
+            (renderState.units.length > 0 || renderState.buildings.length > 0 || renderState.resources.length > 0)) {
           console.log('[WorkerBridge] First renderState message received:', {
-            tick: message.state.tick,
-            units: message.state.units.length,
-            buildings: message.state.buildings.length,
-            resources: message.state.resources.length,
+            tick: renderState.tick,
+            units: renderState.units.length,
+            buildings: renderState.buildings.length,
+            resources: renderState.resources.length,
             hasCallback: !!this.onRenderState,
           });
           this.hasLoggedFirstRenderState = true;
         }
-        this._renderState = message.state;
-        this.onRenderState?.(message.state);
+        this._renderState = renderState;
+        this.onRenderState?.(renderState);
         break;
 
       case 'events':
