@@ -4,7 +4,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useGameStore, CommandTargetMode } from '@/store/gameStore';
 import { useGameSetupStore, getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
-import { getRenderStateAdapter, getWorkerBridge } from '@/engine/workers';
+import { getRenderStateAdapter, getWorkerBridge, RenderStateWorldAdapter } from '@/engine/workers';
 import { clamp } from '@/utils/math';
 
 const MINIMAP_SIZE = 192;
@@ -157,7 +157,7 @@ export function Minimap() {
       // CRITICAL: Access globalThis directly to bypass code-split bundle issues
       // Each bundle may have its own copy of getRenderStateAdapter() with stale code
       const ADAPTER_KEY = '__voidstrike_RenderStateWorldAdapter__';
-      const worldAdapter = (globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter();
+      const worldAdapter = ((globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter()) as RenderStateWorldAdapter;
 
       // Debug: log adapter state
       const logKey = '_minimapDebugLogged';
@@ -365,7 +365,7 @@ export function Minimap() {
     // Check if any selected are units (not buildings) using render state adapter
     // Access globalThis directly to bypass code-split bundle issues
     const ADAPTER_KEY = '__voidstrike_RenderStateWorldAdapter__';
-    const worldAdapter = (globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter();
+    const worldAdapter = ((globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter()) as RenderStateWorldAdapter;
     const hasUnits = selectedIds.some((id) => {
       const entity = worldAdapter.getEntity(id);
       return entity?.get('Unit') !== undefined;
@@ -454,7 +454,7 @@ export function Minimap() {
       // Check if any selected are units (not buildings) using render state adapter
       // Access globalThis directly to bypass code-split bundle issues
       const ADAPTER_KEY = '__voidstrike_RenderStateWorldAdapter__';
-      const worldAdapter = (globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter();
+      const worldAdapter = ((globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter()) as RenderStateWorldAdapter;
       const hasUnits = selectedIds.some((id) => {
         const entity = worldAdapter.getEntity(id);
         return entity?.get('Unit') !== undefined;
