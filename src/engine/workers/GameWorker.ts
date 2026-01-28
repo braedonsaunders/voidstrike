@@ -1325,7 +1325,9 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       }
 
       case 'start': {
+        console.log('[GameWorker] Received start command');
         if (!game) {
+          console.error('[GameWorker] Game not initialized when start called');
           postMessage({ type: 'error', message: 'Game not initialized' } satisfies WorkerToMainMessage);
           return;
         }
