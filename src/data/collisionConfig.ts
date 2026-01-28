@@ -6,6 +6,8 @@
  * how units space themselves without touching code.
  */
 
+import { debugInitialization } from '@/utils/debugLogger';
+
 // ============================================================================
 // COLLISION CONFIG TYPES
 // ============================================================================
@@ -155,7 +157,7 @@ class CollisionConfigLoader {
     try {
       const response = await fetch('/config/collision.config.json');
       if (!response.ok) {
-        console.warn('[CollisionConfig] Failed to load collision.config.json, using defaults');
+        debugInitialization.warn('[CollisionConfig] Failed to load collision.config.json, using defaults');
         this.config = DEFAULT_CONFIG;
         return;
       }
@@ -171,9 +173,9 @@ class CollisionConfigLoader {
         buildingAvoidance: { ...DEFAULT_CONFIG.buildingAvoidance, ...json.buildingAvoidance },
         stuck: { ...DEFAULT_CONFIG.stuck, ...json.stuck },
       };
-      console.log('[CollisionConfig] Loaded collision configuration');
+      debugInitialization.log('[CollisionConfig] Loaded collision configuration');
     } catch (error) {
-      console.warn('[CollisionConfig] Error loading collision.config.json:', error);
+      debugInitialization.warn('[CollisionConfig] Error loading collision.config.json:', error);
       this.config = DEFAULT_CONFIG;
     }
   }

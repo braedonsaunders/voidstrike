@@ -444,8 +444,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
         setStatus('hosting');
 
       } catch (e) {
-        // Critical error - keep as console.error so it always shows
-        console.error('[Lobby] Init error:', e);
+        debugNetworking.error('[Lobby] Init error:', e);
         if (mounted) {
           setError(e instanceof Error ? e.message : 'Failed to initialize lobby');
           setStatus('error');
@@ -668,8 +667,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       }, 30000);
 
     } catch (e) {
-      // Critical error - keep as console.error so it always shows
-      console.error('[Lobby] Join error:', e);
+      debugNetworking.error('[Lobby] Join error:', e);
       setError(e instanceof Error ? e.message : 'Failed to join lobby');
       setIsHost(true); // Reset to host mode so Join button reappears
       setStatus('hosting'); // Go back to hosting so user can try again
@@ -772,8 +770,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     const name = joinedNameRef.current;
 
     if (!code || !name) {
-      // Critical error - keep as console.error so it always shows
-      console.error('[Lobby] Cannot reconnect - no stored lobby info');
+      debugNetworking.error('[Lobby] Cannot reconnect - no stored lobby info');
       return false;
     }
 
@@ -798,8 +795,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       debugNetworking.log('[Lobby] Reconnection result:', isConnected ? 'success' : 'failed');
       return isConnected;
     } catch (e) {
-      // Critical error - keep as console.error so it always shows
-      console.error('[Lobby] Reconnection failed:', e);
+      debugNetworking.error('[Lobby] Reconnection failed:', e);
       return false;
     }
   }, [isHost, joinLobby]);

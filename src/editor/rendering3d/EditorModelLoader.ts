@@ -10,6 +10,7 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { debugAssets } from '@/utils/debugLogger';
 
 // Model configuration loaded from assets.json
 export interface ModelConfig {
@@ -64,7 +65,7 @@ async function loadAssetConfig(): Promise<void> {
   try {
     const response = await fetch('/config/assets.json');
     if (!response.ok) {
-      console.warn('[EditorModelLoader] assets.json not found, using fallback');
+      debugAssets.warn('[EditorModelLoader] assets.json not found, using fallback');
       return;
     }
 
@@ -138,9 +139,9 @@ async function loadAssetConfig(): Promise<void> {
     }
 
     configLoaded = true;
-    console.log(`[EditorModelLoader] Loaded ${modelConfigs.size} model configurations from assets.json`);
+    debugAssets.log(`[EditorModelLoader] Loaded ${modelConfigs.size} model configurations from assets.json`);
   } catch (error) {
-    console.warn('[EditorModelLoader] Failed to load assets.json:', error);
+    debugAssets.warn('[EditorModelLoader] Failed to load assets.json:', error);
   }
 }
 
@@ -224,7 +225,7 @@ async function loadModel(typeId: string): Promise<THREE.Object3D | null> {
       },
       undefined,
       (error) => {
-        console.warn(`[EditorModelLoader] Failed to load model for ${typeId}:`, error);
+        debugAssets.warn(`[EditorModelLoader] Failed to load model for ${typeId}:`, error);
         loadingPromises.delete(typeId);
         resolve(null);
       }

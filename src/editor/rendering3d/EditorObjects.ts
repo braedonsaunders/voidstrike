@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import type { EditorObject, ObjectTypeConfig } from '../config/EditorConfig';
 import { EditorModelLoader } from './EditorModelLoader';
+import { debugInitialization } from '@/utils/debugLogger';
 
 // Object visual configurations (fallback when no model available)
 const OBJECT_VISUALS: Record<
@@ -85,7 +86,7 @@ export class EditorObjects {
       // Refresh all objects to use real models
       this.refreshAllModels();
     } catch (error) {
-      console.warn('[EditorObjects] Failed to initialize models:', error);
+      debugInitialization.warn('[EditorObjects] Failed to initialize models:', error);
     }
   }
 

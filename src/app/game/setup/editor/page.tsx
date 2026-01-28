@@ -84,7 +84,7 @@ function EditorPageContent() {
     // Convert editor format to game format
     const gameData = voidstrikeDataProvider.exportForGame?.(data) as MapData;
     if (!gameData) {
-      console.error('Failed to convert map to game format');
+      debugInitialization.error('Failed to convert map to game format');
       return;
     }
 

@@ -255,7 +255,7 @@ function saveGraphicsSettings(settings: GraphicsSettings, preset: GraphicsPreset
     };
     localStorage.setItem(GRAPHICS_SETTINGS_KEY, JSON.stringify(state));
   } catch (e) {
-    console.warn('Failed to save graphics settings:', e);
+    debugInitialization.warn('Failed to save graphics settings:', e);
   }
 }
 
@@ -275,7 +275,7 @@ function loadGraphicsSettings(): { settings: Partial<GraphicsSettings>; preset: 
 
     return { settings: state.settings, preset: state.preset };
   } catch (e) {
-    console.warn('Failed to load graphics settings:', e);
+    debugInitialization.warn('Failed to load graphics settings:', e);
     return null;
   }
 }
@@ -289,7 +289,7 @@ function saveAudioSettings(state: SavedAudioState): void {
   try {
     localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(state));
   } catch (e) {
-    console.warn('Failed to save audio settings:', e);
+    debugInitialization.warn('Failed to save audio settings:', e);
   }
 }
 
@@ -309,7 +309,7 @@ function loadAudioSettings(): SavedAudioState | null {
 
     return state;
   } catch (e) {
-    console.warn('Failed to load audio settings:', e);
+    debugInitialization.warn('Failed to load audio settings:', e);
     return null;
   }
 }
@@ -909,7 +909,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     try {
       const response = await fetch('/config/graphics-presets.json');
       if (!response.ok) {
-        console.warn('Failed to load graphics presets, using defaults');
+        debugInitialization.warn('Failed to load graphics presets, using defaults');
         return;
       }
       const config = await response.json() as GraphicsPresetsConfig;
@@ -918,7 +918,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         graphicsPresetsLoaded: true,
       });
     } catch (error) {
-      console.warn('Error loading graphics presets:', error);
+      debugInitialization.warn('Error loading graphics presets:', error);
     }
   },
 
@@ -940,7 +940,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     }
 
     if (!presetSettings) {
-      console.warn(`Preset "${presetName}" not found or has no settings`);
+      debugInitialization.warn(`Preset "${presetName}" not found or has no settings`);
       return;
     }
 

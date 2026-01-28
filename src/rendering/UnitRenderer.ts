@@ -278,7 +278,6 @@ export class UnitRenderer {
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       debugMesh.warn('[UnitRenderer] Failed to initialize GPU culling:', errorMsg);
-      console.warn('[UnitRenderer] GPU culling init failed:', errorMsg);
     }
   }
 
@@ -305,7 +304,6 @@ export class UnitRenderer {
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       debugMesh.warn('[UnitRenderer] Failed to initialize GPU indirect renderer:', errorMsg);
-      console.warn('[GPU Indirect Renderer] INIT FAILED:', errorMsg);
     }
   }
 
@@ -331,15 +329,15 @@ export class UnitRenderer {
    */
   public forceCPUCulling(enable: boolean): void {
     if (!this.cullingService) {
-      console.warn('[UnitRenderer] Culling service not initialized, cannot toggle');
+      debugMesh.warn('[UnitRenderer] Culling service not initialized, cannot toggle');
       return;
     }
 
     this.cullingService.forceCPUFallback(enable);
     if (enable) {
-      console.log('[UnitRenderer] GPU culling DISABLED - using CPU fallback for debugging');
+      debugMesh.log('[UnitRenderer] GPU culling DISABLED - using CPU fallback for debugging');
     } else {
-      console.log('[UnitRenderer] GPU culling ENABLED');
+      debugMesh.log('[UnitRenderer] GPU culling ENABLED');
     }
   }
 

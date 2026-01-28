@@ -5,6 +5,7 @@
  * Generates MapBlueprint objects that are converted to full map data.
  */
 
+import { debugInitialization } from '@/utils/debugLogger';
 import type {
   MapBlueprint,
   MapMeta,
@@ -928,7 +929,7 @@ function validateAndFixBlueprint(
 
   // Ensure bases array exists
   if (!fixed.bases || fixed.bases.length === 0) {
-    console.warn('LLM did not generate bases - this will need manual placement');
+    debugInitialization.warn('LLM did not generate bases - this will need manual placement');
     fixed.bases = [];
   }
 

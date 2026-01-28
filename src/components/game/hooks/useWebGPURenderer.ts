@@ -52,7 +52,7 @@ import { MapData } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
 import { Transform } from '@/engine/components/Transform';
 import AssetManager, { DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
-import { debugInitialization, debugPerformance } from '@/utils/debugLogger';
+import { debugInitialization, debugPerformance, debugPostProcessing } from '@/utils/debugLogger';
 
 // Pooled Vector3 objects for combat event handlers (avoids allocation per attack/death)
 const _combatStartPos = new THREE.Vector3();
@@ -342,7 +342,7 @@ export function useWebGPURenderer({
       onVelocitySetupFailed(() => {
         const currentSettings = useUIStore.getState().graphicsSettings;
         if (currentSettings.antiAliasingMode === 'taa') {
-          console.warn('[useWebGPURenderer] Auto-switching from TAA to FXAA due to vertex buffer limit');
+          debugPostProcessing.warn('[useWebGPURenderer] Auto-switching from TAA to FXAA due to vertex buffer limit');
           useUIStore.getState().setAntiAliasingMode('fxaa');
         }
       });

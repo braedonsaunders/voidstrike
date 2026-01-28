@@ -355,7 +355,7 @@ export function useP2P(): UseP2PReturn {
         setState(s => ({ ...s, nostrStatus: 'Received answer, connecting...' }));
 
         if (!pcRef.current) {
-          console.error('[P2P] No peer connection');
+          debugNetworking.error('[P2P] No peer connection');
           return;
         }
 

@@ -13,6 +13,9 @@
 
 import { distance } from '@/utils/math';
 
+// Debug flag for worker logging (workers can't access UI store)
+const DEBUG = false;
+
 // Unit priority for focus fire (higher = more important to kill)
 const DEFAULT_UNIT_PRIORITY: Record<string, number> = {
   // High priority targets

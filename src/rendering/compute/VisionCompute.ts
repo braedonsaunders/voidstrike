@@ -154,13 +154,13 @@ export class VisionCompute {
       this.useCPUFallback = false;
 
       debugShaders.log(`[VisionCompute] GPU compute initialized (${this.gridWidth}x${this.gridHeight} grid)`);
-      console.log('[GPU Vision] ✓ INITIALIZED with temporal smoothing');
+      debugShaders.log('[GPU Vision] INITIALIZED with temporal smoothing');
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
       debugShaders.warn('[VisionCompute] GPU compute not available:', errorMsg);
       this.gpuComputeAvailable = false;
       this.useCPUFallback = true;
-      console.warn('[GPU Vision] ✗ INIT FAILED:', errorMsg);
+      debugShaders.warn('[GPU Vision] INIT FAILED:', errorMsg);
     }
   }
 

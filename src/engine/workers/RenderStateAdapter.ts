@@ -16,6 +16,7 @@ import type {
   ResourceRenderState,
 } from './types';
 import type { IEntity, IWorldProvider } from '@/engine/ecs/IWorldProvider';
+import { debugInitialization } from '@/utils/debugLogger';
 
 // ============================================================================
 // ENTITY ADAPTERS
@@ -544,7 +545,7 @@ export class RenderStateWorldAdapter implements IWorldProvider {
     if (!instance) {
       instance = new RenderStateWorldAdapter();
       global[RENDER_STATE_ADAPTER_KEY] = instance;
-      console.log('[RenderStateWorldAdapter] Created new singleton instance on globalThis');
+      debugInitialization.log('[RenderStateWorldAdapter] Created new singleton instance on globalThis');
     }
     return instance;
   }
@@ -558,7 +559,7 @@ export class RenderStateWorldAdapter implements IWorldProvider {
     if (instance) {
       instance.clear();
       global[RENDER_STATE_ADAPTER_KEY] = undefined;
-      console.log('[RenderStateWorldAdapter] Reset singleton instance');
+      debugInitialization.log('[RenderStateWorldAdapter] Reset singleton instance');
     }
   }
 
@@ -607,12 +608,12 @@ export class RenderStateWorldAdapter implements IWorldProvider {
 
       // Debug: log first 5 updates and every 100th update
       if (this._updateCount <= 5 || this._updateCount % 100 === 0) {
-        console.log(`[RenderStateWorldAdapter] updateFromRenderState #${this._updateCount}: units=${state.units.length}, buildings=${state.buildings.length}`);
+        debugInitialization.log(`[RenderStateWorldAdapter] updateFromRenderState #${this._updateCount}: units=${state.units.length}, buildings=${state.buildings.length}`);
       }
 
       // Debug: log first significant update
       if (!this.hasLoggedFirstUpdate && (state.units.length > 0 || state.buildings.length > 0 || state.resources.length > 0)) {
-        console.log('[RenderStateWorldAdapter] First update with entities:', {
+        debugInitialization.log('[RenderStateWorldAdapter] First update with entities:', {
           tick: state.tick,
           units: state.units.length,
           buildings: state.buildings.length,
@@ -681,14 +682,14 @@ export class RenderStateWorldAdapter implements IWorldProvider {
       // Mark as ready once we have entities
       if (!this._isReady && (this.unitEntities.size > 0 || this.buildingEntities.size > 0 || this.resourceEntities.size > 0)) {
         this._isReady = true;
-        console.log('[RenderStateWorldAdapter] Adapter is now ready with entities:', {
+        debugInitialization.log('[RenderStateWorldAdapter] Adapter is now ready with entities:', {
           units: this.unitEntities.size,
           buildings: this.buildingEntities.size,
           resources: this.resourceEntities.size,
         });
       }
     } catch (error) {
-      console.error('[RenderStateWorldAdapter] Error updating from render state:', error);
+      debugInitialization.error('[RenderStateWorldAdapter] Error updating from render state:', error);
     }
   }
 

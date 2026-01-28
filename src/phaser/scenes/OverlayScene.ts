@@ -1,4 +1,5 @@
 import * as Phaser from 'phaser';
+import { debugAudio } from '@/utils/debugLogger';
 import { EventBus } from '@/engine/core/EventBus';
 import { Game } from '@/engine/core/Game';
 import { Transform } from '@/engine/components/Transform';
@@ -168,14 +169,14 @@ export class OverlayScene extends Phaser.Scene {
   init(data: { eventBus: EventBus }): void {
     this.eventBus = data?.eventBus ?? null;
     if (!this.eventBus) {
-      console.warn('[OverlayScene] init called without eventBus - scene will have limited functionality');
+      debugAudio.warn('[OverlayScene] init called without eventBus - scene will have limited functionality');
     } else {
-      console.log('[OverlayScene] Initialized with eventBus');
+      debugAudio.log('[OverlayScene] Initialized with eventBus');
     }
   }
 
   create(): void {
-    console.log('[OverlayScene] create() called, eventBus:', this.eventBus ? 'present' : 'missing');
+    debugAudio.log('[OverlayScene] create() called, eventBus:', this.eventBus ? 'present' : 'missing');
 
     // Create graphics layers (back to front)
     this.threatZoneGraphics = this.add.graphics();
@@ -252,10 +253,10 @@ export class OverlayScene extends Phaser.Scene {
 
   private setupEventListeners(): void {
     if (!this.eventBus) {
-      console.warn('[OverlayScene] setupEventListeners skipped - no eventBus');
+      debugAudio.warn('[OverlayScene] setupEventListeners skipped - no eventBus');
       return;
     }
-    console.log('[OverlayScene] Setting up event listeners');
+    debugAudio.log('[OverlayScene] Setting up event listeners');
 
     // Combat events increase intensity (only for human player)
     this.registerEvent('combat:attack', (data: {
@@ -589,7 +590,7 @@ export class OverlayScene extends Phaser.Scene {
       };
 
       this.countdownWorker.onerror = (error) => {
-        console.error('[OverlayScene] Countdown worker error:', error);
+        debugAudio.error('[OverlayScene] Countdown worker error:', error);
         // Fallback: complete immediately on worker error
         this.handleCountdownComplete();
       };
@@ -602,7 +603,7 @@ export class OverlayScene extends Phaser.Scene {
       });
     } catch (error) {
       // Fallback if Worker fails to initialize (e.g., in some environments)
-      console.warn('[OverlayScene] Failed to create countdown worker, using fallback:', error);
+      debugAudio.warn('[OverlayScene] Failed to create countdown worker, using fallback:', error);
       this.startFallbackCountdown(centerX, centerY);
     }
   }

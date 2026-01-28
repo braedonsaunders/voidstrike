@@ -258,8 +258,7 @@ export class AICoordinator extends System {
     difficulty: AIDifficulty = 'medium',
     personality: AIPersonality = 'balanced'
   ): void {
-    // Use console.log directly for worker compatibility (debugAI uses Zustand)
-    console.log(`[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
+    debugAI.log(`[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
 
     const factionConfig = getFactionAIConfig(faction);
     if (!factionConfig) {
@@ -349,7 +348,7 @@ export class AICoordinator extends System {
     if (!ai) {
       // Debug: this would mean resources are being credited to an unregistered player
       if (this.game.getCurrentTick() % 100 === 0) {
-        console.warn(`[AICoordinator] creditResources called for unregistered player: ${playerId}. Registered players: ${Array.from(this.aiPlayers.keys()).join(', ')}`);
+        debugAI.warn(`[AICoordinator] creditResources called for unregistered player: ${playerId}. Registered players: ${Array.from(this.aiPlayers.keys()).join(', ')}`);
       }
       return;
     }
@@ -357,9 +356,9 @@ export class AICoordinator extends System {
     ai.minerals += minerals;
     ai.vespene += vespene;
 
-    // Log periodically - use console.log directly for worker compatibility
+    // Log periodically
     if (this.game.getCurrentTick() % 100 === 0) {
-      console.log(`[AICoordinator] ${playerId} received: +${minerals} minerals, +${vespene} gas (total: ${Math.floor(ai.minerals)}M, ${Math.floor(ai.vespene)}G)`);
+      debugAI.log(`[AICoordinator] ${playerId} received: +${minerals} minerals, +${vespene} gas (total: ${Math.floor(ai.minerals)}M, ${Math.floor(ai.vespene)}G)`);
     }
   }
 
@@ -624,9 +623,8 @@ export class AICoordinator extends System {
     this.clearEntityCache();
     this.random.reseed(currentTick * 31337 + 42);
 
-    // Use direct console.log for worker compatibility (debugAI uses Zustand which doesn't work in workers)
     if (currentTick === 1) {
-      console.log(`[AICoordinator] Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ')}`);
+      debugAI.log(`[AICoordinator] Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ')}`);
     }
 
     for (const [playerId, ai] of this.aiPlayers) {
@@ -640,14 +638,14 @@ export class AICoordinator extends System {
       const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
       if (totalBuildings === 0) {
         if (currentTick % 100 === 0) {
-          console.warn(`[AICoordinator] ${playerId} has no buildings detected! buildingCounts:`, Object.fromEntries(ai.buildingCounts));
+          debugAI.warn(`[AICoordinator] ${playerId} has no buildings detected! buildingCounts:`, Object.fromEntries(ai.buildingCounts));
         }
         continue;
       }
 
-      // Periodic status log - use console.log directly for worker compatibility
+      // Periodic status log
       if (currentTick % 200 === 0) {
-        console.log(`[AICoordinator] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, vespene=${Math.floor(ai.vespene)}, supply=${ai.supply}/${ai.maxSupply}, buildOrderStep=${ai.buildOrderIndex}/${ai.buildOrder.length}, state=${ai.state}`);
+        debugAI.log(`[AICoordinator] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, vespene=${Math.floor(ai.vespene)}, supply=${ai.supply}/${ai.maxSupply}, buildOrderStep=${ai.buildOrderIndex}/${ai.buildOrder.length}, state=${ai.state}`);
       }
 
       this.updateMaxSupply(ai);

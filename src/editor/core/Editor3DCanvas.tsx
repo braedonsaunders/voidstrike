@@ -25,6 +25,7 @@ import { EditorBrushPreview } from '../rendering3d/EditorBrushPreview';
 import { TerrainBrush, type RampResult } from '../tools/TerrainBrush';
 import { ObjectPlacer } from '../tools/ObjectPlacer';
 import { RTSCamera } from '@/rendering/Camera';
+import { debugInitialization } from '@/utils/debugLogger';
 
 export interface Editor3DCanvasProps {
   config: EditorConfig;
@@ -847,7 +848,7 @@ export function Editor3DCanvas({
               );
               updates = rampResult.updates;
               if (rampResult.wasExtended) {
-                console.warn(
+                debugInitialization.warn(
                   `[Editor] Ramp auto-extended to meet walkableClimb constraints. ` +
                   `Original: (${endPos.x.toFixed(1)}, ${endPos.y.toFixed(1)}) → ` +
                   `Extended: (${rampResult.finalEndpoint.x.toFixed(1)}, ${rampResult.finalEndpoint.y.toFixed(1)}). ` +
@@ -939,7 +940,7 @@ export function Editor3DCanvas({
               );
               updates = platformRampResult.updates;
               if (platformRampResult.wasExtended) {
-                console.warn(
+                debugInitialization.warn(
                   `[Editor] Platform ramp auto-extended to meet walkableClimb constraints. ` +
                   `Original: (${endPos.x.toFixed(1)}, ${endPos.y.toFixed(1)}) → ` +
                   `Extended: (${platformRampResult.finalEndpoint.x.toFixed(1)}, ${platformRampResult.finalEndpoint.y.toFixed(1)}). ` +

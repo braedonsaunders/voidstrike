@@ -8,6 +8,7 @@
  */
 
 import pako from 'pako';
+import { debugInitialization } from '@/utils/debugLogger';
 
 // IndexedDB configuration
 const IDB_NAME = 'voidstrike_storage';
@@ -42,7 +43,7 @@ async function initIndexedDB(): Promise<IDBDatabase> {
     const request = indexedDB.open(IDB_NAME, IDB_VERSION);
 
     request.onerror = () => {
-      console.warn('[Storage] Failed to open IndexedDB:', request.error);
+      debugInitialization.warn('[Storage] Failed to open IndexedDB:', request.error);
       reject(request.error);
     };
 

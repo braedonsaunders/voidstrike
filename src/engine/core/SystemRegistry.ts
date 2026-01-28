@@ -1,5 +1,6 @@
 import { System } from '../ecs/System';
 import { Game } from './Game';
+import { debugInitialization } from '@/utils/debugLogger';
 
 /**
  * Defines a system's dependencies for execution ordering.
@@ -215,8 +216,8 @@ export class SystemRegistry {
    * Print the dependency graph for debugging.
    */
   public printDependencyGraph(): void {
-    console.log('System Dependency Graph:');
-    console.log('========================');
+    debugInitialization.log('System Dependency Graph:');
+    debugInitialization.log('========================');
 
     const order = this.getExecutionOrder();
     for (let i = 0; i < order.length; i++) {
@@ -225,7 +226,7 @@ export class SystemRegistry {
       const deps = def.dependencies.length > 0
         ? `← [${def.dependencies.join(', ')}]`
         : '(no dependencies)';
-      console.log(`${i + 1}. ${name} ${deps}`);
+      debugInitialization.log(`${i + 1}. ${name} ${deps}`);
     }
   }
 }

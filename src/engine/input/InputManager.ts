@@ -37,6 +37,7 @@ import {
   type WheelInputEvent,
   MouseButton,
 } from './types';
+import { debugInitialization } from '@/utils/debugLogger';
 
 // =============================================================================
 // CONSTANTS
@@ -167,7 +168,7 @@ export class InputManager {
     } = {}
   ): void {
     if (this.initialized) {
-      console.warn('[InputManager] Already initialized. Call dispose() first to reinitialize.');
+      debugInitialization.warn('[InputManager] Already initialized. Call dispose() first to reinitialize.');
       return;
     }
 
@@ -198,7 +199,7 @@ export class InputManager {
     container.addEventListener('mouseleave', () => { this.mouseInBounds = false; });
 
     this.initialized = true;
-    console.log('[InputManager] Initialized');
+    debugInitialization.log('[InputManager] Initialized');
   }
 
   /**
@@ -256,7 +257,7 @@ export class InputManager {
     this.eventBus = null;
     this.initialized = false;
 
-    console.log('[InputManager] Disposed');
+    debugInitialization.log('[InputManager] Disposed');
   }
 
   // =============================================================================
@@ -308,7 +309,7 @@ export class InputManager {
       subscriber(context);
     }
 
-    console.log(`[InputManager] Context changed: ${previousContext} -> ${context}`);
+    debugInitialization.log(`[InputManager] Context changed: ${previousContext} -> ${context}`);
   }
 
   /**

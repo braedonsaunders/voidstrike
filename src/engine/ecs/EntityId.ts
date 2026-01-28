@@ -13,6 +13,8 @@
  * fail validation (generation mismatch).
  */
 
+import { debugInitialization } from '@/utils/debugLogger';
+
 /** Raw entity ID type - encodes both index and generation */
 export type EntityId = number;
 
@@ -106,7 +108,7 @@ export class EntityIdAllocator {
       index = this.nextFreshIndex++;
     } else {
       // Out of capacity
-      console.error(`EntityIdAllocator: Exceeded max capacity of ${this.maxIndex} entities`);
+      debugInitialization.error(`EntityIdAllocator: Exceeded max capacity of ${this.maxIndex} entities`);
       return INVALID_ENTITY_ID;
     }
 
@@ -127,7 +129,7 @@ export class EntityIdAllocator {
 
     // Validate this ID is currently valid
     if (index >= this.maxIndex || this.generations[index] !== generation) {
-      console.warn(`EntityIdAllocator: Attempted to free invalid EntityId ${id}`);
+      debugInitialization.warn(`EntityIdAllocator: Attempted to free invalid EntityId ${id}`);
       return;
     }
 

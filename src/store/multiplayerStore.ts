@@ -232,7 +232,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
             handler(data);
           }
         } catch (e) {
-          console.error('[Multiplayer] Failed to parse message:', e);
+          debugNetworking.error('[Multiplayer] Failed to parse message:', e);
         }
       };
 
@@ -262,7 +262,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       };
 
       const errorHandler = (e: Event) => {
-        console.error('[Multiplayer] Data channel error:', e);
+        debugNetworking.error('[Multiplayer] Data channel error:', e);
       };
 
       // Use addEventListener to not overwrite other handlers
@@ -386,7 +386,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         dataChannel.send(JSON.stringify(data));
         return true;
       } catch (e) {
-        console.error('[Multiplayer] Failed to send message:', e);
+        debugNetworking.error('[Multiplayer] Failed to send message:', e);
         // Buffer on send failure
         get().bufferCommand(data);
         return false;
@@ -447,7 +447,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           return true;
         }
       } catch (e) {
-        console.error('[Multiplayer] Reconnection failed:', e);
+        debugNetworking.error('[Multiplayer] Reconnection failed:', e);
       }
     }
 

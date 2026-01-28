@@ -147,7 +147,7 @@ export function usePublicLobbies(): UsePublicLobbiesReturn {
       cleanupIntervalRef.current = setInterval(cleanupOldLobbies, 30000);
 
     } catch (e) {
-      console.error('[LobbyBrowser] Error:', e);
+      debugNetworking.error('[LobbyBrowser] Error:', e);
       setError(e instanceof Error ? e.message : 'Failed to browse lobbies');
       setIsLoading(false);
     }

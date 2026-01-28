@@ -133,7 +133,7 @@ export function WebGPUGameCanvas() {
   const handleRenderState = useCallback((state: RenderState) => {
     // Debug: log first render state received
     if (!firstRenderStateLoggedRef.current && (state.units.length > 0 || state.buildings.length > 0 || state.resources.length > 0)) {
-      console.log('[WebGPUGameCanvas] Received first render state:', {
+      debugInitialization.log('[WebGPUGameCanvas] Received first render state:', {
         tick: state.tick,
         units: state.units.length,
         buildings: state.buildings.length,

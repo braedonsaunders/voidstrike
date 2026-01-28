@@ -14,6 +14,9 @@
  * - Sends: RenderState snapshots, game events for audio/effects
  */
 
+// Debug flag for worker logging (workers can't access UI store)
+const DEBUG = false;
+
 import { World } from '../ecs/World';
 import { EventBus } from '../core/EventBus';
 import { SystemRegistry } from '../core/SystemRegistry';
@@ -457,11 +460,13 @@ class WorkerGame {
   public start(): void {
     if (this.state === 'running') return;
 
-    console.log('[GameWorker] Starting game loop. Entity counts:', {
-      units: this.world.getEntitiesWith('Unit').length,
-      buildings: this.world.getEntitiesWith('Building').length,
-      resources: this.world.getEntitiesWith('Resource').length,
-    });
+    if (DEBUG) {
+      console.log('[GameWorker] Starting game loop. Entity counts:', {
+        units: this.world.getEntitiesWith('Unit').length,
+        buildings: this.world.getEntitiesWith('Building').length,
+        resources: this.world.getEntitiesWith('Resource').length,
+      });
+    }
 
     this.state = 'running';
     this.lastTickTime = performance.now();
@@ -680,12 +685,12 @@ class WorkerGame {
     this.renderStatesSent++;
 
     // Debug: log first 5 sends and every 100th send
-    if (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0) {
+    if (DEBUG && (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0)) {
       console.log(`[GameWorker] sendRenderState #${this.renderStatesSent}: units=${units.length}, buildings=${buildings.length}, resources=${resources.length}`);
     }
 
     // Debug log first render state with entities
-    if (!this.hasLoggedFirstRenderState && (units.length > 0 || buildings.length > 0 || resources.length > 0)) {
+    if (DEBUG && !this.hasLoggedFirstRenderState && (units.length > 0 || buildings.length > 0 || resources.length > 0)) {
       console.log('[GameWorker] Sending first render state with entities:', {
         tick: this.currentTick,
         units: units.length,
@@ -939,11 +944,13 @@ class WorkerGame {
    * Creates resources and player bases for all players.
    */
   public spawnInitialEntities(mapData: SpawnMapData): void {
-    console.log('[GameWorker] spawnInitialEntities called:', {
-      resourceCount: mapData.resources?.length ?? 0,
-      spawnCount: mapData.spawns?.length ?? 0,
-      playerSlotCount: mapData.playerSlots?.length ?? 0,
-    });
+    if (DEBUG) {
+      console.log('[GameWorker] spawnInitialEntities called:', {
+        resourceCount: mapData.resources?.length ?? 0,
+        spawnCount: mapData.spawns?.length ?? 0,
+        playerSlotCount: mapData.playerSlots?.length ?? 0,
+      });
+    }
 
     // Spawn resources
     if (mapData.resources) {
@@ -956,7 +963,7 @@ class WorkerGame {
             resourceDef.amount ?? (resourceDef.type === 'mineral' ? 1500 : 2500)
           ));
       }
-      console.log('[GameWorker] Spawned', mapData.resources.length, 'resources');
+      if (DEBUG) console.log('[GameWorker] Spawned', mapData.resources.length, 'resources');
     }
 
     // Get active player slots (human or AI)
@@ -1000,7 +1007,7 @@ class WorkerGame {
 
       // Register AI players with the AI system
       if (slot.type === 'ai' && this.config.aiEnabled) {
-        console.log(`[GameWorker] Registering AI for ${slot.id} (${slot.faction}, ${slot.aiDifficulty})`);
+        if (DEBUG) console.log(`[GameWorker] Registering AI for ${slot.id} (${slot.faction}, ${slot.aiDifficulty})`);
         this.registerAI(slot.id, slot.aiDifficulty ?? 'medium');
 
         // Also notify the EnhancedAISystem about this AI player
@@ -1148,7 +1155,7 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       }
 
       case 'start': {
-        console.log('[GameWorker] Received start command');
+        if (DEBUG) console.log('[GameWorker] Received start command');
         if (!game) {
           console.error('[GameWorker] Game not initialized when start called');
           postMessage({ type: 'error', message: 'Game not initialized' } satisfies WorkerToMainMessage);

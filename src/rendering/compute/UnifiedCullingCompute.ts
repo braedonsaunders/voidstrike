@@ -189,7 +189,6 @@ export class UnifiedCullingCompute {
       debugShaders.warn('[UnifiedCullingCompute] GPU compute init failed:', errorMsg);
       this.gpuComputeAvailable = false;
       this.useCPUFallback = true;
-      console.warn('[GPU Culling] INIT FAILED:', errorMsg);
     }
   }
 
@@ -419,7 +418,6 @@ export class UnifiedCullingCompute {
       const errorMsg = e instanceof Error ? e.message : String(e);
       debugShaders.warn('[UnifiedCullingCompute] GPU culling failed:', errorMsg);
       this.useCPUFallback = true;
-      console.warn('[GPU Culling] Execution failed, switching to CPU:', errorMsg);
     }
   }
 

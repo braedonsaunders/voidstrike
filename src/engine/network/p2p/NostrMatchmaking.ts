@@ -390,7 +390,7 @@ export class NostrMatchmaking {
         timestamp: event.created_at,
       });
     } catch (e) {
-      console.error('[Nostr] Failed to parse seek event:', e);
+      debugNetworking.error('[Nostr] Failed to parse seek event:', e);
     }
   }
 
@@ -409,7 +409,7 @@ export class NostrMatchmaking {
         fromPubkey: event.pubkey,
       });
     } catch (e) {
-      console.error('[Nostr] Failed to parse offer:', e);
+      debugNetworking.error('[Nostr] Failed to parse offer:', e);
     }
   }
 
@@ -427,7 +427,7 @@ export class NostrMatchmaking {
         fromPubkey: event.pubkey,
       });
     } catch (e) {
-      console.error('[Nostr] Failed to parse answer:', e);
+      debugNetworking.error('[Nostr] Failed to parse answer:', e);
     }
   }
 }

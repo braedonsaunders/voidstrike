@@ -434,7 +434,7 @@ export const voidstrikeDataProvider: EditorDataProvider = {
           });
         }
       } catch (error) {
-        console.error('[Validation] Connectivity analysis failed:', error);
+        debugInitialization.error('[Validation] Connectivity analysis failed:', error);
         issues.push({
           type: 'warning',
           message: 'Connectivity analysis failed - check console for details',
@@ -474,7 +474,7 @@ export const voidstrikeDataProvider: EditorDataProvider = {
       // Convert back to editor format
       return mapDataToEditorFormat(mapData);
     } catch (error) {
-      console.error('[AutoFix] Failed:', error);
+      debugInitialization.error('[AutoFix] Failed:', error);
       return null;
     }
   },

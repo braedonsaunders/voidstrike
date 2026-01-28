@@ -26,7 +26,7 @@ import {
 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import { MapData, elevationToZone } from '@/data/maps';
-import { debugPathfinding } from '@/utils/debugLogger';
+import { debugPathfinding, debugShaders } from '@/utils/debugLogger';
 import type { IWorldProvider } from '@/engine/ecs/IWorldProvider';
 import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
@@ -855,7 +855,7 @@ export class TSLGameOverlayManager {
     const duration = performance.now() - startTime;
 
     // Summary log for production - detailed breakdown available via debug logger
-    console.log(`[NavmeshOverlay] Completed: ${connectedCount} connected, ${disconnectedCount} disconnected, ${notOnNavmeshCount} not on navmesh (${duration.toFixed(0)}ms)`);
+    debugShaders.log(`[NavmeshOverlay] Completed: ${connectedCount} connected, ${disconnectedCount} disconnected, ${notOnNavmeshCount} not on navmesh (${duration.toFixed(0)}ms)`);
 
     debugPathfinding.log(`[NavmeshOverlay] Completed in ${duration.toFixed(0)}ms`);
     debugPathfinding.log(`[NavmeshOverlay]   Connected: ${connectedCount}, Disconnected: ${disconnectedCount}`);

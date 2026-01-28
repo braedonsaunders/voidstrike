@@ -290,6 +290,7 @@ export function deterministicDamage(
 
 /**
  * Deterministic normalization of a 2D vector
+ * Uses integerSqrt for cross-platform determinism
  */
 export function deterministicNormalize(x: number, y: number): { x: number; y: number } {
   const qx = quantize(x, QUANT_POSITION);
@@ -298,7 +299,9 @@ export function deterministicNormalize(x: number, y: number): { x: number; y: nu
   const magSq = qx * qx + qy * qy;
   if (magSq === 0) return { x: 0, y: 0 };
 
-  const mag = Math.sqrt(magSq);
+  const mag = integerSqrt(magSq);
+  if (mag === 0) return { x: 0, y: 0 };
+
   return {
     x: qx / mag,
     y: qy / mag,

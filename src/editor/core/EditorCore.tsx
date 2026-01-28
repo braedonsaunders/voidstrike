@@ -19,6 +19,7 @@ import { useEditorState } from '../hooks/useEditorState';
 import { useUIStore } from '@/store/uiStore';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { mapDataToEditorFormat } from '../providers/voidstrike';
+import { debugInitialization } from '@/utils/debugLogger';
 import type { MapData } from '@/data/maps/MapTypes';
 
 // Detailed validation result type for the editor UI
@@ -208,7 +209,7 @@ export function EditorCore({
           const data = await dataProvider.loadMap(mapId);
           loadMap(data);
         } catch (error) {
-          console.error('Failed to load map:', error);
+          debugInitialization.error('Failed to load map:', error);
         }
       } else if (dataProvider) {
         const newMap = dataProvider.createMap(128, 128, 'New Map');
@@ -314,7 +315,7 @@ export function EditorCore({
       }
       onValidate?.(state.mapData);
     } catch (error) {
-      console.error('Validation failed:', error);
+      debugInitialization.error('Validation failed:', error);
       setValidationResult({
         valid: false,
         isValidating: false,
@@ -341,7 +342,7 @@ export function EditorCore({
         }
       }
     } catch (error) {
-      console.error('Auto-fix failed:', error);
+      debugInitialization.error('Auto-fix failed:', error);
       setValidationResult(prev => ({
         ...prev,
         isValidating: false,

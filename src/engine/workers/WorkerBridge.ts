@@ -36,6 +36,7 @@ import {
   addMultiplayerMessageHandler,
   removeMultiplayerMessageHandler,
 } from '@/store/multiplayerStore';
+import { debugInitialization } from '@/utils/debugLogger';
 
 // ============================================================================
 // TYPES
@@ -131,13 +132,13 @@ export class WorkerBridge {
   }
 
   private async _initialize(): Promise<void> {
-    console.log('[WorkerBridge] _initialize() starting');
+    debugInitialization.log('[WorkerBridge] _initialize() starting');
     // Create the worker
     this.worker = new Worker(
       new URL('./GameWorker.ts', import.meta.url),
       { type: 'module' }
     );
-    console.log('[WorkerBridge] Worker created:', !!this.worker);
+    debugInitialization.log('[WorkerBridge] Worker created:', !!this.worker);
 
     // Set up message handler
     this.worker.onmessage = this.handleWorkerMessage.bind(this);
@@ -145,7 +146,7 @@ export class WorkerBridge {
       console.error('[WorkerBridge] Worker error:', error);
       this.onError?.(error.message);
     };
-    console.log('[WorkerBridge] Message handlers set up');
+    debugInitialization.log('[WorkerBridge] Message handlers set up');
 
     // Initialize the worker with game config
     await this.sendAndWait('init', {
@@ -202,7 +203,7 @@ export class WorkerBridge {
 
     // Debug: log every 100th message or first 5 messages
     if (this.messageCount <= 5 || this.messageCount % 100 === 0) {
-      console.log(`[WorkerBridge] Message #${this.messageCount}: type=${message.type}`);
+      debugInitialization.log(`[WorkerBridge] Message #${this.messageCount}: type=${message.type}`);
     }
 
     switch (message.type) {
@@ -213,7 +214,7 @@ export class WorkerBridge {
         // Debug: log first render state with entities
         if (!this.hasLoggedFirstRenderState &&
             (renderState.units.length > 0 || renderState.buildings.length > 0 || renderState.resources.length > 0)) {
-          console.log('[WorkerBridge] First renderState message received:', {
+          debugInitialization.log('[WorkerBridge] First renderState message received:', {
             tick: renderState.tick,
             units: renderState.units.length,
             buildings: renderState.buildings.length,
@@ -242,7 +243,7 @@ export class WorkerBridge {
         break;
 
       case 'error':
-        console.error('[WorkerBridge] Worker error:', message.message, message.stack);
+        debugInitialization.error('[WorkerBridge] Worker error:', message.message, message.stack);
         this.onError?.(message.message, message.stack);
         break;
 
@@ -312,13 +313,13 @@ export class WorkerBridge {
   // ============================================================================
 
   public start(): void {
-    console.log('[WorkerBridge] start() called', { initialized: this._initialized, running: this._running, hasWorker: !!this.worker });
+    debugInitialization.log('[WorkerBridge] start() called', { initialized: this._initialized, running: this._running, hasWorker: !!this.worker });
     if (!this._initialized || this._running) {
-      console.log('[WorkerBridge] start() early return - already running or not initialized');
+      debugInitialization.log('[WorkerBridge] start() early return - already running or not initialized');
       return;
     }
     this._running = true;
-    console.log('[WorkerBridge] Sending start message to worker');
+    debugInitialization.log('[WorkerBridge] Sending start message to worker');
     this.worker?.postMessage({ type: 'start' } satisfies MainToWorkerMessage);
   }
 
