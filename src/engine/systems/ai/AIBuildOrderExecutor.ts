@@ -188,6 +188,16 @@ export class AIBuildOrderExecutor {
     const currentTick = this.game.getCurrentTick();
     const shouldLog = currentTick % 200 === 0;
 
+    // One-time diagnostic at tick 100 to help debug AI issues
+    if (currentTick === 100) {
+      const aiBuildings = buildings.filter(b => b.get<Selectable>('Selectable')?.playerId === ai.playerId);
+      console.log(`[AIBuildOrder] ${ai.playerId} tick 100 diagnostic: Looking for producer of "${unitType}". Total buildings=${buildings.length}, AI buildings=${aiBuildings.length}`);
+      for (const b of aiBuildings) {
+        const building = b.get<Building>('Building');
+        console.log(`  - ${building?.buildingId}: complete=${building?.isComplete()}, canProduce=[${building?.canProduce?.join(',')}]`);
+      }
+    }
+
     // Debug: log what we're looking for
     if (shouldLog && buildings.length === 0) {
       debugAI.warn(`[AIBuildOrder] ${ai.playerId}: No cached buildings found for production check`);
@@ -438,7 +448,8 @@ export class AIBuildOrderExecutor {
       workerId,
     });
 
-    // Always log successful building placement
+    // Always log successful building placement (helps diagnose AI issues)
+    console.log(`[AIBuildOrder] ${ai.playerId}: SUCCESS - Building ${buildingType} at (${buildPos.x.toFixed(1)}, ${buildPos.y.toFixed(1)}) with worker ${workerId}`);
     debugAI.log(`[AIBuildOrder] ${ai.playerId}: Placed ${buildingType} at (${buildPos.x.toFixed(1)}, ${buildPos.y.toFixed(1)}) with worker ${workerId}`);
 
     return true;
@@ -590,7 +601,8 @@ export class AIBuildOrderExecutor {
       ai.vespene -= unitDef.vespeneCost;
       building.addToProductionQueue('unit', unitType, unitDef.buildTime);
 
-      // Log successful unit queue
+      // Always log successful unit training (helps diagnose AI issues)
+      console.log(`[AIBuildOrder] ${ai.playerId}: SUCCESS - Queued ${unitType} at ${building.buildingId} (minerals: ${Math.floor(ai.minerals)})`);
       debugAI.log(`[AIBuildOrder] ${ai.playerId}: Queued ${unitType} at ${building.buildingId} (minerals: ${Math.floor(ai.minerals)})`);
       return true;
     }

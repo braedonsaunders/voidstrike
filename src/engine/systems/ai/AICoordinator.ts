@@ -258,6 +258,8 @@ export class AICoordinator extends System {
     difficulty: AIDifficulty = 'medium',
     personality: AIPersonality = 'balanced'
   ): void {
+    // Always log AI registration (bypasses debug settings for diagnostics)
+    console.log(`[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
     debugAI.log(`[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
 
     const factionConfig = getFactionAIConfig(faction);
@@ -624,6 +626,8 @@ export class AICoordinator extends System {
     this.random.reseed(currentTick * 31337 + 42);
 
     if (currentTick === 1) {
+      // Always log on first tick for diagnostics
+      console.log(`[AICoordinator] Tick 1: Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ') || '(none)'}`);
       debugAI.log(`[AICoordinator] Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ')}`);
     }
 
@@ -637,7 +641,9 @@ export class AICoordinator extends System {
 
       const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
       if (totalBuildings === 0) {
+        // Critical diagnostic: always log when AI has no buildings (this blocks all AI logic)
         if (currentTick % 100 === 0) {
+          console.warn(`[AICoordinator] ${playerId} has NO buildings detected! AI logic SKIPPED. This is likely a bug.`);
           debugAI.warn(`[AICoordinator] ${playerId} has no buildings detected! buildingCounts:`, Object.fromEntries(ai.buildingCounts));
         }
         continue;
