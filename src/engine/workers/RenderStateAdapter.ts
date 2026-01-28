@@ -517,8 +517,13 @@ class ResourceComponentAdapter {
  *
  * Singleton pattern for global access from UI components.
  */
+// Use a string key on globalThis to ensure singleton is shared across code-split bundles
+// Symbol.for() would work but string keys are simpler for type declarations
+const RENDER_STATE_ADAPTER_KEY = '__voidstrike_RenderStateWorldAdapter__';
+
 export class RenderStateWorldAdapter implements IWorldProvider {
-  private static instance: RenderStateWorldAdapter | null = null;
+  // Note: We use globalThis instead of static class variable to ensure
+  // the singleton is shared across Next.js/Turbopack code-split bundles
 
   private unitEntities: Map<number, UnitEntityAdapter> = new Map();
   private buildingEntities: Map<number, BuildingEntityAdapter> = new Map();
@@ -530,21 +535,30 @@ export class RenderStateWorldAdapter implements IWorldProvider {
 
   /**
    * Get the singleton instance (creates one if needed)
+   * Uses globalThis to ensure singleton is shared across code-split bundles
    */
   public static getInstance(): RenderStateWorldAdapter {
-    if (!RenderStateWorldAdapter.instance) {
-      RenderStateWorldAdapter.instance = new RenderStateWorldAdapter();
+    // Access via globalThis to share across code-split bundles
+    const global = globalThis as unknown as Record<string, RenderStateWorldAdapter | undefined>;
+    let instance = global[RENDER_STATE_ADAPTER_KEY];
+    if (!instance) {
+      instance = new RenderStateWorldAdapter();
+      global[RENDER_STATE_ADAPTER_KEY] = instance;
+      console.log('[RenderStateWorldAdapter] Created new singleton instance on globalThis');
     }
-    return RenderStateWorldAdapter.instance;
+    return instance;
   }
 
   /**
    * Reset the singleton instance (for game restart)
    */
   public static resetInstance(): void {
-    if (RenderStateWorldAdapter.instance) {
-      RenderStateWorldAdapter.instance.clear();
-      RenderStateWorldAdapter.instance = null;
+    const global = globalThis as unknown as Record<string, RenderStateWorldAdapter | undefined>;
+    const instance = global[RENDER_STATE_ADAPTER_KEY];
+    if (instance) {
+      instance.clear();
+      global[RENDER_STATE_ADAPTER_KEY] = undefined;
+      console.log('[RenderStateWorldAdapter] Reset singleton instance');
     }
   }
 
@@ -552,7 +566,8 @@ export class RenderStateWorldAdapter implements IWorldProvider {
    * Check if instance exists
    */
   public static hasInstance(): boolean {
-    return RenderStateWorldAdapter.instance !== null;
+    const global = globalThis as unknown as Record<string, RenderStateWorldAdapter | undefined>;
+    return global[RENDER_STATE_ADAPTER_KEY] !== undefined;
   }
 
   // Debug: log first update only
