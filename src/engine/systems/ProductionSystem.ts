@@ -373,6 +373,9 @@ export class ProductionSystem extends System {
         const spawnX = baseSpawnX + (i * 0.5);
         const spawnY = baseSpawnY + (i * 0.5);
 
+        // Diagnostic: log when units are spawned (helps debug AI production issues)
+        console.log(`[ProductionSystem] ${ownerPlayerId}: Spawning ${item.id} at (${spawnX.toFixed(1)}, ${spawnY.toFixed(1)})`);
+
         this.game.eventBus.emit('unit:spawn', {
           unitType: item.id,
           x: spawnX,
