@@ -572,6 +572,9 @@ VOIDSTRIKE uses a **fully data-driven architecture** that separates game-specifi
 | **Abilities** | `abilities/abilities.ts` | All unit/building abilities with effects |
 | **Formations** | `formations/formations.ts` | Unit formation patterns and positioning |
 | **AI** | `ai/buildOrders.ts` | AI difficulty config, build orders, unit compositions |
+| **AI** | `ai/factions/*.ts` | Faction macro rules, roles, and economic thresholds |
+
+AI macro rules are cost-sensitive and should stay aligned with building definitions to avoid economic deadlocks (for example, supply-building rules should require at least the building's mineral cost).
 
 ### Example: Creating an Age of Empires Clone
 

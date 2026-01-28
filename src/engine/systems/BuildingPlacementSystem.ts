@@ -8,6 +8,7 @@ import { Selectable } from '../components/Selectable';
 import { Unit } from '../components/Unit';
 import { Resource } from '../components/Resource';
 import { Wall } from '../components/Wall';
+import { EnhancedAISystem } from './EnhancedAISystem';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { WALL_DEFINITIONS } from '@/data/buildings/walls';
 import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
@@ -44,6 +45,9 @@ export class BuildingPlacementSystem extends System {
   // Deterministic RNG for worker wandering (multiplayer sync)
   private readonly wanderRng = new SeededRandom(1);
 
+  // Cache reference to AI system for AI resource checks
+  private aiSystem: EnhancedAISystem | null = null;
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -64,6 +68,17 @@ export class BuildingPlacementSystem extends System {
 
     // Handle worker resuming construction on a paused/in-progress building
     this.game.eventBus.on('command:resume_construction', this.handleResumeConstruction.bind(this));
+  }
+
+  /**
+   * Get the AI system, lazily initializing if needed.
+   * Always re-checks if null since AI system may be registered after init.
+   */
+  private getAISystem(): EnhancedAISystem | null {
+    if (!this.aiSystem) {
+      this.aiSystem = this.world.getSystem(EnhancedAISystem) || null;
+    }
+    return this.aiSystem;
   }
 
   /**
@@ -346,8 +361,10 @@ export class BuildingPlacementSystem extends System {
     }
 
     const isPlayerLocal = isLocalPlayer(playerId);
+    const aiPlayer = !isPlayerLocal ? this.getAISystem()?.getAIPlayer(playerId) : undefined;
+    const isPlayerAI = aiPlayer !== undefined;
 
-    // Check resources (only for local player - AI handles its own resources)
+    // Check resources (local player via game store, AI via AI state)
     if (isPlayerLocal) {
       if (this.game.statePort.getMinerals() < definition.mineralCost) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
@@ -357,6 +374,11 @@ export class BuildingPlacementSystem extends System {
       if (this.game.statePort.getVespene() < definition.vespeneCost) {
         this.game.eventBus.emit('alert:notEnoughVespene', {});
         this.game.eventBus.emit('warning:lowVespene', {});
+        return;
+      }
+    } else if (isPlayerAI && aiPlayer) {
+      if (aiPlayer.minerals < definition.mineralCost || aiPlayer.vespene < definition.vespeneCost) {
+        debugBuildingPlacement.log(`BuildingPlacementSystem: AI ${playerId} lacks resources for ${buildingType} (need ${definition.mineralCost}M/${definition.vespeneCost}G, have ${Math.floor(aiPlayer.minerals)}M/${Math.floor(aiPlayer.vespene)}G)`);
         return;
       }
     }
@@ -400,9 +422,12 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Deduct resources (only for local player - AI handles its own resources)
+    // Deduct resources (local player via store, AI via AI state)
     if (isPlayerLocal) {
       this.game.statePort.addResources(-definition.mineralCost, -definition.vespeneCost);
+    } else if (isPlayerAI && aiPlayer) {
+      aiPlayer.minerals -= definition.mineralCost;
+      aiPlayer.vespene -= definition.vespeneCost;
     }
 
     // Create the building entity at the snapped center position
@@ -745,8 +770,10 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Check resources (only for local player)
+    // Check resources (local player via game store, AI via AI state)
     const isPlayerLocal = isLocalPlayer(playerId);
+    const aiPlayer = !isPlayerLocal ? this.getAISystem()?.getAIPlayer(playerId) : undefined;
+    const isPlayerAI = aiPlayer !== undefined;
     if (isPlayerLocal) {
       if (this.game.statePort.getMinerals() < addonDef.mineralCost) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
@@ -756,6 +783,11 @@ export class BuildingPlacementSystem extends System {
       if (this.game.statePort.getVespene() < addonDef.vespeneCost) {
         this.game.eventBus.emit('alert:notEnoughVespene', {});
         this.game.eventBus.emit('warning:lowVespene', {});
+        return;
+      }
+    } else if (isPlayerAI && aiPlayer) {
+      if (aiPlayer.minerals < addonDef.mineralCost || aiPlayer.vespene < addonDef.vespeneCost) {
+        debugBuildingPlacement.log(`BuildingPlacementSystem: AI ${playerId} lacks resources for addon ${addonType} (need ${addonDef.mineralCost}M/${addonDef.vespeneCost}G, have ${Math.floor(aiPlayer.minerals)}M/${Math.floor(aiPlayer.vespene)}G)`);
         return;
       }
     }
@@ -770,9 +802,12 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Deduct resources (only for local player)
+    // Deduct resources (local player via store, AI via AI state)
     if (isPlayerLocal) {
       this.game.statePort.addResources(-addonDef.mineralCost, -addonDef.vespeneCost);
+    } else if (isPlayerAI && aiPlayer) {
+      aiPlayer.minerals -= addonDef.mineralCost;
+      aiPlayer.vespene -= addonDef.vespeneCost;
     }
 
     // Create the addon entity - starts in 'constructing' state (no worker needed)
@@ -1707,10 +1742,17 @@ export class BuildingPlacementSystem extends System {
       // No worker assigned - cancel the blueprint
       const definition = BUILDING_DEFINITIONS[building.buildingId];
       if (definition) {
-        // Refund resources to the player (only for local player)
+        // Refund resources to the player (local player via store, AI via AI state)
         if (isLocalPlayer(selectable.playerId)) {
           this.game.statePort.addResources(definition.mineralCost, definition.vespeneCost);
           debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene for cancelled ${building.name}`);
+        } else {
+          const aiPlayer = this.getAISystem()?.getAIPlayer(selectable.playerId);
+          if (aiPlayer) {
+            aiPlayer.minerals += definition.mineralCost;
+            aiPlayer.vespene += definition.vespeneCost;
+            debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded AI ${selectable.playerId} ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene for cancelled ${building.name}`);
+          }
         }
 
         // PERF: If this is an extractor/refinery, restore the vespene geyser visibility

@@ -31,7 +31,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 100, // Highest priority - never get supply blocked
     conditions: [
       { type: 'supplyRatio', operator: '>=', value: 0.7 },
-      { type: 'minerals', operator: '>=', value: 75 }, // Lowered from 100 - supply is critical
+      { type: 'minerals', operator: '>=', value: 100 }, // Match supply cache cost to prevent deadlocks
     ],
     action: { type: 'build', targetId: 'supply_cache' },
     cooldownTicks: 40, // ~2 seconds
@@ -45,7 +45,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 150, // Even higher priority
     conditions: [
       { type: 'supplyRatio', operator: '>=', value: 0.85 },
-      { type: 'minerals', operator: '>=', value: 50 }, // Very low threshold - emergency
+      { type: 'minerals', operator: '>=', value: 100 }, // Match supply cache cost to prevent deadlocks
     ],
     action: { type: 'build', targetId: 'supply_cache' },
     cooldownTicks: 15, // Faster cooldown for emergencies
@@ -67,6 +67,22 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     cooldownTicks: 10, // Very fast - queue multiple workers
   },
 
+  // Opening worker production - keep economy growing before supply pressure
+  {
+    id: 'workers_opening',
+    name: 'Train Workers (Opening)',
+    description: 'Train workers early before supply pressure kicks in',
+    priority: 95,
+    conditions: [
+      // workerSaturation = workers / (bases * 16), so < 1.0 means under-saturated
+      { type: 'workerSaturation', operator: '<', value: 1.2 }, // Allow slight over-saturation for smoother production
+      { type: 'minerals', operator: '>=', value: 50 },
+      { type: 'supplyRatio', operator: '<', value: 0.7 }, // Bank for supply once pressure starts
+    ],
+    action: { type: 'train', targetId: 'fabricator' },
+    cooldownTicks: 25, // Slightly faster worker production
+  },
+
   // Standard worker production - caps at 16 per base (optimal saturation)
   {
     id: 'workers_basic',
@@ -76,7 +92,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     conditions: [
       // workerSaturation = workers / (bases * 16), so < 1.0 means under-saturated
       { type: 'workerSaturation', operator: '<', value: 1.2 }, // Allow slight over-saturation for smoother production
-      { type: 'minerals', operator: '>=', value: 50 },
+      { type: 'minerals', operator: '>=', value: 100 }, // Bank for supply cache cost
       { type: 'supplyRatio', operator: '<', value: 0.9 }, // Stop earlier to leave room for army
     ],
     action: { type: 'train', targetId: 'fabricator' },
