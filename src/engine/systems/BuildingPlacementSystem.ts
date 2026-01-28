@@ -401,7 +401,9 @@ export class BuildingPlacementSystem extends System {
         return;
       }
       const resource = vespeneGeyserEntity.get<Resource>('Resource')!;
-      if (resource.hasRefinery()) {
+      // Check if ANY extractor exists (complete or under construction) - not just complete ones
+      // This prevents duplicate extractor placement attempts while one is being built
+      if (resource.extractorEntityId !== null) {
         this.game.eventBus.emit('ui:error', { message: 'Vespene Geyser already has an Extractor', playerId });
         return;
       }
@@ -440,6 +442,9 @@ export class BuildingPlacementSystem extends System {
       .add(new Building(definition))
       .add(health)
       .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId));
+
+    // Diagnostic: confirm building entity was created (helps debug AI placement issues)
+    console.log(`[BuildingPlacement] ${playerId}: Created ${buildingType} entity #${buildingEntity.id} at (${snappedX}, ${snappedY})`);
 
     // Building starts in 'waiting_for_worker' state (from constructor)
     // Construction will start when worker arrives at site

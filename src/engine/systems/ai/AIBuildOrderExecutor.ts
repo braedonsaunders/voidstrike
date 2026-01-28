@@ -599,10 +599,11 @@ export class AIBuildOrderExecutor {
 
       ai.minerals -= unitDef.mineralCost;
       ai.vespene -= unitDef.vespeneCost;
-      building.addToProductionQueue('unit', unitType, unitDef.buildTime);
+      ai.supply += unitDef.supplyCost; // Track supply used
+      building.addToProductionQueue('unit', unitType, unitDef.buildTime, unitDef.supplyCost);
 
       // Always log successful unit training (helps diagnose AI issues)
-      console.log(`[AIBuildOrder] ${ai.playerId}: SUCCESS - Queued ${unitType} at ${building.buildingId} (minerals: ${Math.floor(ai.minerals)})`);
+      console.log(`[AIBuildOrder] ${ai.playerId}: SUCCESS - Queued ${unitType} at ${building.buildingId} (minerals: ${Math.floor(ai.minerals)}, supply: ${ai.supply}/${ai.maxSupply})`);
       debugAI.log(`[AIBuildOrder] ${ai.playerId}: Queued ${unitType} at ${building.buildingId} (minerals: ${Math.floor(ai.minerals)})`);
       return true;
     }
