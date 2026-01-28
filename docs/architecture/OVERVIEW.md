@@ -421,7 +421,6 @@ voidstrike/
 │   │   ├── debugLogger.ts
 │   │   ├── EntityValidator.ts
 │   │   ├── FixedPoint.ts
-│   │   ├── gameSetup.ts
 │   │   ├── math.ts
 │   │   ├── overlayCache.ts
 │   │   ├── storage.ts
