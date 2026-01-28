@@ -268,6 +268,15 @@ voidstrike/
 │   │   │   ├── IWorldProvider.ts
 │   │   │   ├── System.ts # System base
 │   │   │   └── World.ts # ECS world container
+│   │   ├── input/
+│   │   │   ├── handlers/
+│   │   │   │   ├── BuildingInputHandler.ts
+│   │   │   │   ├── CommandInputHandler.ts
+│   │   │   │   ├── GameplayInputHandler.ts
+│   │   │   │   └── index.ts
+│   │   │   ├── index.ts
+│   │   │   ├── InputManager.ts
+│   │   │   └── types.ts
 │   │   ├── network/
 │   │   │   ├── p2p/
 │   │   │   │   ├── ConnectionCode.ts
@@ -528,6 +537,9 @@ voidstrike/
     │   │   ├── merkleTree.test.ts
     │   │   └── types.test.ts
     │   └── systems/ # ECS Systems
+    │       ├── movement/
+    │       │   ├── flockingBehavior.perf.test.ts
+    │       │   └── flockingBehavior.test.ts
     │       ├── abilitySystem.test.ts
     │       ├── buildingPlacementSystem.test.ts
     │       ├── combatSystem.test.ts
