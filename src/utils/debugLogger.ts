@@ -40,15 +40,28 @@ const categoryToSettingKey: Record<DebugCategory, keyof DebugSettings> = {
   performance: 'debugPerformance',
 };
 
+let workerDebugSettings: DebugSettings | null = null;
+
+export function setWorkerDebugSettings(settings: DebugSettings): void {
+  workerDebugSettings = settings;
+}
+
+function getDebugSettings(): DebugSettings | null {
+  if (typeof window === 'undefined') {
+    return workerDebugSettings;
+  }
+
+  return useUIStore.getState().debugSettings;
+}
+
 /**
  * Check if debugging is enabled for a specific category
  */
 function isEnabled(category: DebugCategory): boolean {
-  const state = useUIStore.getState();
-  const { debugSettings } = state;
+  const debugSettings = getDebugSettings();
 
   // Check master toggle first
-  if (!debugSettings.debugEnabled) {
+  if (!debugSettings || !debugSettings.debugEnabled) {
     return false;
   }
 

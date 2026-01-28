@@ -68,6 +68,7 @@ import type {
 } from './types';
 import type { GameConfig, GameState, TerrainCell } from '../core/Game';
 import { dispatchCommand, type GameCommand } from '../core/GameCommand';
+import { setWorkerDebugSettings } from '@/utils/debugLogger';
 
 // ============================================================================
 // WORKER GAME CLASS
@@ -1177,6 +1178,11 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
 
       case 'resume': {
         game?.start();
+        break;
+      }
+
+      case 'setDebugSettings': {
+        setWorkerDebugSettings(message.settings);
         break;
       }
 

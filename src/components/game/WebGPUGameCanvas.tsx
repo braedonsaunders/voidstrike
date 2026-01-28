@@ -341,6 +341,9 @@ export function WebGPUGameCanvas() {
         // Initialize the worker
         await bridge.initialize();
 
+        // Sync debug settings to worker for category filtering
+        bridge.setDebugSettings(useUIStore.getState().debugSettings);
+
         // Set terrain data on worker
         bridge.setTerrainGrid(CURRENT_MAP.terrain);
 
@@ -601,6 +604,16 @@ export function WebGPUGameCanvas() {
       }
     }
   }, [isLandingMode, landingBuildingId, isBuilding, refs.placementPreview]);
+
+  // Sync debug settings to worker
+  useEffect(() => {
+    const unsubscribe = useUIStore.subscribe((state: UIState, prevState: UIState) => {
+      if (state.debugSettings === prevState.debugSettings) return;
+      workerBridgeRef.current?.setDebugSettings(state.debugSettings);
+    });
+
+    return () => unsubscribe();
+  }, []);
 
   // Subscribe to overlay settings changes
   useEffect(() => {
