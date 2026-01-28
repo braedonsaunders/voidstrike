@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { FlockingBehavior, FlockingEntityCache, FlockingSpatialGrid } from '@/engine/systems/movement/FlockingBehavior';
+import { ALIGNMENT_RADIUS } from '@/data/movement.config';
 import { Transform } from '@/engine/components/Transform';
 import { Unit, UnitState } from '@/engine/components/Unit';
 import { Velocity } from '@/engine/components/Velocity';
@@ -41,6 +42,8 @@ const PERFORMANCE_THRESHOLDS = {
   UNITS_500_MS: 40.0,    // 40ms for 500 units (main benchmark)
   UNITS_1000_MS: 80.0,   // 80ms for 1000 units (stress test)
 };
+
+const GRID_CELL_SIZE = ALIGNMENT_RADIUS;
 
 // =============================================================================
 // TEST DATA GENERATORS
@@ -203,20 +206,26 @@ function createChokePointScenario(unitCount: number): TestScenario {
  * Create mocks from entity list
  */
 function createScenarioFromEntities(entities: TestEntity[]): TestScenario {
-  const entityMap = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
   const cacheMap = new Map<number, { transform: Transform; unit: Unit; velocity: Velocity }>();
+  // Lightweight spatial hash to avoid O(n) scans in perf tests.
+  const cellMap = new Map<string, SpatialEntityData[]>();
 
   for (const entity of entities) {
-    entityMap.set(entity.id, {
-      x: entity.transform.x,
-      y: entity.transform.y,
-      data: entity.spatialData,
-    });
     cacheMap.set(entity.id, {
       transform: entity.transform,
       unit: entity.unit,
       velocity: entity.velocity,
     });
+
+    const cellX = Math.floor(entity.spatialData.x / GRID_CELL_SIZE);
+    const cellY = Math.floor(entity.spatialData.y / GRID_CELL_SIZE);
+    const cellKey = `${cellX},${cellY}`;
+    const bucket = cellMap.get(cellKey);
+    if (bucket) {
+      bucket.push(entity.spatialData);
+    } else {
+      cellMap.set(cellKey, [entity.spatialData]);
+    }
   }
 
   const grid: FlockingSpatialGrid = {
@@ -224,16 +233,30 @@ function createScenarioFromEntities(entities: TestEntity[]): TestScenario {
       const results: SpatialEntityData[] = [];
       let bufferIndex = 0;
       const radiusSq = radius * radius;
+      const minCellX = Math.floor((x - radius) / GRID_CELL_SIZE);
+      const maxCellX = Math.floor((x + radius) / GRID_CELL_SIZE);
+      const minCellY = Math.floor((y - radius) / GRID_CELL_SIZE);
+      const maxCellY = Math.floor((y + radius) / GRID_CELL_SIZE);
 
-      for (const [, entity] of entityMap) {
-        const dx = entity.x - x;
-        const dy = entity.y - y;
-        const distSq = dx * dx + dy * dy;
+      for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+        for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
+          const bucket = cellMap.get(`${cellX},${cellY}`);
+          if (!bucket) continue;
 
-        if (distSq <= radiusSq && bufferIndex < buffer.length) {
-          Object.assign(buffer[bufferIndex], entity.data);
-          results.push(buffer[bufferIndex]);
-          bufferIndex++;
+          for (const entity of bucket) {
+            const dx = entity.x - x;
+            const dy = entity.y - y;
+            const distSq = dx * dx + dy * dy;
+
+            if (distSq <= radiusSq) {
+              if (bufferIndex >= buffer.length) {
+                return results;
+              }
+              Object.assign(buffer[bufferIndex], entity);
+              results.push(buffer[bufferIndex]);
+              bufferIndex++;
+            }
+          }
         }
       }
 
@@ -242,14 +265,25 @@ function createScenarioFromEntities(entities: TestEntity[]): TestScenario {
     queryRadius(x: number, y: number, radius: number): number[] {
       const results: number[] = [];
       const radiusSq = radius * radius;
+      const minCellX = Math.floor((x - radius) / GRID_CELL_SIZE);
+      const maxCellX = Math.floor((x + radius) / GRID_CELL_SIZE);
+      const minCellY = Math.floor((y - radius) / GRID_CELL_SIZE);
+      const maxCellY = Math.floor((y + radius) / GRID_CELL_SIZE);
 
-      for (const [id, entity] of entityMap) {
-        const dx = entity.x - x;
-        const dy = entity.y - y;
-        const distSq = dx * dx + dy * dy;
+      for (let cellX = minCellX; cellX <= maxCellX; cellX++) {
+        for (let cellY = minCellY; cellY <= maxCellY; cellY++) {
+          const bucket = cellMap.get(`${cellX},${cellY}`);
+          if (!bucket) continue;
 
-        if (distSq <= radiusSq) {
-          results.push(id);
+          for (const entity of bucket) {
+            const dx = entity.x - x;
+            const dy = entity.y - y;
+            const distSq = dx * dx + dy * dy;
+
+            if (distSq <= radiusSq) {
+              results.push(entity.id);
+            }
+          }
         }
       }
 
@@ -606,25 +640,44 @@ describe('FlockingBehavior Performance', () => {
       const out: PooledVector2 = { x: 0, y: 0 } as PooledVector2;
 
       const measurements: { count: number; time: number }[] = [];
+      const runCounts = [100, 200, 400];
+      const sampleRuns = 5;
 
-      for (const count of [100, 200, 400]) {
-        const scenario = createDenseClusterScenario(count);
+      for (const count of runCounts) {
+        // Warmup to reduce JIT and allocation variance
+        const warmupScenario = createDenseClusterScenario(count);
         flocking.setCurrentTick(0);
-
-        const start = performance.now();
-        for (const entity of scenario.entities) {
+        for (const entity of warmupScenario.entities) {
           flocking.calculateSeparationForce(
-            entity.id, entity.transform, entity.unit, out, 100, scenario.grid
+            entity.id, entity.transform, entity.unit, out, 100, warmupScenario.grid
           );
         }
-        const elapsed = performance.now() - start;
-
-        measurements.push({ count, time: elapsed });
-
-        // Clean up for next iteration
-        for (const entity of scenario.entities) {
+        for (const entity of warmupScenario.entities) {
           flocking.cleanupUnit(entity.id);
         }
+
+        const times: number[] = [];
+        for (let run = 0; run < sampleRuns; run++) {
+          const scenario = createDenseClusterScenario(count);
+          flocking.setCurrentTick(0);
+
+          const start = performance.now();
+          for (const entity of scenario.entities) {
+            flocking.calculateSeparationForce(
+              entity.id, entity.transform, entity.unit, out, 100, scenario.grid
+            );
+          }
+          const elapsed = performance.now() - start;
+          times.push(elapsed);
+
+          // Clean up for next iteration
+          for (const entity of scenario.entities) {
+            flocking.cleanupUnit(entity.id);
+          }
+        }
+
+        times.sort((a, b) => a - b);
+        measurements.push({ count, time: times[Math.floor(times.length / 2)] });
       }
 
       // If O(n²), time should quadruple when count doubles

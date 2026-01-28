@@ -938,7 +938,7 @@ export class AIBuildOrderExecutor {
 
       // Check if valid placement
       const buildingDef = BUILDING_DEFINITIONS[ai.config!.roles.mainBase];
-      if (this.game.isValidBuildingPlacement(buildPos.x, buildPos.y, buildingDef.width, buildingDef.height)) {
+      if (this.game.isValidBuildingPlacement(buildPos.x, buildPos.y, buildingDef.width, buildingDef.height, undefined, true)) {
         return buildPos;
       }
     }

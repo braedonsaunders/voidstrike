@@ -823,6 +823,8 @@ aiWorker.postMessage({
 
 Both workers maintain main thread fallbacks for environments without Web Worker support.
 
+In worker mode, `WorkerGame` mirrors main-thread building placement validation (terrain, collisions, decorations) so AI and player placement rules stay consistent across runtimes.
+
 ### State Management
 
 Zustand store for reactive game state:
