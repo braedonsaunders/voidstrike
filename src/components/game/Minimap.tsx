@@ -4,7 +4,7 @@ import { useRef, useEffect, useState, useCallback } from 'react';
 import { useGameStore, CommandTargetMode } from '@/store/gameStore';
 import { useGameSetupStore, getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
-import { getRenderStateAdapter, getWorkerBridge, RenderStateWorldAdapter } from '@/engine/workers';
+import { getRenderStateAdapter, getWorkerBridge } from '@/engine/workers';
 import { clamp } from '@/utils/math';
 
 const MINIMAP_SIZE = 192;
@@ -154,42 +154,24 @@ export function Minimap() {
       }
 
       // Get entities from render state adapter (worker mode)
-      // CRITICAL: Access globalThis directly to bypass code-split bundle issues
-      // Each bundle may have its own copy of getRenderStateAdapter() with stale code
-      const ADAPTER_KEY = '__voidstrike_RenderStateWorldAdapter__';
-      const worldAdapter = ((globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter()) as RenderStateWorldAdapter;
+      // Note: WorkerBridge directly updates the singleton, ensuring consistency
+      const worldAdapter = getRenderStateAdapter();
 
-      // Debug: log adapter state
-      const logKey = '_minimapDebugLogged';
+      // Debug: log adapter state periodically
       const adapterCheckKey = '_minimapAdapterCheckCount';
-      if (!(window as any)[logKey]) {
-        (window as any)[adapterCheckKey] = ((window as any)[adapterCheckKey] ?? 0) + 1;
-        const checkCount = (window as any)[adapterCheckKey];
-        if (checkCount % 30 === 1) {
-          const counts = worldAdapter?.getEntityCounts?.() ?? { units: 0, buildings: 0, resources: 0 };
-          console.log('[Minimap] Adapter state:', {
-            isReady: worldAdapter?.isReady?.() ?? false,
-            updateCount: worldAdapter?.getUpdateCount?.() ?? 0,
-            ...counts,
-            fromGlobalThis: !!(globalThis as any)[ADAPTER_KEY],
-          });
-        }
+      (window as any)[adapterCheckKey] = ((window as any)[adapterCheckKey] ?? 0) + 1;
+      const checkCount = (window as any)[adapterCheckKey];
+      if (checkCount % 60 === 1) {
+        const counts = worldAdapter.getEntityCounts();
+        console.log('[Minimap] Adapter state:', {
+          isReady: worldAdapter.isReady(),
+          updateCount: worldAdapter.getUpdateCount(),
+          ...counts,
+        });
       }
 
       // Draw resources
       const resources = worldAdapter.getEntitiesWith('Transform', 'Resource');
-
-      // Debug: log first time we get entities
-      if (resources.length > 0 || worldAdapter.getEntitiesWith('Unit').length > 0) {
-        if (!(window as any)[logKey]) {
-          console.log('[Minimap] Got entities from adapter:', {
-            resources: resources.length,
-            buildings: worldAdapter.getEntitiesWith('Building').length,
-            units: worldAdapter.getEntitiesWith('Unit').length,
-          });
-          (window as any)[logKey] = true;
-        }
-      }
       for (const entity of resources) {
         const transform = entity.get<{ x: number; y: number }>('Transform');
         const resource = entity.get<{ resourceType: string }>('Resource');
@@ -363,9 +345,7 @@ export function Minimap() {
     if (selectedIds.length === 0) return;
 
     // Check if any selected are units (not buildings) using render state adapter
-    // Access globalThis directly to bypass code-split bundle issues
-    const ADAPTER_KEY = '__voidstrike_RenderStateWorldAdapter__';
-    const worldAdapter = ((globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter()) as RenderStateWorldAdapter;
+    const worldAdapter = getRenderStateAdapter();
     const hasUnits = selectedIds.some((id) => {
       const entity = worldAdapter.getEntity(id);
       return entity?.get('Unit') !== undefined;
@@ -452,9 +432,7 @@ export function Minimap() {
     const selectedIds = useGameStore.getState().selectedUnits;
     if (selectedIds.length > 0) {
       // Check if any selected are units (not buildings) using render state adapter
-      // Access globalThis directly to bypass code-split bundle issues
-      const ADAPTER_KEY = '__voidstrike_RenderStateWorldAdapter__';
-      const worldAdapter = ((globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter()) as RenderStateWorldAdapter;
+      const worldAdapter = getRenderStateAdapter();
       const hasUnits = selectedIds.some((id) => {
         const entity = worldAdapter.getEntity(id);
         return entity?.get('Unit') !== undefined;
