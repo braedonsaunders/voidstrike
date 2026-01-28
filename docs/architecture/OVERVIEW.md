@@ -539,18 +539,20 @@ voidstrike/
     │   │   ├── desyncDetection.test.ts
     │   │   ├── merkleTree.test.ts
     │   │   └── types.test.ts
-    │   └── systems/ # ECS Systems
-    │       ├── movement/
-    │       │   ├── flockingBehavior.perf.test.ts
-    │       │   └── flockingBehavior.test.ts
-    │       ├── abilitySystem.test.ts
-    │       ├── buildingPlacementSystem.test.ts
-    │       ├── combatSystem.test.ts
-    │       ├── pathfindingSystem.test.ts
-    │       ├── productionSystem.test.ts
-    │       ├── projectileSystem.test.ts
-    │       ├── resourceSystem.test.ts
-    │       └── visionSystem.test.ts
+    │   ├── systems/ # ECS Systems
+    │   │   ├── movement/
+    │   │   │   ├── flockingBehavior.perf.test.ts
+    │   │   │   └── flockingBehavior.test.ts
+    │   │   ├── abilitySystem.test.ts
+    │   │   ├── buildingPlacementSystem.test.ts
+    │   │   ├── combatSystem.test.ts
+    │   │   ├── pathfindingSystem.test.ts
+    │   │   ├── productionSystem.test.ts
+    │   │   ├── projectileSystem.test.ts
+    │   │   ├── resourceSystem.test.ts
+    │   │   └── visionSystem.test.ts
+    │   └── workers/ # Web Workers
+    │       └── gameWorker.test.ts
     └── utils/ # Utility functions
         ├── debugLogger.test.ts
         ├── fixedPoint.test.ts
