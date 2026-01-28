@@ -12,6 +12,7 @@ import type { ResourceType } from '../components/Resource';
 import type { ArmorType } from '../components/Health';
 import type { GameState, TerrainCell, GameConfig } from '../core/Game';
 import type { AIDifficulty } from '../systems/EnhancedAISystem';
+import type { GameCommand } from '../core/GameCommand';
 
 // ============================================================================
 // RENDER STATE - Data transferred from worker to main thread for rendering
