@@ -9,6 +9,7 @@ import { debugNetworking } from '@/utils/debugLogger';
  * - Network pause state
  * - Reconnection tracking
  * - Desync detection state
+ * - Latency measurement and connection quality
  */
 
 // Connection status for detailed state tracking
@@ -25,6 +26,22 @@ export type DesyncState =
   | 'synced'           // Game states match
   | 'checking'         // Verifying checksums
   | 'desynced';        // Confirmed desync - game should end
+
+// Connection quality based on latency and jitter
+export type ConnectionQuality = 'excellent' | 'good' | 'poor' | 'critical';
+
+// Latency measurement data
+export interface LatencyStats {
+  currentRTT: number;           // Most recent RTT in ms
+  averageRTT: number;           // Exponential moving average RTT
+  minRTT: number;               // Minimum observed RTT
+  maxRTT: number;               // Maximum observed RTT
+  jitter: number;               // RTT variance (ms)
+  packetsLost: number;          // Number of pings without pong response
+  packetsSent: number;          // Total pings sent
+  lastPingTime: number;         // Timestamp of last ping sent
+  lastPongTime: number;         // Timestamp of last pong received
+}
 
 export interface BufferedCommand {
   command: unknown;
@@ -69,6 +86,13 @@ export interface MultiplayerState {
   // Message handlers
   messageHandlers: ((data: unknown) => void)[];
 
+  // Latency measurement
+  latencyStats: LatencyStats;
+  connectionQuality: ConnectionQuality;
+  pendingPings: Map<number, number>; // pingId -> timestamp
+  pingInterval: ReturnType<typeof setInterval> | null;
+  pingTimeoutMs: number; // How long to wait for pong before considering lost
+
   // Actions
   setMultiplayer: (isMultiplayer: boolean) => void;
   setConnected: (isConnected: boolean) => void;
@@ -98,9 +122,30 @@ export interface MultiplayerState {
   // Reconnection
   attemptReconnect: () => Promise<boolean>;
 
+  // Latency measurement
+  startPingInterval: () => void;
+  stopPingInterval: () => void;
+  sendPing: () => void;
+  handlePong: (pingId: number, timestamp: number) => void;
+  updateConnectionQuality: () => void;
+  getAdaptiveCommandDelay: (tickRate: number) => number;
+
   // Reset
   reset: () => void;
 }
+
+// Default latency stats
+const defaultLatencyStats: LatencyStats = {
+  currentRTT: 0,
+  averageRTT: 0,
+  minRTT: Infinity,
+  maxRTT: 0,
+  jitter: 0,
+  packetsLost: 0,
+  packetsSent: 0,
+  lastPingTime: 0,
+  lastPongTime: 0,
+};
 
 const initialState = {
   isMultiplayer: false,
@@ -122,6 +167,12 @@ const initialState = {
   dataChannel: null,
   reconnectCallback: null,
   messageHandlers: [] as ((data: unknown) => void)[],
+  // Latency measurement
+  latencyStats: { ...defaultLatencyStats },
+  connectionQuality: 'excellent' as ConnectionQuality,
+  pendingPings: new Map<number, number>(),
+  pingInterval: null as ReturnType<typeof setInterval> | null,
+  pingTimeoutMs: 2000, // 2 seconds timeout for pong response
 };
 
 export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
@@ -153,6 +204,29 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       const messageHandler = (event: MessageEvent) => {
         try {
           const data = JSON.parse(event.data);
+
+          // Handle ping/pong internally for latency measurement
+          if (data.type === 'ping') {
+            // Respond with pong immediately
+            try {
+              channel.send(JSON.stringify({
+                type: 'pong',
+                pingId: data.pingId,
+                timestamp: data.timestamp,
+              }));
+            } catch (e) {
+              debugNetworking.warn('[Multiplayer] Failed to send pong:', e);
+            }
+            return; // Don't pass to other handlers
+          }
+
+          if (data.type === 'pong') {
+            // Handle pong response
+            get().handlePong(data.pingId, data.timestamp);
+            return; // Don't pass to other handlers
+          }
+
+          // Pass to registered handlers
           const handlers = get().messageHandlers;
           for (const handler of handlers) {
             handler(data);
@@ -165,6 +239,9 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       const closeHandler = () => {
         debugNetworking.log('[Multiplayer] Data channel closed');
         const currentState = get();
+
+        // Stop ping interval on disconnect
+        get().stopPingInterval();
 
         // Only trigger reconnection flow if we were previously connected
         if (currentState.isConnected && currentState.isMultiplayer) {
@@ -212,7 +289,12 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           get().sendMessage(command);
         }
       }
+
+      // Start ping interval for latency measurement
+      get().startPingInterval();
     } else {
+      // Stopping - clean up ping interval
+      get().stopPingInterval();
       set({ dataChannel: channel });
     }
   },
@@ -373,12 +455,203 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     return get().attemptReconnect();
   },
 
+  // Latency measurement - start periodic pings
+  startPingInterval: () => {
+    const state = get();
+    // Don't start if already running
+    if (state.pingInterval) return;
+
+    debugNetworking.log('[Multiplayer] Starting ping interval');
+
+    // Send initial ping immediately
+    get().sendPing();
+
+    // Then send pings every 1 second
+    const interval = setInterval(() => {
+      get().sendPing();
+    }, 1000);
+
+    set({ pingInterval: interval });
+  },
+
+  stopPingInterval: () => {
+    const { pingInterval } = get();
+    if (pingInterval) {
+      clearInterval(pingInterval);
+      set({ pingInterval: null });
+    }
+  },
+
+  sendPing: () => {
+    const state = get();
+    if (!state.dataChannel || state.dataChannel.readyState !== 'open') {
+      return;
+    }
+
+    const pingId = Date.now();
+    const now = performance.now();
+
+    // Track pending ping
+    const newPendingPings = new Map(state.pendingPings);
+    newPendingPings.set(pingId, now);
+
+    // Clean up old pending pings (older than timeout)
+    const timeout = state.pingTimeoutMs;
+    for (const [id, timestamp] of newPendingPings) {
+      if (now - timestamp > timeout) {
+        newPendingPings.delete(id);
+        // Count as lost packet
+        set((s) => ({
+          latencyStats: {
+            ...s.latencyStats,
+            packetsLost: s.latencyStats.packetsLost + 1,
+          },
+        }));
+      }
+    }
+
+    set({
+      pendingPings: newPendingPings,
+      latencyStats: {
+        ...state.latencyStats,
+        packetsSent: state.latencyStats.packetsSent + 1,
+        lastPingTime: now,
+      },
+    });
+
+    // Send ping message
+    try {
+      state.dataChannel.send(JSON.stringify({
+        type: 'ping',
+        pingId,
+        timestamp: pingId,
+      }));
+    } catch (e) {
+      debugNetworking.warn('[Multiplayer] Failed to send ping:', e);
+    }
+  },
+
+  handlePong: (pingId: number, _timestamp: number) => {
+    const state = get();
+    const sentTime = state.pendingPings.get(pingId);
+
+    if (!sentTime) {
+      // Pong for unknown ping (possibly timed out)
+      return;
+    }
+
+    const now = performance.now();
+    const rtt = now - sentTime;
+
+    // Remove from pending
+    const newPendingPings = new Map(state.pendingPings);
+    newPendingPings.delete(pingId);
+
+    // Calculate new stats
+    const stats = state.latencyStats;
+    const alpha = 0.2; // EMA smoothing factor (higher = more responsive)
+    const newAvgRTT = stats.averageRTT === 0
+      ? rtt
+      : stats.averageRTT * (1 - alpha) + rtt * alpha;
+
+    // Calculate jitter (variance in RTT)
+    const jitterAlpha = 0.1;
+    const rttDiff = Math.abs(rtt - stats.averageRTT);
+    const newJitter = stats.jitter * (1 - jitterAlpha) + rttDiff * jitterAlpha;
+
+    set({
+      pendingPings: newPendingPings,
+      latencyStats: {
+        ...stats,
+        currentRTT: rtt,
+        averageRTT: newAvgRTT,
+        minRTT: Math.min(stats.minRTT, rtt),
+        maxRTT: Math.max(stats.maxRTT, rtt),
+        jitter: newJitter,
+        lastPongTime: now,
+      },
+    });
+
+    // Update connection quality based on new stats
+    get().updateConnectionQuality();
+  },
+
+  updateConnectionQuality: () => {
+    const { latencyStats } = get();
+    const { averageRTT, jitter, packetsLost, packetsSent } = latencyStats;
+
+    // Calculate packet loss percentage
+    const lossRate = packetsSent > 0 ? packetsLost / packetsSent : 0;
+
+    // Determine quality based on RTT, jitter, and packet loss
+    let quality: ConnectionQuality;
+
+    if (averageRTT < 50 && jitter < 20 && lossRate < 0.01) {
+      quality = 'excellent';
+    } else if (averageRTT < 100 && jitter < 40 && lossRate < 0.05) {
+      quality = 'good';
+    } else if (averageRTT < 200 && jitter < 80 && lossRate < 0.10) {
+      quality = 'poor';
+    } else {
+      quality = 'critical';
+    }
+
+    set({ connectionQuality: quality });
+
+    // Log quality changes
+    const currentQuality = get().connectionQuality;
+    if (currentQuality !== quality) {
+      debugNetworking.log(`[Multiplayer] Connection quality: ${quality} (RTT: ${averageRTT.toFixed(1)}ms, Jitter: ${jitter.toFixed(1)}ms, Loss: ${(lossRate * 100).toFixed(1)}%)`);
+    }
+  },
+
+  // Calculate adaptive command delay based on measured RTT
+  getAdaptiveCommandDelay: (tickRate: number) => {
+    const { latencyStats, connectionQuality } = get();
+    const tickDurationMs = 1000 / tickRate;
+
+    // Base delay on average RTT + jitter buffer
+    const rttBuffer = latencyStats.averageRTT + latencyStats.jitter * 2;
+
+    // Convert to ticks, rounding up
+    let delayTicks = Math.ceil(rttBuffer / tickDurationMs);
+
+    // Add safety margin based on connection quality
+    switch (connectionQuality) {
+      case 'excellent':
+        delayTicks += 1;
+        break;
+      case 'good':
+        delayTicks += 2;
+        break;
+      case 'poor':
+        delayTicks += 3;
+        break;
+      case 'critical':
+        delayTicks += 4;
+        break;
+    }
+
+    // Clamp to reasonable bounds (2-10 ticks = 100-500ms at 20 TPS)
+    const minDelay = 2;
+    const maxDelay = 10;
+    return Math.max(minDelay, Math.min(maxDelay, delayTicks));
+  },
+
   reset: () => {
-    const { dataChannel } = get();
+    const { dataChannel, pingInterval } = get();
     if (dataChannel) {
       dataChannel.close();
     }
-    set({ ...initialState, messageHandlers: [] });
+    if (pingInterval) {
+      clearInterval(pingInterval);
+    }
+    set({
+      ...initialState,
+      messageHandlers: [],
+      latencyStats: { ...defaultLatencyStats },
+      pendingPings: new Map(),
+    });
   },
 }));
 
@@ -424,4 +697,29 @@ export function resumeFromNetworkPause(): void {
 // Report desync
 export function reportDesync(tick: number): void {
   useMultiplayerStore.getState().setDesyncState('desynced', tick);
+}
+
+// Get latency stats
+export function getLatencyStats(): LatencyStats {
+  return useMultiplayerStore.getState().latencyStats;
+}
+
+// Get connection quality
+export function getConnectionQuality(): ConnectionQuality {
+  return useMultiplayerStore.getState().connectionQuality;
+}
+
+// Get adaptive command delay based on current latency
+export function getAdaptiveCommandDelay(tickRate: number): number {
+  return useMultiplayerStore.getState().getAdaptiveCommandDelay(tickRate);
+}
+
+// Start latency measurement
+export function startLatencyMeasurement(): void {
+  useMultiplayerStore.getState().startPingInterval();
+}
+
+// Stop latency measurement
+export function stopLatencyMeasurement(): void {
+  useMultiplayerStore.getState().stopPingInterval();
 }
