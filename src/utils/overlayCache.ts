@@ -7,6 +7,8 @@
  * Static overlays are cached per-map using a hash of the map data.
  */
 
+import { debugInitialization } from '@/utils/debugLogger';
+
 const DB_NAME = 'voidstrike_overlay_cache';
 const DB_VERSION = 1;
 const STORE_NAME = 'overlays';
@@ -45,7 +47,7 @@ async function initDB(): Promise<IDBDatabase> {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
     request.onerror = () => {
-      console.warn('[OverlayCache] Failed to open database:', request.error);
+      debugInitialization.warn('[OverlayCache] Failed to open database:', request.error);
       reject(request.error);
     };
 
@@ -147,7 +149,7 @@ export async function getOverlayCache(
       };
     });
   } catch (error) {
-    console.warn('[OverlayCache] Error getting cache:', error);
+    debugInitialization.warn('[OverlayCache] Error getting cache:', error);
     return null;
   }
 }
@@ -200,7 +202,7 @@ export async function setOverlayCache(
         const error = request.error;
         if (isQuotaExceededError(error)) {
           // Try to free space by cleaning up old entries
-          console.warn('[OverlayCache] Quota exceeded, cleaning up old entries...');
+          debugInitialization.warn('[OverlayCache] Quota exceeded, cleaning up old entries...');
           try {
             await cleanupOldCacheEntries();
             // Retry the operation once
@@ -208,7 +210,7 @@ export async function setOverlayCache(
             const retryStore = retryTransaction.objectStore(STORE_NAME);
             const retryRequest = retryStore.put(entry);
             retryRequest.onerror = () => {
-              console.warn('[OverlayCache] Failed to cache after cleanup:', retryRequest.error);
+              debugInitialization.warn('[OverlayCache] Failed to cache after cleanup:', retryRequest.error);
               resolve();
             };
             retryRequest.onsuccess = () => resolve();
@@ -216,14 +218,14 @@ export async function setOverlayCache(
             resolve();
           }
         } else {
-          console.warn('[OverlayCache] Error setting cache:', error);
+          debugInitialization.warn('[OverlayCache] Error setting cache:', error);
           resolve();
         }
       };
       request.onsuccess = () => resolve();
     });
   } catch (error) {
-    console.warn('[OverlayCache] Error setting cache:', error);
+    debugInitialization.warn('[OverlayCache] Error setting cache:', error);
   }
 }
 
@@ -252,7 +254,7 @@ export async function invalidateMapCache(mapHash: string): Promise<void> {
       };
     });
   } catch (error) {
-    console.warn('[OverlayCache] Error invalidating cache:', error);
+    debugInitialization.warn('[OverlayCache] Error invalidating cache:', error);
   }
 }
 
@@ -272,7 +274,7 @@ export async function clearAllOverlayCache(): Promise<void> {
       request.onsuccess = () => resolve();
     });
   } catch (error) {
-    console.warn('[OverlayCache] Error clearing cache:', error);
+    debugInitialization.warn('[OverlayCache] Error clearing cache:', error);
   }
 }
 
@@ -302,6 +304,6 @@ export async function cleanupOldCacheEntries(): Promise<void> {
       };
     });
   } catch (error) {
-    console.warn('[OverlayCache] Error cleaning up cache:', error);
+    debugInitialization.warn('[OverlayCache] Error cleaning up cache:', error);
   }
 }

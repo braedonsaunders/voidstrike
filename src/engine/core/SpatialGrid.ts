@@ -19,6 +19,7 @@
  */
 
 import { getEntityIndex } from '../ecs/EntityId';
+import { debugInitialization } from '@/utils/debugLogger';
 
 /** Unit state enum for inline storage - must match Unit component states */
 export const enum SpatialUnitState {
@@ -365,7 +366,7 @@ export class SpatialGrid {
     const idx = getEntityIndex(id);
 
     if (idx >= this.maxTotalEntities) {
-      console.warn(`SpatialGrid: Entity index ${idx} exceeds max ${this.maxTotalEntities}`);
+      debugInitialization.warn(`SpatialGrid: Entity index ${idx} exceeds max ${this.maxTotalEntities}`);
       return;
     }
 

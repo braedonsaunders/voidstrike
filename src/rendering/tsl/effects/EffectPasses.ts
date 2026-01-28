@@ -685,7 +685,7 @@ export function createFogOfWarPass(
 ): FogOfWarPassResult | null {
   // Guard against undefined depth node which causes shader compilation errors
   if (!depthNode) {
-    console.warn('[FogOfWar] Cannot create fog of war pass: depth node is undefined');
+    debugPostProcessing.warn('[FogOfWar] Cannot create fog of war pass: depth node is undefined');
     return null;
   }
   // ============================================

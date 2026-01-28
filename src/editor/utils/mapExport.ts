@@ -7,6 +7,7 @@
 import type { MapData } from '@/data/maps/MapTypes';
 import type { MapJson } from '@/data/maps/schema/MapJsonSchema';
 import { mapDataToJson } from '@/data/maps/serialization/serialize';
+import { debugInitialization } from '@/utils/debugLogger';
 
 /**
  * Export MapData to JSON string
@@ -45,7 +46,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
       document.body.removeChild(textarea);
       return true;
     } catch {
-      console.error('Failed to copy to clipboard:', err);
+      debugInitialization.error('Failed to copy to clipboard:', err);
       return false;
     }
   }

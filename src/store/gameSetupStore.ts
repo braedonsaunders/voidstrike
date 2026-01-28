@@ -200,7 +200,7 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
         // Fire-and-forget async storage - the state is set synchronously below
         setLargeData('voidstrike_editor_map_data', mapData).then(result => {
           if (!result.success) {
-            console.warn('[gameSetupStore] Failed to persist editor map data:', result.message);
+            debugInitialization.warn('[gameSetupStore] Failed to persist editor map data:', result.message);
           }
         });
       } else {

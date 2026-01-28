@@ -79,7 +79,7 @@ export class AIBuildOrderExecutor {
     // Check supply condition (BuildOrderStep uses 'supply' property)
     if (step.supply !== undefined && ai.supply < step.supply) {
       if (shouldLog) {
-        console.log(`[AIBuildOrder] ${ai.playerId}: Waiting for supply ${ai.supply}/${step.supply} for step ${ai.buildOrderIndex}: ${step.type} ${step.id}`);
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for supply ${ai.supply}/${step.supply} for step ${ai.buildOrderIndex}: ${step.type} ${step.id}`);
       }
       return;
     }
@@ -92,7 +92,7 @@ export class AIBuildOrderExecutor {
         for (const reqBuildingId of buildingDef.requirements) {
           if (!this.hasCompleteBuildingOfType(ai, reqBuildingId)) {
             if (shouldLog) {
-              console.log(`[AIBuildOrder] ${ai.playerId}: Waiting for requirement ${reqBuildingId} for building ${step.id}`);
+              debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for requirement ${reqBuildingId} for building ${step.id}`);
             }
             return;
           }
@@ -105,7 +105,7 @@ export class AIBuildOrderExecutor {
       if (!this.hasProductionBuildingForUnit(ai, step.id)) {
         // No production building yet - wait, don't count as failure
         if (shouldLog) {
-          console.log(`[AIBuildOrder] ${ai.playerId}: No production building for ${step.id}, waiting...`);
+          debugAI.log(`[AIBuildOrder] ${ai.playerId}: No production building for ${step.id}, waiting...`);
         }
         return;
       }
@@ -118,15 +118,15 @@ export class AIBuildOrderExecutor {
       ai.buildOrderIndex++;
       ai.buildOrderFailureCount = 0;
       // Always log successful steps
-      console.log(`[AIBuildOrder] ${ai.playerId}: Build order step ${ai.buildOrderIndex}/${ai.buildOrder.length} complete: ${step.type} ${step.id || ''}`);
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: Build order step ${ai.buildOrderIndex}/${ai.buildOrder.length} complete: ${step.type} ${step.id || ''}`);
     } else {
       ai.buildOrderFailureCount++;
       if (shouldLog) {
-        console.log(`[AIBuildOrder] ${ai.playerId}: Step ${ai.buildOrderIndex} failed (${ai.buildOrderFailureCount}/10): ${step.type} ${step.id}, minerals=${Math.floor(ai.minerals)}`);
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: Step ${ai.buildOrderIndex} failed (${ai.buildOrderFailureCount}/10): ${step.type} ${step.id}, minerals=${Math.floor(ai.minerals)}`);
       }
       if (ai.buildOrderFailureCount > 10) {
         // Skip problematic step after too many failures
-        console.warn(`[AIBuildOrder] ${ai.playerId}: Skipping stuck build order step: ${step.type} ${step.id || ''}`);
+        debugAI.warn(`[AIBuildOrder] ${ai.playerId}: Skipping stuck build order step: ${step.type} ${step.id || ''}`);
         ai.buildOrderIndex++;
         ai.buildOrderFailureCount = 0;
       }
@@ -143,7 +143,7 @@ export class AIBuildOrderExecutor {
 
     // Debug: log what we're looking for
     if (shouldLog && buildings.length === 0) {
-      console.warn(`[AIBuildOrder] ${ai.playerId}: No cached buildings found for production check`);
+      debugAI.warn(`[AIBuildOrder] ${ai.playerId}: No cached buildings found for production check`);
     }
 
     for (const entity of buildings) {
@@ -154,20 +154,20 @@ export class AIBuildOrderExecutor {
       if (!selectable || !building || !health) continue;
       if (selectable.playerId !== ai.playerId) {
         if (shouldLog) {
-          console.log(`[AIBuildOrder] Building ${entity.id} (${building.buildingId}) belongs to ${selectable.playerId}, not ${ai.playerId}`);
+          debugAI.log(`[AIBuildOrder] Building ${entity.id} (${building.buildingId}) belongs to ${selectable.playerId}, not ${ai.playerId}`);
         }
         continue;
       }
       if (health.isDead()) continue;
       if (!building.isComplete()) {
         if (shouldLog) {
-          console.log(`[AIBuildOrder] Building ${entity.id} (${building.buildingId}) not complete: state=${building.state}, progress=${building.buildProgress}`);
+          debugAI.log(`[AIBuildOrder] Building ${entity.id} (${building.buildingId}) not complete: state=${building.state}, progress=${building.buildProgress}`);
         }
         continue;
       }
       if (!building.canProduce.includes(unitType)) {
         if (shouldLog) {
-          console.log(`[AIBuildOrder] Building ${entity.id} (${building.buildingId}) can't produce ${unitType}, canProduce=[${building.canProduce.join(',')}]`);
+          debugAI.log(`[AIBuildOrder] Building ${entity.id} (${building.buildingId}) can't produce ${unitType}, canProduce=[${building.canProduce.join(',')}]`);
         }
         continue;
       }
@@ -176,7 +176,7 @@ export class AIBuildOrderExecutor {
     }
 
     if (shouldLog) {
-      console.warn(`[AIBuildOrder] ${ai.playerId}: No production building found for ${unitType}. Total buildings checked: ${buildings.length}`);
+      debugAI.warn(`[AIBuildOrder] ${ai.playerId}: No production building found for ${unitType}. Total buildings checked: ${buildings.length}`);
     }
     return false;
   }
@@ -319,13 +319,13 @@ export class AIBuildOrderExecutor {
     const shouldLog = currentTick % 100 === 0;
 
     if (!buildingDef) {
-      console.warn(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding failed - unknown building type: ${buildingType}`);
+      debugAI.warn(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding failed - unknown building type: ${buildingType}`);
       return false;
     }
 
     if (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost) {
       if (shouldLog) {
-        console.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - insufficient resources for ${buildingType} (need ${buildingDef.mineralCost}M/${buildingDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - insufficient resources for ${buildingType} (need ${buildingDef.mineralCost}M/${buildingDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
       }
       return false;
     }
@@ -339,7 +339,7 @@ export class AIBuildOrderExecutor {
         // Check if we have the building and it's complete
         if (requiredCount === 0 || !this.hasCompleteBuildingOfType(ai, reqBuildingId)) {
           if (shouldLog) {
-            console.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - ${buildingType} requires completed ${reqBuildingId}`);
+            debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - ${buildingType} requires completed ${reqBuildingId}`);
           }
           return false;
         }
@@ -349,7 +349,7 @@ export class AIBuildOrderExecutor {
     const basePos = this.coordinator.findAIBase(ai);
     if (!basePos) {
       // This is a critical error - AI has no base
-      console.error(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding CRITICAL - cannot find AI base!`);
+      debugAI.error(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding CRITICAL - cannot find AI base!`);
       return false;
     }
 
@@ -357,7 +357,7 @@ export class AIBuildOrderExecutor {
     const workerId = economyManager.findAvailableWorker(ai.playerId);
     if (workerId === null) {
       if (shouldLog) {
-        console.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - no available worker for ${buildingType}`);
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - no available worker for ${buildingType}`);
       }
       return false;
     }
@@ -369,7 +369,7 @@ export class AIBuildOrderExecutor {
       buildPos = economyManager.findAvailableVespeneGeyser(ai, basePos);
       if (!buildPos) {
         if (shouldLog) {
-          console.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - no available vespene geyser near base`);
+          debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - no available vespene geyser near base`);
         }
         return false;
       }
@@ -377,7 +377,7 @@ export class AIBuildOrderExecutor {
       buildPos = this.findBuildingSpot(ai.playerId, basePos, buildingDef.width, buildingDef.height, workerId);
       if (!buildPos) {
         if (shouldLog) {
-          console.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - no valid building spot for ${buildingType}`);
+          debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - no valid building spot for ${buildingType}`);
         }
         return false;
       }
@@ -394,7 +394,7 @@ export class AIBuildOrderExecutor {
     });
 
     // Always log successful building placement
-    console.log(`[AIBuildOrder] ${ai.playerId}: Placed ${buildingType} at (${buildPos.x.toFixed(1)}, ${buildPos.y.toFixed(1)}) with worker ${workerId}`);
+    debugAI.log(`[AIBuildOrder] ${ai.playerId}: Placed ${buildingType} at (${buildPos.x.toFixed(1)}, ${buildPos.y.toFixed(1)}) with worker ${workerId}`);
 
     return true;
   }
@@ -501,8 +501,7 @@ export class AIBuildOrderExecutor {
   public tryTrainUnit(ai: AIPlayer, unitType: string): boolean {
     const unitDef = UNIT_DEFINITIONS[unitType];
     if (!unitDef) {
-      // Use console for worker compatibility - this is a critical error
-      console.warn(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit failed - unknown unit type: ${unitType}`);
+      debugAI.warn(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit failed - unknown unit type: ${unitType}`);
       return false;
     }
 
@@ -511,13 +510,13 @@ export class AIBuildOrderExecutor {
 
     if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) {
       if (shouldLog) {
-        console.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit - insufficient resources for ${unitType} (need ${unitDef.mineralCost}M/${unitDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit - insufficient resources for ${unitType} (need ${unitDef.mineralCost}M/${unitDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
       }
       return false;
     }
     if (ai.supply + unitDef.supplyCost > ai.maxSupply) {
       if (shouldLog) {
-        console.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit - supply blocked for ${unitType} (${ai.supply}+${unitDef.supplyCost} > ${ai.maxSupply})`);
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit - supply blocked for ${unitType} (${ai.supply}+${unitDef.supplyCost} > ${ai.maxSupply})`);
       }
       return false;
     }
@@ -549,15 +548,15 @@ export class AIBuildOrderExecutor {
       building.addToProductionQueue('unit', unitType, unitDef.buildTime);
 
       // Log successful unit queue
-      console.log(`[AIBuildOrder] ${ai.playerId}: Queued ${unitType} at ${building.buildingId} (minerals: ${Math.floor(ai.minerals)})`);
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: Queued ${unitType} at ${building.buildingId} (minerals: ${Math.floor(ai.minerals)})`);
       return true;
     }
 
     if (shouldLog) {
       if (!foundProducer) {
-        console.warn(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit failed - no production building for ${unitType}. Buildings checked: ${buildings.length}`);
+        debugAI.warn(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit failed - no production building for ${unitType}. Buildings checked: ${buildings.length}`);
       } else {
-        console.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit - all ${unitType} producers busy or missing tech lab`);
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit - all ${unitType} producers busy or missing tech lab`);
       }
     }
     return false;

@@ -123,7 +123,7 @@ export class AIWorkerManager {
 
       this.worker.onmessage = this.handleWorkerMessage.bind(this);
       this.worker.onerror = (error) => {
-        console.error('[AIWorkerManager] Worker error:', error);
+        debugAI.error('[AIWorkerManager] Worker error:', error);
         this.workerReady = false;
       };
 

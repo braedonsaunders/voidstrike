@@ -18,7 +18,7 @@ import * as THREE from 'three';
 import { WaterMesh as ThreeWaterMesh } from 'three/addons/objects/WaterMesh.js';
 import type { MapData, MapCell } from '@/data/maps/MapTypes';
 import type { BiomeConfig } from './Biomes';
-import { debugAssets } from '@/utils/debugLogger';
+import { debugAssets, debugMesh } from '@/utils/debugLogger';
 
 // Height scale factor (matches Terrain.ts)
 const HEIGHT_SCALE = 0.04;
@@ -83,7 +83,7 @@ function loadWaterNormalsTexture(): void {
     },
     undefined,
     (error) => {
-      console.error('Failed to load water normals texture:', error);
+      debugMesh.error('Failed to load water normals texture:', error);
     }
   );
 }
@@ -104,7 +104,7 @@ function getWaterNormals(): THREE.Texture {
 
   // Generate a proper fallback with wave patterns
   // This will only be used if texture hasn't loaded yet
-  console.warn('Water normals texture not loaded yet, using generated fallback');
+  debugMesh.warn('Water normals texture not loaded yet, using generated fallback');
   return generateFallbackNormals();
 }
 

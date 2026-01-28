@@ -303,7 +303,7 @@ export class PeerRelayNetwork {
           via: message.via,
         });
       } catch (e) {
-        console.error('[PeerRelay] Failed to decrypt relay data:', e);
+        debugNetworking.error('[PeerRelay] Failed to decrypt relay data:', e);
       }
     } else {
       // We're a relay - forward to next hop

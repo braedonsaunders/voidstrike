@@ -92,7 +92,7 @@ export class World {
 
     // Validate generation matches (catch stale references)
     if (entity.id !== id) {
-      console.warn(`World.destroyEntity: Stale EntityId ${id}, current entity has id ${entity.id}`);
+      debugInitialization.warn(`World.destroyEntity: Stale EntityId ${id}, current entity has id ${entity.id}`);
       return;
     }
 

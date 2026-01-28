@@ -6,6 +6,7 @@
 
 import { useRef, useState, useMemo } from 'react';
 import type { EditorConfig, EditorMapData } from '../config/EditorConfig';
+import { debugInitialization } from '@/utils/debugLogger';
 
 export interface MapListItem {
   id: string;
@@ -82,7 +83,7 @@ export function EditorHeader({
         const json = JSON.parse(event.target?.result as string);
         onImport(json);
       } catch (err) {
-        console.error('Failed to parse map JSON:', err);
+        debugInitialization.error('Failed to parse map JSON:', err);
         alert('Invalid map file. Please select a valid JSON map file.');
       }
     };

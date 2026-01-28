@@ -6,6 +6,7 @@ import { useGameSetupStore, getPlayerColor, getLocalPlayerId, isSpectatorMode } 
 import { Game } from '@/engine/core/Game';
 import { getRenderStateAdapter, getWorkerBridge } from '@/engine/workers';
 import { clamp } from '@/utils/math';
+import { debugInitialization } from '@/utils/debugLogger';
 
 const MINIMAP_SIZE = 192;
 
@@ -163,7 +164,7 @@ export function Minimap() {
       const checkCount = (window as any)[adapterCheckKey];
       if (checkCount % 60 === 1) {
         const counts = worldAdapter.getEntityCounts();
-        console.log('[Minimap] Adapter state:', {
+        debugInitialization.log('[Minimap] Adapter state:', {
           isReady: worldAdapter.isReady(),
           updateCount: worldAdapter.getUpdateCount(),
           ...counts,
