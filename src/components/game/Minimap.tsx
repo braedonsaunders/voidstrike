@@ -154,29 +154,24 @@ export function Minimap() {
       }
 
       // Get entities from render state adapter (worker mode)
-      const worldAdapter = getRenderStateAdapter();
+      // CRITICAL: Access globalThis directly to bypass code-split bundle issues
+      // Each bundle may have its own copy of getRenderStateAdapter() with stale code
+      const ADAPTER_KEY = '__voidstrike_RenderStateWorldAdapter__';
+      const worldAdapter = (globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter();
 
-      // Debug: log adapter state and identity to trace singleton issues
+      // Debug: log adapter state
       const logKey = '_minimapDebugLogged';
       const adapterCheckKey = '_minimapAdapterCheckCount';
       if (!(window as any)[logKey]) {
-        // Count checks to avoid spam
         (window as any)[adapterCheckKey] = ((window as any)[adapterCheckKey] ?? 0) + 1;
         const checkCount = (window as any)[adapterCheckKey];
-
-        // Log every 30 frames (about 2 seconds at 15fps) until entities are found
         if (checkCount % 30 === 1) {
-          const counts = worldAdapter.getEntityCounts();
-          // Check what's on globalThis
-          const globalKey = '__voidstrike_RenderStateWorldAdapter__';
-          const globalInstance = (globalThis as any)[globalKey];
-          console.log('[Minimap] Checking adapter state:', {
-            isReady: worldAdapter.isReady(),
-            updateCount: worldAdapter.getUpdateCount(),
+          const counts = worldAdapter?.getEntityCounts?.() ?? { units: 0, buildings: 0, resources: 0 };
+          console.log('[Minimap] Adapter state:', {
+            isReady: worldAdapter?.isReady?.() ?? false,
+            updateCount: worldAdapter?.getUpdateCount?.() ?? 0,
             ...counts,
-            globalThisHasKey: !!globalInstance,
-            globalThisUpdateCount: globalInstance?.getUpdateCount?.() ?? 'N/A',
-            sameInstance: worldAdapter === globalInstance,
+            fromGlobalThis: !!(globalThis as any)[ADAPTER_KEY],
           });
         }
       }
@@ -368,7 +363,9 @@ export function Minimap() {
     if (selectedIds.length === 0) return;
 
     // Check if any selected are units (not buildings) using render state adapter
-    const worldAdapter = getRenderStateAdapter();
+    // Access globalThis directly to bypass code-split bundle issues
+    const ADAPTER_KEY = '__voidstrike_RenderStateWorldAdapter__';
+    const worldAdapter = (globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter();
     const hasUnits = selectedIds.some((id) => {
       const entity = worldAdapter.getEntity(id);
       return entity?.get('Unit') !== undefined;
@@ -455,7 +452,9 @@ export function Minimap() {
     const selectedIds = useGameStore.getState().selectedUnits;
     if (selectedIds.length > 0) {
       // Check if any selected are units (not buildings) using render state adapter
-      const worldAdapter = getRenderStateAdapter();
+      // Access globalThis directly to bypass code-split bundle issues
+      const ADAPTER_KEY = '__voidstrike_RenderStateWorldAdapter__';
+      const worldAdapter = (globalThis as any)[ADAPTER_KEY] ?? getRenderStateAdapter();
       const hasUnits = selectedIds.some((id) => {
         const entity = worldAdapter.getEntity(id);
         return entity?.get('Unit') !== undefined;
