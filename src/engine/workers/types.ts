@@ -62,6 +62,7 @@ export interface UnitRenderState {
   carryingMinerals: number;
   carryingVespene: number;
   isMining: boolean;
+  gatherTargetId: number | null;
   // Transform mode
   currentMode: string;
   transformProgress: number;

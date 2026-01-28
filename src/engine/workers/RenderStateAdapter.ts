@@ -117,6 +117,7 @@ class UnitAdapter {
   public isRepairing: boolean;
   public carryingMinerals: number;
   public carryingVespene: number;
+  public gatherTargetId: number | null;
 
   constructor(data: UnitRenderState) {
     this.unitId = data.unitId;
@@ -131,6 +132,7 @@ class UnitAdapter {
     this.isRepairing = data.isRepairing;
     this.carryingMinerals = data.carryingMinerals;
     this.carryingVespene = data.carryingVespene;
+    this.gatherTargetId = data.gatherTargetId;
   }
 
   public update(data: UnitRenderState): void {
@@ -146,6 +148,7 @@ class UnitAdapter {
     this.isRepairing = data.isRepairing;
     this.carryingMinerals = data.carryingMinerals;
     this.carryingVespene = data.carryingVespene;
+    this.gatherTargetId = data.gatherTargetId;
   }
 
   public isSelected(): boolean {

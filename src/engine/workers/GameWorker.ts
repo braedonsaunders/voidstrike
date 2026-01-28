@@ -931,6 +931,7 @@ export class WorkerGame {
         carryingMinerals: unit.carryingMinerals,
         carryingVespene: unit.carryingVespene,
         isMining: unit.isMining,
+        gatherTargetId: unit.gatherTargetId,
         currentMode: unit.currentMode,
         transformProgress: unit.transformProgress,
         isRepairing: unit.isRepairing,
