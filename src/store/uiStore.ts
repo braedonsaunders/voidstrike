@@ -246,7 +246,7 @@ const SETTINGS_VERSION = 1;
 const AUDIO_SETTINGS_VERSION = 1;
 
 function saveGraphicsSettings(settings: GraphicsSettings, preset: GraphicsPresetName): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   try {
     const state: SavedGraphicsState = {
       settings,
@@ -260,7 +260,7 @@ function saveGraphicsSettings(settings: GraphicsSettings, preset: GraphicsPreset
 }
 
 function loadGraphicsSettings(): { settings: Partial<GraphicsSettings>; preset: GraphicsPresetName } | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return null;
   try {
     const saved = localStorage.getItem(GRAPHICS_SETTINGS_KEY);
     if (!saved) return null;
@@ -285,7 +285,7 @@ function loadGraphicsSettings(): { settings: Partial<GraphicsSettings>; preset: 
 // ============================================
 
 function saveAudioSettings(state: SavedAudioState): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
   try {
     localStorage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(state));
   } catch (e) {
@@ -294,7 +294,7 @@ function saveAudioSettings(state: SavedAudioState): void {
 }
 
 function loadAudioSettings(): SavedAudioState | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') return null;
   try {
     const saved = localStorage.getItem(AUDIO_SETTINGS_KEY);
     if (!saved) return null;
@@ -324,7 +324,7 @@ const savedAudioSettings = loadAudioSettings();
 const DEBUG_SETTINGS_KEY = 'voidstrike_debug_settings';
 
 function saveDebugSettings(settings: DebugSettings): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') return;
   try {
     sessionStorage.setItem(DEBUG_SETTINGS_KEY, JSON.stringify(settings));
   } catch {
@@ -333,7 +333,7 @@ function saveDebugSettings(settings: DebugSettings): void {
 }
 
 function loadDebugSettings(): DebugSettings | null {
-  if (typeof window === 'undefined') return null;
+  if (typeof window === 'undefined' || typeof sessionStorage === 'undefined') return null;
   try {
     const saved = sessionStorage.getItem(DEBUG_SETTINGS_KEY);
     if (!saved) return null;
