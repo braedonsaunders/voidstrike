@@ -388,7 +388,7 @@ export function WebGPUGameCanvas() {
 
         // Initialize audio system with camera and biome, then start music
         if (eventHandlerRef.current) {
-          const camera = refs.camera.current ?? undefined;
+          const camera = refs.camera.current?.camera ?? undefined;
           const biome = CURRENT_MAP.biome;
           await eventHandlerRef.current.initializeAudio(camera, biome);
           await eventHandlerRef.current.startGameplayMusic();
