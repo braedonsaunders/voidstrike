@@ -1103,11 +1103,6 @@ export class WorkerGame {
     }
   }
 
-  public registerAI(playerId: string, difficulty: AIDifficulty): void {
-    this.eventBus.emit('ai:registered', { playerId, difficulty });
-    this.playerResources.set(playerId, { minerals: 50, vespene: 0, supply: 0, maxSupply: 0 });
-  }
-
   /**
    * Spawn initial entities based on map data.
    * Creates resources and player bases for all players.
@@ -1177,17 +1172,15 @@ export class WorkerGame {
       // Register AI players with the AI system
       if (slot.type === 'ai' && this.config.aiEnabled) {
         if (DEBUG) console.log(`[GameWorker] Registering AI for ${slot.id} (${slot.faction}, ${slot.aiDifficulty})`);
-        this.registerAI(slot.id, slot.aiDifficulty ?? 'medium');
 
-        // Also notify the EnhancedAISystem about this AI player
+        // Set up initial resources for AI player
+        this.playerResources.set(slot.id, { minerals: 50, vespene: 0, supply: 0, maxSupply: 0 });
+
+        // Register with EnhancedAISystem (which also emits ai:registered event
+        // that AIMicroSystem listens to for unit micro behavior)
         const enhancedAI = this.world.getSystem(EnhancedAISystem);
         if (enhancedAI) {
           enhancedAI.registerAI(slot.id, slot.faction, slot.aiDifficulty ?? 'medium');
-        }
-
-        // Register with AIMicroSystem for unit micro behavior
-        if (this.aiMicroSystem) {
-          this.aiMicroSystem.registerAIPlayer(slot.id);
         }
       }
     }
@@ -1389,11 +1382,6 @@ if (typeof self !== 'undefined') {
 
       case 'setDecorations': {
         game?.setDecorationCollisions(message.collisions);
-        break;
-      }
-
-      case 'registerAI': {
-        game?.registerAI(message.playerId, message.difficulty);
         break;
       }
 
