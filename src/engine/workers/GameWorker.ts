@@ -1108,13 +1108,12 @@ export class WorkerGame {
    * Creates resources and player bases for all players.
    */
   public spawnInitialEntities(mapData: SpawnMapData): void {
-    if (DEBUG) {
-      console.log('[GameWorker] spawnInitialEntities called:', {
-        resourceCount: mapData.resources?.length ?? 0,
-        spawnCount: mapData.spawns?.length ?? 0,
-        playerSlotCount: mapData.playerSlots?.length ?? 0,
-      });
-    }
+    // Always log spawn calls (helps debug duplicate registration issues)
+    console.log('[GameWorker] spawnInitialEntities called:', {
+      resourceCount: mapData.resources?.length ?? 0,
+      spawnCount: mapData.spawns?.length ?? 0,
+      playerSlotCount: mapData.playerSlots?.length ?? 0,
+    });
 
     // Spawn resources
     if (mapData.resources) {
@@ -1386,6 +1385,7 @@ if (typeof self !== 'undefined') {
       }
 
       case 'spawnEntities': {
+        console.log('[GameWorker] Received spawnEntities message');
         game?.spawnInitialEntities(message.mapData);
         break;
       }
