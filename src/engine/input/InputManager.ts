@@ -62,7 +62,7 @@ export class InputManager {
   private game: Game | null = null;
   private worldProvider: IWorldProvider | null = null;
   private eventBus: EventBus | null = null;
-  private getLocalPlayerIdFn: (() => number | null) | null = null;
+  private getLocalPlayerIdFn: (() => string | null) | null = null;
 
   // Input context
   private currentContext: InputContext = 'gameplay';
@@ -78,8 +78,8 @@ export class InputManager {
   // Selection state
   private selectionState: SelectionState = {
     isSelecting: false,
-    start: { x: 0, y: 0 },
-    end: { x: 0, y: 0 },
+    selectionStart: { x: 0, y: 0 },
+    selectionEnd: { x: 0, y: 0 },
   };
 
   // Double-click detection
@@ -163,7 +163,7 @@ export class InputManager {
       game?: Game | null;
       worldProvider?: IWorldProvider | null;
       eventBus?: EventBus | null;
-      getLocalPlayerId?: () => number | null;
+      getLocalPlayerId?: () => string | null;
     } = {}
   ): void {
     if (this.initialized) {
@@ -210,7 +210,7 @@ export class InputManager {
     game?: Game | null;
     worldProvider?: IWorldProvider | null;
     eventBus?: EventBus | null;
-    getLocalPlayerId?: () => number | null;
+    getLocalPlayerId?: () => string | null;
   }): void {
     if (options.camera !== undefined) this.camera = options.camera;
     if (options.game !== undefined) this.game = options.game;
@@ -386,8 +386,8 @@ export class InputManager {
   public startSelection(x: number, y: number): void {
     this.selectionState = {
       isSelecting: true,
-      start: { x, y },
-      end: { x, y },
+      selectionStart: { x, y },
+      selectionEnd: { x, y },
     };
     this.notifySelectionSubscribers();
   }
@@ -397,7 +397,7 @@ export class InputManager {
    */
   public updateSelection(x: number, y: number): void {
     if (!this.selectionState.isSelecting) return;
-    this.selectionState.end = { x, y };
+    this.selectionState.selectionEnd = { x, y };
     this.notifySelectionSubscribers();
   }
 
@@ -408,8 +408,8 @@ export class InputManager {
     const finalState = { ...this.selectionState };
     this.selectionState = {
       isSelecting: false,
-      start: { x: 0, y: 0 },
-      end: { x: 0, y: 0 },
+      selectionStart: { x: 0, y: 0 },
+      selectionEnd: { x: 0, y: 0 },
     };
     this.notifySelectionSubscribers();
     return finalState;
@@ -421,8 +421,8 @@ export class InputManager {
   public cancelSelection(): void {
     this.selectionState = {
       isSelecting: false,
-      start: { x: 0, y: 0 },
-      end: { x: 0, y: 0 },
+      selectionStart: { x: 0, y: 0 },
+      selectionEnd: { x: 0, y: 0 },
     };
     this.notifySelectionSubscribers();
   }

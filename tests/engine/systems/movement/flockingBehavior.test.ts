@@ -127,7 +127,7 @@ function createOutputVector(): PooledVector2 {
 }
 
 /** Create spatial entity data from unit/transform */
-function createSpatialData(id: number, transform: Transform, unit: Unit): SpatialEntityData {
+function createSpatialData(id: number, transform: Transform, unit: Unit, playerId: number = 1): SpatialEntityData {
   return {
     id,
     x: transform.x,
@@ -135,7 +135,7 @@ function createSpatialData(id: number, transform: Transform, unit: Unit): Spatia
     radius: unit.collisionRadius,
     isFlying: unit.isFlying ?? false,
     state: stateToSpatialState(unit.state),
-    playerId: unit.playerId ?? 0,
+    playerId,
     collisionRadius: unit.collisionRadius,
     isWorker: unit.isWorker ?? false,
     maxSpeed: unit.speed,

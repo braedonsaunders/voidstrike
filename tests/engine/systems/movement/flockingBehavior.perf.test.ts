@@ -65,13 +65,13 @@ function createTestUnit(id: number, x: number, y: number, state: UnitState = 'id
   const transform = new Transform(x, y, 0, 0);
   const velocity = new Velocity(state === 'moving' ? 1 : 0, 0, 0);
 
+  // Minimal Unit mock with only properties needed for flocking tests
   const unit = {
     type: 'Unit' as const,
     entityId: id,
     unitId: 'test_unit',
     name: 'Test Unit',
     state,
-    playerId: 1,
     speed: 3.0,
     attackRange: 5,
     attackDamage: 10,
@@ -88,7 +88,7 @@ function createTestUnit(id: number, x: number, y: number, state: UnitState = 'id
     canAttackAir: false,
     isBiological: true,
     isMechanical: false,
-  } as Unit;
+  } as unknown as Unit;
 
   const spatialData: SpatialEntityData = {
     id,

@@ -71,8 +71,8 @@ export interface InputState {
  */
 export interface SelectionState {
   isSelecting: boolean;
-  start: { x: number; y: number };
-  end: { x: number; y: number };
+  selectionStart: { x: number; y: number };
+  selectionEnd: { x: number; y: number };
 }
 
 // =============================================================================
@@ -130,7 +130,7 @@ export interface InputHandlerDependencies {
   readonly world: IWorldProvider | null;
   readonly eventBus: EventBus | null;
   readonly camera: RTSCamera | null;
-  readonly getLocalPlayerId: () => number | null;
+  readonly getLocalPlayerId: () => string | null;
 }
 
 /**

@@ -175,16 +175,16 @@ export class GameplayInputHandler implements InputHandler {
 
       if (!eventBus) return true;
 
-      const screenDx = Math.abs(finalState.end.x - finalState.start.x);
-      const screenDy = Math.abs(finalState.end.y - finalState.start.y);
+      const screenDx = Math.abs(finalState.selectionEnd.x - finalState.selectionStart.x);
+      const screenDy = Math.abs(finalState.selectionEnd.y - finalState.selectionStart.y);
 
       if (screenDx > MIN_BOX_DRAG || screenDy > MIN_BOX_DRAG) {
         // Box selection
         eventBus.emit('selection:boxScreen', {
-          screenStartX: finalState.start.x,
-          screenStartY: finalState.start.y,
-          screenEndX: finalState.end.x,
-          screenEndY: finalState.end.y,
+          screenStartX: finalState.selectionStart.x,
+          screenStartY: finalState.selectionStart.y,
+          screenEndX: finalState.selectionEnd.x,
+          screenEndY: finalState.selectionEnd.y,
           additive: state.modifiers.shift,
           playerId: getLocalPlayerId(),
         });
@@ -557,14 +557,13 @@ export class GameplayInputHandler implements InputHandler {
   }
 
   private handleAttackRangeOverlay(): boolean {
-    // This requires overlay manager reference - emit event instead
-    useUIStore.getState().toggleAttackRangeOverlay?.();
-    return true;
+    // TODO: Implement attack range overlay toggle when overlay system is available
+    return false;
   }
 
   private handleVisionRangeOverlay(): boolean {
-    useUIStore.getState().toggleVisionRangeOverlay?.();
-    return true;
+    // TODO: Implement vision range overlay toggle when overlay system is available
+    return false;
   }
 
   private handleControlGroup(

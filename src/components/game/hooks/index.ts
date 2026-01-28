@@ -7,5 +7,6 @@
 
 export { useWebGPURenderer, type WebGPURendererRefs, type UseWebGPURendererProps, type UseWebGPURendererReturn } from './useWebGPURenderer';
 export { useCameraControl, type UseCameraControlProps, type UseCameraControlReturn } from './useCameraControl';
-export { useGameInput, type UseGameInputProps, type SelectionState, type UseGameInputReturn } from './useGameInput';
+export { useGameInput, type UseGameInputProps, type UseGameInputReturn } from './useGameInput';
+export type { SelectionState } from '@/engine/input';
 export { usePostProcessing, type UsePostProcessingProps } from './usePostProcessing';

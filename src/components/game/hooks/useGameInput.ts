@@ -62,8 +62,8 @@ export interface UseGameInputReturn {
 // Default selection state for SSR or before initialization
 const defaultSelectionState: SelectionState = {
   isSelecting: false,
-  start: { x: 0, y: 0 },
-  end: { x: 0, y: 0 },
+  selectionStart: { x: 0, y: 0 },
+  selectionEnd: { x: 0, y: 0 },
 };
 
 // =============================================================================
