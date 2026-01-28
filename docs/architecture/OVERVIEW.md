@@ -552,6 +552,7 @@ voidstrike/
     │       ├── resourceSystem.test.ts
     │       └── visionSystem.test.ts
     └── utils/ # Utility functions
+        ├── debugLogger.test.ts
         ├── fixedPoint.test.ts
         ├── math.test.ts
         └── vectorPool.test.ts
