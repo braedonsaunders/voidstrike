@@ -82,6 +82,13 @@ export class InputManager {
     selectionEnd: { x: 0, y: 0 },
   };
 
+  // Cached snapshot for useSyncExternalStore (must return same reference if unchanged)
+  private selectionStateSnapshot: SelectionState = {
+    isSelecting: false,
+    selectionStart: { x: 0, y: 0 },
+    selectionEnd: { x: 0, y: 0 },
+  };
+
   // Double-click detection
   private lastClick: { time: number; x: number; y: number } | null = null;
 
@@ -362,9 +369,10 @@ export class InputManager {
 
   /**
    * Get the current selection state
+   * Returns a cached snapshot for useSyncExternalStore compatibility
    */
   public getSelectionState(): SelectionState {
-    return { ...this.selectionState };
+    return this.selectionStateSnapshot;
   }
 
   /**
@@ -428,7 +436,9 @@ export class InputManager {
   }
 
   private notifySelectionSubscribers(): void {
-    const state = this.getSelectionState();
+    // Update cached snapshot (creates new object reference for useSyncExternalStore)
+    this.selectionStateSnapshot = { ...this.selectionState };
+    const state = this.selectionStateSnapshot;
     for (const subscriber of this.selectionSubscribers) {
       subscriber(state);
     }
