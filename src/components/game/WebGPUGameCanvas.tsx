@@ -84,8 +84,6 @@ export function WebGPUGameCanvas() {
   const gameRef = useRef<Game | null>(null);
   const workerBridgeRef = useRef<WorkerBridge | null>(null);
   const eventHandlerRef = useRef<MainThreadEventHandler | null>(null);
-  // Use singleton pattern for render state adapter so UI components can access it
-  const renderStateAdapterRef = useRef<RenderStateWorldAdapter>(RenderStateWorldAdapter.getInstance());
 
   // Refs for hook consumption - these point to worker mode data sources
   const worldProviderRef = useRef<IWorldProvider | null>(null);
@@ -176,7 +174,7 @@ export function WebGPUGameCanvas() {
 
   // Game time getter - uses render state adapter (synced from worker)
   const getGameTime = useCallback(() => {
-    return renderStateAdapterRef.current.getGameTime();
+    return RenderStateWorldAdapter.getInstance().getGameTime();
   }, []);
 
   // Game finished checker - uses game state from worker
@@ -332,7 +330,8 @@ export function WebGPUGameCanvas() {
         workerBridgeRef.current = bridge;
 
         // Set up refs for hook consumption
-        worldProviderRef.current = renderStateAdapterRef.current;
+        // IMPORTANT: Use getInstance() to get fresh singleton after Strict Mode reset
+        worldProviderRef.current = RenderStateWorldAdapter.getInstance();
         eventBusRef.current = bridge.eventBus;
 
         // Create main thread event handler for audio/effects
@@ -591,7 +590,7 @@ export function WebGPUGameCanvas() {
     if (refs.placementPreview.current) {
       if (isLandingMode && landingBuildingId) {
         // Get building type from render state adapter
-        const building = renderStateAdapterRef.current.getEntity(landingBuildingId);
+        const building = RenderStateWorldAdapter.getInstance().getEntity(landingBuildingId);
         const buildingId = building?.get<{ buildingId: string }>('Building')?.buildingId;
 
         if (buildingId) {
