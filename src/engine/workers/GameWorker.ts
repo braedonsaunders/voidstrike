@@ -55,7 +55,7 @@ import { ChecksumSystem } from '../systems/ChecksumSystem';
 import type {
   MainToWorkerMessage,
   WorkerToMainMessage,
-  RenderState,
+  SerializedRenderState,
   GameEvent,
   UnitRenderState,
   BuildingRenderState,
@@ -864,7 +864,8 @@ class WorkerGame {
       this.hasLoggedFirstRenderState = true;
     }
 
-    const renderState: RenderState = {
+    // Serialize Maps to arrays for postMessage (Maps can't be serialized)
+    const serializedRenderState: SerializedRenderState = {
       tick: this.currentTick,
       gameTime: this.gameTime,
       gameState: this.state,
@@ -873,13 +874,13 @@ class WorkerGame {
       buildings,
       resources,
       projectiles,
-      visionGrids: new Map(), // Vision grids collected by VisionSystem
-      playerResources: new Map(this.playerResources),
+      visionGrids: [], // Vision grids collected by VisionSystem - TODO if needed
+      playerResources: Array.from(this.playerResources.entries()),
       selectedEntityIds: [...this.selectedEntityIds],
-      controlGroups: new Map(this.controlGroups),
+      controlGroups: Array.from(this.controlGroups.entries()),
     };
 
-    postMessage({ type: 'renderState', state: renderState } satisfies WorkerToMainMessage);
+    postMessage({ type: 'renderState', state: serializedRenderState } satisfies WorkerToMainMessage);
   }
 
   private collectUnitRenderState(): UnitRenderState[] {
