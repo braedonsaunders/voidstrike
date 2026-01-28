@@ -333,6 +333,9 @@ export class BuildingPlacementSystem extends System {
     attachTo?: number; // Parent building ID for addons
     parentBuildingId?: number; // Alternative name for parent (used by AI)
   }): void {
+    // Diagnostic: confirm event handler is being called
+    console.log(`[BuildingPlacement] Received building:place event: ${data.buildingType} at (${data.position?.x}, ${data.position?.y}) for ${data.playerId}`);
+
     const { buildingType, playerId = getLocalPlayerId() ?? 'player1' } = data;
     const definition = BUILDING_DEFINITIONS[buildingType];
     const isAddon = data.isAddon === true;
