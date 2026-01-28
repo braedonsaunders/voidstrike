@@ -409,7 +409,7 @@ export interface CommandQueueConfig {
  * processed in deterministic order.
  */
 export class CommandQueue {
-  private queue: Map<number, GameCommand[]> = new Map();
+  private commandMap: Map<number, GameCommand[]> = new Map();
   private readonly commandDelayTicks: number;
 
   constructor(config: CommandQueueConfig) {
@@ -419,19 +419,19 @@ export class CommandQueue {
   /**
    * Queue a command for execution at a specific tick
    */
-  queue(command: GameCommand): void {
+  enqueue(command: GameCommand): void {
     const tick = command.tick;
-    if (!this.queue.has(tick)) {
-      this.queue.set(tick, []);
+    if (!this.commandMap.has(tick)) {
+      this.commandMap.set(tick, []);
     }
-    this.queue.get(tick)!.push(command);
+    this.commandMap.get(tick)!.push(command);
   }
 
   /**
    * Get commands scheduled for a specific tick, sorted deterministically
    */
   getCommandsForTick(tick: number): GameCommand[] {
-    const commands = this.queue.get(tick);
+    const commands = this.commandMap.get(tick);
     if (!commands) return [];
 
     // Sort by player ID for deterministic ordering across all clients
@@ -453,7 +453,7 @@ export class CommandQueue {
    * Remove commands for a specific tick after processing
    */
   clearTick(tick: number): void {
-    this.queue.delete(tick);
+    this.commandMap.delete(tick);
   }
 
   /**
@@ -461,7 +461,7 @@ export class CommandQueue {
    */
   getStaleTicks(currentTick: number): number[] {
     const staleTicks: number[] = [];
-    for (const tick of this.queue.keys()) {
+    for (const tick of this.commandMap.keys()) {
       if (tick < currentTick) {
         staleTicks.push(tick);
       }
@@ -480,13 +480,13 @@ export class CommandQueue {
    * Clear all queued commands
    */
   clear(): void {
-    this.queue.clear();
+    this.commandMap.clear();
   }
 
   /**
    * Get the number of queued ticks
    */
   get size(): number {
-    return this.queue.size;
+    return this.commandMap.size;
   }
 }
