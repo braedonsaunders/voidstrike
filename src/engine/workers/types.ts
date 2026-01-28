@@ -424,59 +424,10 @@ export type WorkerToMainMessage =
   | { type: 'desync'; tick: number; localChecksum: string; remoteChecksum: string };
 
 // ============================================================================
-// GAME COMMAND - Commands sent from main thread to control game
+// GAME COMMAND - Re-export from shared module for consistency
 // ============================================================================
 
-export interface GameCommand {
-  tick: number;
-  playerId: string;
-  type:
-    | 'MOVE'
-    | 'ATTACK'
-    | 'ATTACK_MOVE'
-    | 'BUILD'
-    | 'TRAIN'
-    | 'ABILITY'
-    | 'STOP'
-    | 'HOLD'
-    | 'RESEARCH'
-    | 'PATROL'
-    | 'TRANSFORM'
-    | 'CLOAK'
-    | 'LOAD'
-    | 'UNLOAD'
-    | 'HEAL'
-    | 'REPAIR'
-    | 'DEMOLISH'
-    | 'LIFTOFF'
-    | 'LAND'
-    | 'RALLY'
-    | 'GATHER'
-    | 'CANCEL_PRODUCTION'
-    | 'CANCEL_RESEARCH'
-    | 'CANCEL_BUILDING'
-    | 'QUEUE_REORDER'
-    | 'SUPPLY_DEPOT_LOWER'
-    | 'SUPPLY_DEPOT_RAISE'
-    | 'SET_AUTOCAST'
-    | 'BUILD_WALL'
-    | 'ADDON_LIFT'
-    | 'ADDON_LAND'
-    | 'SUBMERGE';
-  entityIds: number[];
-  targetPosition?: { x: number; y: number };
-  targetEntityId?: number;
-  buildingType?: string;
-  unitType?: string;
-  abilityId?: string;
-  upgradeId?: string;
-  queueIndex?: number;
-  newQueueIndex?: number;
-  targetIndex?: number;
-  autocastEnabled?: boolean;
-  wallPoints?: Array<{ x: number; y: number }>;
-  shiftHeld?: boolean;
-}
+export type { GameCommand } from '../core/GameCommand';
 
 // ============================================================================
 // TYPED ARRAY HELPERS - For efficient serialization
