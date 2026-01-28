@@ -189,8 +189,17 @@ export class WorkerBridge {
   // Debug: track first render state message
   private hasLoggedFirstRenderState = false;
 
+  // Debug: count all messages received
+  private messageCount = 0;
+
   private handleWorkerMessage(event: MessageEvent<WorkerToMainMessage>): void {
     const message = event.data;
+    this.messageCount++;
+
+    // Debug: log every 100th message or first 5 messages
+    if (this.messageCount <= 5 || this.messageCount % 100 === 0) {
+      console.log(`[WorkerBridge] Message #${this.messageCount}: type=${message.type}`);
+    }
 
     switch (message.type) {
       case 'renderState':
