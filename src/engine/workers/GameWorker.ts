@@ -31,6 +31,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Projectile } from '../components/Projectile';
 import { Velocity } from '../components/Velocity';
+import { validateEntity } from '@/utils/EntityValidator';
 
 // Systems (worker-safe)
 import { SpawnSystem } from '../systems/SpawnSystem';
@@ -80,7 +81,7 @@ import { setWorkerDebugSettings } from '@/utils/debugLogger';
  * This is a stripped-down version of Game.ts that runs entirely in the worker
  * without any main-thread dependencies (no Three.js, no Zustand, no Web Audio).
  */
-class WorkerGame {
+export class WorkerGame {
   public world: World;
   public eventBus: EventBus;
   public config: GameConfig;
@@ -613,6 +614,172 @@ class WorkerGame {
     return this.terrainGrid[gridY][gridX];
   }
 
+  /**
+   * Check if a building position overlaps with decorations (rocks, trees).
+   */
+  public isPositionClearOfDecorations(centerX: number, centerY: number, width: number, height: number): boolean {
+    const halfW = width / 2 + 0.5; // Small buffer
+    const halfH = height / 2 + 0.5;
+
+    for (const deco of this.decorationCollisions) {
+      const dx = Math.abs(centerX - deco.x);
+      const dz = Math.abs(centerY - deco.z);
+
+      if (dx < halfW + deco.radius && dz < halfH + deco.radius) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Check if a building can be placed at the given position.
+   * Returns true if all tiles under the building are buildable ground at the same elevation.
+   */
+  public isValidTerrainForBuilding(centerX: number, centerY: number, width: number, height: number): boolean {
+    if (!this.terrainGrid) {
+      // No terrain data - allow placement (legacy behavior)
+      return true;
+    }
+
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+    let requiredElevation: number | null = null;
+
+    const firstRow = this.terrainGrid[0];
+    if (!firstRow) return false;
+
+    for (let dy = -Math.floor(halfHeight); dy < Math.ceil(halfHeight); dy++) {
+      for (let dx = -Math.floor(halfWidth); dx < Math.ceil(halfWidth); dx++) {
+        const tileX = Math.floor(centerX + dx);
+        const tileY = Math.floor(centerY + dy);
+
+        if (tileY < 0 || tileY >= this.terrainGrid.length ||
+            tileX < 0 || tileX >= firstRow.length) {
+          return false;
+        }
+
+        const cell = this.terrainGrid[tileY][tileX];
+
+        if (cell.terrain !== 'ground' && cell.terrain !== 'platform') {
+          return false;
+        }
+
+        if (requiredElevation === null) {
+          requiredElevation = cell.elevation;
+        } else if (cell.elevation !== requiredElevation) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Check if a building can be placed at the given position.
+   * Mirrors Game.ts validation for worker parity.
+   */
+  public isValidBuildingPlacement(
+    centerX: number,
+    centerY: number,
+    width: number,
+    height: number,
+    excludeEntityId?: number,
+    skipUnitCheck: boolean = false
+  ): boolean {
+    const halfW = width / 2;
+    const halfH = height / 2;
+
+    if (centerX - halfW < 0 || centerY - halfH < 0 ||
+        centerX + halfW > this.config.mapWidth || centerY + halfH > this.config.mapHeight) {
+      return false;
+    }
+
+    if (!this.isValidTerrainForBuilding(centerX, centerY, width, height)) {
+      return false;
+    }
+
+    const queryPadding = 10;
+    const nearbyBuildingIds = this.world.buildingGrid.queryRect(
+      centerX - halfW - queryPadding,
+      centerY - halfH - queryPadding,
+      centerX + halfW + queryPadding,
+      centerY + halfH + queryPadding
+    );
+
+    for (const buildingId of nearbyBuildingIds) {
+      const entity = this.world.getEntity(buildingId);
+      if (!validateEntity(entity, buildingId, 'WorkerGame.isValidBuildingPlacement:building', this.currentTick)) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      if (!transform || !building) continue;
+
+      if (building.isFlying || building.state === 'lifting' ||
+          building.state === 'flying' || building.state === 'landing') {
+        continue;
+      }
+
+      const existingHalfW = building.width / 2;
+      const existingHalfH = building.height / 2;
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      if (dx < halfW + existingHalfW && dy < halfH + existingHalfH) {
+        return false;
+      }
+    }
+
+    const resources = this.world.getEntitiesWith('Resource', 'Transform');
+    for (const entity of resources) {
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      if (dx < halfW + 1.5 && dy < halfH + 1.5) {
+        return false;
+      }
+    }
+
+    if (!skipUnitCheck) {
+      const nearbyUnitIds = this.world.unitGrid.queryRect(
+        centerX - halfW - 2,
+        centerY - halfH - 2,
+        centerX + halfW + 2,
+        centerY + halfH + 2
+      );
+
+      for (const unitId of nearbyUnitIds) {
+        if (excludeEntityId !== undefined && unitId === excludeEntityId) {
+          continue;
+        }
+
+        const entity = this.world.getEntity(unitId);
+        if (!validateEntity(entity, unitId, 'WorkerGame.isValidBuildingPlacement:unit', this.currentTick)) continue;
+
+        const transform = entity.get<Transform>('Transform');
+        if (!transform) continue;
+
+        const dx = Math.abs(centerX - transform.x);
+        const dy = Math.abs(centerY - transform.y);
+
+        if (dx < halfW + 0.5 && dy < halfH + 0.5) {
+          return false;
+        }
+      }
+    }
+
+    if (!this.isPositionClearOfDecorations(centerX, centerY, width, height)) {
+      return false;
+    }
+
+    return true;
+  }
+
   public async initializeNavMesh(positions: Float32Array, indices: Uint32Array): Promise<boolean> {
     return this.pathfindingSystem.initializeNavMesh(positions, indices);
   }
@@ -623,6 +790,7 @@ class WorkerGame {
 
   public setDecorationCollisions(collisions: Array<{ x: number; z: number; radius: number }>): void {
     this.decorationCollisions = collisions;
+    this.pathfindingSystem.registerDecorationCollisions(collisions);
   }
 
   public getDecorationCollisions(): Array<{ x: number; z: number; radius: number }> {
@@ -1144,7 +1312,8 @@ class WorkerGame {
 
 let game: WorkerGame | null = null;
 
-self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
+if (typeof self !== 'undefined') {
+  self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
   const message = event.data;
 
   try {
@@ -1262,21 +1431,24 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
     const stack = error instanceof Error ? error.stack : undefined;
     postMessage({ type: 'error', message: errorMessage, stack } satisfies WorkerToMainMessage);
   }
-};
+  };
+}
 
-// Handle uncaught errors
-self.onerror = (event) => {
-  const message = typeof event === 'string' ? event : (event as ErrorEvent).message ?? 'Unknown error';
-  let stack: string | undefined;
-  if (typeof event === 'object' && event !== null) {
-    const errEvent = event as ErrorEvent;
-    if (errEvent.filename) {
-      stack = `${errEvent.filename}:${errEvent.lineno}:${errEvent.colno}`;
+if (typeof self !== 'undefined') {
+  // Handle uncaught errors
+  self.onerror = (event) => {
+    const message = typeof event === 'string' ? event : (event as ErrorEvent).message ?? 'Unknown error';
+    let stack: string | undefined;
+    if (typeof event === 'object' && event !== null) {
+      const errEvent = event as ErrorEvent;
+      if (errEvent.filename) {
+        stack = `${errEvent.filename}:${errEvent.lineno}:${errEvent.colno}`;
+      }
     }
-  }
-  postMessage({
-    type: 'error',
-    message: `Uncaught error: ${message}`,
-    stack,
-  } satisfies WorkerToMainMessage);
-};
+    postMessage({
+      type: 'error',
+      message: `Uncaught error: ${message}`,
+      stack,
+    } satisfies WorkerToMainMessage);
+  };
+}
