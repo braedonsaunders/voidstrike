@@ -1,8 +1,13 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useMultiplayerStore, ConnectionStatus, DesyncState } from '@/store/multiplayerStore';
-import { Game } from '@/engine/core/Game';
+import {
+  useMultiplayerStore,
+  ConnectionStatus,
+  DesyncState,
+  ConnectionQuality,
+  LatencyStats,
+} from '@/store/multiplayerStore';
 
 /**
  * MultiplayerOverlay - Shows connection status, network pause, and desync notifications
@@ -185,7 +190,12 @@ export function MultiplayerOverlay() {
  * Shows connection quality/status without blocking gameplay
  */
 export function ConnectionStatusIndicator() {
-  const { isMultiplayer, connectionStatus, isConnected } = useMultiplayerStore();
+  const {
+    isMultiplayer,
+    connectionStatus,
+    connectionQuality,
+    latencyStats,
+  } = useMultiplayerStore();
 
   if (!isMultiplayer) return null;
 
@@ -229,6 +239,206 @@ export function ConnectionStatusIndicator() {
     <div className="flex items-center gap-1.5" title={`Multiplayer: ${getStatusText(connectionStatus)}`}>
       <div className={`w-2 h-2 rounded-full ${getStatusColor(connectionStatus)}`} />
       <span className="text-xs text-void-400">{getStatusText(connectionStatus)}</span>
+    </div>
+  );
+}
+
+/**
+ * ConnectionQualityIndicator - Shows detailed latency and connection quality
+ * For use in HUD or settings overlay
+ */
+export function ConnectionQualityIndicator({ showDetails = false }: { showDetails?: boolean }) {
+  const {
+    isMultiplayer,
+    connectionStatus,
+    connectionQuality,
+    latencyStats,
+  } = useMultiplayerStore();
+
+  // Update latency display periodically
+  const [displayStats, setDisplayStats] = useState<LatencyStats | null>(null);
+
+  useEffect(() => {
+    if (!isMultiplayer || connectionStatus !== 'connected') {
+      setDisplayStats(null);
+      return;
+    }
+
+    // Update every 500ms
+    const interval = setInterval(() => {
+      setDisplayStats(useMultiplayerStore.getState().latencyStats);
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, [isMultiplayer, connectionStatus]);
+
+  if (!isMultiplayer) return null;
+
+  const getQualityColor = (quality: ConnectionQuality) => {
+    switch (quality) {
+      case 'excellent':
+        return 'text-green-400';
+      case 'good':
+        return 'text-lime-400';
+      case 'poor':
+        return 'text-yellow-400';
+      case 'critical':
+        return 'text-red-400';
+      default:
+        return 'text-void-400';
+    }
+  };
+
+  const getQualityIcon = (quality: ConnectionQuality) => {
+    switch (quality) {
+      case 'excellent':
+        return '▓▓▓▓'; // 4 bars
+      case 'good':
+        return '▓▓▓░'; // 3 bars
+      case 'poor':
+        return '▓▓░░'; // 2 bars
+      case 'critical':
+        return '▓░░░'; // 1 bar
+      default:
+        return '░░░░';
+    }
+  };
+
+  if (connectionStatus !== 'connected' || !displayStats) {
+    return (
+      <div className="flex items-center gap-2 text-void-500 text-xs">
+        <span className="font-mono">---</span>
+        <span>ms</span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* Signal bars */}
+      <span className={`font-mono text-xs ${getQualityColor(connectionQuality)}`}>
+        {getQualityIcon(connectionQuality)}
+      </span>
+
+      {/* Latency */}
+      <span className={`font-mono text-xs ${getQualityColor(connectionQuality)}`}>
+        {Math.round(displayStats.averageRTT)}ms
+      </span>
+
+      {/* Extended details */}
+      {showDetails && (
+        <div className="flex items-center gap-3 text-void-500 text-xs">
+          <span title="Jitter">±{Math.round(displayStats.jitter)}ms</span>
+          <span title="Min/Max RTT">
+            {Math.round(displayStats.minRTT === Infinity ? 0 : displayStats.minRTT)}-
+            {Math.round(displayStats.maxRTT)}ms
+          </span>
+          {displayStats.packetsSent > 0 && (
+            <span title="Packet loss">
+              {((displayStats.packetsLost / displayStats.packetsSent) * 100).toFixed(1)}% loss
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * LatencyGraph - Visual representation of latency over time
+ * For use in debug overlay or network settings
+ */
+export function LatencyDisplay() {
+  const {
+    isMultiplayer,
+    connectionStatus,
+    connectionQuality,
+    latencyStats,
+  } = useMultiplayerStore();
+
+  const [stats, setStats] = useState<LatencyStats | null>(null);
+
+  useEffect(() => {
+    if (!isMultiplayer || connectionStatus !== 'connected') {
+      setStats(null);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setStats(useMultiplayerStore.getState().latencyStats);
+    }, 250);
+
+    return () => clearInterval(interval);
+  }, [isMultiplayer, connectionStatus]);
+
+  if (!isMultiplayer || connectionStatus !== 'connected' || !stats) {
+    return null;
+  }
+
+  const getQualityLabel = (quality: ConnectionQuality) => {
+    switch (quality) {
+      case 'excellent':
+        return 'Excellent';
+      case 'good':
+        return 'Good';
+      case 'poor':
+        return 'Poor';
+      case 'critical':
+        return 'Critical';
+      default:
+        return 'Unknown';
+    }
+  };
+
+  const getQualityBgColor = (quality: ConnectionQuality) => {
+    switch (quality) {
+      case 'excellent':
+        return 'bg-green-500/20 border-green-500/50';
+      case 'good':
+        return 'bg-lime-500/20 border-lime-500/50';
+      case 'poor':
+        return 'bg-yellow-500/20 border-yellow-500/50';
+      case 'critical':
+        return 'bg-red-500/20 border-red-500/50';
+      default:
+        return 'bg-void-500/20 border-void-500/50';
+    }
+  };
+
+  return (
+    <div className={`rounded-lg border p-3 ${getQualityBgColor(connectionQuality)}`}>
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-void-300 text-sm font-medium">Network Quality</span>
+        <span className="text-sm font-bold">{getQualityLabel(connectionQuality)}</span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-xs">
+        <div className="flex justify-between">
+          <span className="text-void-500">Ping:</span>
+          <span className="font-mono">{Math.round(stats.averageRTT)}ms</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-void-500">Jitter:</span>
+          <span className="font-mono">±{Math.round(stats.jitter)}ms</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-void-500">Min:</span>
+          <span className="font-mono">{Math.round(stats.minRTT === Infinity ? 0 : stats.minRTT)}ms</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-void-500">Max:</span>
+          <span className="font-mono">{Math.round(stats.maxRTT)}ms</span>
+        </div>
+        <div className="flex justify-between col-span-2">
+          <span className="text-void-500">Packet Loss:</span>
+          <span className="font-mono">
+            {stats.packetsSent > 0
+              ? `${((stats.packetsLost / stats.packetsSent) * 100).toFixed(1)}%`
+              : '0%'}
+            {' '}({stats.packetsLost}/{stats.packetsSent})
+          </span>
+        </div>
+      </div>
     </div>
   );
 }

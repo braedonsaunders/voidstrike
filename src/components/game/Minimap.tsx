@@ -154,41 +154,24 @@ export function Minimap() {
       }
 
       // Get entities from render state adapter (worker mode)
+      // Note: WorkerBridge directly updates the singleton, ensuring consistency
       const worldAdapter = getRenderStateAdapter();
 
-      // Debug: log adapter state periodically until entities are found
-      const logKey = '_minimapDebugLogged';
+      // Debug: log adapter state periodically
       const adapterCheckKey = '_minimapAdapterCheckCount';
-      if (!(window as any)[logKey]) {
-        // Count checks to avoid spam
-        (window as any)[adapterCheckKey] = ((window as any)[adapterCheckKey] ?? 0) + 1;
-        const checkCount = (window as any)[adapterCheckKey];
-
-        // Log every 30 frames (about 2 seconds at 15fps) until entities are found
-        if (checkCount % 30 === 1) {
-          const counts = worldAdapter.getEntityCounts();
-          console.log('[Minimap] Checking adapter state:', {
-            isReady: worldAdapter.isReady(),
-            updateCount: worldAdapter.getUpdateCount(),
-            ...counts,
-          });
-        }
+      (window as any)[adapterCheckKey] = ((window as any)[adapterCheckKey] ?? 0) + 1;
+      const checkCount = (window as any)[adapterCheckKey];
+      if (checkCount % 60 === 1) {
+        const counts = worldAdapter.getEntityCounts();
+        console.log('[Minimap] Adapter state:', {
+          isReady: worldAdapter.isReady(),
+          updateCount: worldAdapter.getUpdateCount(),
+          ...counts,
+        });
       }
 
       // Draw resources
       const resources = worldAdapter.getEntitiesWith('Transform', 'Resource');
-
-      // Debug: log first time we get entities
-      if (resources.length > 0 || worldAdapter.getEntitiesWith('Unit').length > 0) {
-        if (!(window as any)[logKey]) {
-          console.log('[Minimap] Got entities from adapter:', {
-            resources: resources.length,
-            buildings: worldAdapter.getEntitiesWith('Building').length,
-            units: worldAdapter.getEntitiesWith('Unit').length,
-          });
-          (window as any)[logKey] = true;
-        }
-      }
       for (const entity of resources) {
         const transform = entity.get<{ x: number; y: number }>('Transform');
         const resource = entity.get<{ resourceType: string }>('Resource');

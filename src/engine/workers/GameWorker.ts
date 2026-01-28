@@ -55,7 +55,7 @@ import { ChecksumSystem } from '../systems/ChecksumSystem';
 import type {
   MainToWorkerMessage,
   WorkerToMainMessage,
-  RenderState,
+  SerializedRenderState,
   GameEvent,
   UnitRenderState,
   BuildingRenderState,
@@ -669,6 +669,7 @@ class WorkerGame {
 
   // Debug: log first render state only
   private hasLoggedFirstRenderState = false;
+  private renderStatesSent = 0;
 
   private sendRenderState(): void {
     const units = this.collectUnitRenderState();
@@ -676,9 +677,16 @@ class WorkerGame {
     const resources = this.collectResourceRenderState();
     const projectiles = this.collectProjectileRenderState();
 
-    // Debug log first render state
+    this.renderStatesSent++;
+
+    // Debug: log first 5 sends and every 100th send
+    if (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0) {
+      console.log(`[GameWorker] sendRenderState #${this.renderStatesSent}: units=${units.length}, buildings=${buildings.length}, resources=${resources.length}`);
+    }
+
+    // Debug log first render state with entities
     if (!this.hasLoggedFirstRenderState && (units.length > 0 || buildings.length > 0 || resources.length > 0)) {
-      console.log('[GameWorker] Sending first render state:', {
+      console.log('[GameWorker] Sending first render state with entities:', {
         tick: this.currentTick,
         units: units.length,
         buildings: buildings.length,
@@ -687,7 +695,8 @@ class WorkerGame {
       this.hasLoggedFirstRenderState = true;
     }
 
-    const renderState: RenderState = {
+    // Serialize Maps to arrays for postMessage (Maps can't be serialized)
+    const serializedRenderState: SerializedRenderState = {
       tick: this.currentTick,
       gameTime: this.gameTime,
       gameState: this.state,
@@ -696,13 +705,13 @@ class WorkerGame {
       buildings,
       resources,
       projectiles,
-      visionGrids: new Map(), // Vision grids collected by VisionSystem
-      playerResources: new Map(this.playerResources),
+      visionGrids: [], // Vision grids collected by VisionSystem - TODO if needed
+      playerResources: Array.from(this.playerResources.entries()),
       selectedEntityIds: [...this.selectedEntityIds],
-      controlGroups: new Map(this.controlGroups),
+      controlGroups: Array.from(this.controlGroups.entries()),
     };
 
-    postMessage({ type: 'renderState', state: renderState } satisfies WorkerToMainMessage);
+    postMessage({ type: 'renderState', state: serializedRenderState } satisfies WorkerToMainMessage);
   }
 
   private collectUnitRenderState(): UnitRenderState[] {
@@ -1139,7 +1148,9 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       }
 
       case 'start': {
+        console.log('[GameWorker] Received start command');
         if (!game) {
+          console.error('[GameWorker] Game not initialized when start called');
           postMessage({ type: 'error', message: 'Game not initialized' } satisfies WorkerToMainMessage);
           return;
         }

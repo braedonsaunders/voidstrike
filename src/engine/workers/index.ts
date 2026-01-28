@@ -32,6 +32,8 @@
 // Types
 export type {
   RenderState,
+  SerializedRenderState,
+  PlayerResourceState,
   UnitRenderState,
   BuildingRenderState,
   ResourceRenderState,
@@ -52,6 +54,7 @@ export type {
   WorkerToMainMessage,
   GameCommand,
 } from './types';
+export { deserializeRenderState } from './types';
 
 // Worker Bridge
 export {

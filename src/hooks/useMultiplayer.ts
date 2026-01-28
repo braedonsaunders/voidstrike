@@ -19,6 +19,7 @@ import { debugNetworking } from '@/utils/debugLogger';
 import type { Filter, NostrEvent } from 'nostr-tools';
 import { getRelays } from '@/engine/network/p2p/NostrRelays';
 import type { PlayerSlot, StartingResources, GameSpeed } from '@/store/gameSetupStore';
+import { useMultiplayerStore } from '@/store/multiplayerStore';
 
 // Short code alphabet (no confusing chars)
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -787,14 +788,57 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       // Re-join the lobby
       await joinLobby(code, name);
 
-      // Check if we successfully connected
-      return status === 'connected';
+      // Wait a bit for connection to establish
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Check if we successfully connected by checking the actual connection state
+      const currentHostConnection = pcRef.current;
+      const isConnected = currentHostConnection !== null;
+
+      debugNetworking.log('[Lobby] Reconnection result:', isConnected ? 'success' : 'failed');
+      return isConnected;
     } catch (e) {
       // Critical error - keep as console.error so it always shows
       console.error('[Lobby] Reconnection failed:', e);
       return false;
     }
-  }, [isHost, joinLobby, status]);
+  }, [isHost, joinLobby]);
+
+  // Wire up reconnection callback to multiplayerStore
+  // This enables automatic reconnection when the data channel closes
+  useEffect(() => {
+    if (status === 'connected' || status === 'hosting') {
+      debugNetworking.log('[Lobby] Wiring reconnection callback to multiplayerStore');
+      useMultiplayerStore.getState().setReconnectCallback(reconnect);
+    }
+
+    return () => {
+      // Clean up on unmount
+      useMultiplayerStore.getState().setReconnectCallback(null);
+    };
+  }, [status, reconnect]);
+
+  // Sync data channel to multiplayerStore for game integration
+  useEffect(() => {
+    if (hostConnection && hostConnection.readyState === 'open') {
+      debugNetworking.log('[Lobby] Syncing host connection to multiplayerStore');
+      useMultiplayerStore.getState().setDataChannel(hostConnection);
+      useMultiplayerStore.getState().setMultiplayer(true);
+      useMultiplayerStore.getState().setHost(false);
+    }
+  }, [hostConnection]);
+
+  // Sync guest data channels to multiplayerStore (for host mode)
+  useEffect(() => {
+    const connectedGuest = guests.find(g => g.dataChannel?.readyState === 'open');
+    if (connectedGuest?.dataChannel) {
+      debugNetworking.log('[Lobby] Syncing guest connection to multiplayerStore');
+      useMultiplayerStore.getState().setDataChannel(connectedGuest.dataChannel);
+      useMultiplayerStore.getState().setMultiplayer(true);
+      useMultiplayerStore.getState().setHost(true);
+      useMultiplayerStore.getState().setRemotePeerId(connectedGuest.pubkey);
+    }
+  }, [guests]);
 
   // Count guests with open data channels
   const connectedGuestCount = guests.filter(g => g.dataChannel?.readyState === 'open').length;

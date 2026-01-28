@@ -147,8 +147,46 @@ export interface ProjectileRenderState {
 }
 
 /**
- * Complete render state for a single frame.
- * Sent from game worker to main thread every tick.
+ * Player resource state for UI display
+ */
+export interface PlayerResourceState {
+  minerals: number;
+  vespene: number;
+  supply: number;
+  maxSupply: number;
+}
+
+/**
+ * Serializable render state for worker-to-main-thread transfer.
+ * Note: Maps cannot be serialized through postMessage, so we use arrays of tuples.
+ */
+export interface SerializedRenderState {
+  tick: number;
+  gameTime: number;
+  gameState: GameState;
+  interpolation: number;
+
+  // Entity snapshots
+  units: UnitRenderState[];
+  buildings: BuildingRenderState[];
+  resources: ResourceRenderState[];
+  projectiles: ProjectileRenderState[];
+
+  // Vision data (per-player fog of war) - serialized as array of [playerId, grid] tuples
+  visionGrids: Array<[string, Uint8Array]>;
+
+  // Player resources (for UI) - serialized as array of [playerId, resources] tuples
+  playerResources: Array<[string, PlayerResourceState]>;
+
+  // Selection state
+  selectedEntityIds: number[];
+  // Control groups - serialized as array of [groupNumber, entityIds] tuples
+  controlGroups: Array<[number, number[]]>;
+}
+
+/**
+ * Complete render state for a single frame (main thread representation).
+ * Converted from SerializedRenderState after receiving from worker.
  */
 export interface RenderState {
   tick: number;
@@ -166,16 +204,31 @@ export interface RenderState {
   visionGrids: Map<string, Uint8Array>;
 
   // Player resources (for UI)
-  playerResources: Map<string, {
-    minerals: number;
-    vespene: number;
-    supply: number;
-    maxSupply: number;
-  }>;
+  playerResources: Map<string, PlayerResourceState>;
 
   // Selection state
   selectedEntityIds: number[];
   controlGroups: Map<number, number[]>;
+}
+
+/**
+ * Convert serialized render state (from worker) to RenderState (with Maps)
+ */
+export function deserializeRenderState(serialized: SerializedRenderState): RenderState {
+  return {
+    tick: serialized.tick,
+    gameTime: serialized.gameTime,
+    gameState: serialized.gameState,
+    interpolation: serialized.interpolation,
+    units: serialized.units,
+    buildings: serialized.buildings,
+    resources: serialized.resources,
+    projectiles: serialized.projectiles,
+    visionGrids: new Map(serialized.visionGrids),
+    playerResources: new Map(serialized.playerResources),
+    selectedEntityIds: serialized.selectedEntityIds,
+    controlGroups: new Map(serialized.controlGroups),
+  };
 }
 
 // ============================================================================
@@ -362,7 +415,7 @@ export interface SpawnMapData {
  */
 export type WorkerToMainMessage =
   | { type: 'initialized'; success: boolean; error?: string }
-  | { type: 'renderState'; state: RenderState }
+  | { type: 'renderState'; state: SerializedRenderState }
   | { type: 'events'; events: GameEvent[] }
   | { type: 'checksum'; tick: number; checksum: string }
   | { type: 'gameOver'; winnerId: string | null; reason: string }

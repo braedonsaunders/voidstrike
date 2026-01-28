@@ -24,6 +24,8 @@ import type {
   ProjectileRenderState,
   SpawnMapData,
 } from './types';
+import { deserializeRenderState } from './types';
+import { RenderStateWorldAdapter } from './RenderStateAdapter';
 import type { MapData } from '@/data/maps';
 import type { GameConfig, GameState, TerrainCell } from '../core/Game';
 import type { AIDifficulty } from '../systems/EnhancedAISystem';
@@ -129,11 +131,13 @@ export class WorkerBridge {
   }
 
   private async _initialize(): Promise<void> {
+    console.log('[WorkerBridge] _initialize() starting');
     // Create the worker
     this.worker = new Worker(
       new URL('./GameWorker.ts', import.meta.url),
       { type: 'module' }
     );
+    console.log('[WorkerBridge] Worker created:', !!this.worker);
 
     // Set up message handler
     this.worker.onmessage = this.handleWorkerMessage.bind(this);
@@ -141,6 +145,7 @@ export class WorkerBridge {
       console.error('[WorkerBridge] Worker error:', error);
       this.onError?.(error.message);
     };
+    console.log('[WorkerBridge] Message handlers set up');
 
     // Initialize the worker with game config
     await this.sendAndWait('init', {
@@ -188,25 +193,43 @@ export class WorkerBridge {
   // Debug: track first render state message
   private hasLoggedFirstRenderState = false;
 
+  // Debug: count all messages received
+  private messageCount = 0;
+
   private handleWorkerMessage(event: MessageEvent<WorkerToMainMessage>): void {
     const message = event.data;
+    this.messageCount++;
+
+    // Debug: log every 100th message or first 5 messages
+    if (this.messageCount <= 5 || this.messageCount % 100 === 0) {
+      console.log(`[WorkerBridge] Message #${this.messageCount}: type=${message.type}`);
+    }
 
     switch (message.type) {
       case 'renderState':
+        // Deserialize the render state (converts array tuples back to Maps)
+        const renderState = deserializeRenderState(message.state);
+
         // Debug: log first render state with entities
         if (!this.hasLoggedFirstRenderState &&
-            (message.state.units.length > 0 || message.state.buildings.length > 0 || message.state.resources.length > 0)) {
+            (renderState.units.length > 0 || renderState.buildings.length > 0 || renderState.resources.length > 0)) {
           console.log('[WorkerBridge] First renderState message received:', {
-            tick: message.state.tick,
-            units: message.state.units.length,
-            buildings: message.state.buildings.length,
-            resources: message.state.resources.length,
+            tick: renderState.tick,
+            units: renderState.units.length,
+            buildings: renderState.buildings.length,
+            resources: renderState.resources.length,
             hasCallback: !!this.onRenderState,
           });
           this.hasLoggedFirstRenderState = true;
         }
-        this._renderState = message.state;
-        this.onRenderState?.(message.state);
+        this._renderState = renderState;
+
+        // CRITICAL: Update the singleton adapter directly via globalThis
+        // This ensures all bundles (including Minimap) see the same data
+        // regardless of which bundle the callback was created in
+        RenderStateWorldAdapter.getInstance().updateFromRenderState(renderState);
+
+        this.onRenderState?.(renderState);
         break;
 
       case 'events':
@@ -289,8 +312,13 @@ export class WorkerBridge {
   // ============================================================================
 
   public start(): void {
-    if (!this._initialized || this._running) return;
+    console.log('[WorkerBridge] start() called', { initialized: this._initialized, running: this._running, hasWorker: !!this.worker });
+    if (!this._initialized || this._running) {
+      console.log('[WorkerBridge] start() early return - already running or not initialized');
+      return;
+    }
     this._running = true;
+    console.log('[WorkerBridge] Sending start message to worker');
     this.worker?.postMessage({ type: 'start' } satisfies MainToWorkerMessage);
   }
 

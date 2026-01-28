@@ -36,6 +36,9 @@ import {
   reportDesync,
   getDesyncState,
   useMultiplayerStore,
+  getAdaptiveCommandDelay,
+  getLatencyStats,
+  type LatencyStats,
 } from '@/store/multiplayerStore';
 
 // Multiplayer message types
@@ -43,11 +46,24 @@ import {
 // 1. { type: 'command', payload: GameCommand } - Game.issueCommand format
 // 2. { type: 'command', commandType: string, data: any } - WebGPUGameCanvas format
 interface MultiplayerMessage {
-  type: 'command' | 'quit' | 'checksum';
+  type: 'command' | 'quit' | 'checksum' | 'sync-request' | 'sync-response';
   payload?: unknown;
   // Alternative format used by WebGPUGameCanvas
   commandType?: string;
   data?: unknown;
+}
+
+// Sync request payload - sent when reconnecting
+interface SyncRequestPayload {
+  lastKnownTick: number;
+  playerId: string;
+}
+
+// Sync response payload - contains commands to replay
+interface SyncResponsePayload {
+  currentTick: number;
+  commands: Array<{ tick: number; commands: GameCommand[] }>;
+  playerId: string;
 }
 import { DesyncDetectionManager, DesyncDetectionConfig } from '../network/DesyncDetection';
 import { bootstrapDefinitions } from '../definitions';
@@ -181,15 +197,27 @@ export class Game {
   // Command queue for lockstep multiplayer - commands are scheduled for future ticks
   private commandQueue: Map<number, GameCommand[]> = new Map();
   // Number of ticks to delay command execution (allows time for network sync)
-  // FIX: Increased from 2 to 4 ticks (200ms at 20 TPS) to handle high-latency connections
-  // 2 ticks (100ms) was too aggressive and caused stale command desyncs on connections >100ms RTT
-  private readonly COMMAND_DELAY_TICKS = 4;
+  // Now dynamically calculated based on measured RTT via getAdaptiveCommandDelay()
+  // Minimum: 2 ticks (100ms), Maximum: 10 ticks (500ms) at 20 TPS
+  private readonly DEFAULT_COMMAND_DELAY_TICKS = 4;
+  // Track current adaptive delay for smooth transitions
+  private currentCommandDelay = 4;
+  // How often to recalculate adaptive delay (every N ticks)
+  private readonly DELAY_RECALC_INTERVAL = 20; // 1 second at 20 TPS
 
   // LOCKSTEP BARRIER: Track which players have sent commands for each tick
   // Format: Map<tick, Set<playerId>>
   private tickCommandReceipts: Map<number, Set<string>> = new Map();
   // Maximum ticks to wait for remote commands before triggering desync (10 ticks = 500ms at 20 tick/sec)
   private readonly LOCKSTEP_TIMEOUT_TICKS = 10;
+
+  // Command history for sync responses (keeps last N ticks of executed commands)
+  private executedCommandHistory: Map<number, GameCommand[]> = new Map();
+  private readonly COMMAND_HISTORY_SIZE = 200; // Keep ~10 seconds at 20 TPS
+
+  // Flag to indicate we're waiting for sync response
+  private awaitingSyncResponse = false;
+  private syncRequestTick = 0;
 
   private constructor(config: Partial<GameConfig> = {}, statePort?: GameStatePort) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -282,7 +310,9 @@ export class Game {
 
           // SECURITY FIX: Validate command tick is within acceptable range
           // Prevents commands scheduled for absurdly far future or past
-          const minTick = this.currentTick - this.COMMAND_DELAY_TICKS;
+          // Use max of current adaptive delay and default for validation (be permissive)
+          const maxDelay = Math.max(this.currentCommandDelay, this.DEFAULT_COMMAND_DELAY_TICKS, 10);
+          const minTick = this.currentTick - maxDelay;
           const maxTick = this.currentTick + 100; // Allow up to 100 ticks (~5 seconds) in future
           if (command.tick < minTick || command.tick > maxTick) {
             console.error(
@@ -321,6 +351,16 @@ export class Game {
           peerId: string;
         };
         this.eventBus.emit('network:checksum', checksumData);
+      } else if (message.type === 'sync-request') {
+        // Handle sync request from reconnecting player
+        const syncRequest = message.payload as SyncRequestPayload;
+        debugNetworking.log('[Game] Received sync request from', syncRequest.playerId, 'for tick', syncRequest.lastKnownTick);
+        this.handleSyncRequest(syncRequest);
+      } else if (message.type === 'sync-response') {
+        // Handle sync response when we're reconnecting
+        const syncResponse = message.payload as SyncResponsePayload;
+        debugNetworking.log('[Game] Received sync response with', syncResponse.commands.length, 'tick entries');
+        this.handleSyncResponse(syncResponse);
       }
     };
     addMultiplayerMessageHandler(this.multiplayerMessageHandler);
@@ -603,6 +643,11 @@ export class Game {
       this.updateEntityCounts();
     }
 
+    // Update adaptive command delay periodically in multiplayer
+    if (this.config.isMultiplayer && this.currentTick % this.DELAY_RECALC_INTERVAL === 0) {
+      this.updateAdaptiveCommandDelay();
+    }
+
     if (tickElapsed > 10) {
       debugPerformance.warn(`[Game] TICK ${this.currentTick}: ${tickElapsed.toFixed(1)}ms`);
     }
@@ -875,6 +920,44 @@ export class Game {
   }
 
   /**
+   * Get the current command delay in ticks.
+   * In multiplayer, this is dynamically calculated based on measured RTT.
+   * In single player, returns the default.
+   */
+  public getCommandDelayTicks(): number {
+    if (!this.config.isMultiplayer) {
+      return this.DEFAULT_COMMAND_DELAY_TICKS;
+    }
+    return this.currentCommandDelay;
+  }
+
+  /**
+   * Update the adaptive command delay based on current latency measurements.
+   * Called periodically during multiplayer games.
+   */
+  private updateAdaptiveCommandDelay(): void {
+    if (!this.config.isMultiplayer) return;
+
+    const newDelay = getAdaptiveCommandDelay(this.config.tickRate);
+
+    // Smooth transitions - don't change by more than 1 tick at a time
+    if (newDelay > this.currentCommandDelay) {
+      this.currentCommandDelay = Math.min(this.currentCommandDelay + 1, newDelay);
+    } else if (newDelay < this.currentCommandDelay) {
+      this.currentCommandDelay = Math.max(this.currentCommandDelay - 1, newDelay);
+    }
+
+    // Log significant changes
+    if (this.currentCommandDelay !== newDelay) {
+      const stats = getLatencyStats();
+      debugNetworking.log(
+        `[Game] Adaptive command delay: ${this.currentCommandDelay} ticks ` +
+        `(RTT: ${stats.averageRTT.toFixed(1)}ms, target: ${newDelay} ticks)`
+      );
+    }
+  }
+
+  /**
    * Issue a command from the local player.
    * In multiplayer, commands are scheduled for a future tick (lockstep) to ensure
    * both players execute the command at the same game tick.
@@ -883,7 +966,8 @@ export class Game {
   public issueCommand(command: GameCommand): void {
     if (isMultiplayerMode()) {
       // LOCKSTEP: Schedule command for future tick so both players execute at same tick
-      const executionTick = this.currentTick + this.COMMAND_DELAY_TICKS;
+      // Use adaptive delay based on measured latency
+      const executionTick = this.currentTick + this.currentCommandDelay;
       command.tick = executionTick;
 
       // Send to remote player with the scheduled execution tick
@@ -892,7 +976,7 @@ export class Game {
         payload: command,
       };
       sendMultiplayerMessage(message);
-      debugNetworking.log('[Game] Sent command to remote for tick', executionTick, ':', command.type);
+      debugNetworking.log('[Game] Sent command to remote for tick', executionTick, ':', command.type, `(delay: ${this.currentCommandDelay})`);
 
       // Queue locally for execution at the scheduled tick
       this.queueCommand(command);
@@ -917,6 +1001,134 @@ export class Game {
       this.tickCommandReceipts.set(tick, new Set());
     }
     this.tickCommandReceipts.get(tick)!.add(command.playerId);
+  }
+
+  /**
+   * Store executed command in history for sync responses
+   */
+  private recordExecutedCommand(command: GameCommand): void {
+    const tick = command.tick;
+    if (!this.executedCommandHistory.has(tick)) {
+      this.executedCommandHistory.set(tick, []);
+    }
+    this.executedCommandHistory.get(tick)!.push(command);
+
+    // Cleanup old history
+    const oldestAllowed = this.currentTick - this.COMMAND_HISTORY_SIZE;
+    for (const historyTick of this.executedCommandHistory.keys()) {
+      if (historyTick < oldestAllowed) {
+        this.executedCommandHistory.delete(historyTick);
+      }
+    }
+  }
+
+  /**
+   * Request sync from the other player after reconnection.
+   * Call this after reconnecting to get missed commands.
+   */
+  public requestSync(): void {
+    if (!this.config.isMultiplayer) return;
+
+    debugNetworking.log('[Game] Requesting sync from current tick:', this.currentTick);
+
+    this.awaitingSyncResponse = true;
+    this.syncRequestTick = this.currentTick;
+
+    const message: MultiplayerMessage = {
+      type: 'sync-request',
+      payload: {
+        lastKnownTick: this.currentTick,
+        playerId: this.config.playerId,
+      } as SyncRequestPayload,
+    };
+    sendMultiplayerMessage(message);
+
+    // Pause until we get the sync response
+    useMultiplayerStore.getState().setNetworkPaused(true, 'Synchronizing game state...');
+  }
+
+  /**
+   * Handle sync request from reconnecting player.
+   * Send them all commands since their last known tick.
+   */
+  private handleSyncRequest(request: SyncRequestPayload): void {
+    const commandsToSend: Array<{ tick: number; commands: GameCommand[] }> = [];
+
+    // Collect all commands from their last known tick to now
+    for (let tick = request.lastKnownTick + 1; tick <= this.currentTick; tick++) {
+      const commands = this.executedCommandHistory.get(tick);
+      if (commands && commands.length > 0) {
+        commandsToSend.push({ tick, commands });
+      }
+    }
+
+    debugNetworking.log(
+      '[Game] Sending sync response with',
+      commandsToSend.length,
+      'tick entries from tick',
+      request.lastKnownTick + 1,
+      'to',
+      this.currentTick
+    );
+
+    const response: MultiplayerMessage = {
+      type: 'sync-response',
+      payload: {
+        currentTick: this.currentTick,
+        commands: commandsToSend,
+        playerId: this.config.playerId,
+      } as SyncResponsePayload,
+    };
+    sendMultiplayerMessage(response);
+  }
+
+  /**
+   * Handle sync response when we're reconnecting.
+   * Replay all missed commands to catch up to current state.
+   */
+  private handleSyncResponse(response: SyncResponsePayload): void {
+    if (!this.awaitingSyncResponse) {
+      debugNetworking.warn('[Game] Received unexpected sync response, ignoring');
+      return;
+    }
+
+    this.awaitingSyncResponse = false;
+
+    debugNetworking.log(
+      '[Game] Processing sync response: fast-forwarding from tick',
+      this.currentTick,
+      'to tick',
+      response.currentTick
+    );
+
+    // Queue all the missed commands
+    let totalCommands = 0;
+    for (const { tick, commands } of response.commands) {
+      for (const command of commands) {
+        // Queue for immediate execution if tick has passed, otherwise queue normally
+        if (tick <= this.currentTick) {
+          // Execute immediately for past ticks
+          this.processCommand(command);
+          totalCommands++;
+        } else {
+          // Queue for future execution
+          this.queueCommand(command);
+          totalCommands++;
+        }
+      }
+    }
+
+    debugNetworking.log('[Game] Sync complete: processed', totalCommands, 'commands');
+
+    // Resume game
+    useMultiplayerStore.getState().setNetworkPaused(false);
+
+    // Emit sync complete event
+    this.eventBus.emit('multiplayer:syncComplete', {
+      fromTick: this.syncRequestTick,
+      toTick: response.currentTick,
+      commandsReplayed: totalCommands,
+    });
   }
 
   /**
@@ -1112,6 +1324,11 @@ export class Game {
     if (this.config.isMultiplayer && !this.validateCommandAuthorization(command)) {
       // Reject unauthorized commands - do not process
       return;
+    }
+
+    // Record command in history for sync responses (multiplayer only)
+    if (this.config.isMultiplayer) {
+      this.recordExecutedCommand(command);
     }
 
     // Dispatch command to appropriate event handlers via shared dispatcher
