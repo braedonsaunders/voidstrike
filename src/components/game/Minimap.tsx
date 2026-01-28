@@ -156,7 +156,7 @@ export function Minimap() {
       // Get entities from render state adapter (worker mode)
       const worldAdapter = getRenderStateAdapter();
 
-      // Debug: log adapter state periodically until entities are found
+      // Debug: log adapter state and identity to trace singleton issues
       const logKey = '_minimapDebugLogged';
       const adapterCheckKey = '_minimapAdapterCheckCount';
       if (!(window as any)[logKey]) {
@@ -167,10 +167,16 @@ export function Minimap() {
         // Log every 30 frames (about 2 seconds at 15fps) until entities are found
         if (checkCount % 30 === 1) {
           const counts = worldAdapter.getEntityCounts();
+          // Check what's on globalThis
+          const globalKey = '__voidstrike_RenderStateWorldAdapter__';
+          const globalInstance = (globalThis as any)[globalKey];
           console.log('[Minimap] Checking adapter state:', {
             isReady: worldAdapter.isReady(),
             updateCount: worldAdapter.getUpdateCount(),
             ...counts,
+            globalThisHasKey: !!globalInstance,
+            globalThisUpdateCount: globalInstance?.getUpdateCount?.() ?? 'N/A',
+            sameInstance: worldAdapter === globalInstance,
           });
         }
       }
