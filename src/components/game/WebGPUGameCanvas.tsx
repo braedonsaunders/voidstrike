@@ -127,6 +127,8 @@ export function WebGPUGameCanvas() {
   }, []);
 
   // Handle render state updates from worker (only in worker mode)
+  // Note: WorkerBridge now directly updates the RenderStateWorldAdapter singleton
+  // This callback is just for additional main-thread side effects
   const firstRenderStateLoggedRef = useRef(false);
   const handleRenderState = useCallback((state: RenderState) => {
     // Debug: log first render state received
@@ -140,7 +142,9 @@ export function WebGPUGameCanvas() {
       firstRenderStateLoggedRef.current = true;
     }
 
-    renderStateAdapterRef.current.updateFromRenderState(state);
+    // Note: Adapter update is now handled directly by WorkerBridge
+    // to ensure all code-split bundles see the same singleton instance
+
     // Update game time in store
     useGameStore.getState().setGameTime(state.gameTime);
   }, []);

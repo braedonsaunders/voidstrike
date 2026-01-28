@@ -25,6 +25,7 @@ import type {
   SpawnMapData,
 } from './types';
 import { deserializeRenderState } from './types';
+import { RenderStateWorldAdapter } from './RenderStateAdapter';
 import type { MapData } from '@/data/maps';
 import type { GameConfig, GameState, TerrainCell } from '../core/Game';
 import type { AIDifficulty } from '../systems/EnhancedAISystem';
@@ -222,6 +223,12 @@ export class WorkerBridge {
           this.hasLoggedFirstRenderState = true;
         }
         this._renderState = renderState;
+
+        // CRITICAL: Update the singleton adapter directly via globalThis
+        // This ensures all bundles (including Minimap) see the same data
+        // regardless of which bundle the callback was created in
+        RenderStateWorldAdapter.getInstance().updateFromRenderState(renderState);
+
         this.onRenderState?.(renderState);
         break;
 
