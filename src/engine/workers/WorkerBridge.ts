@@ -130,11 +130,13 @@ export class WorkerBridge {
   }
 
   private async _initialize(): Promise<void> {
+    console.log('[WorkerBridge] _initialize() starting');
     // Create the worker
     this.worker = new Worker(
       new URL('./GameWorker.ts', import.meta.url),
       { type: 'module' }
     );
+    console.log('[WorkerBridge] Worker created:', !!this.worker);
 
     // Set up message handler
     this.worker.onmessage = this.handleWorkerMessage.bind(this);
@@ -142,6 +144,7 @@ export class WorkerBridge {
       console.error('[WorkerBridge] Worker error:', error);
       this.onError?.(error.message);
     };
+    console.log('[WorkerBridge] Message handlers set up');
 
     // Initialize the worker with game config
     await this.sendAndWait('init', {
@@ -189,8 +192,17 @@ export class WorkerBridge {
   // Debug: track first render state message
   private hasLoggedFirstRenderState = false;
 
+  // Debug: count all messages received
+  private messageCount = 0;
+
   private handleWorkerMessage(event: MessageEvent<WorkerToMainMessage>): void {
     const message = event.data;
+    this.messageCount++;
+
+    // Debug: log every 100th message or first 5 messages
+    if (this.messageCount <= 5 || this.messageCount % 100 === 0) {
+      console.log(`[WorkerBridge] Message #${this.messageCount}: type=${message.type}`);
+    }
 
     switch (message.type) {
       case 'renderState':
@@ -293,8 +305,13 @@ export class WorkerBridge {
   // ============================================================================
 
   public start(): void {
-    if (!this._initialized || this._running) return;
+    console.log('[WorkerBridge] start() called', { initialized: this._initialized, running: this._running, hasWorker: !!this.worker });
+    if (!this._initialized || this._running) {
+      console.log('[WorkerBridge] start() early return - already running or not initialized');
+      return;
+    }
     this._running = true;
+    console.log('[WorkerBridge] Sending start message to worker');
     this.worker?.postMessage({ type: 'start' } satisfies MainToWorkerMessage);
   }
 

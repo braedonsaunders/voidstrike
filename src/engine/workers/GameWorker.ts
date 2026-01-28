@@ -846,6 +846,7 @@ class WorkerGame {
 
   // Debug: log first render state only
   private hasLoggedFirstRenderState = false;
+  private renderStatesSent = 0;
 
   private sendRenderState(): void {
     const units = this.collectUnitRenderState();
@@ -853,9 +854,16 @@ class WorkerGame {
     const resources = this.collectResourceRenderState();
     const projectiles = this.collectProjectileRenderState();
 
-    // Debug log first render state
+    this.renderStatesSent++;
+
+    // Debug: log first 5 sends and every 100th send
+    if (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0) {
+      console.log(`[GameWorker] sendRenderState #${this.renderStatesSent}: units=${units.length}, buildings=${buildings.length}, resources=${resources.length}`);
+    }
+
+    // Debug log first render state with entities
     if (!this.hasLoggedFirstRenderState && (units.length > 0 || buildings.length > 0 || resources.length > 0)) {
-      console.log('[GameWorker] Sending first render state:', {
+      console.log('[GameWorker] Sending first render state with entities:', {
         tick: this.currentTick,
         units: units.length,
         buildings: buildings.length,
@@ -1317,7 +1325,9 @@ self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
       }
 
       case 'start': {
+        console.log('[GameWorker] Received start command');
         if (!game) {
+          console.error('[GameWorker] Game not initialized when start called');
           postMessage({ type: 'error', message: 'Game not initialized' } satisfies WorkerToMainMessage);
           return;
         }
