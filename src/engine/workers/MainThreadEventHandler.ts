@@ -315,6 +315,57 @@ export class MainThreadEventHandler {
   }
 
   // ============================================================================
+  // AUDIO INITIALIZATION
+  // ============================================================================
+
+  private audioInitialized = false;
+
+  /**
+   * Initialize the audio system with camera for spatial audio and sync UI store settings.
+   * Must be called after renderer setup when camera is available.
+   */
+  public async initializeAudio(camera?: THREE.Camera, biome?: string): Promise<void> {
+    if (this.audioInitialized) return;
+
+    // Initialize AudioManager with camera for spatial audio
+    await AudioManager.initialize(camera);
+
+    // Sync with UI store settings
+    const uiState = useUIStore.getState();
+    AudioManager.setCategoryVolume('music', uiState.musicVolume);
+    AudioManager.setCategoryVolume('combat', uiState.soundVolume);
+    AudioManager.setCategoryVolume('ui', uiState.soundVolume);
+    AudioManager.setCategoryVolume('unit', uiState.soundVolume);
+    AudioManager.setCategoryVolume('building', uiState.soundVolume);
+    AudioManager.setCategoryVolume('ambient', uiState.soundVolume);
+    AudioManager.setCategoryVolume('voice', uiState.voicesEnabled ? uiState.voiceVolume : 0);
+    AudioManager.setCategoryVolume('alert', uiState.alertsEnabled ? uiState.alertVolume : 0);
+
+    // Set master mute state
+    AudioManager.setMuted(!uiState.soundEnabled);
+
+    // Initialize MusicPlayer with settings
+    await MusicPlayer.initialize();
+    MusicPlayer.setVolume(uiState.musicVolume);
+    MusicPlayer.setMuted(!uiState.musicEnabled);
+
+    // Preload all sounds from config
+    const allSoundIds = AudioManager.getPreloadSoundIds();
+    await AudioManager.preload(allSoundIds);
+
+    // Start biome ambient if provided
+    if (biome) {
+      const biomeAmbient = AudioManager.getBiomeAmbient();
+      const ambientSound = biomeAmbient[biome];
+      if (ambientSound) {
+        AudioManager.play(ambientSound);
+      }
+    }
+
+    this.audioInitialized = true;
+  }
+
+  // ============================================================================
   // MUSIC CONTROL
   // ============================================================================
 

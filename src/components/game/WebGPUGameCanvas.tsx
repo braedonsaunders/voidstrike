@@ -386,8 +386,11 @@ export function WebGPUGameCanvas() {
           refs.fogOfWar.current.setPlayerId(localPlayerId);
         }
 
-        // Initialize audio (via main thread event handler)
+        // Initialize audio system with camera and biome, then start music
         if (eventHandlerRef.current) {
+          const camera = refs.camera.current ?? undefined;
+          const biome = CURRENT_MAP.biome;
+          await eventHandlerRef.current.initializeAudio(camera, biome);
           await eventHandlerRef.current.startGameplayMusic();
         }
 
