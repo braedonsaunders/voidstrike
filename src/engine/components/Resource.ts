@@ -3,9 +3,9 @@ import { Component } from '../ecs/Component';
 export type ResourceType = 'minerals' | 'vespene';
 
 // Optimal worker counts per resource
-// Minerals: 2 workers per patch is optimal, 3 is max (diminishing returns)
+// Minerals: 1 worker per patch is optimal for display, 3 is max (diminishing returns)
 // Vespene: 3 workers per geyser is optimal and max
-export const OPTIMAL_WORKERS_PER_MINERAL = 2;
+export const OPTIMAL_WORKERS_PER_MINERAL = 1;
 export const MAX_WORKERS_PER_MINERAL = 3;
 export const OPTIMAL_WORKERS_PER_VESPENE = 3;
 export const MAX_WORKERS_PER_VESPENE = 3;
