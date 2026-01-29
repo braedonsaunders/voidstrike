@@ -459,10 +459,10 @@ export function WebGPUGameCanvas() {
           scene.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
         }
 
-        // Start game logic (runs in worker)
-        setTimeout(() => {
+        // Start game logic after countdown completes (runs in worker)
+        eventBus.once('game:countdownComplete', () => {
           workerBridgeRef.current?.start();
-        }, 100);
+        });
 
         // Initialize Phaser loop worker for background tab immunity (ES module for Next.js 16+ Turbopack)
         try {
