@@ -609,9 +609,9 @@ export class RenderStateWorldAdapter implements IWorldProvider {
     try {
       this._updateCount++;
 
-      // Debug: log first 5 updates and every 100th update
-      if (this._updateCount <= 5 || this._updateCount % 100 === 0) {
-        debugInitialization.log(`[RenderStateWorldAdapter] updateFromRenderState #${this._updateCount}: units=${state.units.length}, buildings=${state.buildings.length}`);
+      // TEMP: Always log first 10 updates for debugging render pipeline
+      if (this._updateCount <= 10 || this._updateCount % 100 === 0) {
+        console.log(`[RenderStateWorldAdapter] updateFromRenderState #${this._updateCount}: tick=${state.tick}, units=${state.units.length}, buildings=${state.buildings.length}, resources=${state.resources.length}`);
       }
 
       // Debug: log first significant update

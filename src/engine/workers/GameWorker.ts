@@ -15,7 +15,7 @@
  */
 
 // Debug flag for worker logging (workers can't access UI store)
-const DEBUG = false;
+const DEBUG = true; // TEMP: Enable for render state debugging
 
 import { World } from '../ecs/World';
 import { EventBus } from '../core/EventBus';

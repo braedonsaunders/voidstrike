@@ -875,6 +875,12 @@ export class UnitRenderer {
     // This ensures previous/current matrix pairs are aligned correctly for velocity
     // PERF: Only re-sort when entity count changes (add/remove) to avoid O(n log n) every frame
     const rawEntities = this.world.getEntitiesWith('Transform', 'Unit');
+
+    // TEMP: Log entity count for debugging render pipeline
+    if (this.frameCount <= 10 || this.frameCount % 300 === 0) {
+      console.log(`[UnitRenderer] update #${this.frameCount}: rawEntities=${rawEntities.length}, world=${this.world.constructor.name}`);
+    }
+
     if (rawEntities.length !== this.cachedEntityCount) {
       // Rebuild cache - entity count changed (add/remove occurred)
       this.cachedSortedEntities.length = 0;
