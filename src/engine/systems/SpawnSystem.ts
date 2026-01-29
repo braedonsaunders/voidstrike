@@ -90,6 +90,13 @@ export class SpawnSystem extends System {
       .add(new Selectable(selectionRadius, 5, playerId, visualScale, visualHeight))
       .add(new Velocity());
 
+    // TEMP: Verify all required components are present
+    const hasTransform = entity.has('Transform');
+    const hasUnit = entity.has('Unit');
+    const hasHealth = entity.has('Health');
+    const hasSelectable = entity.has('Selectable');
+    console.log(`[SpawnSystem] Entity #${entity.id} components: T=${hasTransform}, U=${hasUnit}, H=${hasHealth}, S=${hasSelectable}`);
+
     // Add abilities if the unit has any
     if (definition.abilities && definition.abilities.length > 0) {
       const maxEnergy = definition.maxEnergy ?? 0;

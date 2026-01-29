@@ -892,6 +892,13 @@ export class WorkerGame {
     const states: UnitRenderState[] = [];
     const entities = this.world.getEntitiesWith('Transform', 'Unit', 'Health', 'Selectable');
 
+    // TEMP: Diagnostic - log query results periodically
+    if (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0) {
+      const allEntities = this.world.getEntities();
+      const unitsOnly = this.world.getEntitiesWith('Unit');
+      console.log(`[GameWorker] collectUnitRenderState: total=${allEntities.length}, withUnit=${unitsOnly.length}, fullQuery=${entities.length}`);
+    }
+
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
       const unit = entity.get<Unit>('Unit')!;
