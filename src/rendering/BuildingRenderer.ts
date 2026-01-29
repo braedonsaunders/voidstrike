@@ -466,11 +466,15 @@ export class BuildingRenderer {
     return 0;
   }
 
+  // TEMP: Frame counter for debugging
+  private debugFrameCount = 0;
+
   public update(deltaTime: number = 16): void {
     const dt = deltaTime / 1000;
     this.fireAnimTime += dt;
     this.constructionAnimTime += dt;
     this.blueprintPulseTime += dt;
+    this.debugFrameCount++;
 
     // Selection ring animation is handled by shared global time uniform
     // (updated by UnitRenderer.update via updateSelectionRingTime)
@@ -479,6 +483,12 @@ export class BuildingRenderer {
     // This ensures previous/current matrix pairs are aligned correctly for velocity
     // PERF: Only re-sort when entity count changes (add/remove) to avoid O(n log n) every frame
     const rawEntities = this.world.getEntitiesWith('Transform', 'Building');
+
+    // TEMP: Log entity count for debugging render pipeline
+    if (this.debugFrameCount <= 10 || this.debugFrameCount % 300 === 0) {
+      console.log(`[BuildingRenderer] update #${this.debugFrameCount}: rawEntities=${rawEntities.length}, world=${this.world.constructor.name}`);
+    }
+
     if (rawEntities.length !== this.cachedEntityCount) {
       // Rebuild cache - entity count changed (add/remove occurred)
       this.cachedSortedEntities.length = 0;
