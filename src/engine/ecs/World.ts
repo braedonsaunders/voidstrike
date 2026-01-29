@@ -143,6 +143,7 @@ export class World {
    */
   private updateEntityArchetype(entityId: EntityId, entity: Entity): void {
     // Remove from old archetype
+    const oldSignature = this.entityArchetype.get(entityId);
     this.removeEntityFromArchetype(entityId);
 
     // Get entity's current component types
@@ -151,12 +152,18 @@ export class World {
 
     if (this._componentBuffer.length === 0) {
       // Entity has no components - don't add to any archetype
+      console.warn(`[World] updateEntityArchetype: Entity ${entityId} has no components!`);
       return;
     }
 
     // Sort to create consistent signature
     this._componentBuffer.sort();
     const signature = this._componentBuffer.join(',');
+
+    // TEMP: Debug for Unit component
+    if (signature.includes('Unit')) {
+      console.log(`[World] updateEntityArchetype: entityId=${entityId}, oldSig=${oldSignature || 'none'}, newSig=${signature}, components=${this._componentBuffer.length}`);
+    }
 
     // Get or create archetype
     let archetype = this.archetypes.get(signature);
@@ -167,12 +174,22 @@ export class World {
         entities: new Set(),
       };
       this.archetypes.set(signature, archetype);
+
+      // TEMP: Debug new archetype creation
+      if (signature.includes('Unit')) {
+        console.log(`[World] Created new archetype: ${signature}, componentSet has Unit=${archetype.componentSet.has('Unit')}`);
+      }
     }
 
     // Add entity to archetype
     archetype.entities.add(entityId);
     this.entityArchetype.set(entityId, signature);
     this.archetypeCacheVersion++;
+
+    // TEMP: Verify entity was added
+    if (signature.includes('Unit')) {
+      console.log(`[World] Entity ${entityId} added to archetype ${signature}, archetype.entities.size=${archetype.entities.size}`);
+    }
   }
 
   /**
@@ -289,6 +306,12 @@ export class World {
     const result: Entity[] = [];
     const requiredSet = new Set(componentTypes);
 
+    // TEMP: Debug Unit queries
+    const isUnitQuery = requiredSet.has('Unit');
+    if (isUnitQuery) {
+      console.log(`[World] getEntitiesWith('Unit'...): Searching ${this.archetypes.size} archetypes, cacheVersion=${this.archetypeCacheVersion}`);
+    }
+
     for (const archetype of this.archetypes.values()) {
       // Check if archetype contains all required components
       let hasAll = true;
@@ -300,6 +323,11 @@ export class World {
       }
 
       if (hasAll) {
+        // TEMP: Debug matching archetypes
+        if (isUnitQuery) {
+          console.log(`[World] Archetype ${archetype.signature} matches, entities=${archetype.entities.size}`);
+        }
+
         // Add all entities from this archetype
         for (const entityId of archetype.entities) {
           // Archetypes store full EntityIds, but entities Map is keyed by index
@@ -309,6 +337,11 @@ export class World {
           }
         }
       }
+    }
+
+    // TEMP: Debug final result
+    if (isUnitQuery) {
+      console.log(`[World] getEntitiesWith('Unit'...): Found ${result.length} entities`);
     }
 
     // Cache the result
@@ -374,9 +407,18 @@ export class World {
     this.componentIndex.get(type)!.add(entityId);
 
     // Update archetype - entity's component signature has changed
-    const entity = this.entities.get(getEntityIndex(entityId));
+    const index = getEntityIndex(entityId);
+    const entity = this.entities.get(index);
+
+    // TEMP: Debug archetype registration
+    if (type === 'Unit') {
+      console.log(`[World] onComponentAdded: entityId=${entityId}, index=${index}, type=${type}, entityFound=${!!entity}`);
+    }
+
     if (entity) {
       this.updateEntityArchetype(entityId, entity);
+    } else {
+      console.error(`[World] onComponentAdded: Entity not found for id=${entityId}, index=${index}`);
     }
   }
 
