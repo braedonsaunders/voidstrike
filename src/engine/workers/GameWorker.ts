@@ -1173,11 +1173,9 @@ export class WorkerGame {
       if (slot.type === 'ai' && this.config.aiEnabled) {
         if (DEBUG) console.log(`[GameWorker] Registering AI for ${slot.id} (${slot.faction}, ${slot.aiDifficulty})`);
 
-        // Set up initial resources for AI player
-        this.playerResources.set(slot.id, { minerals: 50, vespene: 0, supply: 0, maxSupply: 0 });
-
         // Register with EnhancedAISystem (which also emits ai:registered event
         // that AIMicroSystem listens to for unit micro behavior)
+        // Note: AI player resources are tracked by AICoordinator, not playerResources
         const enhancedAI = this.world.getSystem(EnhancedAISystem);
         if (enhancedAI) {
           enhancedAI.registerAI(slot.id, slot.faction, slot.aiDifficulty ?? 'medium');

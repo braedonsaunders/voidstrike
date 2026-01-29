@@ -387,6 +387,16 @@ export class AIBuildOrderExecutor {
       return false;
     }
 
+    // Prevent building if we already have one of this type under construction
+    // This avoids duplicate build orders for the same building type
+    const inProgressCount = ai.buildingsInProgress.get(buildingType) || 0;
+    if (inProgressCount > 0) {
+      if (shouldLog) {
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - ${buildingType} already in progress (${inProgressCount})`);
+      }
+      return false;
+    }
+
     // Check building requirements BEFORE attempting placement
     // This prevents invalid build attempts and resource churn
     if (buildingDef.requirements && buildingDef.requirements.length > 0) {
@@ -811,6 +821,13 @@ export class AIBuildOrderExecutor {
 
     // Check resources
     if (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost) {
+      return false;
+    }
+
+    // Prevent expanding if we already have an expansion under construction
+    const inProgressCount = ai.buildingsInProgress.get(expansionType) || 0;
+    if (inProgressCount > 0) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryExpand - ${expansionType} already in progress`);
       return false;
     }
 

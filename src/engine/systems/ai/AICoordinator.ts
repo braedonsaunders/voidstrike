@@ -570,6 +570,9 @@ export class AICoordinator extends System {
     }
 
     const buildings = this.getCachedBuildings();
+    const buildingsInProgress = new Map<string, number>();
+    let queuedSupply = 0;
+
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable');
       const building = entity.get<Building>('Building');
@@ -580,6 +583,19 @@ export class AICoordinator extends System {
       if (health.isDead()) continue;
 
       buildingCounts.set(building.buildingId, (buildingCounts.get(building.buildingId) || 0) + 1);
+
+      // Track buildings under construction (not complete)
+      if (!building.isComplete()) {
+        buildingsInProgress.set(building.buildingId, (buildingsInProgress.get(building.buildingId) || 0) + 1);
+      }
+
+      // Calculate supply cost of units in production queues
+      // This prevents infinite queuing by accounting for units that haven't spawned yet
+      for (const item of building.productionQueue) {
+        if (item.type === 'unit' && item.supplyCost > 0) {
+          queuedSupply += item.supplyCost * item.produceCount;
+        }
+      }
     }
 
     ai.workerCount = workerCount;
@@ -587,7 +603,9 @@ export class AICoordinator extends System {
     ai.armyValue = armySupply * 10;
     ai.armyComposition = armyComposition;
     ai.buildingCounts = buildingCounts;
-    ai.supply = workerCount + armySupply;
+    ai.buildingsInProgress = buildingsInProgress;
+    // Include queued supply to prevent infinite unit queuing
+    ai.supply = workerCount + armySupply + queuedSupply;
   }
 
   private updateMaxSupply(ai: AIPlayer): void {
