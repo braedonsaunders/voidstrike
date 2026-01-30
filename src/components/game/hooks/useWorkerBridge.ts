@@ -197,6 +197,18 @@ export function useWorkerBridge({
       // Set terrain data on game instance
       game.setTerrainGrid(currentMap.terrain);
 
+      // Configure SelectionSystem for worker mode:
+      // - Use RenderStateWorldAdapter for entity queries (has actual entity data from worker)
+      // - Sync selection changes to worker via WorkerBridge.setSelection
+      const selectionSystem = game.selectionSystem;
+      selectionSystem.setWorldProvider(worldProviderRef.current!);
+      selectionSystem.setSelectionSyncCallback((entityIds, playerId) => {
+        bridge.setSelection(entityIds, playerId);
+      });
+      if (localPlayerId) {
+        selectionSystem.setPlayerId(localPlayerId);
+      }
+
       setIsInitialized(true);
       return true;
     } catch (error) {

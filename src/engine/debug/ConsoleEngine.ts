@@ -7,6 +7,8 @@
 
 import { Game } from '@/engine/core/Game';
 import { RTSCamera } from '@/rendering/Camera';
+import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
+import { getWorkerBridge } from '@/engine/workers/WorkerBridge';
 import {
   CONSOLE_COMMANDS,
   COMMAND_MAP,
@@ -21,11 +23,6 @@ import {
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { useGameStore } from '@/store/gameStore';
 import { DefinitionRegistry } from '@/engine/definitions';
-import { Transform } from '@/engine/components/Transform';
-import { Health } from '@/engine/components/Health';
-import { Selectable } from '@/engine/components/Selectable';
-import { Unit } from '@/engine/components/Unit';
-import { Building } from '@/engine/components/Building';
 
 // Console output entry
 export interface ConsoleEntry {
@@ -588,45 +585,61 @@ export class ConsoleEngine {
 
       case 'killUnits': {
         const targetPlayer = args.player as string | undefined;
-        const units = ctx.game.world.getEntitiesWith('Unit', 'Health', 'Selectable');
+        const worldAdapter = RenderStateWorldAdapter.getInstance();
+        if (!worldAdapter) {
+          return { success: false, message: 'Game not initialized' };
+        }
 
-        let killed = 0;
+        const units = worldAdapter.getEntitiesWith('Unit', 'Health', 'Selectable');
+        const entityIds: number[] = [];
+
         for (const entity of units) {
-          const selectable = entity.get<Selectable>('Selectable');
+          const selectable = entity.get<{ playerId: string }>('Selectable');
+          const health = entity.get<{ isDead: () => boolean }>('Health');
           if (targetPlayer && selectable?.playerId !== targetPlayer) continue;
-
-          const health = entity.get<Health>('Health');
           if (health && !health.isDead()) {
-            health.current = 0;
-            killed++;
+            entityIds.push(entity.id);
           }
+        }
+
+        // Emit debug event - worker will handle the actual killing
+        for (const entityId of entityIds) {
+          ctx.game.eventBus.emit('debug:killEntity', { entityId });
         }
 
         return {
           success: true,
-          message: `Killed ${killed} units${targetPlayer ? ` belonging to ${targetPlayer}` : ''}`,
+          message: `Killing ${entityIds.length} units${targetPlayer ? ` belonging to ${targetPlayer}` : ''}`,
         };
       }
 
       case 'killBuildings': {
         const targetPlayer = args.player as string | undefined;
-        const buildings = ctx.game.world.getEntitiesWith('Building', 'Health', 'Selectable');
+        const worldAdapter = RenderStateWorldAdapter.getInstance();
+        if (!worldAdapter) {
+          return { success: false, message: 'Game not initialized' };
+        }
 
-        let destroyed = 0;
+        const buildings = worldAdapter.getEntitiesWith('Building', 'Health', 'Selectable');
+        const entityIds: number[] = [];
+
         for (const entity of buildings) {
-          const selectable = entity.get<Selectable>('Selectable');
+          const selectable = entity.get<{ playerId: string }>('Selectable');
+          const health = entity.get<{ isDead: () => boolean }>('Health');
           if (targetPlayer && selectable?.playerId !== targetPlayer) continue;
-
-          const health = entity.get<Health>('Health');
           if (health && !health.isDead()) {
-            health.current = 0;
-            destroyed++;
+            entityIds.push(entity.id);
           }
+        }
+
+        // Emit debug event - worker will handle the actual destruction
+        for (const entityId of entityIds) {
+          ctx.game.eventBus.emit('debug:killEntity', { entityId });
         }
 
         return {
           success: true,
-          message: `Destroyed ${destroyed} buildings${targetPlayer ? ` belonging to ${targetPlayer}` : ''}`,
+          message: `Destroying ${entityIds.length} buildings${targetPlayer ? ` belonging to ${targetPlayer}` : ''}`,
         };
       }
 
@@ -634,20 +647,22 @@ export class ConsoleEngine {
         const entityId = args.entityId as number;
         const amount = args.amount as number;
 
-        const entity = ctx.game.world.getEntity(entityId);
+        const worldAdapter = RenderStateWorldAdapter.getInstance();
+        if (!worldAdapter) {
+          return { success: false, message: 'Game not initialized' };
+        }
+
+        const entity = worldAdapter.getEntity(entityId);
         if (!entity) {
           return { success: false, message: `Entity ${entityId} not found` };
         }
 
-        const health = entity.get<Health>('Health');
-        if (!health) {
-          return { success: false, message: `Entity ${entityId} has no health component` };
-        }
+        // Emit debug event - worker will handle the damage
+        ctx.game.eventBus.emit('debug:damageEntity', { entityId, amount });
 
-        const actual = health.takeDamage(amount, ctx.game.getGameTime());
         return {
           success: true,
-          message: `Dealt ${actual} damage to entity ${entityId} (HP: ${health.current.toFixed(0)}/${health.max})`,
+          message: `Dealing ${amount} damage to entity ${entityId}`,
         };
       }
 
@@ -655,21 +670,22 @@ export class ConsoleEngine {
         const entityId = args.entityId as number;
         const amount = args.amount as number | undefined;
 
-        const entity = ctx.game.world.getEntity(entityId);
+        const worldAdapter = RenderStateWorldAdapter.getInstance();
+        if (!worldAdapter) {
+          return { success: false, message: 'Game not initialized' };
+        }
+
+        const entity = worldAdapter.getEntity(entityId);
         if (!entity) {
           return { success: false, message: `Entity ${entityId} not found` };
         }
 
-        const health = entity.get<Health>('Health');
-        if (!health) {
-          return { success: false, message: `Entity ${entityId} has no health component` };
-        }
+        // Emit debug event - worker will handle the healing
+        ctx.game.eventBus.emit('debug:healEntity', { entityId, amount });
 
-        const healAmount = amount ?? health.max;
-        const actual = health.heal(healAmount);
         return {
           success: true,
-          message: `Healed entity ${entityId} for ${actual} HP (HP: ${health.current.toFixed(0)}/${health.max})`,
+          message: `Healing entity ${entityId}${amount ? ` for ${amount} HP` : ' to full'}`,
         };
       }
 
@@ -678,33 +694,46 @@ export class ConsoleEngine {
         const x = args.x as number;
         const y = args.y as number;
 
-        const entity = ctx.game.world.getEntity(entityId);
+        const worldAdapter = RenderStateWorldAdapter.getInstance();
+        if (!worldAdapter) {
+          return { success: false, message: 'Game not initialized' };
+        }
+
+        const entity = worldAdapter.getEntity(entityId);
         if (!entity) {
           return { success: false, message: `Entity ${entityId} not found` };
         }
 
-        const transform = entity.get<Transform>('Transform');
-        if (!transform) {
-          return { success: false, message: `Entity ${entityId} has no transform component` };
-        }
+        // Emit debug event - worker will handle the teleport
+        ctx.game.eventBus.emit('debug:teleportEntity', { entityId, x, y });
 
-        transform.x = x;
-        transform.y = y;
         return {
           success: true,
-          message: `Teleported entity ${entityId} to (${x.toFixed(1)}, ${y.toFixed(1)})`,
+          message: `Teleporting entity ${entityId} to (${x.toFixed(1)}, ${y.toFixed(1)})`,
         };
       }
 
       case 'selectEntity': {
         const entityId = args.entityId as number;
 
-        const entity = ctx.game.world.getEntity(entityId);
+        const worldAdapter = RenderStateWorldAdapter.getInstance();
+        if (!worldAdapter) {
+          return { success: false, message: 'Game not initialized' };
+        }
+
+        const entity = worldAdapter.getEntity(entityId);
         if (!entity) {
           return { success: false, message: `Entity ${entityId} not found` };
         }
 
         useGameStore.getState().selectUnits([entityId]);
+
+        // Sync selection to worker
+        const bridge = getWorkerBridge();
+        if (bridge) {
+          bridge.setSelection([entityId], ctx.playerId);
+        }
+
         return {
           success: true,
           message: `Selected entity ${entityId}`,
@@ -753,12 +782,15 @@ export class ConsoleEngine {
         const result = action.result as 'victory' | 'defeat';
         const duration = ctx.game.getGameTime();
 
-        // Get opponent player ID for loser field
+        // Get opponent player ID from render state
+        const worldAdapter = RenderStateWorldAdapter.getInstance();
         const allPlayers = new Set<string>();
-        const allEntities = ctx.game.world.getEntitiesWith('Selectable');
-        for (const entity of allEntities) {
-          const selectable = entity.get<Selectable>('Selectable');
-          if (selectable) allPlayers.add(selectable.playerId);
+        if (worldAdapter) {
+          const allEntities = worldAdapter.getEntitiesWith('Selectable');
+          for (const entity of allEntities) {
+            const selectable = entity.get<{ playerId: string }>('Selectable');
+            if (selectable) allPlayers.add(selectable.playerId);
+          }
         }
         const otherPlayers = [...allPlayers].filter(p => p !== ctx.playerId);
         const opponent = otherPlayers[0] || 'opponent';
@@ -787,32 +819,12 @@ export class ConsoleEngine {
   // ---------------------------------------------------------------------------
 
   /**
-   * Apply god mode to all units and buildings owned by the player
+   * Apply god mode to all units and buildings owned by the player.
+   * Emits debug event for worker to handle the actual state change.
    */
   private applyGodMode(game: Game, playerId: string, enabled: boolean): void {
-    // Apply to units
-    const units = game.world.getEntitiesWith('Unit', 'Health', 'Selectable');
-    for (const entity of units) {
-      const selectable = entity.get<Selectable>('Selectable');
-      if (selectable?.playerId === playerId) {
-        const health = entity.get<Health>('Health');
-        if (health) {
-          health.isInvincible = enabled;
-        }
-      }
-    }
-
-    // Apply to buildings
-    const buildings = game.world.getEntitiesWith('Building', 'Health', 'Selectable');
-    for (const entity of buildings) {
-      const selectable = entity.get<Selectable>('Selectable');
-      if (selectable?.playerId === playerId) {
-        const health = entity.get<Health>('Health');
-        if (health) {
-          health.isInvincible = enabled;
-        }
-      }
-    }
+    // Emit debug event - worker will handle setting invincibility on entities
+    game.eventBus.emit('debug:setGodMode', { playerId, enabled });
   }
 
   // ---------------------------------------------------------------------------
