@@ -484,10 +484,6 @@ export class BuildingRenderer {
     // PERF: Only re-sort when entity count changes (add/remove) to avoid O(n log n) every frame
     const rawEntities = this.world.getEntitiesWith('Transform', 'Building');
 
-    // TEMP: Log entity count for debugging render pipeline
-    if (this.debugFrameCount <= 10 || this.debugFrameCount % 300 === 0) {
-      console.log(`[BuildingRenderer] update #${this.debugFrameCount}: rawEntities=${rawEntities.length}, world=${this.world.constructor.name}`);
-    }
 
     if (rawEntities.length !== this.cachedEntityCount) {
       // Rebuild cache - entity count changed (add/remove occurred)

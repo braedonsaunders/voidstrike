@@ -61,9 +61,6 @@ export class SpawnSystem extends System {
     // Create the entity
     const entity = this.world.createEntity();
 
-    // Diagnostic: confirm entity creation
-    console.log(`[SpawnSystem] Created ${unitType} entity #${entity.id} at (${x.toFixed(1)}, ${y.toFixed(1)}) for ${playerId}`);
-
     // Calculate visual properties for selection
     // Flying units need visualHeight to match their rendered position
     const isFlying = definition.isFlying ?? false;
@@ -89,13 +86,6 @@ export class SpawnSystem extends System {
       .add(new Health(definition.maxHealth, definition.armor, this.getArmorType(definition)))
       .add(new Selectable(selectionRadius, 5, playerId, visualScale, visualHeight))
       .add(new Velocity());
-
-    // TEMP: Verify all required components are present
-    const hasTransform = entity.has('Transform');
-    const hasUnit = entity.has('Unit');
-    const hasHealth = entity.has('Health');
-    const hasSelectable = entity.has('Selectable');
-    console.log(`[SpawnSystem] Entity #${entity.id} components: T=${hasTransform}, U=${hasUnit}, H=${hasHealth}, S=${hasSelectable}`);
 
     // Add abilities if the unit has any
     if (definition.abilities && definition.abilities.length > 0) {
