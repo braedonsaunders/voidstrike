@@ -2,10 +2,8 @@
 
 import { useEffect, useState, memo, useRef } from 'react';
 import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
-import { Game } from '@/engine/core/Game';
-import { Selectable } from '@/engine/components/Selectable';
-import { Health } from '@/engine/components/Health';
-import { Unit } from '@/engine/components/Unit';
+import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
+import { getWorkerBridge } from '@/engine/workers/WorkerBridge';
 
 interface PlayerStatus {
   playerId: string;
@@ -30,8 +28,9 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
 
   // Update player statuses with tick-based caching
   useEffect(() => {
-    const game = Game.getInstance();
-    if (!game) return;
+    const worldAdapter = RenderStateWorldAdapter.getInstance();
+    const workerBridge = getWorkerBridge();
+    if (!worldAdapter) return;
 
     // Get active player slots (human or AI) and sort by player ID for consistent ordering
     const activeSlots = playerSlots
@@ -44,18 +43,18 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
       });
 
     const computeStatuses = (): PlayerStatus[] => {
-      const currentTick = game.getCurrentTick();
+      const currentTick = worldAdapter.getTick();
       // Skip if already computed for this tick
       if (currentTick === lastTickRef.current) {
         return cachedStatusesRef.current;
       }
 
-      const world = game.world;
       const statuses: PlayerStatus[] = [];
 
       // PERF: Query entities once, then filter by player
-      const buildings = world.getEntitiesWith('Building', 'Selectable', 'Health');
-      const units = world.getEntitiesWith('Unit', 'Selectable', 'Health');
+      // RenderStateWorldAdapter provides entity data from the worker
+      const buildings = worldAdapter.getEntitiesWith('Building');
+      const units = worldAdapter.getEntitiesWith('Unit');
 
       for (const slot of activeSlots) {
         let buildingCount = 0;
@@ -65,8 +64,8 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
 
         // Count buildings for this player
         for (const entity of buildings) {
-          const selectable = entity.get<Selectable>('Selectable');
-          const health = entity.get<Health>('Health');
+          const selectable = entity.get<{ playerId: string }>('Selectable');
+          const health = entity.get<{ isDead: () => boolean }>('Health');
           if (selectable?.playerId === slot.id && !health?.isDead()) {
             buildingCount++;
           }
@@ -74,9 +73,9 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
 
         // Count units for this player
         for (const entity of units) {
-          const selectable = entity.get<Selectable>('Selectable');
-          const unit = entity.get<Unit>('Unit');
-          const health = entity.get<Health>('Health');
+          const selectable = entity.get<{ playerId: string }>('Selectable');
+          const unit = entity.get<{ isWorker: boolean }>('Unit');
+          const health = entity.get<{ isDead: () => boolean }>('Health');
           if (selectable?.playerId === slot.id && !health?.isDead()) {
             unitCount++;
             if (unit?.isWorker) {
@@ -112,9 +111,9 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
     };
 
     // Subscribe to events that could change player stats
-    const eventBus = game.eventBus;
-    const unsubSpawned = eventBus.on('unit:spawned', updateStatuses);
-    const unsubDied = eventBus.on('unit:died', updateStatuses);
+    const eventBus = workerBridge?.eventBus;
+    const unsubSpawned = eventBus?.on('unit:spawned', updateStatuses);
+    const unsubDied = eventBus?.on('unit:died', updateStatuses);
 
     // Update immediately
     updateStatuses();
@@ -123,8 +122,8 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
     const interval = setInterval(updateStatuses, 2000);
 
     return () => {
-      unsubSpawned();
-      unsubDied();
+      unsubSpawned?.();
+      unsubDied?.();
       clearInterval(interval);
     };
   }, [playerSlots]);
