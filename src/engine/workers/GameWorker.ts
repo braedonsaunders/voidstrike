@@ -887,6 +887,11 @@ export class WorkerGame extends GameCore {
     }
 
     this.eventBus.emit('game:entitiesSpawned', { mapName: mapData.name });
+
+    // Send initial render state so main thread can display entities before game starts
+    // This allows the loading screen to complete once entities are ready
+    this.sendRenderState();
+    debugInitialization.log('[GameWorker] Sent initial render state after spawning entities');
   }
 
   private spawnBase(playerId: string, x: number, y: number): void {
