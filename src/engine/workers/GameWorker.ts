@@ -615,6 +615,20 @@ export class WorkerGame {
   }
 
   /**
+   * Get terrain height at a specific world position.
+   * Converts elevation (0-255) to world height units.
+   * Returns 0 if terrain data is not available.
+   */
+  public getTerrainHeightAt(worldX: number, worldY: number): number {
+    const cell = this.getTerrainAt(worldX, worldY);
+    if (!cell) return 0;
+
+    // Convert elevation to height using same formula as Terrain.ts
+    // elevation * 0.04 gives range 0 to ~10.2 units
+    return cell.elevation * 0.04;
+  }
+
+  /**
    * Check if a building position overlaps with decorations (rocks, trees).
    */
   public isPositionClearOfDecorations(centerX: number, centerY: number, width: number, height: number): boolean {
