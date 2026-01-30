@@ -351,7 +351,7 @@ export function useWebGPURenderer({
       // In worker mode, worldProviderRef points to RenderStateWorldAdapter
       // visionSystem is null in worker mode - visibility comes from RenderState
       const worldProvider = getWorldProvider();
-      console.log(`[useWebGPURenderer] Creating UnitRenderer with worldProvider: ${worldProvider.constructor.name}`);
+      debugInitialization.log(`[useWebGPURenderer] Creating UnitRenderer with worldProvider: ${worldProvider.constructor.name}`);
       unitRendererRef.current = new UnitRenderer(
         scene,
         worldProvider,
@@ -383,7 +383,7 @@ export function useWebGPURenderer({
 
       // Create building renderer
       const buildingWorldProvider = getWorldProvider();
-      console.log(`[useWebGPURenderer] Creating BuildingRenderer with worldProvider: ${buildingWorldProvider.constructor.name}`);
+      debugInitialization.log(`[useWebGPURenderer] Creating BuildingRenderer with worldProvider: ${buildingWorldProvider.constructor.name}`);
       buildingRendererRef.current = new BuildingRenderer(
         scene,
         buildingWorldProvider,

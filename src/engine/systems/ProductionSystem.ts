@@ -8,7 +8,7 @@ import { Game } from '../core/Game';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
-import { debugProduction } from '@/utils/debugLogger';
+import { debugProduction, debugSpawning } from '@/utils/debugLogger';
 import { EnhancedAISystem } from './EnhancedAISystem';
 
 export class ProductionSystem extends System {
@@ -384,7 +384,7 @@ export class ProductionSystem extends System {
         const spawnY = baseSpawnY + (i * 0.5);
 
         // Diagnostic: log when units are spawned (helps debug AI production issues)
-        console.log(`[ProductionSystem] ${ownerPlayerId}: Spawning ${item.id} at (${spawnX.toFixed(1)}, ${spawnY.toFixed(1)})`);
+        debugSpawning.log(`[ProductionSystem] ${ownerPlayerId}: Spawning ${item.id} at (${spawnX.toFixed(1)}, ${spawnY.toFixed(1)})`);
 
         this.game.eventBus.emit('unit:spawn', {
           unitType: item.id,
