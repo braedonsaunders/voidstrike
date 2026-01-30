@@ -32,6 +32,10 @@ const MAX_UNIT_TYPES = 64;
 const MAX_LOD_LEVELS = 3;
 const MAX_PLAYERS = 8;
 
+// Number of frames to quarantine geometries before disposal.
+// WebGPU typically has 2-3 frames in flight; 4 frames provides safety margin.
+const GEOMETRY_QUARANTINE_FRAMES = 4;
+
 /**
  * Per-unit-type mesh configuration
  */
@@ -90,6 +94,17 @@ export class GPUIndirectRenderer {
 
   // Initialization state
   private initialized = false;
+
+  // Frame counter for quarantine timing
+  private frameCount = 0;
+
+  // Geometry disposal quarantine - prevents WebGPU "setIndexBuffer" crashes
+  // by delaying geometry disposal until GPU has finished pending draw commands.
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    material: THREE.Material;
+    frameQueued: number;
+  }> = [];
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
@@ -299,6 +314,44 @@ export class GPUIndirectRenderer {
   }
 
   /**
+   * Queue geometry and material for delayed disposal.
+   * This prevents WebGPU "setIndexBuffer" crashes by ensuring the GPU
+   * has finished all pending draw commands before buffers are freed.
+   */
+  private queueGeometryForDisposal(
+    geometry: THREE.BufferGeometry,
+    material: THREE.Material
+  ): void {
+    this.geometryQuarantine.push({
+      geometry,
+      material,
+      frameQueued: this.frameCount,
+    });
+  }
+
+  /**
+   * Process quarantined geometries and dispose those that are safe.
+   * Call this once per frame.
+   */
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = this.frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= GEOMETRY_QUARANTINE_FRAMES) {
+        // Safe to dispose - GPU has finished with these buffers
+        entry.geometry.dispose();
+        entry.material.dispose();
+      } else {
+        // Keep in quarantine
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
+  }
+
+  /**
    * Reset all indirect args instance counts to 0
    * Called before culling each frame
    */
@@ -404,6 +457,9 @@ export class GPUIndirectRenderer {
    * Call this each frame before rendering
    */
   updateInstanceMatrices(): void {
+    this.frameCount++;
+    this.processGeometryQuarantine();
+
     if (!this.gpuEntityBuffer) return;
 
     const transformData = this.gpuEntityBuffer.getTransformData();
@@ -498,12 +554,27 @@ export class GPUIndirectRenderer {
    * Dispose all resources
    */
   dispose(): void {
+    // Flush any pending quarantined geometries first
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      entry.material.dispose();
+    }
+    this.geometryQuarantine.length = 0;
+
+    // Dispose all indirect meshes - use quarantine for meshes that may still be in flight
     for (const [, data] of this.indirectMeshes) {
       this.scene.remove(data.mesh);
-      data.geometry.dispose();
-      data.material.dispose();
+      // Queue for delayed disposal to prevent WebGPU crashes if GPU still using buffers
+      this.queueGeometryForDisposal(data.geometry, data.material);
     }
     this.indirectMeshes.clear();
+
+    // Flush the quarantine immediately since we're doing a full teardown
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      entry.material.dispose();
+    }
+    this.geometryQuarantine.length = 0;
 
     this.unitTypeGeometries.clear();
     this.unitTypeMaterials.clear();
