@@ -107,6 +107,7 @@ const MAX_SELECTION_RING_INSTANCES = BUILDING_RENDERER.MAX_SELECTION_RING_INSTAN
  * Setting needsUpdate on cloned attributes forces WebGPU to create fresh GPU buffers.
  * Without this, WebGPU may lazily share buffers with the source geometry, which
  * become invalid when the source is disposed, causing "setIndexBuffer" crashes.
+ * Also ensures required attributes (like UVs) exist to prevent "Vertex buffer slot" errors.
  */
 function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry {
   const cloned = source.clone();
@@ -119,6 +120,20 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
   // Mark index buffer as needing GPU buffer upload if present
   if (cloned.index) {
     cloned.index.needsUpdate = true;
+  }
+
+  // Ensure UV coordinates exist - required by many shaders (slot 1)
+  // Some models from Tripo/Meshy AI lack UVs, causing "Vertex buffer slot 1" errors
+  if (!cloned.attributes.uv && cloned.attributes.position) {
+    const posCount = cloned.attributes.position.count;
+    const uvArray = new Float32Array(posCount * 2);
+    // Generate basic UV coords based on position (simple projection)
+    const pos = cloned.attributes.position;
+    for (let i = 0; i < posCount; i++) {
+      uvArray[i * 2] = pos.getX(i) * 0.5 + 0.5;
+      uvArray[i * 2 + 1] = pos.getZ(i) * 0.5 + 0.5;
+    }
+    cloned.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
   }
 
   return cloned;

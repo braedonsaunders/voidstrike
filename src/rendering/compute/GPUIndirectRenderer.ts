@@ -212,6 +212,19 @@ export class GPUIndirectRenderer {
       instancedGeometry.setIndex(clonedIndex);
     }
 
+    // Ensure UV coordinates exist - required by many shaders (slot 1)
+    // Some models from Tripo/Meshy AI lack UVs, causing "Vertex buffer slot 1" errors
+    if (!instancedGeometry.attributes.uv && instancedGeometry.attributes.position) {
+      const posCount = instancedGeometry.attributes.position.count;
+      const uvArray = new Float32Array(posCount * 2);
+      const pos = instancedGeometry.attributes.position;
+      for (let i = 0; i < posCount; i++) {
+        uvArray[i * 2] = pos.getX(i) * 0.5 + 0.5;
+        uvArray[i * 2 + 1] = pos.getZ(i) * 0.5 + 0.5;
+      }
+      instancedGeometry.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
+    }
+
     // Create per-instance position offset attribute (vec3)
     // This is simpler than full mat4 transforms and works with WebGPU
     const instanceOffsetData = new Float32Array(MAX_UNITS * 3);
