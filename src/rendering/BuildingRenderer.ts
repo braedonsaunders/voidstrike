@@ -102,6 +102,28 @@ interface InstancedBuildingGroup {
 const MAX_BUILDING_INSTANCES_PER_TYPE = BUILDING_RENDERER.MAX_INSTANCES_PER_TYPE;
 const MAX_SELECTION_RING_INSTANCES = BUILDING_RENDERER.MAX_SELECTION_RING_INSTANCES;
 
+/**
+ * Clone geometry with proper GPU buffer initialization for WebGPU.
+ * Setting needsUpdate on cloned attributes forces WebGPU to create fresh GPU buffers.
+ * Without this, WebGPU may lazily share buffers with the source geometry, which
+ * become invalid when the source is disposed, causing "setIndexBuffer" crashes.
+ */
+function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry {
+  const cloned = source.clone();
+
+  // Mark all attributes as needing GPU buffer upload
+  for (const name of Object.keys(cloned.attributes)) {
+    cloned.attributes[name].needsUpdate = true;
+  }
+
+  // Mark index buffer as needing GPU buffer upload if present
+  if (cloned.index) {
+    cloned.index.needsUpdate = true;
+  }
+
+  return cloned;
+}
+
 export class BuildingRenderer {
   private scene: THREE.Scene;
   private world: IWorldProvider;
@@ -288,10 +310,10 @@ export class BuildingRenderer {
 
       baseMesh.traverse((child) => {
         if (child instanceof THREE.Mesh && !geometry) {
-          // Clone geometry to avoid sharing disposal lifecycle with asset cache.
-          // Without cloning, disposing this mesh would invalidate GPU buffers
-          // still used by other meshes, causing WebGPU "setIndexBuffer" crashes.
-          geometry = child.geometry.clone();
+          // Clone geometry with proper GPU buffer initialization to prevent WebGPU crashes.
+          // Without cloning and setting needsUpdate, disposing this mesh would invalidate
+          // GPU buffers still used by other meshes, causing "setIndexBuffer" errors.
+          geometry = cloneGeometryForGPU(child.geometry);
           material = child.material;
           // Get the world scale of this mesh (includes parent scales from normalization)
           child.getWorldScale(modelScale);
