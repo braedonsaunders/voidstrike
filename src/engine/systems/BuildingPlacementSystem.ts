@@ -364,26 +364,35 @@ export class BuildingPlacementSystem extends System {
     }
 
     const isPlayerLocal = isLocalPlayer(playerId);
-    const aiPlayer = !isPlayerLocal ? this.getAISystem()?.getAIPlayer(playerId) : undefined;
+    const aiSystem = this.getAISystem();
+    const aiPlayer = !isPlayerLocal ? aiSystem?.getAIPlayer(playerId) : undefined;
     const isPlayerAI = aiPlayer !== undefined;
+
+    // Debug: Log player type detection
+    console.log(`[BuildingPlacement] Player check: playerId=${playerId}, isLocal=${isPlayerLocal}, hasAISystem=${!!aiSystem}, isAI=${isPlayerAI}`);
 
     // Check resources (local player via game store, AI via AI state)
     if (isPlayerLocal) {
       if (this.game.statePort.getMinerals() < definition.mineralCost) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
         this.game.eventBus.emit('warning:lowMinerals', {});
+        console.log(`[BuildingPlacement] FAIL: Local player lacks minerals`);
         return;
       }
       if (this.game.statePort.getVespene() < definition.vespeneCost) {
         this.game.eventBus.emit('alert:notEnoughVespene', {});
         this.game.eventBus.emit('warning:lowVespene', {});
+        console.log(`[BuildingPlacement] FAIL: Local player lacks vespene`);
         return;
       }
     } else if (isPlayerAI && aiPlayer) {
       if (aiPlayer.minerals < definition.mineralCost || aiPlayer.vespene < definition.vespeneCost) {
-        debugBuildingPlacement.log(`BuildingPlacementSystem: AI ${playerId} lacks resources for ${buildingType} (need ${definition.mineralCost}M/${definition.vespeneCost}G, have ${Math.floor(aiPlayer.minerals)}M/${Math.floor(aiPlayer.vespene)}G)`);
+        console.log(`[BuildingPlacement] FAIL: AI ${playerId} lacks resources for ${buildingType} (need ${definition.mineralCost}M/${definition.vespeneCost}G, have ${Math.floor(aiPlayer.minerals)}M/${Math.floor(aiPlayer.vespene)}G)`);
         return;
       }
+    } else {
+      // Neither local nor AI player - this shouldn't happen
+      console.log(`[BuildingPlacement] WARNING: Player ${playerId} is neither local nor AI - skipping resource check`);
     }
 
     // Check building dependencies (tech requirements)
@@ -416,16 +425,20 @@ export class BuildingPlacementSystem extends System {
     // so we can exclude them from collision detection
     const worker = this.findWorkerForConstruction(data.workerId, playerId);
     if (!worker) {
+      console.log(`[BuildingPlacement] FAIL: No worker available for ${playerId} to build ${buildingType}`);
       this.game.eventBus.emit('ui:error', { message: 'No worker available', playerId });
       return;
     }
+    console.log(`[BuildingPlacement] Found worker ${worker.entity.id} for ${buildingType}`);
 
     // Check placement validity using center position (exclude builder from collision)
     // Skip collision check for extractors since they go on vespene geysers
     if (buildingType !== 'extractor' && !this.isValidPlacement(snappedX, snappedY, definition.width, definition.height, worker.entity.id)) {
+      console.log(`[BuildingPlacement] FAIL: Invalid placement at (${snappedX}, ${snappedY}) for ${buildingType}`);
       this.game.eventBus.emit('ui:error', { message: 'Cannot build here - area blocked', playerId });
       return;
     }
+    console.log(`[BuildingPlacement] Placement valid at (${snappedX}, ${snappedY}) for ${buildingType}`);
 
     // Deduct resources (local player via store, AI via AI state)
     if (isPlayerLocal) {
