@@ -145,7 +145,7 @@ const COMMAND_EVENTS: Record<GameCommandType, string> = {
   CANCEL_BUILDING: 'building:cancel',
   QUEUE_REORDER: 'production:reorder',
   SUPPLY_DEPOT_LOWER: 'command:lowerSupplyDepot',
-  SUPPLY_DEPOT_RAISE: 'command:lowerSupplyDepot',
+  SUPPLY_DEPOT_RAISE: 'command:raiseSupplyDepot',
   SET_AUTOCAST: 'ability:setAutocast',
   BUILD_WALL: 'wall:build',
   ADDON_LIFT: 'addon:lift',
