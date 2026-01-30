@@ -34,6 +34,7 @@ const THREAT_WINDOW_TICKS = 200; // ~10 seconds at 20 ticks/sec
 // SC2-style engagement tracking constants
 const ENGAGEMENT_CHECK_INTERVAL = 10; // Check engagement every 10 ticks (~500ms)
 const RE_COMMAND_IDLE_INTERVAL = 40; // Re-command idle units every 40 ticks (~2 sec)
+const DEFENSE_COMMAND_INTERVAL = 20; // Re-command defending units every 20 ticks (~1 sec)
 const HUNT_MODE_BUILDING_THRESHOLD = 3; // Enter hunt mode when enemy has <= 3 buildings
 const ASSAULT_IDLE_TIMEOUT_TICKS = 100; // If assault unit idle for 5 sec, consider it "stuck"
 
@@ -44,6 +45,7 @@ export class AITacticsManager {
   // SC2-style engagement tracking per AI player
   private lastEngagementCheck: Map<string, number> = new Map();
   private lastReCommandTick: Map<string, number> = new Map();
+  private lastDefenseCommandTick: Map<string, number> = new Map();
   private isEngaged: Map<string, boolean> = new Map();
 
   constructor(game: Game, coordinator: AICoordinator) {
@@ -424,6 +426,10 @@ export class AITacticsManager {
 
   /**
    * Execute the defending phase.
+   *
+   * FIX: Added throttling to prevent constant re-commanding which was causing units
+   * to move around without actually attacking. Now only re-commands idle units
+   * periodically, allowing engaged units to continue fighting.
    */
   public executeDefendingPhase(ai: AIPlayer, currentTick: number): void {
     const armyUnits = this.getArmyUnits(ai.playerId);
@@ -439,38 +445,106 @@ export class AITacticsManager {
       return;
     }
 
-    // Find nearest enemy threat
+    // Find nearest enemy threat - search wider radius for defense (100 units instead of 50)
     const threatPos = this.findNearestThreat(ai, basePos);
+
+    // If no threat found near base, check if we're still under attack
+    // (enemy might have retreated or been killed)
     if (!threatPos) {
-      ai.state = 'building';
+      if (!this.isUnderAttack(ai)) {
+        ai.state = 'building';
+        debugAI.log(`[AITactics] ${ai.playerId}: No threats found, returning to build`);
+      }
       return;
     }
 
-    // Issue attack command towards threat
-    const command: GameCommand = {
-      tick: currentTick,
-      playerId: ai.playerId,
-      type: 'ATTACK',
-      entityIds: armyUnits,
-      targetPosition: threatPos,
-    };
+    // Throttle defense commands - don't re-command every tick
+    const lastDefenseCommand = this.lastDefenseCommandTick.get(ai.playerId) || 0;
+    const shouldCommand = currentTick - lastDefenseCommand >= DEFENSE_COMMAND_INTERVAL;
 
-    this.game.processCommand(command);
+    if (shouldCommand) {
+      // Only command units that are idle or not yet engaged in combat
+      // Units already attacking or moving to attack should continue without interruption
+      const idleDefenders = this.getIdleDefendingUnits(ai.playerId, armyUnits);
 
-    debugAI.log(`[AITactics] ${ai.playerId}: Defending base with ${armyUnits.length} units`);
+      if (idleDefenders.length > 0) {
+        // Issue attack-move command towards threat
+        // Using ATTACK with targetPosition triggers attack-move behavior
+        const command: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'ATTACK',
+          entityIds: idleDefenders,
+          targetPosition: threatPos,
+        };
+
+        this.game.processCommand(command);
+
+        debugAI.log(
+          `[AITactics] ${ai.playerId}: Commanding ${idleDefenders.length}/${armyUnits.length} ` +
+          `idle defenders to threat at (${threatPos.x.toFixed(0)}, ${threatPos.y.toFixed(0)})`
+        );
+      }
+
+      this.lastDefenseCommandTick.set(ai.playerId, currentTick);
+    }
 
     // Check if threat is eliminated
     if (!this.isUnderAttack(ai)) {
       ai.state = 'building';
+      debugAI.log(`[AITactics] ${ai.playerId}: Threat eliminated, returning to build`);
     }
   }
 
   /**
+   * Get army units that are idle and need to be commanded for defense.
+   * Excludes units already engaged in combat or moving to attack.
+   */
+  private getIdleDefendingUnits(playerId: string, armyUnits: number[]): number[] {
+    const idleUnits: number[] = [];
+
+    for (const entityId of armyUnits) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const unit = entity.get<Unit>('Unit');
+      const health = entity.get<Health>('Health');
+      if (!unit || !health) continue;
+      if (health.isDead()) continue;
+
+      // Unit needs commanding if:
+      // 1. It's idle (not doing anything)
+      // 2. It's completely stopped (no target, no destination)
+      const isIdle = unit.state === 'idle' && unit.targetEntityId === null;
+      const isStuck = unit.state === 'idle' && !unit.isInAssaultMode;
+
+      // Don't interrupt units that are:
+      // - Currently attacking (has a target)
+      // - Moving to attack (attackmoving state)
+      // - In assault mode and actively scanning
+      const isEngaged = unit.targetEntityId !== null ||
+        unit.state === 'attacking' ||
+        (unit.state === 'attackmoving' && unit.targetX !== null);
+
+      if ((isIdle || isStuck) && !isEngaged) {
+        idleUnits.push(entityId);
+      }
+    }
+
+    return idleUnits;
+  }
+
+  /**
    * Find the nearest enemy threat to a position.
+   * Searches within a reasonable radius of the base for enemy units.
    */
   private findNearestThreat(ai: AIPlayer, position: { x: number; y: number }): { x: number; y: number } | null {
     const units = this.coordinator.getCachedUnitsWithTransform();
     let nearestThreat: { x: number; y: number; distance: number } | null = null;
+
+    // Search radius for threats - 80 units should cover most base areas
+    // This is larger than before (50) to catch enemies that are attacking from range
+    const THREAT_SEARCH_RADIUS = 80;
 
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -480,14 +554,16 @@ export class AITacticsManager {
 
       if (selectable.playerId === ai.playerId) continue;
       if (health.isDead()) continue;
-      if (unit.isWorker) continue;
+      // Include workers too - they might be attacking or part of a worker rush
+      // Only skip if unit has 0 attack damage
+      if (unit.attackDamage === 0) continue;
 
       const dx = transform.x - position.x;
       const dy = transform.y - position.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      // Only consider threats within reasonable distance of base
-      if (distance > 50) continue;
+      // Only consider threats within search radius of base
+      if (distance > THREAT_SEARCH_RADIUS) continue;
 
       if (!nearestThreat || distance < nearestThreat.distance) {
         nearestThreat = { x: transform.x, y: transform.y, distance };
