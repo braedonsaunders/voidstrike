@@ -65,18 +65,28 @@ export class ProductionSystem extends System {
     if (cancelled) {
       const unitDef = UNIT_DEFINITIONS[cancelled.id];
       if (unitDef) {
-        // Only update store for local player's buildings
         const selectable = entity.get<Selectable>('Selectable');
-        if (selectable && isLocalPlayer(selectable.playerId)) {
-          const refundPercent = cancelled.progress < 0.5 ? 1 : 0.5;
-          // Refund based on produceCount (1 for normal, 2 for reactor bonus)
-          const produceCount = cancelled.produceCount || 1;
-          this.game.statePort.addResources(
-            Math.floor(unitDef.mineralCost * produceCount * refundPercent),
-            Math.floor(unitDef.vespeneCost * produceCount * refundPercent)
-          );
+        const playerId = selectable?.playerId;
+        const refundPercent = cancelled.progress < 0.5 ? 1 : 0.5;
+        const produceCount = cancelled.produceCount || 1;
+        const mineralRefund = Math.floor(unitDef.mineralCost * produceCount * refundPercent);
+        const vespeneRefund = Math.floor(unitDef.vespeneCost * produceCount * refundPercent);
+
+        // Check AI status FIRST before checking local player
+        const aiSystem = this.getAISystem();
+        const aiPlayer = playerId ? aiSystem?.getAIPlayer(playerId) : undefined;
+
+        if (aiPlayer) {
+          // Refund to AI player
+          aiPlayer.minerals += mineralRefund;
+          aiPlayer.vespene += vespeneRefund;
           if (cancelled.supplyAllocated) {
-            // Supply cost already accounts for produceCount
+            // Note: AI supply is recalculated from entities, no manual adjustment needed
+          }
+        } else if (playerId && isLocalPlayer(playerId)) {
+          // Refund to local human player
+          this.game.statePort.addResources(mineralRefund, vespeneRefund);
+          if (cancelled.supplyAllocated) {
             this.game.statePort.addSupply(-cancelled.supplyCost);
           }
         }

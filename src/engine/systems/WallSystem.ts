@@ -9,6 +9,7 @@ import { Selectable } from '../components/Selectable';
 import { Unit } from '../components/Unit';
 import { WALL_DEFINITIONS, WALL_UPGRADE_DEFINITIONS, WallUpgradeType } from '@/data/buildings/walls';
 import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
+import { EnhancedAISystem } from './EnhancedAISystem';
 
 /**
  * WallSystem handles all wall-related mechanics:
@@ -26,9 +27,19 @@ export class WallSystem extends System {
   // Distance to check for gate proximity
   private static readonly GATE_TRIGGER_DISTANCE = 3;
 
+  // Cached reference to AI system (lazy loaded)
+  private aiSystem: EnhancedAISystem | null = null;
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
+  }
+
+  private getAISystem(): EnhancedAISystem | null {
+    if (!this.aiSystem) {
+      this.aiSystem = this.world.getSystem(EnhancedAISystem) || null;
+    }
+    return this.aiSystem;
   }
 
   private setupEventListeners(): void {
@@ -344,7 +355,11 @@ export class WallSystem extends System {
 
     if (!upgradeDef) return;
 
-    const isPlayerLocal = isLocalPlayer(playerId);
+    // Check AI status FIRST before checking local player
+    const aiSystem = this.getAISystem();
+    const aiPlayer = aiSystem?.getAIPlayer(playerId);
+    const isPlayerAI = aiPlayer !== undefined;
+    const isPlayerLocal = !isPlayerAI && isLocalPlayer(playerId);
 
     // Check if research is complete
     if (!this.game.statePort.hasResearch(playerId, `wall_${upgradeType}`)) {
@@ -367,8 +382,12 @@ export class WallSystem extends System {
         continue;
       }
 
-      // Check cost
-      if (isPlayerLocal) {
+      // Check cost based on player type
+      if (isPlayerAI && aiPlayer) {
+        if (aiPlayer.minerals < upgradeDef.applyCost.minerals || aiPlayer.vespene < upgradeDef.applyCost.vespene) {
+          continue;
+        }
+      } else if (isPlayerLocal) {
         if (this.game.statePort.getMinerals() < upgradeDef.applyCost.minerals) {
           this.game.eventBus.emit('alert:notEnoughMinerals', {});
           this.game.eventBus.emit('warning:lowMinerals', {});
@@ -381,8 +400,11 @@ export class WallSystem extends System {
         }
       }
 
-      // Deduct resources
-      if (isPlayerLocal) {
+      // Deduct resources based on player type
+      if (isPlayerAI && aiPlayer) {
+        aiPlayer.minerals -= upgradeDef.applyCost.minerals;
+        aiPlayer.vespene -= upgradeDef.applyCost.vespene;
+      } else if (isPlayerLocal) {
         this.game.statePort.addResources(-upgradeDef.applyCost.minerals, -upgradeDef.applyCost.vespene);
       }
 

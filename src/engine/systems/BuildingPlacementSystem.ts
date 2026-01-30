@@ -111,10 +111,18 @@ export class BuildingPlacementSystem extends System {
       vespene: definition.vespeneCost * validPositions.length,
     };
 
-    const isPlayerLocal = isLocalPlayer(playerId);
+    // Check AI status FIRST before checking local player
+    const aiSystem = this.getAISystem();
+    const aiPlayer = aiSystem?.getAIPlayer(playerId);
+    const isPlayerAI = aiPlayer !== undefined;
+    const isPlayerLocal = !isPlayerAI && isLocalPlayer(playerId);
 
-    // Check resources
-    if (isPlayerLocal) {
+    // Check resources based on player type
+    if (isPlayerAI && aiPlayer) {
+      if (aiPlayer.minerals < totalCost.minerals || aiPlayer.vespene < totalCost.vespene) {
+        return;
+      }
+    } else if (isPlayerLocal) {
       if (this.game.statePort.getMinerals() < totalCost.minerals) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
         this.game.eventBus.emit('warning:lowMinerals', {});
@@ -148,8 +156,11 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Deduct resources
-    if (isPlayerLocal) {
+    // Deduct resources based on player type
+    if (isPlayerAI && aiPlayer) {
+      aiPlayer.minerals -= totalCost.minerals;
+      aiPlayer.vespene -= totalCost.vespene;
+    } else if (isPlayerLocal) {
       this.game.statePort.addResources(-totalCost.minerals, -totalCost.vespene);
     }
 
@@ -360,10 +371,14 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    const isPlayerLocal = isLocalPlayer(playerId);
+    // FIX: Check AI status FIRST before checking local player
+    // In worker context, isLocalPlayer may incorrectly return true for AI players
+    // because the Zustand store isn't synchronized with the main thread
     const aiSystem = this.getAISystem();
-    const aiPlayer = !isPlayerLocal ? aiSystem?.getAIPlayer(playerId) : undefined;
+    const aiPlayer = aiSystem?.getAIPlayer(playerId);
     const isPlayerAI = aiPlayer !== undefined;
+    // Only consider as local human player if NOT an AI player
+    const isPlayerLocal = !isPlayerAI && isLocalPlayer(playerId);
 
     // Check resources (local player via game store, AI via AI state)
     if (isPlayerLocal) {
@@ -710,10 +725,14 @@ export class BuildingPlacementSystem extends System {
       building.state = 'complete';
       health.current = health.max;
 
-      // Add supply if applicable - only for local player's buildings
+      // Add supply if applicable - only for local human player's buildings (AI supply is recalculated)
       const selectable = entity.get<Selectable>('Selectable');
-      if (building.supplyProvided > 0 && selectable?.playerId && isLocalPlayer(selectable.playerId)) {
-        this.game.statePort.addMaxSupply(building.supplyProvided);
+      if (building.supplyProvided > 0 && selectable?.playerId) {
+        const aiSystem = this.getAISystem();
+        const isAI = aiSystem?.isAIPlayer(selectable.playerId) ?? false;
+        if (!isAI && isLocalPlayer(selectable.playerId)) {
+          this.game.statePort.addMaxSupply(building.supplyProvided);
+        }
       }
 
       // Release any workers constructing this building
@@ -775,11 +794,19 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Check resources (local player via game store, AI via AI state)
-    const isPlayerLocal = isLocalPlayer(playerId);
-    const aiPlayer = !isPlayerLocal ? this.getAISystem()?.getAIPlayer(playerId) : undefined;
+    // Check AI status FIRST before checking local player
+    const aiSystem = this.getAISystem();
+    const aiPlayer = aiSystem?.getAIPlayer(playerId);
     const isPlayerAI = aiPlayer !== undefined;
-    if (isPlayerLocal) {
+    const isPlayerLocal = !isPlayerAI && isLocalPlayer(playerId);
+
+    // Check resources (local player via game store, AI via AI state)
+    if (isPlayerAI && aiPlayer) {
+      if (aiPlayer.minerals < addonDef.mineralCost || aiPlayer.vespene < addonDef.vespeneCost) {
+        debugBuildingPlacement.log(`BuildingPlacementSystem: AI ${playerId} lacks resources for addon ${addonType} (need ${addonDef.mineralCost}M/${addonDef.vespeneCost}G, have ${Math.floor(aiPlayer.minerals)}M/${Math.floor(aiPlayer.vespene)}G)`);
+        return;
+      }
+    } else if (isPlayerLocal) {
       if (this.game.statePort.getMinerals() < addonDef.mineralCost) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
         this.game.eventBus.emit('warning:lowMinerals', {});
@@ -788,11 +815,6 @@ export class BuildingPlacementSystem extends System {
       if (this.game.statePort.getVespene() < addonDef.vespeneCost) {
         this.game.eventBus.emit('alert:notEnoughVespene', {});
         this.game.eventBus.emit('warning:lowVespene', {});
-        return;
-      }
-    } else if (isPlayerAI && aiPlayer) {
-      if (aiPlayer.minerals < addonDef.mineralCost || aiPlayer.vespene < addonDef.vespeneCost) {
-        debugBuildingPlacement.log(`BuildingPlacementSystem: AI ${playerId} lacks resources for addon ${addonType} (need ${addonDef.mineralCost}M/${addonDef.vespeneCost}G, have ${Math.floor(aiPlayer.minerals)}M/${Math.floor(aiPlayer.vespene)}G)`);
         return;
       }
     }
@@ -1459,9 +1481,13 @@ export class BuildingPlacementSystem extends System {
           if (isAddon) {
             this.handleAddonCompletion(entity.id, building, selectable?.playerId);
           } else {
-            // Add supply if applicable - only for local player's buildings
-            if (building.supplyProvided > 0 && selectable?.playerId && isLocalPlayer(selectable.playerId)) {
-              this.game.statePort.addMaxSupply(building.supplyProvided);
+            // Add supply if applicable - only for local human player's buildings (AI supply is recalculated)
+            if (building.supplyProvided > 0 && selectable?.playerId) {
+              const aiSystem = this.getAISystem();
+              const isAI = aiSystem?.isAIPlayer(selectable.playerId) ?? false;
+              if (!isAI && isLocalPlayer(selectable.playerId)) {
+                this.game.statePort.addMaxSupply(building.supplyProvided);
+              }
             }
 
             // Set default rally point for production buildings
@@ -1747,17 +1773,18 @@ export class BuildingPlacementSystem extends System {
       // No worker assigned - cancel the blueprint
       const definition = BUILDING_DEFINITIONS[building.buildingId];
       if (definition) {
-        // Refund resources to the player (local player via store, AI via AI state)
-        if (isLocalPlayer(selectable.playerId)) {
+        // Check AI status FIRST before checking local player for refund
+        const aiSystem = this.getAISystem();
+        const aiPlayer = aiSystem?.getAIPlayer(selectable.playerId);
+        if (aiPlayer) {
+          // Refund to AI player
+          aiPlayer.minerals += definition.mineralCost;
+          aiPlayer.vespene += definition.vespeneCost;
+          debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene to AI ${selectable.playerId} for cancelled ${building.name}`);
+        } else if (isLocalPlayer(selectable.playerId)) {
+          // Refund to local human player
           this.game.statePort.addResources(definition.mineralCost, definition.vespeneCost);
           debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene for cancelled ${building.name}`);
-        } else {
-          const aiPlayer = this.getAISystem()?.getAIPlayer(selectable.playerId);
-          if (aiPlayer) {
-            aiPlayer.minerals += definition.mineralCost;
-            aiPlayer.vespene += definition.vespeneCost;
-            debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded AI ${selectable.playerId} ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene for cancelled ${building.name}`);
-          }
         }
 
         // PERF: If this is an extractor/refinery, restore the vespene geyser visibility
