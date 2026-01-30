@@ -203,7 +203,7 @@ export function WebGPUGameCanvas() {
   });
 
   // Input handling hook
-  const { selectionState, handleMouseDown, handleMouseMove, handleMouseUp, handleContextMenu } = useGameInput({
+  const { selectionState } = useGameInput({
     containerRef,
     cameraRef: refs.camera,
     gameRef,
@@ -646,10 +646,6 @@ export function WebGPUGameCanvas() {
     <div
       ref={containerRef}
       className="absolute inset-0"
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onContextMenu={handleContextMenu}
     >
       {/* Loading screen */}
       {isLoading && (

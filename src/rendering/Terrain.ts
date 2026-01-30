@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MapData, MapCell, TerrainType, ElevationLevel, Elevation, TerrainFeature, TERRAIN_FEATURE_CONFIG } from '@/data/maps';
+import { MapData, MapCell, TerrainType, Elevation, TerrainFeature, TERRAIN_FEATURE_CONFIG } from '@/data/maps';
 import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType } from './Biomes';
 import { TSLTerrainMaterial } from './tsl/TerrainMaterial';
 import AssetManager from '@/assets/AssetManager';

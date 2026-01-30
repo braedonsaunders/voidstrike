@@ -44,7 +44,7 @@ export class EnvironmentManager {
   private waterMesh: WaterMesh | null = null;
   private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
-  private legacyDecorations: MapDecorations | null = null;
+  private mapDecorations: MapDecorations | null = null;
   // AAA decoration light manager - pools 50 lights for hundreds of emissive decorations
   private decorationLightManager: DecorationLightManager | null = null;
   // Centralized emissive decoration manager with animation and light attachment
@@ -269,8 +269,8 @@ export class EnvironmentManager {
     }
 
     // MapDecorations handles watch towers and destructibles (non-instanced objects)
-    this.legacyDecorations = new MapDecorations(this.mapData, this.terrain, this.scene, this.decorationLightManager);
-    this.scene.add(this.legacyDecorations.group);
+    this.mapDecorations = new MapDecorations(this.mapData, this.terrain, this.scene, this.decorationLightManager);
+    this.scene.add(this.mapDecorations.group);
   }
 
   /**
@@ -296,8 +296,8 @@ export class EnvironmentManager {
     }
 
     // Update emissive decoration pulsing animation
-    if (this.legacyDecorations) {
-      this.legacyDecorations.update(deltaTime);
+    if (this.mapDecorations) {
+      this.mapDecorations.update(deltaTime);
     }
 
     // Update emissive decoration manager (crystal pulsing, etc.)
@@ -781,7 +781,7 @@ export class EnvironmentManager {
     if (this.waterMesh) this.scene.remove(this.waterMesh.group);
     if (this.mapBorderFog) this.scene.remove(this.mapBorderFog.mesh);
     if (this.particles) this.scene.remove(this.particles.points);
-    if (this.legacyDecorations) this.scene.remove(this.legacyDecorations.group);
+    if (this.mapDecorations) this.scene.remove(this.mapDecorations.group);
 
     // STEP 2: Now safe to dispose resources (no longer being rendered)
     this.trees?.dispose();
@@ -794,7 +794,7 @@ export class EnvironmentManager {
     this.waterMesh?.dispose();
     this.mapBorderFog?.dispose();
     this.particles?.dispose();
-    this.legacyDecorations?.dispose();
+    this.mapDecorations?.dispose();
     this.decorationLightManager?.dispose();
     this.emissiveDecorationManager?.dispose();
     this.emissiveLightPool?.dispose();

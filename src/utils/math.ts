@@ -48,28 +48,6 @@ export function angle(x1: number, y1: number, x2: number, y2: number): number {
   return Math.atan2(y2 - y1, x2 - x1);
 }
 
-/**
- * @internal NON-DETERMINISTIC - DO NOT USE IN GAMEPLAY CODE
- * Uses Math.random() which breaks multiplayer sync. For gameplay randomness,
- * use SeededRandom instead. This function exists only for non-gameplay uses
- * like UI effects or debugging.
- * @deprecated Use SeededRandom.nextRange() for deterministic gameplay
- */
-export function randomRange(min: number, max: number): number {
-  return min + Math.random() * (max - min);
-}
-
-/**
- * @internal NON-DETERMINISTIC - DO NOT USE IN GAMEPLAY CODE
- * Uses Math.random() which breaks multiplayer sync. For gameplay randomness,
- * use SeededRandom instead. This function exists only for non-gameplay uses
- * like UI effects or debugging.
- * @deprecated Use SeededRandom.nextInt() for deterministic gameplay
- */
-export function randomInt(min: number, max: number): number {
-  return Math.floor(randomRange(min, max + 1));
-}
-
 // Seeded random for deterministic gameplay
 export class SeededRandom {
   private seed: number;
