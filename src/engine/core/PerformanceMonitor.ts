@@ -322,6 +322,44 @@ class PerformanceMonitorClass {
   }
 
   /**
+   * Apply performance metrics received from the game worker.
+   * This bridges the worker's performance data to the main thread's PerformanceMonitor.
+   * Called by WorkerBridge when receiving 'performanceMetrics' messages.
+   */
+  public applyWorkerMetrics(
+    tickTime: number,
+    systemTimings: Array<[string, number]>,
+    entityCounts: [number, number, number, number]
+  ): void {
+    // Record tick time
+    this.lastTickTime = tickTime;
+    this.tickTimeHistory.push(tickTime);
+
+    // Apply system timings - clear first, then record each
+    this.currentSystemTimings.clear();
+    for (const [name, duration] of systemTimings) {
+      this.currentSystemTimings.set(name, duration);
+
+      // Update history ring buffer
+      if (!this.systemTimingHistory.has(name)) {
+        this.systemTimingHistory.set(name, new RingBuffer(SYSTEM_TIMING_HISTORY_SIZE));
+      }
+      this.systemTimingHistory.get(name)!.push(duration);
+    }
+
+    // Apply entity counts
+    const [units, buildings, resources, projectiles] = entityCounts;
+    this.entityCounts = {
+      total: units + buildings + resources + projectiles,
+      units,
+      buildings,
+      projectiles,
+      resources,
+      effects: 0,
+    };
+  }
+
+  /**
    * Update render metrics (called by WebGPUGameCanvas each frame)
    * @param drawCalls - Draw calls for this frame (reset after each frame)
    * @param triangles - Triangles rendered this frame (reset after each frame)

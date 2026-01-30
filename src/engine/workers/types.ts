@@ -387,7 +387,8 @@ export type MainToWorkerMessage =
   | { type: 'requestChecksum' }
   | { type: 'setSelection'; entityIds: number[]; playerId: string }
   | { type: 'setControlGroup'; groupNumber: number; entityIds: number[] }
-  | { type: 'spawnEntities'; mapData: SpawnMapData };
+  | { type: 'spawnEntities'; mapData: SpawnMapData }
+  | { type: 'setPerformanceCollection'; enabled: boolean };
 
 /**
  * Player slot info for spawning
@@ -427,6 +428,19 @@ export interface SpawnMapData {
 }
 
 /**
+ * Performance metrics sent from worker to main thread.
+ * Only sent when performance collection is enabled (panel is open).
+ * Uses flat arrays for efficient serialization.
+ */
+export interface WorkerPerformanceMetrics {
+  tickTime: number;
+  // Tuple array [systemName, durationMs] for efficient serialization
+  systemTimings: Array<[string, number]>;
+  // [units, buildings, resources, projectiles]
+  entityCounts: [number, number, number, number];
+}
+
+/**
  * Messages sent FROM game worker TO main thread
  */
 export type WorkerToMainMessage =
@@ -437,7 +451,8 @@ export type WorkerToMainMessage =
   | { type: 'gameOver'; winnerId: string | null; reason: string }
   | { type: 'error'; message: string; stack?: string }
   | { type: 'multiplayerCommand'; command: GameCommand }
-  | { type: 'desync'; tick: number; localChecksum: string; remoteChecksum: string };
+  | { type: 'desync'; tick: number; localChecksum: string; remoteChecksum: string }
+  | { type: 'performanceMetrics'; metrics: WorkerPerformanceMetrics };
 
 // ============================================================================
 // GAME COMMAND - Re-export from shared module for consistency

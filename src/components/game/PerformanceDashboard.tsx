@@ -6,6 +6,7 @@ import {
   PerformanceSnapshot,
   SystemTiming,
 } from '@/engine/core/PerformanceMonitor';
+import { getWorkerBridge } from '@/engine/workers/WorkerBridge';
 
 // Mini sparkline graph component
 const Sparkline = memo(function Sparkline({
@@ -142,6 +143,13 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
   }, []);
 
   useEffect(() => {
+    // Enable worker performance collection when dashboard mounts
+    const bridge = getWorkerBridge();
+    bridge?.setPerformanceCollection(true);
+
+    // Start main thread performance monitor
+    PerformanceMonitor.start();
+
     // Subscribe to performance updates
     const unsubscribe = PerformanceMonitor.subscribe(handleSnapshot);
 
@@ -151,7 +159,12 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
     setFpsHistory(PerformanceMonitor.getFPSHistory().slice(-60));
     setTickHistory(PerformanceMonitor.getTickTimeHistory().slice(-60));
 
-    return unsubscribe;
+    return () => {
+      // Disable worker performance collection when dashboard unmounts
+      bridge?.setPerformanceCollection(false);
+      PerformanceMonitor.stop();
+      unsubscribe();
+    };
   }, [handleSnapshot]);
 
   if (!snapshot) {
