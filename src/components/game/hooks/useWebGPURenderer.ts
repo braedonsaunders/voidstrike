@@ -153,6 +153,10 @@ export function useWebGPURenderer({
   // Animation frame ID for cleanup
   const animationFrameIdRef = useRef<number | null>(null);
 
+  // Accumulators for per-frame render metrics (triangles/drawCalls reset each frame in WebGPU)
+  const accumulatedTrianglesRef = useRef<number>(0);
+  const accumulatedDrawCallsRef = useRef<number>(0);
+
   const calculateDisplayResolution = useCallback(() => {
     const settings = useUIStore.getState().graphicsSettings;
     const containerWidth = containerRef.current?.clientWidth ?? window.innerWidth;
@@ -851,6 +855,13 @@ export function useWebGPURenderer({
 
       const renderElapsed = performance.now() - renderStart;
 
+      // Accumulate render metrics immediately after render (before info gets reset)
+      // In WebGPU, renderer.info is reset at start of each render call, so we must
+      // accumulate across all frames to get accurate per-second totals
+      const rendererInfo = renderContext.renderer.info;
+      accumulatedTrianglesRef.current += rendererInfo.render.triangles;
+      accumulatedDrawCallsRef.current += rendererInfo.render.calls;
+
       if (renderPipelineRef.current?.isTAAEnabled()) {
         updateCameraMatrices(camera.camera);
       }
@@ -860,9 +871,8 @@ export function useWebGPURenderer({
         debugPerformance.warn(`[FRAME] Total: ${frameElapsed.toFixed(1)}ms, Render: ${renderElapsed.toFixed(1)}ms`);
       }
 
-      // Update performance metrics
+      // Update performance metrics once per second
       if (Math.floor(currentTime / 1000) !== Math.floor(prevTime / 1000)) {
-        const rendererInfo = renderContext.renderer.info;
         const cpuTime = updatesElapsed;
         const gpuTime = renderElapsed;
 
@@ -887,12 +897,16 @@ export function useWebGPURenderer({
 
         const gpuStats = unitRendererRef.current?.getGPURenderingStats();
 
+        // Use accumulated metrics (summed across all frames this second)
+        const trianglesThisSecond = accumulatedTrianglesRef.current;
+        const drawCallsThisSecond = accumulatedDrawCallsRef.current;
+
         useUIStore.getState().updatePerformanceMetrics({
           cpuTime,
           gpuTime,
           frameTime: frameElapsed,
-          triangles: rendererInfo.render.triangles,
-          drawCalls: rendererInfo.render.calls,
+          triangles: trianglesThisSecond,
+          drawCalls: drawCallsThisSecond,
           renderWidth,
           renderHeight,
           displayWidth,
@@ -902,13 +916,16 @@ export function useWebGPURenderer({
           gpuManagedUnits: gpuStats?.managedEntities ?? 0,
         });
 
+        const fps = frameElapsed > 0 ? 1000 / frameElapsed : 60;
         PerformanceMonitor.updateRenderMetrics(
-          rendererInfo.render.calls,
-          rendererInfo.render.triangles,
-          1000 / frameElapsed
+          drawCallsThisSecond,
+          trianglesThisSecond,
+          fps
         );
 
-        rendererInfo.reset();
+        // Reset accumulators for next second
+        accumulatedTrianglesRef.current = 0;
+        accumulatedDrawCallsRef.current = 0;
       }
 
       animationFrameIdRef.current = requestAnimationFrame(animate);
