@@ -208,6 +208,16 @@ export class BattleEffectsRenderer {
   private shockwavePool: MeshPool;
   private moveRingPool: MeshPool;
 
+  // Geometry disposal quarantine for WebGPU safety
+  // WebGPU has 2-3 frames of commands in flight; we wait 4 frames before disposing
+  private frameCount: number = 0;
+  private static readonly GEOMETRY_QUARANTINE_FRAMES = 4;
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    materials: THREE.Material[];
+    frameQueued: number;
+  }> = [];
+
   // Shared geometries
   private projectileHeadGeometry: THREE.SphereGeometry;
   private groundRingGeometry: THREE.RingGeometry;
@@ -625,6 +635,49 @@ export class BattleEffectsRenderer {
   }
 
   // ============================================
+  // GEOMETRY QUARANTINE (WebGPU Safety)
+  // ============================================
+
+  /**
+   * Queue geometry and materials for delayed disposal.
+   * WebGPU has 2-3 frames of commands in flight, so we wait 4 frames before disposing.
+   */
+  private queueGeometryForDisposal(
+    geometry: THREE.BufferGeometry,
+    materials: THREE.Material | THREE.Material[]
+  ): void {
+    const materialArray = Array.isArray(materials) ? materials : [materials];
+    this.geometryQuarantine.push({
+      geometry,
+      materials: materialArray,
+      frameQueued: this.frameCount,
+    });
+  }
+
+  /**
+   * Process quarantined geometries and dispose those that have waited long enough.
+   */
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = this.frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= BattleEffectsRenderer.GEOMETRY_QUARANTINE_FRAMES) {
+        // Safe to dispose now
+        entry.geometry.dispose();
+        for (const material of entry.materials) {
+          material.dispose();
+        }
+      } else {
+        // Keep in quarantine
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
+  }
+
+  // ============================================
   // EVENT LISTENERS
   // ============================================
 
@@ -1006,8 +1059,11 @@ export class BattleEffectsRenderer {
     this.releaseToPool(this.projectileHeadPool, effect.headMesh);
     this.releaseToPool(this.projectileGlowPool, effect.glowSprite);
     this.scene.remove(effect.trailMesh);
-    effect.trailGeometry.dispose();
-    (effect.trailMesh.material as THREE.Material).dispose();
+    // Queue geometry for delayed disposal (WebGPU safety)
+    this.queueGeometryForDisposal(
+      effect.trailGeometry,
+      effect.trailMesh.material as THREE.Material
+    );
 
     this.projectileEffects.delete(effectId);
     if (effect.entityId !== undefined) {
@@ -1153,11 +1209,9 @@ export class BattleEffectsRenderer {
     this.scene.remove(effect.beam);
     this.scene.remove(effect.glow);
 
-    // Dispose geometries and materials
-    effect.beamGeometry.dispose();
-    effect.beamMaterial.dispose();
-    effect.glowGeometry.dispose();
-    effect.glowMaterial.dispose();
+    // Queue geometries for delayed disposal (WebGPU safety)
+    this.queueGeometryForDisposal(effect.beamGeometry, effect.beamMaterial);
+    this.queueGeometryForDisposal(effect.glowGeometry, effect.glowMaterial);
 
     // Return sprites to pool
     if (effect.startGlow) this.releaseToPool(this.projectileGlowPool, effect.startGlow);
@@ -1558,6 +1612,10 @@ export class BattleEffectsRenderer {
   public update(deltaTime: number): void {
     const dt = deltaTime / 1000;
 
+    // Process geometry quarantine at start of frame
+    this.frameCount++;
+    this.processGeometryQuarantine();
+
     this.updateProjectiles(dt);
     this.updateGroundEffects(dt);
     this.updateImpactDecals(dt);
@@ -1598,8 +1656,11 @@ export class BattleEffectsRenderer {
         this.releaseToPool(this.projectileHeadPool, effect.headMesh);
         this.releaseToPool(this.projectileGlowPool, effect.glowSprite);
         this.scene.remove(effect.trailMesh);
-        effect.trailGeometry.dispose();
-        (effect.trailMesh.material as THREE.Material).dispose();
+        // Queue geometry for delayed disposal (WebGPU safety)
+        this.queueGeometryForDisposal(
+          effect.trailGeometry,
+          effect.trailMesh.material as THREE.Material
+        );
 
         // Clear entity mapping if applicable
         if (effect.entityId !== undefined) {
@@ -1976,5 +2037,14 @@ export class BattleEffectsRenderer {
 
     this.glowTexture.dispose();
     this.scorchTexture.dispose();
+
+    // Flush geometry quarantine
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const material of entry.materials) {
+        material.dispose();
+      }
+    }
+    this.geometryQuarantine = [];
   }
 }
