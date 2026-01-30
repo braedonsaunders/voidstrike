@@ -59,6 +59,19 @@ export class BuildingPlacementPreview {
   private dashPointsPool: THREE.Vector3[] = [];
   private dashPointsPoolIndex: number = 0;
 
+  // Frame counter for quarantine timing
+  private frameCount: number = 0;
+
+  // Geometry disposal quarantine - prevents WebGPU "setIndexBuffer" crashes
+  // by delaying geometry disposal until GPU has finished pending draw commands.
+  // WebGPU typically has 2-3 frames in flight; 4 frames provides safety margin.
+  private static readonly GEOMETRY_QUARANTINE_FRAMES = 4;
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    materials: THREE.Material[];
+    frameQueued: number;
+  }> = [];
+
   constructor(mapData: MapData, getTerrainHeight?: (x: number, y: number) => number) {
     this.group = new THREE.Group();
     this.mapData = mapData;
@@ -130,12 +143,54 @@ export class BuildingPlacementPreview {
   }
 
   /**
+   * Queue geometry and materials for delayed disposal.
+   * This prevents WebGPU "setIndexBuffer" crashes by ensuring the GPU
+   * has finished all pending draw commands before buffers are freed.
+   */
+  private queueGeometryForDisposal(
+    geometry: THREE.BufferGeometry,
+    materials: THREE.Material | THREE.Material[]
+  ): void {
+    const materialArray = Array.isArray(materials) ? materials : [materials];
+    this.geometryQuarantine.push({
+      geometry,
+      materials: materialArray,
+      frameQueued: this.frameCount,
+    });
+  }
+
+  /**
+   * Process quarantined geometries and dispose those that are safe.
+   * Call this once per frame.
+   */
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = this.frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= BuildingPlacementPreview.GEOMETRY_QUARANTINE_FRAMES) {
+        // Safe to dispose - GPU has finished with these buffers
+        entry.geometry.dispose();
+        for (const material of entry.materials) {
+          material.dispose();
+        }
+      } else {
+        // Keep in quarantine
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
+  }
+
+  /**
    * Clear queue visuals
    */
   private clearQueueVisuals(): void {
     if (this.queueLine) {
       this.group.remove(this.queueLine);
-      this.queueLine.geometry.dispose();
+      // Queue for delayed disposal to prevent WebGPU crashes
+      this.queueGeometryForDisposal(this.queueLine.geometry, []);
       this.queueLine = null;
     }
 
@@ -147,17 +202,15 @@ export class BuildingPlacementPreview {
   }
 
   /**
-   * Dispose all materials and geometries in a group
+   * Dispose all materials and geometries in a group via quarantine.
+   * Uses quarantine to prevent WebGPU crashes from disposing while GPU still rendering.
    */
   private disposeGroup(group: THREE.Group | THREE.Object3D): void {
     group.traverse((child) => {
       if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Points) {
-        child.geometry.dispose();
-        if (child.material instanceof THREE.Material) {
-          child.material.dispose();
-        } else if (Array.isArray(child.material)) {
-          child.material.forEach((m) => m.dispose());
-        }
+        // Queue geometry and materials for delayed disposal
+        const materials = child.material;
+        this.queueGeometryForDisposal(child.geometry, materials);
       }
     });
   }
@@ -392,11 +445,10 @@ export class BuildingPlacementPreview {
   }
 
   private updateGridMesh(centerX: number, centerY: number, width: number, height: number): void {
-    // Remove old mesh
+    // Remove old mesh - use quarantine to prevent WebGPU crashes
     if (this.gridMesh) {
       this.group.remove(this.gridMesh);
-      this.gridMesh.geometry.dispose();
-      (this.gridMesh.material as THREE.Material).dispose();
+      this.queueGeometryForDisposal(this.gridMesh.geometry, this.gridMesh.material as THREE.Material);
     }
 
     // Create grid geometry with per-tile coloring
@@ -637,6 +689,12 @@ export class BuildingPlacementPreview {
    * Update animation for blueprint effects (call each frame)
    */
   public update(dt: number): void {
+    this.frameCount++;
+
+    // Process quarantined geometries at the START of each frame
+    // This ensures GPU has finished with disposed buffers before we free them
+    this.processGeometryQuarantine();
+
     if (!this.group.visible) return;
 
     this.blueprintPulseTime += dt;
@@ -712,8 +770,8 @@ export class BuildingPlacementPreview {
   private clearMeshes(): void {
     if (this.gridMesh) {
       this.group.remove(this.gridMesh);
-      this.gridMesh.geometry.dispose();
-      (this.gridMesh.material as THREE.Material).dispose();
+      // Use quarantine to prevent WebGPU crashes
+      this.queueGeometryForDisposal(this.gridMesh.geometry, this.gridMesh.material as THREE.Material);
       this.gridMesh = null;
     }
 
@@ -725,8 +783,26 @@ export class BuildingPlacementPreview {
   }
 
   public dispose(): void {
+    // Flush any pending quarantined geometries first
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const material of entry.materials) {
+        material.dispose();
+      }
+    }
+    this.geometryQuarantine.length = 0;
+
     this.clearMeshes();
     this.clearQueueVisuals();
     this.queueLineMaterial.dispose();
+
+    // Flush any geometries queued during dispose
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const material of entry.materials) {
+        material.dispose();
+      }
+    }
+    this.geometryQuarantine.length = 0;
   }
 }
