@@ -3,6 +3,10 @@ import { BiomeConfig } from './Biomes';
 import { MapData, MapDecoration } from '@/data/maps';
 import AssetManager from '@/assets/AssetManager';
 import { DECORATIONS } from '@/data/rendering.config';
+import { TransformUtils } from './shared/InstancedMeshPool';
+
+// PERF: Shared transform utilities for all decoration classes (avoids duplicate temp objects)
+const _transformUtils = new TransformUtils();
 
 // PERF: Reusable Euler object for instanced decoration loops (avoids thousands of allocations)
 const _tempEuler = new THREE.Euler();
@@ -188,12 +192,6 @@ export class InstancedTrees {
   private materials: THREE.Material[] = [];
   private treeCollisions: Array<{ x: number; z: number; radius: number }> = [];
 
-  // Reusable objects for update loop
-  private _tempMatrix = new THREE.Matrix4();
-  private _tempPosition = new THREE.Vector3();
-  private _tempQuaternion = new THREE.Quaternion();
-  private _tempScale = new THREE.Vector3();
-
   constructor(
     mapData: MapData,
     _biome: BiomeConfig,
@@ -320,12 +318,12 @@ export class InstancedTrees {
         const inst = instances[i];
         if (!isInFrustum(inst.x, inst.y, inst.z)) continue;
 
-        this._tempPosition.set(inst.x, inst.y, inst.z);
+        _transformUtils.tempPosition.set(inst.x, inst.y, inst.z);
         _tempEuler.set(0, inst.rotation, 0);
-        this._tempQuaternion.setFromEuler(_tempEuler);
-        this._tempScale.set(inst.scale, inst.scale, inst.scale);
-        this._tempMatrix.compose(this._tempPosition, this._tempQuaternion, this._tempScale);
-        mesh.setMatrixAt(visibleCount, this._tempMatrix);
+        _transformUtils.tempQuaternion.setFromEuler(_tempEuler);
+        _transformUtils.tempScale.set(inst.scale, inst.scale, inst.scale);
+        _transformUtils.tempMatrix.compose(_transformUtils.tempPosition, _transformUtils.tempQuaternion, _transformUtils.tempScale);
+        mesh.setMatrixAt(visibleCount, _transformUtils.tempMatrix);
         visibleCount++;
       }
 
@@ -362,12 +360,6 @@ export class InstancedRocks {
   private geometries: THREE.BufferGeometry[] = [];
   private materials: THREE.Material[] = [];
   private rockCollisions: Array<{ x: number; z: number; radius: number }> = [];
-
-  // Reusable objects for update loop
-  private _tempMatrix = new THREE.Matrix4();
-  private _tempPosition = new THREE.Vector3();
-  private _tempQuaternion = new THREE.Quaternion();
-  private _tempScale = new THREE.Vector3();
 
   constructor(
     mapData: MapData,
@@ -498,12 +490,12 @@ export class InstancedRocks {
         const inst = instances[i];
         if (!isInFrustum(inst.x, inst.y, inst.z)) continue;
 
-        this._tempPosition.set(inst.x, inst.y, inst.z);
+        _transformUtils.tempPosition.set(inst.x, inst.y, inst.z);
         _tempEuler.set(0, inst.rotation, 0);
-        this._tempQuaternion.setFromEuler(_tempEuler);
-        this._tempScale.set(inst.scale, inst.scale, inst.scale);
-        this._tempMatrix.compose(this._tempPosition, this._tempQuaternion, this._tempScale);
-        mesh.setMatrixAt(visibleCount, this._tempMatrix);
+        _transformUtils.tempQuaternion.setFromEuler(_tempEuler);
+        _transformUtils.tempScale.set(inst.scale, inst.scale, inst.scale);
+        _transformUtils.tempMatrix.compose(_transformUtils.tempPosition, _transformUtils.tempQuaternion, _transformUtils.tempScale);
+        mesh.setMatrixAt(visibleCount, _transformUtils.tempMatrix);
         visibleCount++;
       }
 
@@ -541,12 +533,6 @@ export class InstancedCrystals {
   private material: THREE.Material | null = null;
   private instances: InstanceData[] = [];
   private maxCount = 0;
-
-  // Reusable objects for update loop
-  private _tempMatrix = new THREE.Matrix4();
-  private _tempPosition = new THREE.Vector3();
-  private _tempQuaternion = new THREE.Quaternion();
-  private _tempScale = new THREE.Vector3();
 
   constructor(
     mapData: MapData,
@@ -627,12 +613,12 @@ export class InstancedCrystals {
       const inst = this.instances[i];
       if (!isInFrustum(inst.x, inst.y, inst.z)) continue;
 
-      this._tempPosition.set(inst.x, inst.y, inst.z);
+      _transformUtils.tempPosition.set(inst.x, inst.y, inst.z);
       _tempEuler.set(0, inst.rotation, 0);
-      this._tempQuaternion.setFromEuler(_tempEuler);
-      this._tempScale.set(inst.scale, inst.scale, inst.scale);
-      this._tempMatrix.compose(this._tempPosition, this._tempQuaternion, this._tempScale);
-      this.instancedMesh.setMatrixAt(visibleCount, this._tempMatrix);
+      _transformUtils.tempQuaternion.setFromEuler(_tempEuler);
+      _transformUtils.tempScale.set(inst.scale, inst.scale, inst.scale);
+      _transformUtils.tempMatrix.compose(_transformUtils.tempPosition, _transformUtils.tempQuaternion, _transformUtils.tempScale);
+      this.instancedMesh.setMatrixAt(visibleCount, _transformUtils.tempMatrix);
       visibleCount++;
     }
 
@@ -662,11 +648,6 @@ export class InstancedGrass {
   private material: THREE.Material | null = null;
   private instances: Array<{ x: number; y: number; z: number; scale: number; rotation: number }> = [];
   private maxCount = 0;
-
-  private _tempMatrix = new THREE.Matrix4();
-  private _tempPosition = new THREE.Vector3();
-  private _tempQuaternion = new THREE.Quaternion();
-  private _tempScale = new THREE.Vector3();
 
   constructor(
     mapData: MapData,
@@ -749,12 +730,12 @@ export class InstancedGrass {
       const inst = this.instances[i];
       if (!isInFrustum(inst.x, inst.y, inst.z)) continue;
 
-      this._tempPosition.set(inst.x, inst.y, inst.z);
+      _transformUtils.tempPosition.set(inst.x, inst.y, inst.z);
       _tempEuler.set(-Math.PI / 2, inst.rotation, 0);
-      this._tempQuaternion.setFromEuler(_tempEuler);
-      this._tempScale.set(inst.scale, inst.scale, inst.scale);
-      this._tempMatrix.compose(this._tempPosition, this._tempQuaternion, this._tempScale);
-      this.instancedMesh.setMatrixAt(visibleCount, this._tempMatrix);
+      _transformUtils.tempQuaternion.setFromEuler(_tempEuler);
+      _transformUtils.tempScale.set(inst.scale, inst.scale, inst.scale);
+      _transformUtils.tempMatrix.compose(_transformUtils.tempPosition, _transformUtils.tempQuaternion, _transformUtils.tempScale);
+      this.instancedMesh.setMatrixAt(visibleCount, _transformUtils.tempMatrix);
       visibleCount++;
     }
 
@@ -780,11 +761,6 @@ export class InstancedPebbles {
   private material: THREE.Material | null = null;
   private instances: Array<{ x: number; y: number; z: number; scale: number; rotation: number }> = [];
   private maxCount = 0;
-
-  private _tempMatrix = new THREE.Matrix4();
-  private _tempPosition = new THREE.Vector3();
-  private _tempQuaternion = new THREE.Quaternion();
-  private _tempScale = new THREE.Vector3();
 
   constructor(
     mapData: MapData,
@@ -858,12 +834,12 @@ export class InstancedPebbles {
       const inst = this.instances[i];
       if (!isInFrustum(inst.x, inst.y, inst.z)) continue;
 
-      this._tempPosition.set(inst.x, inst.y, inst.z);
+      _transformUtils.tempPosition.set(inst.x, inst.y, inst.z);
       _tempEuler.set(0, inst.rotation, 0);
-      this._tempQuaternion.setFromEuler(_tempEuler);
-      this._tempScale.set(inst.scale, inst.scale, inst.scale);
-      this._tempMatrix.compose(this._tempPosition, this._tempQuaternion, this._tempScale);
-      this.instancedMesh.setMatrixAt(visibleCount, this._tempMatrix);
+      _transformUtils.tempQuaternion.setFromEuler(_tempEuler);
+      _transformUtils.tempScale.set(inst.scale, inst.scale, inst.scale);
+      _transformUtils.tempMatrix.compose(_transformUtils.tempPosition, _transformUtils.tempQuaternion, _transformUtils.tempScale);
+      this.instancedMesh.setMatrixAt(visibleCount, _transformUtils.tempMatrix);
       visibleCount++;
     }
 

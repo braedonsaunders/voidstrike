@@ -214,6 +214,8 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
   // Store joined lobby info for reconnection
   const joinedCodeRef = useRef<string | null>(null);
   const joinedNameRef = useRef<string | null>(null);
+  // Track when reconnection is in progress to prevent state conflicts with multiplayerStore
+  const isReconnectingRef = useRef<boolean>(false);
   const [mySlotId, setMySlotId] = useState<string | null>(null);
 
   const poolRef = useRef<SimplePool | null>(null);
@@ -590,8 +592,11 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
           } catch (e) {
             debugNetworking.error('[Lobby] Failed to process offer:', e);
             setError('Failed to connect to host');
-            setIsHost(true); // Reset to host mode
-            setStatus('hosting'); // Go back to hosting so user can try again
+            // Don't reset to host mode during reconnection - let multiplayerStore handle retry
+            if (!isReconnectingRef.current) {
+              setIsHost(true); // Reset to host mode
+              setStatus('hosting'); // Go back to hosting so user can try again
+            }
           }
         },
         oneose: () => {
@@ -622,12 +627,18 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
           try {
             const data = JSON.parse(event.content);
             setError(data.reason || 'Lobby is full');
-            setIsHost(true); // Reset to host mode so Join button reappears
-            setStatus('hosting'); // Go back to hosting so user can try again
+            // Don't reset to host mode during reconnection - let multiplayerStore handle retry
+            if (!isReconnectingRef.current) {
+              setIsHost(true); // Reset to host mode so Join button reappears
+              setStatus('hosting'); // Go back to hosting so user can try again
+            }
           } catch {
             setError('Lobby is full - no open slots available');
-            setIsHost(true); // Reset to host mode so Join button reappears
-            setStatus('hosting');
+            // Don't reset to host mode during reconnection - let multiplayerStore handle retry
+            if (!isReconnectingRef.current) {
+              setIsHost(true); // Reset to host mode so Join button reappears
+              setStatus('hosting');
+            }
           }
         },
       });
@@ -660,8 +671,11 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
           offerSub.close();
           rejectSub.close();
           setError('No lobby found with that code');
-          setIsHost(true); // Reset to host mode so Join button reappears
-          setStatus('hosting'); // Go back to hosting so user can try again
+          // Don't reset to host mode during reconnection - let multiplayerStore handle retry
+          if (!isReconnectingRef.current) {
+            setIsHost(true); // Reset to host mode so Join button reappears
+            setStatus('hosting'); // Go back to hosting so user can try again
+          }
         }
         joinTimeoutRef.current = null;
       }, 30000);
@@ -669,8 +683,11 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     } catch (e) {
       debugNetworking.error('[Lobby] Join error:', e);
       setError(e instanceof Error ? e.message : 'Failed to join lobby');
-      setIsHost(true); // Reset to host mode so Join button reappears
-      setStatus('hosting'); // Go back to hosting so user can try again
+      // Don't reset to host mode during reconnection - let multiplayerStore handle retry
+      if (!isReconnectingRef.current) {
+        setIsHost(true); // Reset to host mode so Join button reappears
+        setStatus('hosting'); // Go back to hosting so user can try again
+      }
     }
   }, []);
 
@@ -759,6 +776,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
   }, []);
 
   // Reconnection function for guests
+  // This is called by multiplayerStore.attemptReconnect() which handles exponential backoff
   const reconnect = useCallback(async (): Promise<boolean> => {
     // Only guests need to reconnect - hosts wait for guests to reconnect to them
     if (isHost) {
@@ -775,6 +793,10 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     }
 
     debugNetworking.log('[Lobby] Attempting to reconnect to lobby:', code);
+
+    // Set reconnecting flag to prevent joinLobby from resetting to host mode on failure
+    // multiplayerStore owns the reconnection state machine and will handle retries
+    isReconnectingRef.current = true;
 
     try {
       // Close existing peer connection
@@ -793,9 +815,17 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       const isConnected = currentHostConnection !== null;
 
       debugNetworking.log('[Lobby] Reconnection result:', isConnected ? 'success' : 'failed');
+
+      // Clear reconnecting flag on success - store will handle state
+      if (isConnected) {
+        isReconnectingRef.current = false;
+      }
+      // On failure, keep flag set - store will either retry or mark as failed
+
       return isConnected;
     } catch (e) {
       debugNetworking.error('[Lobby] Reconnection failed:', e);
+      // Keep reconnecting flag set - store will handle retry or failure
       return false;
     }
   }, [isHost, joinLobby]);
@@ -811,6 +841,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     return () => {
       // Clean up on unmount
       useMultiplayerStore.getState().setReconnectCallback(null);
+      isReconnectingRef.current = false;
     };
   }, [status, reconnect]);
 

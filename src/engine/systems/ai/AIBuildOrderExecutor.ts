@@ -16,6 +16,8 @@ import { Unit } from '../../components/Unit';
 import { Building } from '../../components/Building';
 import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
+import { Ability, DOMINION_ABILITIES } from '../../components/Ability';
+import { Resource } from '../../components/Resource';
 import { Game } from '../../core/Game';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
@@ -32,6 +34,7 @@ import {
 } from '@/data/ai/aiConfig';
 import type { BuildOrderStep } from '@/data/ai/buildOrders';
 import { getCounterRecommendation, analyzeThreatGaps } from '../AIMicroSystem';
+import { distance } from '@/utils/math';
 
 // Build order index for when we've finished the build order
 const BUILD_ORDER_COMPLETE = 999;
@@ -239,9 +242,7 @@ export class AIBuildOrderExecutor {
       case 'research':
         return this.tryStartResearch(ai, step.id);
       case 'ability':
-        // Abilities not yet supported in AI build orders
-        debugAI.log(`[AIBuildOrder] ${ai.playerId}: Ability step not implemented: ${step.id}`);
-        return true;
+        return this.tryUseAbility(ai, step.id);
       default:
         debugAI.log(`[AIBuildOrder] ${ai.playerId}: Unknown build order step type: ${step.type}`);
         return true;
@@ -846,6 +847,269 @@ export class AIBuildOrderExecutor {
     }
 
     return null;
+  }
+
+  // === Ability Execution ===
+
+  /**
+   * Try to use an ability as part of a build order step.
+   * Supports scanner_sweep, mule, and supply_drop abilities.
+   */
+  public tryUseAbility(ai: AIPlayer, abilityId: string): boolean {
+    const abilityDef = DOMINION_ABILITIES[abilityId];
+    if (!abilityDef) {
+      debugAI.warn(`[AIBuildOrder] ${ai.playerId}: Unknown ability: ${abilityId}`);
+      return false;
+    }
+
+    // Find a caster entity that can use this ability
+    const caster = this.findAbilityCaster(ai, abilityId);
+    if (!caster) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: No caster available for ability: ${abilityId}`);
+      return false;
+    }
+
+    // Determine target based on ability type
+    const target = this.determineAbilityTarget(ai, abilityId, abilityDef.targetType, caster);
+    if (!target && (abilityDef.targetType === 'point' || abilityDef.targetType === 'unit')) {
+      debugAI.log(`[AIBuildOrder] ${ai.playerId}: No valid target for ability: ${abilityId}`);
+      return false;
+    }
+
+    // Emit the ability command
+    this.game.eventBus.emit('command:ability', {
+      entityIds: [caster.entityId],
+      abilityId,
+      targetPosition: target?.position,
+      targetEntityId: target?.entityId,
+    });
+
+    debugAI.log(`[AIBuildOrder] ${ai.playerId}: Used ability ${abilityId} from entity ${caster.entityId}`);
+    return true;
+  }
+
+  /**
+   * Find an entity that can cast the specified ability.
+   * Returns the entity ID and its position.
+   */
+  private findAbilityCaster(
+    ai: AIPlayer,
+    abilityId: string
+  ): { entityId: number; position: { x: number; y: number } } | null {
+    // Check buildings first (for abilities like scanner_sweep, mule, supply_drop from command center)
+    const buildings = this.coordinator.getCachedBuildings();
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+      const health = entity.get<Health>('Health')!;
+      const ability = entity.get<Ability>('Ability');
+      const transform = entity.get<Transform>('Transform');
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (!building.isComplete()) continue;
+      if (!ability || !transform) continue;
+
+      // Check if this entity has the ability and can use it
+      if (ability.canUseAbility(abilityId)) {
+        return {
+          entityId: entity.id,
+          position: { x: transform.x, y: transform.y },
+        };
+      }
+    }
+
+    // Check units (for abilities like stim, siege mode, etc.)
+    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Ability', 'Health');
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health')!;
+      const ability = entity.get<Ability>('Ability')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (health.isDead()) continue;
+
+      if (ability.canUseAbility(abilityId)) {
+        return {
+          entityId: entity.id,
+          position: { x: transform.x, y: transform.y },
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Determine the target for an ability based on its target type.
+   */
+  private determineAbilityTarget(
+    ai: AIPlayer,
+    abilityId: string,
+    targetType: string,
+    caster: { entityId: number; position: { x: number; y: number } }
+  ): { position?: { x: number; y: number }; entityId?: number } | null {
+    switch (targetType) {
+      case 'none':
+      case 'self':
+        // Self-cast abilities don't need a target
+        return {};
+
+      case 'point':
+        return this.determinePointTarget(ai, abilityId, caster);
+
+      case 'unit':
+      case 'ally':
+        return this.determineUnitTarget(ai, abilityId, targetType);
+
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Determine a point target for abilities like scanner_sweep, mule.
+   */
+  private determinePointTarget(
+    ai: AIPlayer,
+    abilityId: string,
+    caster: { entityId: number; position: { x: number; y: number } }
+  ): { position: { x: number; y: number } } | null {
+    switch (abilityId) {
+      case 'scanner_sweep': {
+        // Target enemy base if known, otherwise scout unexplored areas
+        if (ai.enemyBaseLocation) {
+          // Add some randomness to avoid always scanning the exact same spot
+          const offsetX = (this.coordinator.getRandom().next() - 0.5) * 10;
+          const offsetY = (this.coordinator.getRandom().next() - 0.5) * 10;
+          return {
+            position: {
+              x: ai.enemyBaseLocation.x + offsetX,
+              y: ai.enemyBaseLocation.y + offsetY,
+            },
+          };
+        }
+        // No enemy base known - scan center of map or last contact location
+        return {
+          position: {
+            x: this.game.config.mapWidth / 2,
+            y: this.game.config.mapHeight / 2,
+          },
+        };
+      }
+
+      case 'mule': {
+        // Target a mineral patch near a base
+        const mineralTarget = this.findMineralPatchNearBase(ai);
+        if (mineralTarget) {
+          return { position: mineralTarget };
+        }
+        // Fallback to near the caster
+        return { position: caster.position };
+      }
+
+      case 'nuke':
+      case 'emp_round': {
+        // Target enemy army concentration
+        if (ai.enemyBaseLocation) {
+          return { position: ai.enemyBaseLocation };
+        }
+        return null;
+      }
+
+      default:
+        // Generic point ability - target near caster
+        return { position: caster.position };
+    }
+  }
+
+  /**
+   * Determine a unit target for abilities like supply_drop.
+   */
+  private determineUnitTarget(
+    ai: AIPlayer,
+    abilityId: string,
+    targetType: string
+  ): { entityId: number } | null {
+    switch (abilityId) {
+      case 'supply_drop': {
+        // Find an incomplete supply_cache
+        const buildings = this.coordinator.getCachedBuildings();
+        for (const entity of buildings) {
+          const selectable = entity.get<Selectable>('Selectable')!;
+          const building = entity.get<Building>('Building')!;
+          const health = entity.get<Health>('Health')!;
+
+          if (selectable.playerId !== ai.playerId) continue;
+          if (health.isDead()) continue;
+          if (building.buildingId !== 'supply_cache') continue;
+          if (building.state !== 'constructing') continue;
+
+          return { entityId: entity.id };
+        }
+        return null;
+      }
+
+      case 'snipe':
+      case 'power_cannon': {
+        // Target high-value enemy units
+        const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+        let bestTarget: { entityId: number; value: number } | null = null;
+
+        for (const entity of units) {
+          const selectable = entity.get<Selectable>('Selectable')!;
+          const health = entity.get<Health>('Health')!;
+          const unit = entity.get<Unit>('Unit')!;
+
+          if (selectable.playerId === ai.playerId) continue; // Enemy only
+          if (health.isDead()) continue;
+
+          // For snipe, prefer biological targets
+          if (abilityId === 'snipe' && !unit.isBiological) continue;
+
+          const value = health.max + (unit.attackDamage * 10);
+          if (!bestTarget || value > bestTarget.value) {
+            bestTarget = { entityId: entity.id, value };
+          }
+        }
+        return bestTarget ? { entityId: bestTarget.entityId } : null;
+      }
+
+      default:
+        return null;
+    }
+  }
+
+  /**
+   * Find a mineral patch near one of the AI's bases.
+   */
+  private findMineralPatchNearBase(ai: AIPlayer): { x: number; y: number } | null {
+    const basePos = this.coordinator.findAIBase(ai);
+    if (!basePos) return null;
+
+    const resources = this.coordinator.getCachedResources();
+    let closestMineral: { x: number; y: number; dist: number } | null = null;
+
+    for (const entity of resources) {
+      const resource = entity.get<Resource>('Resource');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!resource || !transform) continue;
+      if (resource.resourceType !== 'minerals') continue;
+      if (resource.isDepleted()) continue;
+
+      const dist = distance(basePos.x, basePos.y, transform.x, transform.y);
+
+      // Only consider minerals within reasonable range of base
+      if (dist > 25) continue;
+
+      if (!closestMineral || dist < closestMineral.dist) {
+        closestMineral = { x: transform.x, y: transform.y, dist };
+      }
+    }
+
+    return closestMineral ? { x: closestMineral.x, y: closestMineral.y } : null;
   }
 
   // === Expansion ===

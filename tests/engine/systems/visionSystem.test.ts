@@ -190,4 +190,95 @@ describe('VisionSystem', () => {
       expect(backToGrid).toEqual(gridPos);
     });
   });
+
+  describe('temporary reveal expiration', () => {
+    interface TemporaryReveal {
+      playerId: string;
+      position: { x: number; y: number };
+      radius: number;
+      expirationTick: number;
+      detectsCloaked: boolean;
+    }
+
+    function processTemporaryReveals(
+      reveals: TemporaryReveal[],
+      currentTick: number
+    ): TemporaryReveal[] {
+      // Filter out expired reveals
+      return reveals.filter((reveal) => reveal.expirationTick > currentTick);
+    }
+
+    it('active reveals are kept', () => {
+      const reveals: TemporaryReveal[] = [
+        { playerId: 'p1', position: { x: 10, y: 10 }, radius: 8, expirationTick: 100, detectsCloaked: true },
+      ];
+      const result = processTemporaryReveals(reveals, 50);
+      expect(result.length).toBe(1);
+    });
+
+    it('expired reveals are removed', () => {
+      const reveals: TemporaryReveal[] = [
+        { playerId: 'p1', position: { x: 10, y: 10 }, radius: 8, expirationTick: 100, detectsCloaked: true },
+      ];
+      const result = processTemporaryReveals(reveals, 150);
+      expect(result.length).toBe(0);
+    });
+
+    it('reveals expiring at current tick are removed', () => {
+      const reveals: TemporaryReveal[] = [
+        { playerId: 'p1', position: { x: 10, y: 10 }, radius: 8, expirationTick: 100, detectsCloaked: true },
+      ];
+      const result = processTemporaryReveals(reveals, 100);
+      expect(result.length).toBe(0);
+    });
+
+    it('mixed active and expired reveals are processed correctly', () => {
+      const reveals: TemporaryReveal[] = [
+        { playerId: 'p1', position: { x: 10, y: 10 }, radius: 8, expirationTick: 50, detectsCloaked: true },
+        { playerId: 'p1', position: { x: 20, y: 20 }, radius: 8, expirationTick: 150, detectsCloaked: true },
+        { playerId: 'p2', position: { x: 30, y: 30 }, radius: 8, expirationTick: 200, detectsCloaked: false },
+      ];
+      const result = processTemporaryReveals(reveals, 100);
+      expect(result.length).toBe(2);
+      expect(result[0].expirationTick).toBe(150);
+      expect(result[1].expirationTick).toBe(200);
+    });
+  });
+
+  describe('cloaked unit detection', () => {
+    interface Position { x: number; y: number }
+
+    function isInDetectionRadius(
+      unitPos: Position,
+      detectPos: Position,
+      radius: number
+    ): boolean {
+      const dx = unitPos.x - detectPos.x;
+      const dy = unitPos.y - detectPos.y;
+      return dx * dx + dy * dy <= radius * radius;
+    }
+
+    it('unit at detection center is detected', () => {
+      expect(isInDetectionRadius({ x: 10, y: 10 }, { x: 10, y: 10 }, 8)).toBe(true);
+    });
+
+    it('unit within radius is detected', () => {
+      expect(isInDetectionRadius({ x: 15, y: 10 }, { x: 10, y: 10 }, 8)).toBe(true);
+    });
+
+    it('unit at edge of radius is detected', () => {
+      expect(isInDetectionRadius({ x: 18, y: 10 }, { x: 10, y: 10 }, 8)).toBe(true);
+    });
+
+    it('unit outside radius is not detected', () => {
+      expect(isInDetectionRadius({ x: 20, y: 10 }, { x: 10, y: 10 }, 8)).toBe(false);
+    });
+
+    it('diagonal distance is calculated correctly', () => {
+      // sqrt(6^2 + 6^2) = sqrt(72) ≈ 8.49 > 8
+      expect(isInDetectionRadius({ x: 16, y: 16 }, { x: 10, y: 10 }, 8)).toBe(false);
+      // sqrt(5^2 + 5^2) = sqrt(50) ≈ 7.07 < 8
+      expect(isInDetectionRadius({ x: 15, y: 15 }, { x: 10, y: 10 }, 8)).toBe(true);
+    });
+  });
 });
