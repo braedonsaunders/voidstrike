@@ -733,7 +733,7 @@ describe('FlockingBehavior Performance', () => {
 
       // Log the results for debugging
       const ratioAvg =
-        result.scalingRatios.reduce((a, b) => a + b, 0) / result.scalingRatios.length;
+        result.scalingRatios.reduce((a: number, b: number) => a + b, 0) / result.scalingRatios.length;
 
       // Verify we're not O(n²) - if doubling input quadruples time, that's bad
       // O(n²) would show ratios around 4.0 when doubling input
