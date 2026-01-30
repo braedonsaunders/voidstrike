@@ -419,6 +419,14 @@ export class EnvironmentManager {
       this.shadowUpdateInterval = hasMoving
         ? EnvironmentManager.SHADOW_UPDATE_INTERVAL_ACTIVE
         : EnvironmentManager.SHADOW_UPDATE_INTERVAL_STATIC;
+
+      // When entities first appear, force immediate shadow update.
+      // This fixes initial unit shadows being stuck at wrong positions -
+      // the shadow map may have rendered before entities existed.
+      if (hasMoving && this.shadowsEnabled) {
+        this.shadowFrameCounter = 0;
+        this.directionalLight.shadow.needsUpdate = true;
+      }
     }
   }
 
