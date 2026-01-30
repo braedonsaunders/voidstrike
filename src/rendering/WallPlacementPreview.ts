@@ -52,6 +52,18 @@ export class WallPlacementPreview {
   private linePointsPool: THREE.Vector3[] = [];
   private static readonly LINE_POINTS_POOL_SIZE = 100;
 
+  // Frame counter for quarantine timing
+  private frameCount: number = 0;
+
+  // Geometry disposal quarantine - prevents WebGPU "setIndexBuffer" crashes
+  // by delaying geometry disposal until GPU has finished pending draw commands.
+  private static readonly GEOMETRY_QUARANTINE_FRAMES = 4;
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    materials: THREE.Material[];
+    frameQueued: number;
+  }> = [];
+
   constructor(mapData: MapData, getTerrainHeight?: (x: number, y: number) => number) {
     this.group = new THREE.Group();
     this.mapData = mapData;
@@ -141,6 +153,9 @@ export class WallPlacementPreview {
    * Update wall line endpoint (mouse move while drawing)
    */
   public updateLine(worldX: number, worldY: number): void {
+    this.frameCount++;
+    this.processGeometryQuarantine();
+
     if (!this.isDrawing) {
       // Not drawing, just show single segment at cursor
       const snappedX = Math.round(worldX);
@@ -374,6 +389,42 @@ export class WallPlacementPreview {
   }
 
   /**
+   * Queue geometry for delayed disposal.
+   * This prevents WebGPU "setIndexBuffer" crashes by ensuring the GPU
+   * has finished all pending draw commands before buffers are freed.
+   */
+  private queueGeometryForDisposal(geometry: THREE.BufferGeometry): void {
+    this.geometryQuarantine.push({
+      geometry,
+      materials: [],
+      frameQueued: this.frameCount,
+    });
+  }
+
+  /**
+   * Process quarantined geometries and dispose those that are safe.
+   */
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = this.frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= WallPlacementPreview.GEOMETRY_QUARANTINE_FRAMES) {
+        // Safe to dispose - GPU has finished with these buffers
+        entry.geometry.dispose();
+        for (const material of entry.materials) {
+          material.dispose();
+        }
+      } else {
+        // Keep in quarantine
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
+  }
+
+  /**
    * Clear all meshes
    * PERF: Don't dispose shared materials/geometry - they are reused
    */
@@ -387,7 +438,8 @@ export class WallPlacementPreview {
 
     if (this.lineMesh) {
       this.group.remove(this.lineMesh);
-      this.lineMesh.geometry.dispose(); // Line geometry is unique per update
+      // Use quarantine to prevent WebGPU crashes
+      this.queueGeometryForDisposal(this.lineMesh.geometry);
       this.lineMesh = null;
     }
 
@@ -403,6 +455,15 @@ export class WallPlacementPreview {
    * Dispose of all resources
    */
   public dispose(): void {
+    // Flush any pending quarantined geometries first
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const material of entry.materials) {
+        material.dispose();
+      }
+    }
+    this.geometryQuarantine.length = 0;
+
     this.clearMeshes();
     this.validMaterial.dispose();
     this.invalidMaterial.dispose();
@@ -412,5 +473,14 @@ export class WallPlacementPreview {
     this.wireGeometry.dispose();
     this.validWireMaterial.dispose();
     this.invalidWireMaterial.dispose();
+
+    // Flush any geometries queued during dispose
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const material of entry.materials) {
+        material.dispose();
+      }
+    }
+    this.geometryQuarantine.length = 0;
   }
 }
