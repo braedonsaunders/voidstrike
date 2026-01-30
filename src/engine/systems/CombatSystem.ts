@@ -184,6 +184,9 @@ export class CombatSystem extends System {
   /**
    * PERF OPTIMIZATION: Rebuild the combat-active unit list
    * Only units in hot cells or with active targets are tracked
+   *
+   * SC2-STYLE: Units in assault mode are ALWAYS combat-active and never throttled.
+   * They continue scanning for enemies even when idle at their destination.
    */
   private updateCombatActiveUnits(currentTick: number): void {
     if (currentTick - this.combatActiveLastUpdate < this.COMBAT_ACTIVE_UPDATE_INTERVAL) {
@@ -201,6 +204,13 @@ export class CombatSystem extends System {
 
       // Always include units with active targets
       if (unit.targetEntityId !== null) {
+        this.combatActiveUnits.add(entity.id);
+        continue;
+      }
+
+      // SC2-STYLE: Always include assault mode units - they never stop scanning
+      // This is the key fix for idle units in enemy bases
+      if (unit.isInAssaultMode) {
         this.combatActiveUnits.add(entity.id);
         continue;
       }
@@ -477,18 +487,21 @@ export class CombatSystem extends System {
 
       // Auto-acquire targets for units that need them
       // canAttackWhileMoving units also acquire targets while moving
+      // SC2-STYLE: Assault mode units ALWAYS need to acquire targets when idle
       const needsTarget = unit.targetEntityId === null && (
         unit.state === 'idle' ||
         unit.state === 'patrolling' ||
         unit.state === 'attackmoving' ||
         unit.state === 'attacking' ||
         unit.isHoldingPosition ||
+        unit.isInAssaultMode || // SC2-STYLE: Assault mode units always scan
         (unit.canAttackWhileMoving && unit.state === 'moving')
       );
 
       if (needsTarget) {
         // PERF: Use hot cell check instead of expensive spatial query for idle units
-        if (unit.state === 'idle' && !unit.isHoldingPosition) {
+        // SC2-STYLE: Skip this optimization for assault mode units - they always search
+        if (unit.state === 'idle' && !unit.isHoldingPosition && !unit.isInAssaultMode) {
           // Fast check: is this unit in a hot cell?
           const inHotCell = this.world.unitGrid.isInHotCell(transform.x, transform.y, this.hotCells);
           if (!inHotCell) {
@@ -503,9 +516,15 @@ export class CombatSystem extends System {
 
         let target: number | null = null;
 
-        // For idle units, do a fast check for enemies within ATTACK range
-        // Uses light throttle (1 tick = ~50ms) for performance while staying responsive
-        if (unit.state === 'idle' || unit.isHoldingPosition) {
+        // SC2-STYLE: Assault mode units always search at sight range, no throttling
+        if (unit.isInAssaultMode && unit.state === 'idle') {
+          // Aggressive sight-range search for assault mode units
+          target = this.findBestTargetSpatial(attacker.id, transform, unit);
+          // Track idle time for assault mode units
+          unit.assaultIdleTicks++;
+        } else if (unit.state === 'idle' || unit.isHoldingPosition) {
+          // For regular idle units, do a fast check for enemies within ATTACK range
+          // Uses light throttle (1 tick = ~50ms) for performance while staying responsive
           target = this.findImmediateAttackTarget(attacker.id, transform, unit, currentTick);
         }
 
@@ -523,6 +542,9 @@ export class CombatSystem extends System {
             const savedTargetX = unit.targetX;
             const savedTargetY = unit.targetY;
             const wasAttackMoving = unit.state === 'attackmoving';
+            // SC2-STYLE: Remember assault destination
+            const savedAssaultDest = unit.assaultDestination;
+            const wasInAssaultMode = unit.isInAssaultMode;
 
             unit.setAttackTarget(target);
 
@@ -530,6 +552,13 @@ export class CombatSystem extends System {
             if (wasAttackMoving && savedTargetX !== null && savedTargetY !== null) {
               unit.targetX = savedTargetX;
               unit.targetY = savedTargetY;
+            }
+
+            // SC2-STYLE: Preserve assault mode through target acquisition
+            if (wasInAssaultMode && savedAssaultDest) {
+              unit.assaultDestination = savedAssaultDest;
+              unit.isInAssaultMode = true;
+              unit.assaultIdleTicks = 0; // Reset idle counter - we found a target
             }
           }
         } else if (target && unit.isHoldingPosition) {
@@ -558,6 +587,12 @@ export class CombatSystem extends System {
             // Resume attack-move to destination
             unit.state = 'attackmoving';
             unit.targetEntityId = null;
+          } else if (unit.isInAssaultMode) {
+            // SC2-STYLE: Assault mode units stay in assault mode, ready to scan for new targets
+            // They go "idle" but with assault mode flag still set, so they keep scanning
+            unit.targetEntityId = null;
+            unit.state = 'idle';
+            // Don't clear assault mode - unit will immediately scan for new targets next tick
           } else if (!unit.executeNextCommand()) {
             unit.clearTarget();
           }
@@ -578,6 +613,11 @@ export class CombatSystem extends System {
             // Resume attack-move to destination
             unit.state = 'attackmoving';
             unit.targetEntityId = null;
+          } else if (unit.isInAssaultMode) {
+            // SC2-STYLE: Assault mode units stay aggressive and keep scanning
+            unit.targetEntityId = null;
+            unit.state = 'idle';
+            // Assault mode preserved - unit will scan for new targets
           } else if (!unit.executeNextCommand()) {
             unit.clearTarget();
           }
@@ -599,6 +639,10 @@ export class CombatSystem extends System {
           } else if (unit.targetX !== null && unit.targetY !== null) {
             unit.state = 'attackmoving';
             unit.targetEntityId = null;
+          } else if (unit.isInAssaultMode) {
+            // SC2-STYLE: Stay aggressive, find a target we CAN attack
+            unit.targetEntityId = null;
+            unit.state = 'idle';
           } else if (!unit.executeNextCommand()) {
             unit.clearTarget();
           }
