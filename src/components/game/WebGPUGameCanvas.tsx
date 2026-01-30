@@ -636,6 +636,14 @@ export function WebGPUGameCanvas() {
         if (opacityKey in overlaySettings && typeof overlaySettings[opacityKey] === 'number') {
           refs.overlayManager.current.setOpacity(overlaySettings[opacityKey] as number);
         }
+
+        // Wire up range overlay toggles (Alt+A, Alt+V shortcuts)
+        if (overlaySettings.showAttackRange !== prevOverlaySettings.showAttackRange) {
+          refs.overlayManager.current.setShowAttackRange(overlaySettings.showAttackRange);
+        }
+        if (overlaySettings.showVisionRange !== prevOverlaySettings.showVisionRange) {
+          refs.overlayManager.current.setShowVisionRange(overlaySettings.showVisionRange);
+        }
       }
     });
 
