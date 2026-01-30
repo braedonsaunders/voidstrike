@@ -534,16 +534,143 @@ function applyScaleAndGround(root: THREE.Object3D, assetId: string, scale: numbe
 }
 
 /**
- * Clone a model properly - uses SkeletonUtils for animated/skinned models
+ * Deep clone geometry with fresh TypedArrays for WebGPU safety.
+ * Creates completely independent buffers that won't be affected if the original is disposed.
+ */
+function deepCloneGeometry(source: THREE.BufferGeometry): THREE.BufferGeometry {
+  const cloned = new THREE.BufferGeometry();
+
+  // Copy all attributes with fresh TypedArrays
+  for (const name of Object.keys(source.attributes)) {
+    const srcAttr = source.attributes[name];
+    const newArray = srcAttr.array.slice(0);
+    const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
+    newAttr.needsUpdate = true;
+    cloned.setAttribute(name, newAttr);
+  }
+
+  // Copy index with fresh TypedArray if present
+  if (source.index) {
+    const srcIndex = source.index;
+    const newIndexArray = srcIndex.array.slice(0);
+    const newIndex = new THREE.BufferAttribute(newIndexArray, srcIndex.itemSize, srcIndex.normalized);
+    newIndex.needsUpdate = true;
+    cloned.setIndex(newIndex);
+  }
+
+  // Copy morph attributes if present
+  if (source.morphAttributes) {
+    for (const name of Object.keys(source.morphAttributes)) {
+      const srcMorphArray = source.morphAttributes[name];
+      cloned.morphAttributes[name] = srcMorphArray.map(srcAttr => {
+        const newArray = srcAttr.array.slice(0);
+        const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
+        newAttr.needsUpdate = true;
+        return newAttr;
+      });
+    }
+  }
+
+  // Copy bounding volumes if computed
+  if (source.boundingBox) {
+    cloned.boundingBox = source.boundingBox.clone();
+  }
+  if (source.boundingSphere) {
+    cloned.boundingSphere = source.boundingSphere.clone();
+  }
+
+  // Copy groups
+  for (const group of source.groups) {
+    cloned.addGroup(group.start, group.count, group.materialIndex);
+  }
+
+  return cloned;
+}
+
+/**
+ * Deep clone a model hierarchy, ensuring all geometries have fresh TypedArrays.
+ * This prevents WebGPU "setIndexBuffer" crashes when original geometry is disposed.
+ */
+function deepCloneModelHierarchy(node: THREE.Object3D): THREE.Object3D {
+  let clonedNode: THREE.Object3D;
+
+  if (node instanceof THREE.Mesh) {
+    // Deep clone geometry to ensure independent GPU buffers
+    const clonedGeometry = deepCloneGeometry(node.geometry);
+    // Clone material (shallow is fine, materials don't cause GPU buffer issues)
+    const clonedMaterial = Array.isArray(node.material)
+      ? node.material.map(m => m.clone())
+      : node.material.clone();
+    clonedNode = new THREE.Mesh(clonedGeometry, clonedMaterial);
+  } else if (node instanceof THREE.SkinnedMesh) {
+    // SkinnedMesh needs special handling - deep clone geometry
+    const clonedGeometry = deepCloneGeometry(node.geometry);
+    const clonedMaterial = Array.isArray(node.material)
+      ? node.material.map(m => m.clone())
+      : node.material.clone();
+    // Create new SkinnedMesh with cloned geometry
+    clonedNode = new THREE.SkinnedMesh(clonedGeometry, clonedMaterial);
+    // Note: Skeleton binding happens through SkeletonUtils.clone for animated models
+  } else if (node instanceof THREE.Points) {
+    const clonedGeometry = deepCloneGeometry(node.geometry);
+    const clonedMaterial = Array.isArray(node.material)
+      ? node.material.map(m => m.clone())
+      : node.material.clone();
+    clonedNode = new THREE.Points(clonedGeometry, clonedMaterial);
+  } else if (node instanceof THREE.Line) {
+    const clonedGeometry = deepCloneGeometry(node.geometry);
+    const clonedMaterial = Array.isArray(node.material)
+      ? node.material.map(m => m.clone())
+      : node.material.clone();
+    clonedNode = new THREE.Line(clonedGeometry, clonedMaterial);
+  } else {
+    // Group or other Object3D - just clone the node itself
+    clonedNode = node.clone(false); // false = don't clone children (we'll do it manually)
+  }
+
+  // Copy transform and properties
+  clonedNode.position.copy(node.position);
+  clonedNode.rotation.copy(node.rotation);
+  clonedNode.scale.copy(node.scale);
+  clonedNode.name = node.name;
+  clonedNode.visible = node.visible;
+  clonedNode.castShadow = node.castShadow;
+  clonedNode.receiveShadow = node.receiveShadow;
+  clonedNode.frustumCulled = node.frustumCulled;
+  clonedNode.renderOrder = node.renderOrder;
+  if (node.userData) {
+    clonedNode.userData = { ...node.userData };
+  }
+
+  // Recursively clone children
+  for (const child of node.children) {
+    clonedNode.add(deepCloneModelHierarchy(child));
+  }
+
+  return clonedNode;
+}
+
+/**
+ * Clone a model properly - uses SkeletonUtils for animated/skinned models,
+ * and deep clones geometry for static models to ensure WebGPU buffer safety.
  * Per threejs-builder skill: SkeletonUtils.clone() is REQUIRED for animated models
  */
 function cloneModel(original: THREE.Object3D, assetId: string): THREE.Object3D {
   if (animatedAssets.has(assetId)) {
-    // Animated/skinned model - must use SkeletonUtils
-    return SkeletonUtils.clone(original) as THREE.Object3D;
+    // Animated/skinned model - must use SkeletonUtils for proper skeleton binding
+    // Then deep clone geometries to ensure GPU buffer independence
+    const skeletonClone = SkeletonUtils.clone(original) as THREE.Object3D;
+    // Deep clone all geometries in the skeleton clone
+    skeletonClone.traverse((node) => {
+      if (node instanceof THREE.Mesh || node instanceof THREE.SkinnedMesh) {
+        const mesh = node as THREE.Mesh;
+        mesh.geometry = deepCloneGeometry(mesh.geometry);
+      }
+    });
+    return skeletonClone;
   }
-  // Static model - regular clone is fine
-  return original.clone();
+  // Static model - use deep clone to ensure GPU buffer independence
+  return deepCloneModelHierarchy(original);
 }
 
 // Standard materials library
