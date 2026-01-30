@@ -570,9 +570,11 @@ export class ResourceSystem extends System {
 
       if (workerOwner) {
         const aiSystem = this.getAISystem();
-        if (aiSystem && aiSystem.isAIPlayer(workerOwner)) {
+        const isAI = aiSystem?.isAIPlayer(workerOwner) ?? false;
+
+        if (isAI) {
           // Credit AI player - this is the ONLY way AI gets resources (simulation-based)
-          aiSystem.creditResources(workerOwner, minerals, vespene);
+          aiSystem!.creditResources(workerOwner, minerals, vespene);
         } else {
           // Try to credit local human player
           // Note: isLocalPlayer uses Zustand which may not work in Web Worker context

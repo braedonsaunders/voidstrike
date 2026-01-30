@@ -624,14 +624,16 @@ export class AIBuildOrderExecutor {
     const shouldLog = currentTick % 100 === 0;
 
     if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) {
+      // Log resource failures with console.warn to ensure visibility
       if (shouldLog) {
-        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit - insufficient resources for ${unitType} (need ${unitDef.mineralCost}M/${unitDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+        console.warn(`[AIBuildOrder] ${ai.playerId}: INSUFFICIENT RESOURCES for ${unitType} (need ${unitDef.mineralCost}M/${unitDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
       }
       return false;
     }
     if (ai.supply + unitDef.supplyCost > ai.maxSupply) {
+      // Log supply failures with console.warn to ensure visibility
       if (shouldLog) {
-        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryTrainUnit - supply blocked for ${unitType} (${ai.supply}+${unitDef.supplyCost} > ${ai.maxSupply})`);
+        console.warn(`[AIBuildOrder] ${ai.playerId}: SUPPLY BLOCKED for ${unitType} (${ai.supply}+${unitDef.supplyCost} > ${ai.maxSupply})`);
       }
       return false;
     }

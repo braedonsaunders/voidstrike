@@ -673,12 +673,20 @@ export class AICoordinator extends System {
         continue;
       }
 
-      // Periodic status log
+      // Periodic status log (always enabled for diagnostics)
       if (currentTick % 200 === 0) {
-        debugAI.log(`[AICoordinator] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, vespene=${Math.floor(ai.vespene)}, supply=${ai.supply}/${ai.maxSupply}, buildOrderStep=${ai.buildOrderIndex}/${ai.buildOrder.length}, state=${ai.state}`);
+        // Use console.log for critical diagnostics to ensure visibility
+        console.log(`[AICoordinator] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, vespene=${Math.floor(ai.vespene)}, supply=${ai.supply}/${ai.maxSupply}, buildOrderStep=${ai.buildOrderIndex}/${ai.buildOrder.length}, state=${ai.state}`);
       }
 
       this.updateMaxSupply(ai);
+
+      // Diagnostic: warn if AI is supply blocked with resources available
+      if (ai.supply >= ai.maxSupply && ai.minerals >= 50) {
+        if (currentTick % 100 === 0) {
+          console.warn(`[AICoordinator] ${playerId} is SUPPLY BLOCKED: supply=${ai.supply}/${ai.maxSupply}, minerals=${Math.floor(ai.minerals)}`);
+        }
+      }
 
       // Economic layer runs EVERY tick
       this.runEconomicLayer(ai, currentTick);

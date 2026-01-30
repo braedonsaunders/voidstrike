@@ -97,6 +97,9 @@ export class WorkerGame extends GameCore {
 
   // Selection state (for UI feedback)
   private selectedEntityIds: number[] = [];
+
+  // Idempotency flag to prevent duplicate entity spawning
+  private entitiesAlreadySpawned = false;
   private controlGroups: Map<number, number[]> = new Map();
 
   // Debug tracking
@@ -805,6 +808,13 @@ export class WorkerGame extends GameCore {
   // ============================================================================
 
   public spawnInitialEntities(mapData: SpawnMapData): void {
+    // Idempotency guard - prevent duplicate entity spawning
+    if (this.entitiesAlreadySpawned) {
+      console.warn('[GameWorker] spawnInitialEntities called multiple times - skipping duplicate spawn');
+      return;
+    }
+    this.entitiesAlreadySpawned = true;
+
     debugInitialization.log('[GameWorker] spawnInitialEntities called:', {
       resourceCount: mapData.resources?.length ?? 0,
       spawnCount: mapData.spawns?.length ?? 0,
