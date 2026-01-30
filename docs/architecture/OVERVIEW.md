@@ -290,6 +290,9 @@ voidstrike/
 │   │   │   ├── index.ts
 │   │   │   ├── MerkleTree.ts
 │   │   │   └── types.ts
+│   │   ├── overlay/
+│   │   │   ├── index.ts
+│   │   │   └── OverlayCoordinator.ts
 │   │   ├── pathfinding/ # Navigation & pathfinding
 │   │   │   └── RecastNavigation.ts
 │   │   ├── systems/ # ECS Systems
