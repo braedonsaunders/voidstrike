@@ -372,6 +372,10 @@ class BuildingHealthAdapter {
   public getHealthPercent(): number {
     return this.max > 0 ? this.current / this.max : 0;
   }
+
+  public isDead(): boolean {
+    return this.current <= 0;
+  }
 }
 
 class BuildingSelectableAdapter {
