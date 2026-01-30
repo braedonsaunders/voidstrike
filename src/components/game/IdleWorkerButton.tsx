@@ -18,8 +18,11 @@ export function IdleWorkerButton() {
   // Update idle worker count via event-driven approach + throttled polling
   // Note: Hooks must be called unconditionally, so spectator check is after all hooks
   useEffect(() => {
-    // Skip for spectators
-    if (isSpectator) return;
+    // Skip for spectators and reset count
+    if (isSpectator) {
+      setIdleWorkerCount(0);
+      return;
+    }
     const bridge = getWorkerBridge();
     if (!bridge) return;
 

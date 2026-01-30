@@ -447,9 +447,9 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   syncWithGameSetup: () => {
     const localPlayerId = getLocalPlayerId();
-    if (localPlayerId) {
-      set({ playerId: localPlayerId });
-    }
+    // Set playerId to local player, or empty string if spectating
+    // This ensures we don't keep showing player1's data when spectating
+    set({ playerId: localPlayerId ?? '' });
   },
 
   reset: () => set(initialState),
