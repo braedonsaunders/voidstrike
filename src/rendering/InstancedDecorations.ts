@@ -26,23 +26,58 @@ let _maxDistanceSq = 10000; // Squared distance for faster comparison
 const DISTANCE_CULL_MULTIPLIER = DECORATIONS.DISTANCE_CULL_MULTIPLIER;
 
 /**
- * Clone geometry with proper GPU buffer initialization for WebGPU.
- * Setting needsUpdate on cloned attributes forces WebGPU to create fresh GPU buffers.
- * Without this, WebGPU may lazily share buffers with the source geometry, which
- * become invalid when the source is disposed, causing "setIndexBuffer" crashes.
+ * Clone geometry with completely fresh GPU buffers for WebGPU.
+ * Creates new TypedArrays for all attributes and index to ensure zero shared state
+ * with the source geometry. This prevents "setIndexBuffer" crashes when source
+ * geometry is disposed while clones are still being rendered.
  * Also ensures required attributes (like UVs) exist to prevent "Vertex buffer slot" errors.
  */
 function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry {
-  const cloned = source.clone();
+  const cloned = new THREE.BufferGeometry();
 
-  // Mark all attributes as needing GPU buffer upload
-  for (const name of Object.keys(cloned.attributes)) {
-    cloned.attributes[name].needsUpdate = true;
+  // Copy all attributes with fresh TypedArrays (no shared references)
+  for (const name of Object.keys(source.attributes)) {
+    const srcAttr = source.attributes[name];
+    // Create a completely new TypedArray by slicing (creates a copy)
+    const newArray = srcAttr.array.slice(0);
+    const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
+    newAttr.needsUpdate = true;
+    cloned.setAttribute(name, newAttr);
   }
 
-  // Mark index buffer as needing GPU buffer upload if present
-  if (cloned.index) {
-    cloned.index.needsUpdate = true;
+  // Copy index with fresh TypedArray if present
+  if (source.index) {
+    const srcIndex = source.index;
+    const newIndexArray = srcIndex.array.slice(0);
+    const newIndex = new THREE.BufferAttribute(newIndexArray, srcIndex.itemSize, srcIndex.normalized);
+    newIndex.needsUpdate = true;
+    cloned.setIndex(newIndex);
+  }
+
+  // Copy morph attributes if present
+  if (source.morphAttributes) {
+    for (const name of Object.keys(source.morphAttributes)) {
+      const srcMorphArray = source.morphAttributes[name];
+      cloned.morphAttributes[name] = srcMorphArray.map(srcAttr => {
+        const newArray = srcAttr.array.slice(0);
+        const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
+        newAttr.needsUpdate = true;
+        return newAttr;
+      });
+    }
+  }
+
+  // Copy bounding volumes if computed
+  if (source.boundingBox) {
+    cloned.boundingBox = source.boundingBox.clone();
+  }
+  if (source.boundingSphere) {
+    cloned.boundingSphere = source.boundingSphere.clone();
+  }
+
+  // Copy groups
+  for (const group of source.groups) {
+    cloned.addGroup(group.start, group.count, group.materialIndex);
   }
 
   // Ensure UV coordinates exist - required by many shaders (slot 1)
