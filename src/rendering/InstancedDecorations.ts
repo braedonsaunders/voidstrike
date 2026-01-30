@@ -26,6 +26,28 @@ let _maxDistanceSq = 10000; // Squared distance for faster comparison
 const DISTANCE_CULL_MULTIPLIER = DECORATIONS.DISTANCE_CULL_MULTIPLIER;
 
 /**
+ * Clone geometry with proper GPU buffer initialization for WebGPU.
+ * Setting needsUpdate on cloned attributes forces WebGPU to create fresh GPU buffers.
+ * Without this, WebGPU may lazily share buffers with the source geometry, which
+ * become invalid when the source is disposed, causing "setIndexBuffer" crashes.
+ */
+function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry {
+  const cloned = source.clone();
+
+  // Mark all attributes as needing GPU buffer upload
+  for (const name of Object.keys(cloned.attributes)) {
+    cloned.attributes[name].needsUpdate = true;
+  }
+
+  // Mark index buffer as needing GPU buffer upload if present
+  if (cloned.index) {
+    cloned.index.needsUpdate = true;
+  }
+
+  return cloned;
+}
+
+/**
  * Update the shared frustum from camera matrices.
  * Also stores camera position for distance-based culling.
  * Call once per frame before updating all decoration classes.
@@ -233,8 +255,9 @@ export class InstancedTrees {
       const borderMaterial = extractMaterial(original, modelId);
       if (!playableMaterial || !borderMaterial) continue;
 
-      const playableGeometry = geometry.clone();
-      const borderGeometry = geometry.clone();
+      // Clone geometries with proper GPU buffer initialization to prevent WebGPU crashes
+      const playableGeometry = cloneGeometryForGPU(geometry);
+      const borderGeometry = cloneGeometryForGPU(geometry);
       this.geometries.push(playableGeometry, borderGeometry);
       this.materials.push(playableMaterial, borderMaterial);
 
@@ -402,8 +425,9 @@ export class InstancedRocks {
       const borderMaterial = extractMaterial(original, modelId);
       if (!playableMaterial || !borderMaterial) continue;
 
-      const playableGeometry = geometry.clone();
-      const borderGeometry = geometry.clone();
+      // Clone geometries with proper GPU buffer initialization to prevent WebGPU crashes
+      const playableGeometry = cloneGeometryForGPU(geometry);
+      const borderGeometry = cloneGeometryForGPU(geometry);
       this.geometries.push(playableGeometry, borderGeometry);
       this.materials.push(playableMaterial, borderMaterial);
 
@@ -554,8 +578,8 @@ export class InstancedCrystals {
     const baseGeometry = extractGeometry(original);
     if (!baseGeometry) return;
 
-    // extractMaterial already returns a clone, no need to clone again
-    this.geometry = baseGeometry.clone();
+    // Clone geometry with proper GPU buffer initialization to prevent WebGPU crashes
+    this.geometry = cloneGeometryForGPU(baseGeometry);
     this.material = extractMaterial(original, modelId);
     if (!this.material) return;
 
