@@ -37,8 +37,20 @@ export class Entity {
     }
 
     const type = component.type;
+
+    // TEMP: Debug component addition for units
+    if (type === 'Unit' && this.id > 200) {
+      console.log(`[Entity] add: entityId=${this.id}, componentType='${type}', componentsSize=${this.components.size}`);
+    }
+
     this.components.set(type, component);
     this.world.onComponentAdded(this.id, type);
+
+    // TEMP: Verify component was added
+    if (type === 'Unit' && this.id > 200) {
+      console.log(`[Entity] add complete: entityId=${this.id}, has('Unit')=${this.components.has('Unit')}, componentsSize=${this.components.size}`);
+    }
+
     return this;
   }
 
