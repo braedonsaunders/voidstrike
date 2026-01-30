@@ -108,122 +108,42 @@ export const debugLog = {
   isEnabled,
 };
 
-// Category-specific loggers for convenience
-export const debugAnimation = {
-  log: (...args: unknown[]) => debugLog.log('animation', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('animation', ...args),
-  error: (...args: unknown[]) => debugLog.error('animation', ...args),
-  isEnabled: () => isEnabled('animation'),
-};
+// Category-specific logger interface
+interface CategoryLogger {
+  log: (...args: unknown[]) => void;
+  warn: (...args: unknown[]) => void;
+  error: (...args: unknown[]) => void;
+  isEnabled: () => boolean;
+}
 
-export const debugMesh = {
-  log: (...args: unknown[]) => debugLog.log('mesh', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('mesh', ...args),
-  error: (...args: unknown[]) => debugLog.error('mesh', ...args),
-  isEnabled: () => isEnabled('mesh'),
-};
+/**
+ * Factory function to create category-specific loggers.
+ * Eliminates boilerplate for each debug category.
+ */
+function createCategoryLogger(category: DebugCategory): CategoryLogger {
+  return {
+    log: (...args: unknown[]) => debugLog.log(category, ...args),
+    warn: (...args: unknown[]) => debugLog.warn(category, ...args),
+    error: (...args: unknown[]) => debugLog.error(category, ...args),
+    isEnabled: () => isEnabled(category),
+  };
+}
 
-export const debugTerrain = {
-  log: (...args: unknown[]) => debugLog.log('terrain', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('terrain', ...args),
-  error: (...args: unknown[]) => debugLog.error('terrain', ...args),
-  isEnabled: () => isEnabled('terrain'),
-};
-
-export const debugShaders = {
-  log: (...args: unknown[]) => debugLog.log('shaders', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('shaders', ...args),
-  error: (...args: unknown[]) => debugLog.error('shaders', ...args),
-  isEnabled: () => isEnabled('shaders'),
-};
-
-export const debugPostProcessing = {
-  log: (...args: unknown[]) => debugLog.log('postProcessing', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('postProcessing', ...args),
-  error: (...args: unknown[]) => debugLog.error('postProcessing', ...args),
-  isEnabled: () => isEnabled('postProcessing'),
-};
-
-export const debugBuildingPlacement = {
-  log: (...args: unknown[]) => debugLog.log('buildingPlacement', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('buildingPlacement', ...args),
-  error: (...args: unknown[]) => debugLog.error('buildingPlacement', ...args),
-  isEnabled: () => isEnabled('buildingPlacement'),
-};
-
-export const debugCombat = {
-  log: (...args: unknown[]) => debugLog.log('combat', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('combat', ...args),
-  error: (...args: unknown[]) => debugLog.error('combat', ...args),
-  isEnabled: () => isEnabled('combat'),
-};
-
-export const debugResources = {
-  log: (...args: unknown[]) => debugLog.log('resources', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('resources', ...args),
-  error: (...args: unknown[]) => debugLog.error('resources', ...args),
-  isEnabled: () => isEnabled('resources'),
-};
-
-export const debugProduction = {
-  log: (...args: unknown[]) => debugLog.log('production', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('production', ...args),
-  error: (...args: unknown[]) => debugLog.error('production', ...args),
-  isEnabled: () => isEnabled('production'),
-};
-
-export const debugSpawning = {
-  log: (...args: unknown[]) => debugLog.log('spawning', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('spawning', ...args),
-  error: (...args: unknown[]) => debugLog.error('spawning', ...args),
-  isEnabled: () => isEnabled('spawning'),
-};
-
-export const debugAI = {
-  log: (...args: unknown[]) => debugLog.log('ai', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('ai', ...args),
-  error: (...args: unknown[]) => debugLog.error('ai', ...args),
-  isEnabled: () => isEnabled('ai'),
-};
-
-export const debugPathfinding = {
-  log: (...args: unknown[]) => debugLog.log('pathfinding', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('pathfinding', ...args),
-  error: (...args: unknown[]) => debugLog.error('pathfinding', ...args),
-  isEnabled: () => isEnabled('pathfinding'),
-};
-
-export const debugAssets = {
-  log: (...args: unknown[]) => debugLog.log('assets', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('assets', ...args),
-  error: (...args: unknown[]) => debugLog.error('assets', ...args),
-  isEnabled: () => isEnabled('assets'),
-};
-
-export const debugInitialization = {
-  log: (...args: unknown[]) => debugLog.log('initialization', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('initialization', ...args),
-  error: (...args: unknown[]) => debugLog.error('initialization', ...args),
-  isEnabled: () => isEnabled('initialization'),
-};
-
-export const debugAudio = {
-  log: (...args: unknown[]) => debugLog.log('audio', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('audio', ...args),
-  error: (...args: unknown[]) => debugLog.error('audio', ...args),
-  isEnabled: () => isEnabled('audio'),
-};
-
-export const debugNetworking = {
-  log: (...args: unknown[]) => debugLog.log('networking', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('networking', ...args),
-  error: (...args: unknown[]) => debugLog.error('networking', ...args),
-  isEnabled: () => isEnabled('networking'),
-};
-
-export const debugPerformance = {
-  log: (...args: unknown[]) => debugLog.log('performance', ...args),
-  warn: (...args: unknown[]) => debugLog.warn('performance', ...args),
-  error: (...args: unknown[]) => debugLog.error('performance', ...args),
-  isEnabled: () => isEnabled('performance'),
-};
+// Category-specific loggers generated via factory
+export const debugAnimation = createCategoryLogger('animation');
+export const debugMesh = createCategoryLogger('mesh');
+export const debugTerrain = createCategoryLogger('terrain');
+export const debugShaders = createCategoryLogger('shaders');
+export const debugPostProcessing = createCategoryLogger('postProcessing');
+export const debugBuildingPlacement = createCategoryLogger('buildingPlacement');
+export const debugCombat = createCategoryLogger('combat');
+export const debugResources = createCategoryLogger('resources');
+export const debugProduction = createCategoryLogger('production');
+export const debugSpawning = createCategoryLogger('spawning');
+export const debugAI = createCategoryLogger('ai');
+export const debugPathfinding = createCategoryLogger('pathfinding');
+export const debugAssets = createCategoryLogger('assets');
+export const debugInitialization = createCategoryLogger('initialization');
+export const debugAudio = createCategoryLogger('audio');
+export const debugNetworking = createCategoryLogger('networking');
+export const debugPerformance = createCategoryLogger('performance');

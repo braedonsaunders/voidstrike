@@ -408,12 +408,14 @@ export class DefinitionValidator {
     units: Record<string, UnitDefinition>,
     buildings: Record<string, BuildingDefinition>,
     research: Record<string, ResearchDefinition>,
-    abilities: Record<string, AbilityDefinition>
+    abilities: Record<string, AbilityDefinition>,
+    projectileTypes?: Set<string>
   ): ValidationResult {
     this.reset();
 
-    // Validate unit ability references
+    // Validate unit references
     for (const [id, unit] of Object.entries(units)) {
+      // Validate ability references
       if (unit.abilities) {
         for (const abilityId of unit.abilities) {
           if (!abilities[abilityId]) {
@@ -425,9 +427,39 @@ export class DefinitionValidator {
           }
         }
       }
+
+      // Validate projectileType references
+      if (projectileTypes && (unit as any).projectileType) {
+        const projectileType = (unit as any).projectileType as string;
+        if (!projectileTypes.has(projectileType)) {
+          this.addError(
+            'invalid_reference',
+            `Unit[${id}].projectileType`,
+            `References unknown projectile type: ${projectileType}`
+          );
+        }
+      }
+
+      // Validate transform mode projectileType references
+      if ((unit as any).transformModes && projectileTypes) {
+        const modes = (unit as any).transformModes as TransformMode[];
+        for (let i = 0; i < modes.length; i++) {
+          const mode = modes[i];
+          if ((mode as any).projectileType) {
+            const projectileType = (mode as any).projectileType as string;
+            if (!projectileTypes.has(projectileType)) {
+              this.addError(
+                'invalid_reference',
+                `Unit[${id}].transformModes[${i}].projectileType`,
+                `References unknown projectile type: ${projectileType}`
+              );
+            }
+          }
+        }
+      }
     }
 
-    // Validate building production references
+    // Validate building references
     for (const [id, building] of Object.entries(buildings)) {
       if (building.canProduce) {
         for (const unitId of building.canProduce) {
@@ -474,6 +506,18 @@ export class DefinitionValidator {
               `References unknown building: ${upgradeId}`
             );
           }
+        }
+      }
+
+      // Validate building projectileType (for turrets/defensive structures)
+      if (projectileTypes && (building as any).projectileType) {
+        const projectileType = (building as any).projectileType as string;
+        if (!projectileTypes.has(projectileType)) {
+          this.addError(
+            'invalid_reference',
+            `Building[${id}].projectileType`,
+            `References unknown projectile type: ${projectileType}`
+          );
         }
       }
     }

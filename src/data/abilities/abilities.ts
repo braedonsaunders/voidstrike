@@ -440,6 +440,140 @@ export const ABILITY_DEFINITIONS: Record<string, AbilityDataDefinition> = {
     requiresResearch: ['supply_drop'],
     interruptsMovement: false,
   },
+
+  // === NAVAL ABILITIES ===
+
+  boost: {
+    id: 'boost',
+    name: 'Boost',
+    description: 'Engage emergency thrusters for a burst of speed.',
+    targetType: 'instant',
+    cooldown: 15,
+    duration: 4,
+    effects: [
+      { type: 'buff', value: 1.75, duration: 4 }, // 75% speed boost
+    ],
+    interruptsMovement: false,
+    soundEffect: 'ability_boost',
+  },
+
+  flak_barrage: {
+    id: 'flak_barrage',
+    name: 'Flak Barrage',
+    description: 'Release a barrage of flak rounds, dealing damage to all air units in the area.',
+    targetType: 'instant',
+    energyCost: 50,
+    cooldown: 10,
+    radius: 6,
+    effects: [
+      {
+        type: 'damage',
+        value: 40,
+        radius: 6,
+        targetFilter: { requiresAir: true, includeEnemies: true },
+      },
+    ],
+    interruptsMovement: false,
+    visualEffect: 'flak_explosion',
+    soundEffect: 'ability_flak',
+  },
+
+  submerge: {
+    id: 'submerge',
+    name: 'Submerge',
+    description: 'Dive beneath the surface, becoming invisible to units without detection.',
+    targetType: 'toggle',
+    cooldown: 3, // Brief cooldown to prevent rapid toggle abuse
+    effects: [
+      { type: 'cloak' },
+      { type: 'custom', customHandler: 'toggleSubmerge' },
+    ],
+    interruptsMovement: false,
+    soundEffect: 'submarine_dive',
+  },
+
+  depth_charge_defense: {
+    id: 'depth_charge_defense',
+    name: 'Depth Charge',
+    description: 'Launch depth charges that deal heavy damage to naval units.',
+    targetType: 'targeted',
+    range: 5,
+    energyCost: 25,
+    cooldown: 8,
+    effects: [
+      {
+        type: 'damage',
+        value: 75,
+        targetFilter: { includeEnemies: true },
+      },
+    ],
+    interruptsMovement: false,
+    visualEffect: 'depth_charge_explosion',
+    soundEffect: 'ability_depth_charge',
+  },
+
+  beach_assault: {
+    id: 'beach_assault',
+    name: 'Beach Assault',
+    description: 'Prepare for amphibious landing, granting loaded units a combat bonus upon disembark.',
+    targetType: 'instant',
+    cooldown: 30,
+    duration: 15,
+    effects: [
+      { type: 'buff', value: 1.25, duration: 15 }, // 25% damage boost to unloaded units
+    ],
+    interruptsMovement: false,
+    soundEffect: 'ability_beach_assault',
+  },
+
+  amphibious_mode: {
+    id: 'amphibious_mode',
+    name: 'Amphibious Mode',
+    description: 'Toggle between water and land movement. Slower on land but can traverse both terrains.',
+    targetType: 'toggle',
+    cooldown: 2,
+    effects: [
+      { type: 'custom', customHandler: 'toggleAmphibious' },
+    ],
+    interruptsMovement: true,
+    soundEffect: 'vehicle_transform',
+  },
+
+  shore_bombardment: {
+    id: 'shore_bombardment',
+    name: 'Shore Bombardment',
+    description: 'Fire a salvo of heavy shells at a ground target location.',
+    targetType: 'ground',
+    range: 14,
+    radius: 3,
+    energyCost: 75,
+    cooldown: 12,
+    castTime: 1.5, // Brief aiming delay
+    effects: [
+      { type: 'damage', value: 100, radius: 3 },
+    ],
+    interruptsMovement: false,
+    visualEffect: 'artillery_strike',
+    soundEffect: 'ability_bombardment',
+  },
+
+  yamato_cannon: {
+    id: 'yamato_cannon',
+    name: 'Yamato Cannon',
+    description: 'Fire the main battery, dealing devastating damage to a single target.',
+    targetType: 'targeted',
+    range: 10,
+    energyCost: 150,
+    cooldown: 60,
+    castTime: 2, // Charge-up time
+    effects: [
+      { type: 'damage', value: 300 },
+    ],
+    channeled: true,
+    interruptsMovement: true,
+    visualEffect: 'yamato_beam',
+    soundEffect: 'ability_yamato',
+  },
 };
 
 // ==================== ABILITY REGISTRY ====================

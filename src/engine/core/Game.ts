@@ -389,6 +389,47 @@ export class Game extends GameCore {
       return;
     }
 
+    // LOCKSTEP BARRIER: In multiplayer, wait for all players before advancing tick
+    if (this.config.isMultiplayer) {
+      const nextTick = this.currentTick + 1;
+      if (!this.hasAllCommandsForTick(nextTick)) {
+        // Start tracking wait time if not already
+        if (!this.tickWaitStart.has(nextTick)) {
+          this.tickWaitStart.set(nextTick, this.currentTick);
+          debugNetworking.log(`[Game] LOCKSTEP: Waiting for commands for tick ${nextTick}`);
+        }
+
+        // Check for timeout
+        const waitStartTick = this.tickWaitStart.get(nextTick)!;
+        const ticksWaited = this.currentTick - waitStartTick;
+
+        if (ticksWaited >= this.LOCKSTEP_TIMEOUT_TICKS) {
+          // Timeout - report desync and proceed anyway to avoid infinite hang
+          console.error(
+            `[Game] LOCKSTEP TIMEOUT: No commands from all players for tick ${nextTick} ` +
+            `after waiting ${ticksWaited} ticks. Expected: ${this.getExpectedPlayerIds().join(', ')}, ` +
+            `Received: ${Array.from(this.tickCommandReceipts.get(nextTick) || []).join(', ')}`
+          );
+          reportDesync(nextTick);
+          this.eventBus.emit('desync:detected', {
+            tick: nextTick,
+            localChecksum: 0,
+            remoteChecksum: 0,
+            remotePeerId: useMultiplayerStore.getState().remotePeerId || 'unknown',
+            reason: 'lockstep_timeout',
+          });
+          // Clear wait tracking and proceed - game may desync but won't freeze
+          this.tickWaitStart.delete(nextTick);
+        } else {
+          // Still waiting - skip this frame
+          return;
+        }
+      } else {
+        // Got all commands - clear wait tracking
+        this.tickWaitStart.delete(nextTick);
+      }
+    }
+
     const tickStart = performance.now();
 
     this.currentTick++;
@@ -396,6 +437,8 @@ export class Game extends GameCore {
 
     if (this.config.isMultiplayer) {
       this.processQueuedCommandsWithCleanup();
+      // Send heartbeats for upcoming ticks to keep lockstep flowing
+      this.ensureHeartbeatsForUpcomingTicks();
     }
 
     this.world.update(deltaTime);
@@ -418,6 +461,101 @@ export class Game extends GameCore {
 
     if (tickElapsed > 10) {
       debugPerformance.warn(`[Game] TICK ${this.currentTick}: ${tickElapsed.toFixed(1)}ms`);
+    }
+  }
+
+  // ============================================================================
+  // LOCKSTEP BARRIER HELPERS
+  // ============================================================================
+
+  /**
+   * Get the set of player IDs that should send commands for lockstep.
+   * In 2-player multiplayer, this is local player + remote peer.
+   */
+  private getExpectedPlayerIds(): string[] {
+    const players: string[] = [this.config.playerId];
+    const remotePeerId = useMultiplayerStore.getState().remotePeerId;
+    if (remotePeerId) {
+      players.push(remotePeerId);
+    }
+    return players;
+  }
+
+  /**
+   * Check if we have received command acknowledgments from all expected players for a tick.
+   * For lockstep, every player must send at least one command or heartbeat for each tick.
+   * We track receipts when commands are queued via queueCommandWithReceipt().
+   */
+  private hasAllCommandsForTick(tick: number): boolean {
+    const expectedPlayers = this.getExpectedPlayerIds();
+    const receipts = this.tickCommandReceipts.get(tick);
+
+    if (!receipts) {
+      // No commands received yet for this tick
+      return false;
+    }
+
+    // Check if all expected players have sent commands
+    for (const playerId of expectedPlayers) {
+      if (!receipts.has(playerId)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  // Track which ticks we've sent commands for (to avoid duplicate heartbeats)
+  private sentCommandForTick: Set<number> = new Set();
+
+  /**
+   * Send a heartbeat command to acknowledge a tick when no other commands were sent.
+   * This ensures the lockstep barrier can proceed even when a player has no actions.
+   */
+  private sendHeartbeatForTick(tick: number): void {
+    if (this.sentCommandForTick.has(tick)) {
+      return; // Already sent a command for this tick
+    }
+
+    const heartbeat: GameCommand = {
+      tick,
+      playerId: this.config.playerId,
+      type: 'HEARTBEAT',
+      entityIds: [],
+    };
+
+    sendMultiplayerMessage({
+      type: 'command',
+      payload: heartbeat,
+    });
+
+    this.queueCommandWithReceipt(heartbeat);
+    this.sentCommandForTick.add(tick);
+
+    // Cleanup old entries
+    const oldestRelevant = this.currentTick - this.COMMAND_HISTORY_SIZE;
+    for (const t of this.sentCommandForTick) {
+      if (t < oldestRelevant) {
+        this.sentCommandForTick.delete(t);
+      }
+    }
+
+    debugNetworking.log(`[Game] Sent heartbeat for tick ${tick}`);
+  }
+
+  /**
+   * Ensure heartbeats are sent for upcoming ticks that need acknowledgment.
+   * Called periodically to keep lockstep in sync.
+   */
+  private ensureHeartbeatsForUpcomingTicks(): void {
+    // Send heartbeats for ticks within the command delay window
+    const startTick = this.currentTick + 1;
+    const endTick = this.currentTick + this.currentCommandDelay + 1;
+
+    for (let tick = startTick; tick <= endTick; tick++) {
+      if (!this.sentCommandForTick.has(tick)) {
+        this.sendHeartbeatForTick(tick);
+      }
     }
   }
 
@@ -472,6 +610,9 @@ export class Game extends GameCore {
       debugNetworking.log('[Game] Sent command for tick', executionTick);
 
       this.queueCommandWithReceipt(command);
+
+      // Track that we sent a real command for this tick (not just a heartbeat)
+      this.sentCommandForTick.add(executionTick);
     } else {
       this.processCommand(command);
     }
