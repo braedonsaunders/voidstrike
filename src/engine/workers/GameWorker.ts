@@ -278,6 +278,22 @@ export class WorkerGame extends GameCore {
       });
     });
 
+    // Damage dealt events (for UI damage numbers)
+    this.eventBus.on('damage:dealt', (data: any) => {
+      this.pendingEvents.push({
+        type: 'damage:dealt',
+        targetId: data.targetId,
+        damage: data.damage,
+        targetPos: data.targetPos,
+        targetHeight: data.targetHeight,
+        isKillingBlow: data.isKillingBlow,
+        isCritical: data.isCritical,
+        targetIsFlying: data.targetIsFlying,
+        targetUnitType: data.targetUnitType,
+        targetPlayerId: data.targetPlayerId,
+      });
+    });
+
     // Projectile events
     this.eventBus.on('projectile:spawned', (data: any) => {
       this.pendingEvents.push({

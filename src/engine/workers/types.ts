@@ -336,6 +336,19 @@ export interface AlertEvent {
   details?: string;
 }
 
+export interface DamageDealtEvent {
+  type: 'damage:dealt';
+  targetId: number;
+  damage: number;
+  targetPos: { x: number; y: number };
+  targetHeight?: number;
+  isKillingBlow?: boolean;
+  isCritical?: boolean;
+  targetIsFlying?: boolean;
+  targetUnitType?: string;
+  targetPlayerId?: string;
+}
+
 export type GameEvent =
   | CombatAttackEvent
   | ProjectileSpawnEvent
@@ -347,7 +360,8 @@ export type GameEvent =
   | UpgradeCompleteEvent
   | AbilityUsedEvent
   | SelectionChangedEvent
-  | AlertEvent;
+  | AlertEvent
+  | DamageDealtEvent;
 
 // ============================================================================
 // WORKER MESSAGES - Communication protocol between main thread and worker
