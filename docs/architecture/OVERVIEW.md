@@ -68,8 +68,11 @@ voidstrike/
 │   │   │   │   ├── index.ts
 │   │   │   │   ├── useCameraControl.ts
 │   │   │   │   ├── useGameInput.ts
+│   │   │   │   ├── useLoadingState.ts
+│   │   │   │   ├── usePhaserOverlay.ts
 │   │   │   │   ├── usePostProcessing.ts
-│   │   │   │   └── useWebGPURenderer.ts
+│   │   │   │   ├── useWebGPURenderer.ts
+│   │   │   │   └── useWorkerBridge.ts
 │   │   │   ├── BaseModal.tsx
 │   │   │   ├── BasePanel.tsx
 │   │   │   ├── BattleSimulatorPanel.tsx
