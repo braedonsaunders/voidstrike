@@ -133,6 +133,16 @@ export class UnitRenderer {
   // Frame counter for tracking inactive meshes
   private frameCount: number = 0;
 
+  // Geometry disposal quarantine - prevents WebGPU "setIndexBuffer" crashes
+  // by delaying geometry disposal until GPU has finished pending draw commands.
+  // WebGPU typically has 2-3 frames in flight; 4 frames provides safety margin.
+  private static readonly GEOMETRY_QUARANTINE_FRAMES = 4;
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    materials: THREE.Material[];
+    frameQueued: number;
+  }> = [];
+
   // PERF: Shared transform utilities (reusable temp objects)
   private readonly transformUtils: TransformUtils = new TransformUtils();
 
@@ -441,6 +451,47 @@ export class UnitRenderer {
    */
   private removeEntityFromCulling(entityId: number): void {
     this.cullingService?.unregisterEntity(entityId);
+  }
+
+  /**
+   * Queue geometry and materials for delayed disposal.
+   * This prevents WebGPU "setIndexBuffer" crashes by ensuring the GPU
+   * has finished all pending draw commands before buffers are freed.
+   */
+  private queueGeometryForDisposal(
+    geometry: THREE.BufferGeometry,
+    materials: THREE.Material | THREE.Material[]
+  ): void {
+    const materialArray = Array.isArray(materials) ? materials : [materials];
+    this.geometryQuarantine.push({
+      geometry,
+      materials: materialArray,
+      frameQueued: this.frameCount,
+    });
+  }
+
+  /**
+   * Process quarantined geometries and dispose those that are safe.
+   * Call this once per frame at the START of update.
+   */
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = this.frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= UnitRenderer.GEOMETRY_QUARANTINE_FRAMES) {
+        // Safe to dispose - GPU has finished with these buffers
+        entry.geometry.dispose();
+        for (const material of entry.materials) {
+          material.dispose();
+        }
+      } else {
+        // Keep in quarantine
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
   }
 
   /**
@@ -868,6 +919,10 @@ export class UnitRenderer {
     const updateStart = performance.now();
     this.frameCount++;
 
+    // Process quarantined geometries at the START of each frame
+    // This ensures GPU has finished with disposed buffers before we free them
+    this.processGeometryQuarantine();
+
     // Update selection ring animation time (shared across all instances)
     this.selectionRingRenderer.updateAnimation(deltaTime);
 
@@ -1190,16 +1245,12 @@ export class UnitRenderer {
       const framesInactive = this.frameCount - group.lastActiveFrame;
       if (framesInactive > INACTIVE_MESH_CLEANUP_FRAMES) {
         this.scene.remove(group.mesh);
-        // Dispose velocity buffer attributes
+        // Dispose velocity buffer attributes immediately (CPU-side only)
         disposeInstancedVelocity(group.mesh);
-        // Dispose geometry (now safe since we clone it during creation)
-        group.mesh.geometry.dispose();
-        // Dispose materials
-        if (group.mesh.material instanceof THREE.Material) {
-          group.mesh.material.dispose();
-        } else if (Array.isArray(group.mesh.material)) {
-          group.mesh.material.forEach(m => m.dispose());
-        }
+        // Queue geometry and materials for delayed disposal to prevent WebGPU crashes.
+        // The GPU may still have pending draw commands using these buffers.
+        const materials = group.mesh.material;
+        this.queueGeometryForDisposal(group.mesh.geometry, materials);
         this.instancedGroups.delete(key);
         debugPerformance.log(`[UnitRenderer] Cleaned up inactive mesh: ${key} (inactive for ${framesInactive} frames)`);
       }
@@ -1258,19 +1309,14 @@ export class UnitRenderer {
   public refreshAllMeshes(): void {
     debugAssets.log('[UnitRenderer] Refreshing all unit meshes...');
 
-    // Clear instanced groups
+    // Clear instanced groups - use quarantine to prevent WebGPU crashes
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      // Dispose velocity buffer attributes to prevent memory leak
+      // Dispose velocity buffer attributes immediately (CPU-side only)
       disposeInstancedVelocity(group.mesh);
-      // Dispose geometry (now safe since we clone it during creation)
-      group.mesh.geometry.dispose();
-      // Dispose materials
-      if (group.mesh.material instanceof THREE.Material) {
-        group.mesh.material.dispose();
-      } else if (Array.isArray(group.mesh.material)) {
-        group.mesh.material.forEach(m => m.dispose());
-      }
+      // Queue geometry and materials for delayed disposal
+      const materials = group.mesh.material;
+      this.queueGeometryForDisposal(group.mesh.geometry, materials);
     }
     this.instancedGroups.clear();
 
@@ -1334,16 +1380,26 @@ export class UnitRenderer {
   }
 
   public dispose(): void {
+    // Flush any pending quarantined geometries first
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const material of entry.materials) {
+        material.dispose();
+      }
+    }
+    this.geometryQuarantine.length = 0;
+
     // Dispose shared utilities
     this.healthBarRenderer.dispose();
     this.selectionRingRenderer.dispose();
     this.teamMarkerGeometry.dispose();
 
+    // Dispose instanced groups - immediate disposal is safe during full teardown
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
       // Dispose velocity buffer attributes to prevent memory leak
       disposeInstancedVelocity(group.mesh);
-      // Dispose geometry (now safe since we clone it during creation)
+      // Dispose geometry (safe since we clone it during creation)
       group.mesh.geometry.dispose();
       // Dispose materials
       if (group.mesh.material instanceof THREE.Material) {
