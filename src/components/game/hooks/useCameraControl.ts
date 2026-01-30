@@ -10,7 +10,7 @@ import type { MutableRefObject } from 'react';
 import { useEffect, useRef, useCallback } from 'react';
 import { RTSCamera } from '@/rendering/Camera';
 import { Game } from '@/engine/core/Game';
-import { Transform } from '@/engine/components/Transform';
+import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
 import { useGameStore, GameState } from '@/store/gameStore';
 
 export interface UseCameraControlProps {
@@ -34,20 +34,22 @@ export function useCameraControl({ cameraRef, gameRef }: UseCameraControlProps):
   // Handle control group selection with optional camera centering
   const handleControlGroupSelect = useCallback(
     (groupNumber: number, isDoubleClick: boolean) => {
-      const game = gameRef.current;
       const camera = cameraRef.current;
-      if (!game || !camera) return;
+      if (!camera) return;
 
       const store = useGameStore.getState();
       const group = store.controlGroups.get(groupNumber);
 
       if (group && group.length > 0) {
         if (isDoubleClick) {
-          // Center camera on first unit in the group
-          const firstEntity = game.world.getEntity(group[0]);
-          const transform = firstEntity?.get<Transform>('Transform');
-          if (transform) {
-            camera.setPosition(transform.x, transform.y);
+          // Center camera on first unit in the group using RenderStateWorldAdapter
+          const worldAdapter = RenderStateWorldAdapter.getInstance();
+          if (worldAdapter) {
+            const firstEntity = worldAdapter.getEntity(group[0]);
+            const transform = firstEntity?.get<{ x: number; y: number }>('Transform');
+            if (transform) {
+              camera.setPosition(transform.x, transform.y);
+            }
           }
         }
 
@@ -56,23 +58,26 @@ export function useCameraControl({ cameraRef, gameRef }: UseCameraControlProps):
         store.selectUnits(group);
       }
     },
-    [gameRef, cameraRef]
+    [cameraRef]
   );
 
   // Center camera on a specific entity
   const centerOnEntity = useCallback(
     (entityId: number) => {
-      const game = gameRef.current;
       const camera = cameraRef.current;
-      if (!game || !camera) return;
+      if (!camera) return;
 
-      const entity = game.world.getEntity(entityId);
-      const transform = entity?.get<Transform>('Transform');
+      // Use RenderStateWorldAdapter for entity lookup (has actual entity data from worker)
+      const worldAdapter = RenderStateWorldAdapter.getInstance();
+      if (!worldAdapter) return;
+
+      const entity = worldAdapter.getEntity(entityId);
+      const transform = entity?.get<{ x: number; y: number }>('Transform');
       if (transform) {
         camera.setPosition(transform.x, transform.y);
       }
     },
-    [gameRef, cameraRef]
+    [cameraRef]
   );
 
   // Center camera on a world position

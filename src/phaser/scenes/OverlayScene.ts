@@ -2,7 +2,7 @@ import * as Phaser from 'phaser';
 import { debugAudio, debugPathfinding } from '@/utils/debugLogger';
 import { EventBus } from '@/engine/core/EventBus';
 import { Game } from '@/engine/core/Game';
-import { Transform } from '@/engine/components/Transform';
+import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, isLocalPlayer, getLocalPlayerId, enableSpectatorMode, isBattleSimulatorMode } from '@/store/gameSetupStore';
 import { useProjectionStore } from '@/store/projectionStore';
@@ -1955,14 +1955,14 @@ export class OverlayScene extends Phaser.Scene {
         continue;
       }
 
-      // Get entity position from game world
-      const game = Game.getInstance();
-      if (!game) continue;
+      // Get entity position from RenderStateWorldAdapter (has entity data from worker)
+      const worldAdapter = RenderStateWorldAdapter.getInstance();
+      if (!worldAdapter) continue;
 
       let entityPos: { x: number; y: number } | null = null;
-      const entity = game.world.getEntity(indicator.entityId);
+      const entity = worldAdapter.getEntity(indicator.entityId);
       if (entity) {
-        const transform = entity.get<Transform>('Transform');
+        const transform = entity.get<{ x: number; y: number }>('Transform');
         if (transform) {
           entityPos = { x: transform.x, y: transform.y };
         }

@@ -1,15 +1,14 @@
 import { System } from '../ecs/System';
-import { Transform } from '../components/Transform';
-import { Selectable } from '../components/Selectable';
-import { Unit } from '../components/Unit';
-import { Building } from '../components/Building';
-import { Health } from '../components/Health';
 import { Game } from '../core/Game';
 import { distance, clamp } from '@/utils/math';
+import type { IWorldProvider } from '../ecs/IWorldProvider';
 
 /**
  * Selection system with screen-space box selection, selection radius buffer,
  * visual bounds support, and priority-based selection (units over buildings).
+ *
+ * In worker mode, this system queries entities from RenderStateWorldAdapter
+ * and notifies the worker of selection changes via a callback.
  */
 export class SelectionSystem extends System {
   public readonly name = 'SelectionSystem';
@@ -27,9 +26,41 @@ export class SelectionSystem extends System {
   // Updated by camera system when viewport changes
   private viewportBounds: { minX: number; maxX: number; minZ: number; maxZ: number } | null = null;
 
+  // World provider for entity queries (RenderStateWorldAdapter in worker mode)
+  private worldProvider: IWorldProvider | null = null;
+
+  // Callback to notify worker of selection changes
+  private onSelectionSync: ((entityIds: number[], playerId: string) => void) | null = null;
+
+  // Current player ID for selection sync
+  private currentPlayerId: string | null = null;
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
+  }
+
+  /**
+   * Set the world provider for entity queries.
+   * In worker mode, this should be RenderStateWorldAdapter.
+   */
+  public setWorldProvider(provider: IWorldProvider): void {
+    this.worldProvider = provider;
+  }
+
+  /**
+   * Set the callback for syncing selection to the worker.
+   * This should be WorkerBridge.setSelection in worker mode.
+   */
+  public setSelectionSyncCallback(callback: (entityIds: number[], playerId: string) => void): void {
+    this.onSelectionSync = callback;
+  }
+
+  /**
+   * Set the current player ID for selection operations.
+   */
+  public setPlayerId(playerId: string): void {
+    this.currentPlayerId = playerId;
   }
 
   /**
@@ -52,6 +83,13 @@ export class SelectionSystem extends System {
    */
   public setViewportBounds(minX: number, maxX: number, minZ: number, maxZ: number): void {
     this.viewportBounds = { minX, maxX, minZ, maxZ };
+  }
+
+  /**
+   * Get the world provider - uses injected provider or falls back to this.world
+   */
+  private getWorldProvider(): IWorldProvider {
+    return this.worldProvider ?? (this.world as unknown as IWorldProvider);
   }
 
   /**
@@ -80,6 +118,22 @@ export class SelectionSystem extends System {
   }
 
   /**
+   * Sync selection to worker and update local state
+   */
+  private syncSelection(selectedIds: number[], playerId: string): void {
+    // Update local state port (Zustand store)
+    this.game.statePort.selectUnits(selectedIds);
+
+    // Notify worker to update isSelected on actual entities
+    if (this.onSelectionSync) {
+      this.onSelectionSync(selectedIds, playerId);
+    }
+
+    // Emit event for UI updates
+    this.game.eventBus.emit('selection:changed', { selectedIds, playerId });
+  }
+
+  /**
    * Screen-space box selection - the most accurate method
    * Converts entity positions to screen space and checks against screen-space box
    */
@@ -92,6 +146,7 @@ export class SelectionSystem extends System {
     playerId: string;
   }): void {
     const { screenStartX, screenStartY, screenEndX, screenEndY, additive, playerId } = data;
+    const world = this.getWorldProvider();
 
     // Screen-space box bounds
     const screenMinX = Math.min(screenStartX, screenEndX);
@@ -103,38 +158,37 @@ export class SelectionSystem extends System {
     const boxWidth = screenMaxX - screenMinX;
     const boxHeight = screenMaxY - screenMinY;
 
-    const entities = this.world.getEntitiesWith('Transform', 'Selectable');
-
-    // First, deselect all if not additive
-    if (!additive) {
-      for (const entity of entities) {
-        const selectable = entity.get<Selectable>('Selectable')!;
-        selectable.deselect();
-      }
-    }
+    const entities = world.getEntitiesWith('Transform', 'Selectable');
 
     // Collect entities within box, separating units from buildings
     const unitIds: number[] = [];
     const buildingIds: number[] = [];
 
     for (const entity of entities) {
-      const transform = entity.get<Transform>('Transform')!;
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const health = entity.get<Health>('Health');
-      const unit = entity.get<Unit>('Unit');
-      const building = entity.get<Building>('Building');
+      const transform = entity.get<{ x: number; y: number }>('Transform');
+      const selectable = entity.get<{
+        playerId: string;
+        selectionRadius: number;
+        selectionPriority: number;
+        visualHeight?: number;
+        visualScale?: number;
+      }>('Selectable');
+      const health = entity.get<{ isDead: () => boolean }>('Health');
+      const unit = entity.get<{ unitId: string }>('Unit');
+      const building = entity.get<{ buildingId: string }>('Building');
+
+      if (!transform || !selectable) continue;
 
       // Only select own units/buildings
       if (selectable.playerId !== playerId) continue;
 
       // Skip dead entities
-      if (health && health.isDead()) continue;
+      if (health?.isDead()) continue;
 
       // PERF: Early reject entities outside viewport bounds (world space culling)
       if (!this.isInViewport(transform.x, transform.y)) continue;
 
       // Convert entity world position to screen space
-      // Must include terrain height + visual height offset for accurate projection
       if (!this.worldToScreenFn) continue;
 
       const terrainHeight = this.getTerrainHeightFn ? this.getTerrainHeightFn(transform.x, transform.y) : 0;
@@ -144,13 +198,11 @@ export class SelectionSystem extends System {
       if (!screenPos) continue; // Behind camera
 
       // Calculate screen-space selection buffer based on visual size
-      // Larger units get bigger screen-space hitboxes
       const visualScale = selectable.visualScale ?? 1;
-      const baseScreenRadius = selectable.selectionRadius * 25; // Pixels per world unit (increased for better feel)
+      const baseScreenRadius = selectable.selectionRadius * 25;
       const screenRadius = baseScreenRadius * visualScale;
 
       // Check if entity's screen-space circle intersects the selection box
-      // Using circle-rectangle intersection for smooth selection feel
       const isInBox = this.circleIntersectsRect(
         screenPos.x,
         screenPos.y,
@@ -179,38 +231,23 @@ export class SelectionSystem extends System {
     }
 
     // Prioritize units over buildings - if any units are selected, ignore buildings
-    const selectedIds = unitIds.length > 0 ? unitIds : buildingIds;
+    let selectedIds = unitIds.length > 0 ? unitIds : buildingIds;
 
-    // Mark entities as selected
-    for (const entityId of selectedIds) {
-      const entity = this.world.getEntity(entityId);
-      if (entity) {
-        const selectable = entity.get<Selectable>('Selectable');
-        if (selectable) {
-          selectable.select();
-        }
-      }
-    }
-
-    // Update store
+    // Handle additive selection
     if (additive) {
       const current = this.game.statePort.getSelectedUnits();
-      // PERF: Avoid multiple spread operations by using Set directly
       const combinedSet = new Set(current);
-      for (let i = 0; i < selectedIds.length; i++) {
-        combinedSet.add(selectedIds[i]);
+      for (const id of selectedIds) {
+        combinedSet.add(id);
       }
-      this.game.statePort.selectUnits(Array.from(combinedSet));
-    } else {
-      this.game.statePort.selectUnits(selectedIds);
+      selectedIds = Array.from(combinedSet);
     }
 
-    this.game.eventBus.emit('selection:changed', { selectedIds });
+    this.syncSelection(selectedIds, playerId);
   }
 
   /**
    * Check if a circle intersects a rectangle
-   * Used for smooth selection feel where entities near the box edge are selected
    */
   private circleIntersectsRect(
     cx: number,
@@ -221,16 +258,11 @@ export class SelectionSystem extends System {
     rectMaxX: number,
     rectMaxY: number
   ): boolean {
-    // Find the closest point on the rectangle to the circle center
     const closestX = clamp(cx, rectMinX, rectMaxX);
     const closestY = clamp(cy, rectMinY, rectMaxY);
-
-    // Calculate distance from circle center to closest point
     const dx = cx - closestX;
     const dy = cy - closestY;
     const distanceSquared = dx * dx + dy * dy;
-
-    // Circle intersects if distance is less than radius
     return distanceSquared <= radius * radius;
   }
 
@@ -245,57 +277,67 @@ export class SelectionSystem extends System {
     playerId: string;
   }): void {
     const { screenX, screenY, additive, selectAllOfType, playerId } = data;
+    const world = this.getWorldProvider();
 
     if (!this.worldToScreenFn) {
-      // Fallback to world-space click (shouldn't happen normally)
       return;
     }
 
-    const entities = this.world.getEntitiesWith('Transform', 'Selectable');
-    let closestEntity: { id: number; distance: number; priority: number } | null = null;
+    const entities = world.getEntitiesWith('Transform', 'Selectable');
+    let closestEntity: { id: number; distance: number; priority: number; unitId?: string; buildingId?: string } | null = null;
 
     // Find closest entity to click point in screen space
     for (const entity of entities) {
-      const transform = entity.get<Transform>('Transform')!;
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const health = entity.get<Health>('Health');
+      const transform = entity.get<{ x: number; y: number }>('Transform');
+      const selectable = entity.get<{
+        playerId: string;
+        selectionRadius: number;
+        selectionPriority: number;
+        visualHeight?: number;
+        visualScale?: number;
+      }>('Selectable');
+      const health = entity.get<{ isDead: () => boolean }>('Health');
+      const unit = entity.get<{ unitId: string }>('Unit');
+      const building = entity.get<{ buildingId: string }>('Building');
+
+      if (!transform || !selectable) continue;
 
       // Allow selecting own units/buildings OR neutral entities (resources)
       if (selectable.playerId !== playerId && selectable.playerId !== 'neutral') continue;
 
       // Skip dead units
-      if (health && health.isDead()) continue;
+      if (health?.isDead()) continue;
 
-      // PERF: Early reject entities outside viewport bounds (world space culling)
+      // PERF: Early reject entities outside viewport bounds
       if (!this.isInViewport(transform.x, transform.y)) continue;
 
-      // Convert entity to screen space - must include terrain height + visual offset
+      // Convert entity to screen space
       const terrainHeight = this.getTerrainHeightFn ? this.getTerrainHeightFn(transform.x, transform.y) : 0;
       const visualHeight = selectable.visualHeight ?? 0;
       const worldY = terrainHeight + visualHeight;
       const screenPos = this.worldToScreenFn(transform.x, transform.y, worldY);
-      if (!screenPos) continue; // Behind camera
+      if (!screenPos) continue;
 
       // Calculate screen-space distance
       const screenDistance = distance(screenX, screenY, screenPos.x, screenPos.y);
 
-      // Calculate screen-space selection radius (more generous for better feel)
+      // Calculate screen-space selection radius
       const visualScale = selectable.visualScale ?? 1;
-      const baseScreenRadius = selectable.selectionRadius * 30; // Pixels per world unit
+      const baseScreenRadius = selectable.selectionRadius * 30;
       const screenRadius = baseScreenRadius * visualScale;
 
       if (screenDistance <= screenRadius) {
-        // Check if this is closer or higher priority
         if (
           !closestEntity ||
           selectable.selectionPriority > closestEntity.priority ||
-          (selectable.selectionPriority === closestEntity.priority &&
-            screenDistance < closestEntity.distance)
+          (selectable.selectionPriority === closestEntity.priority && screenDistance < closestEntity.distance)
         ) {
           closestEntity = {
             id: entity.id,
             distance: screenDistance,
             priority: selectable.selectionPriority,
+            unitId: unit?.unitId,
+            buildingId: building?.buildingId,
           };
         }
       }
@@ -303,191 +345,130 @@ export class SelectionSystem extends System {
 
     // Handle Ctrl+click or double-click - select all of same type
     if (selectAllOfType && closestEntity) {
-      const clickedEntity = this.world.getEntity(closestEntity.id);
-      if (clickedEntity) {
-        const clickedUnit = clickedEntity.get<Unit>('Unit');
-        if (clickedUnit) {
-          this.selectAllOfUnitType(clickedUnit.unitId, playerId, additive);
-          return;
-        }
-        const clickedBuilding = clickedEntity.get<Building>('Building');
-        if (clickedBuilding) {
-          this.selectAllOfBuildingType(clickedBuilding.buildingId, playerId, additive);
-          return;
-        }
+      if (closestEntity.unitId) {
+        this.selectAllOfUnitType(closestEntity.unitId, playerId, additive);
+        return;
+      }
+      if (closestEntity.buildingId) {
+        this.selectAllOfBuildingType(closestEntity.buildingId, playerId, additive);
+        return;
       }
     }
 
-    // Clear selection if not additive
-    if (!additive) {
-      for (const entity of entities) {
-        const selectable = entity.get<Selectable>('Selectable')!;
-        selectable.deselect();
-      }
-    }
-
-    // Select the clicked entity
-    const selectedIds: number[] = [];
+    // Build selected IDs
+    let selectedIds: number[] = [];
     if (closestEntity) {
-      const entity = this.world.getEntity(closestEntity.id);
-      if (entity) {
-        const selectable = entity.get<Selectable>('Selectable')!;
-
-        // If additive and already selected, deselect
-        if (additive && selectable.isSelected) {
-          selectable.deselect();
+      if (additive) {
+        const current = this.game.statePort.getSelectedUnits();
+        const isAlreadySelected = current.includes(closestEntity.id);
+        if (isAlreadySelected) {
+          // Deselect if already selected
+          selectedIds = current.filter(id => id !== closestEntity!.id);
         } else {
-          selectable.select();
-          selectedIds.push(entity.id);
+          // Add to selection
+          selectedIds = [...current, closestEntity.id];
         }
+      } else {
+        selectedIds = [closestEntity.id];
       }
-    }
-
-    // Update store
-    if (!additive) {
-      this.game.statePort.selectUnits(selectedIds);
+    } else if (!additive) {
+      // Clicked empty space - clear selection
+      selectedIds = [];
     } else {
-      const current = this.game.statePort.getSelectedUnits();
-      if (closestEntity && selectedIds.length > 0) {
-        this.game.statePort.selectUnits([...current, ...selectedIds]);
-      } else if (closestEntity) {
-        this.game.statePort.selectUnits(current.filter((id) => id !== closestEntity!.id));
-      }
+      // Additive click on empty space - keep current selection
+      return;
     }
 
-    this.game.eventBus.emit('selection:changed', { selectedIds });
+    this.syncSelection(selectedIds, playerId);
   }
 
   private selectAllOfUnitType(unitId: string, playerId: string, additive: boolean): void {
-    const entities = this.world.getEntitiesWith('Unit', 'Selectable');
-    const selectedIds: number[] = [];
+    const world = this.getWorldProvider();
+    const entities = world.getEntitiesWith('Unit', 'Selectable');
+    const newSelectedIds: number[] = [];
 
-    // Clear selection if not additive
-    if (!additive) {
-      for (const entity of entities) {
-        const selectable = entity.get<Selectable>('Selectable')!;
-        selectable.deselect();
-      }
-    }
-
-    // Select all units of the same type belonging to the player within viewport
     for (const entity of entities) {
-      const unit = entity.get<Unit>('Unit')!;
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const health = entity.get<Health>('Health');
-      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<{ unitId: string }>('Unit');
+      const selectable = entity.get<{ playerId: string }>('Selectable');
+      const health = entity.get<{ isDead: () => boolean }>('Health');
+      const transform = entity.get<{ x: number; y: number }>('Transform');
 
-      // Skip dead units
-      if (health && health.isDead()) continue;
-
-      // Only select units within the current viewport
+      if (!unit || !selectable) continue;
+      if (health?.isDead()) continue;
       if (transform && !this.isInViewport(transform.x, transform.y)) continue;
 
       if (unit.unitId === unitId && selectable.playerId === playerId) {
-        selectable.select();
-        selectedIds.push(entity.id);
+        newSelectedIds.push(entity.id);
       }
     }
 
-    // Update store
+    let selectedIds = newSelectedIds;
     if (additive) {
       const current = this.game.statePort.getSelectedUnits();
-      // PERF: Avoid multiple spread operations by using Set directly
       const combinedSet = new Set(current);
-      for (let i = 0; i < selectedIds.length; i++) {
-        combinedSet.add(selectedIds[i]);
+      for (const id of newSelectedIds) {
+        combinedSet.add(id);
       }
-      this.game.statePort.selectUnits(Array.from(combinedSet));
-    } else {
-      this.game.statePort.selectUnits(selectedIds);
+      selectedIds = Array.from(combinedSet);
     }
 
-    this.game.eventBus.emit('selection:changed', { selectedIds });
+    this.syncSelection(selectedIds, playerId);
   }
 
   private selectAllOfBuildingType(buildingId: string, playerId: string, additive: boolean): void {
-    const entities = this.world.getEntitiesWith('Building', 'Selectable');
-    const selectedIds: number[] = [];
+    const world = this.getWorldProvider();
+    const entities = world.getEntitiesWith('Building', 'Selectable');
+    const newSelectedIds: number[] = [];
 
-    // Clear selection if not additive (clear all selectable entities, not just buildings)
-    if (!additive) {
-      const allSelectable = this.world.getEntitiesWith('Selectable');
-      for (const entity of allSelectable) {
-        const selectable = entity.get<Selectable>('Selectable')!;
-        selectable.deselect();
-      }
-    }
-
-    // Select all buildings of the same type belonging to the player within viewport
     for (const entity of entities) {
-      const building = entity.get<Building>('Building')!;
-      const selectable = entity.get<Selectable>('Selectable')!;
-      const health = entity.get<Health>('Health');
-      const transform = entity.get<Transform>('Transform');
+      const building = entity.get<{ buildingId: string }>('Building');
+      const selectable = entity.get<{ playerId: string }>('Selectable');
+      const health = entity.get<{ isDead: () => boolean }>('Health');
+      const transform = entity.get<{ x: number; y: number }>('Transform');
 
-      // Skip destroyed buildings
-      if (health && health.isDead()) continue;
-
-      // Only select buildings within the current viewport
+      if (!building || !selectable) continue;
+      if (health?.isDead()) continue;
       if (transform && !this.isInViewport(transform.x, transform.y)) continue;
 
       if (building.buildingId === buildingId && selectable.playerId === playerId) {
-        selectable.select();
-        selectedIds.push(entity.id);
+        newSelectedIds.push(entity.id);
       }
     }
 
-    // Update store
+    let selectedIds = newSelectedIds;
     if (additive) {
       const current = this.game.statePort.getSelectedUnits();
-      // PERF: Avoid multiple spread operations by using Set directly
       const combinedSet = new Set(current);
-      for (let i = 0; i < selectedIds.length; i++) {
-        combinedSet.add(selectedIds[i]);
+      for (const id of newSelectedIds) {
+        combinedSet.add(id);
       }
-      this.game.statePort.selectUnits(Array.from(combinedSet));
-    } else {
-      this.game.statePort.selectUnits(selectedIds);
+      selectedIds = Array.from(combinedSet);
     }
 
-    this.game.eventBus.emit('selection:changed', { selectedIds });
+    this.syncSelection(selectedIds, playerId);
   }
 
   private handleSetControlGroup(data: { group: number; entityIds: number[] }): void {
     const { group, entityIds } = data;
 
-    // Clear previous control group assignments for this group
-    const entities = this.world.getEntitiesWith('Selectable');
-    for (const entity of entities) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      if (selectable.controlGroup === group) {
-        selectable.controlGroup = null;
-      }
-    }
-
-    // Assign new control group
-    for (const entityId of entityIds) {
-      const entity = this.world.getEntity(entityId);
-      if (entity) {
-        const selectable = entity.get<Selectable>('Selectable');
-        if (selectable) {
-          selectable.controlGroup = group;
-        }
-      }
-    }
-
     this.controlGroups.set(group, entityIds);
     this.game.statePort.setControlGroup(group, entityIds);
+
+    // Notify worker of control group change
+    this.game.eventBus.emit('controlGroup:set', { group, entityIds });
   }
 
   private handleGetControlGroup(data: { group: number }): void {
     const { group } = data;
+    const world = this.getWorldProvider();
     const entityIds = this.controlGroups.get(group) || [];
 
-    // Filter out dead entities
+    // Filter out dead/destroyed entities
     const validIds = entityIds.filter((id) => {
-      const entity = this.world.getEntity(id);
-      return entity && !entity.isDestroyed();
+      const entity = world.getEntity(id);
+      if (!entity) return false;
+      const health = entity.get<{ isDead: () => boolean }>('Health');
+      return !health?.isDead();
     });
 
     // Update the stored group if entities were removed
@@ -495,58 +476,31 @@ export class SelectionSystem extends System {
       this.controlGroups.set(group, validIds);
     }
 
-    // Clear current selection and select control group
-    const entities = this.world.getEntitiesWith('Selectable');
-    for (const entity of entities) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      selectable.deselect();
-    }
-
-    for (const entityId of validIds) {
-      const entity = this.world.getEntity(entityId);
-      if (entity) {
-        const selectable = entity.get<Selectable>('Selectable');
-        if (selectable) {
-          selectable.select();
-        }
-      }
-    }
-
-    this.game.statePort.selectUnits(validIds);
-    this.game.eventBus.emit('selection:changed', { selectedIds: validIds });
+    const playerId = this.currentPlayerId ?? this.game.config.playerId ?? 'player1';
+    this.syncSelection(validIds, playerId);
   }
 
   private handleClearSelection(): void {
-    const entities = this.world.getEntitiesWith('Selectable');
-    for (const entity of entities) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      selectable.deselect();
-    }
-
-    this.game.statePort.selectUnits([]);
-    this.game.eventBus.emit('selection:changed', { selectedIds: [] });
+    const playerId = this.currentPlayerId ?? this.game.config.playerId ?? 'player1';
+    this.syncSelection([], playerId);
   }
 
   public update(_deltaTime: number): void {
     // Auto-deselect dead units
+    const world = this.getWorldProvider();
     const selectedUnits = this.game.statePort.getSelectedUnits();
     let needsUpdate = false;
     const validSelectedIds: number[] = [];
 
     for (const entityId of selectedUnits) {
-      const entity = this.world.getEntity(entityId);
-      if (!entity || entity.isDestroyed()) {
+      const entity = world.getEntity(entityId);
+      if (!entity) {
         needsUpdate = true;
         continue;
       }
 
-      const health = entity.get<Health>('Health');
-      if (health && health.isDead()) {
-        // Deselect dead unit
-        const selectable = entity.get<Selectable>('Selectable');
-        if (selectable) {
-          selectable.deselect();
-        }
+      const health = entity.get<{ isDead: () => boolean }>('Health');
+      if (health?.isDead()) {
         needsUpdate = true;
         continue;
       }
@@ -554,10 +508,10 @@ export class SelectionSystem extends System {
       validSelectedIds.push(entityId);
     }
 
-    // Update store if selection changed
+    // Update if selection changed
     if (needsUpdate) {
-      this.game.statePort.selectUnits(validSelectedIds);
-      this.game.eventBus.emit('selection:changed', { selectedIds: validSelectedIds });
+      const playerId = this.currentPlayerId ?? this.game.config.playerId ?? 'player1';
+      this.syncSelection(validSelectedIds, playerId);
     }
   }
 }
