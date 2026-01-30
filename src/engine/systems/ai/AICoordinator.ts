@@ -260,12 +260,10 @@ export class AICoordinator extends System {
   ): void {
     // Idempotency check: prevent duplicate registrations that would reset AI state
     if (this.aiPlayers.has(playerId)) {
-      console.log(`[AICoordinator] AI ${playerId} already registered, skipping duplicate registration`);
+      debugAI.log(`[AICoordinator] AI ${playerId} already registered, skipping duplicate registration`);
       return;
     }
 
-    // Always log AI registration (bypasses debug settings for diagnostics)
-    console.log(`[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
     debugAI.log(`[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
 
     const factionConfig = getFactionAIConfig(faction);
@@ -650,9 +648,7 @@ export class AICoordinator extends System {
     this.random.reseed(currentTick * 31337 + 42);
 
     if (currentTick === 1) {
-      // Always log on first tick for diagnostics
-      console.log(`[AICoordinator] Tick 1: Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ') || '(none)'}`);
-      debugAI.log(`[AICoordinator] Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ')}`);
+      debugAI.log(`[AICoordinator] Tick 1: Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ') || '(none)'}`);
     }
 
     for (const [playerId, ai] of this.aiPlayers) {
@@ -665,26 +661,23 @@ export class AICoordinator extends System {
 
       const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
       if (totalBuildings === 0) {
-        // Critical diagnostic: always log when AI has no buildings (this blocks all AI logic)
         if (currentTick % 100 === 0) {
-          console.warn(`[AICoordinator] ${playerId} has NO buildings detected! AI logic SKIPPED. This is likely a bug.`);
-          debugAI.warn(`[AICoordinator] ${playerId} has no buildings detected! buildingCounts:`, Object.fromEntries(ai.buildingCounts));
+          debugAI.warn(`[AICoordinator] ${playerId} has NO buildings detected! AI logic SKIPPED. buildingCounts:`, Object.fromEntries(ai.buildingCounts));
         }
         continue;
       }
 
-      // Periodic status log (always enabled for diagnostics)
+      // Periodic status log
       if (currentTick % 200 === 0) {
-        // Use console.log for critical diagnostics to ensure visibility
-        console.log(`[AICoordinator] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, vespene=${Math.floor(ai.vespene)}, supply=${ai.supply}/${ai.maxSupply}, buildOrderStep=${ai.buildOrderIndex}/${ai.buildOrder.length}, state=${ai.state}`);
+        debugAI.log(`[AICoordinator] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, vespene=${Math.floor(ai.vespene)}, supply=${ai.supply}/${ai.maxSupply}, buildOrderStep=${ai.buildOrderIndex}/${ai.buildOrder.length}, state=${ai.state}`);
       }
 
       this.updateMaxSupply(ai);
 
-      // Diagnostic: warn if AI is supply blocked with resources available
+      // Warn if AI is supply blocked with resources available
       if (ai.supply >= ai.maxSupply && ai.minerals >= 50) {
         if (currentTick % 100 === 0) {
-          console.warn(`[AICoordinator] ${playerId} is SUPPLY BLOCKED: supply=${ai.supply}/${ai.maxSupply}, minerals=${Math.floor(ai.minerals)}`);
+          debugAI.warn(`[AICoordinator] ${playerId} is SUPPLY BLOCKED: supply=${ai.supply}/${ai.maxSupply}, minerals=${Math.floor(ai.minerals)}`);
         }
       }
 
