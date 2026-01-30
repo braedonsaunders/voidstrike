@@ -637,7 +637,9 @@ export class BuildingPlacementSystem extends System {
     workerId: number | undefined,
     playerId: string
   ): { entity: Entity } | null {
-    const selectedUnits = this.game.statePort.getSelectedUnits();
+    // statePort only exists on main thread Game, not WorkerGame
+    // In worker context (AI players), there are no selected units anyway
+    const selectedUnits = (this.game as any).statePort?.getSelectedUnits?.() ?? [];
 
     // If specific worker ID provided, use that ONLY if they're not already building
     if (workerId !== undefined) {
