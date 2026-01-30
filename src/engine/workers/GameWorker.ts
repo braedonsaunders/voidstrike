@@ -596,11 +596,6 @@ export class WorkerGame extends GameCore {
     const states: UnitRenderState[] = [];
     const entities = this.world.getEntitiesWith('Transform', 'Unit', 'Health', 'Selectable');
 
-    if (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0) {
-      const allEntities = this.world.getEntities();
-      const unitsOnly = this.world.getEntitiesWith('Unit');
-      console.log(`[GameWorker] collectUnitRenderState: total=${allEntities.length}, withUnit=${unitsOnly.length}, fullQuery=${entities.length}`);
-    }
 
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
@@ -810,7 +805,7 @@ export class WorkerGame extends GameCore {
   // ============================================================================
 
   public spawnInitialEntities(mapData: SpawnMapData): void {
-    console.log('[GameWorker] spawnInitialEntities called:', {
+    debugInitialization.log('[GameWorker] spawnInitialEntities called:', {
       resourceCount: mapData.resources?.length ?? 0,
       spawnCount: mapData.spawns?.length ?? 0,
       playerSlotCount: mapData.playerSlots?.length ?? 0,
@@ -1070,7 +1065,7 @@ if (typeof self !== 'undefined') {
         }
 
         case 'spawnEntities': {
-          console.log('[GameWorker] Received spawnEntities message');
+          debugInitialization.log('[GameWorker] Received spawnEntities message');
           game?.spawnInitialEntities(message.mapData);
           break;
         }
