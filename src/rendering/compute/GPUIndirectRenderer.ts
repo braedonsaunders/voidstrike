@@ -193,23 +193,51 @@ export class GPUIndirectRenderer {
     const instancedGeometry = new THREE.InstancedBufferGeometry();
     instancedGeometry.instanceCount = MAX_UNITS;
 
-    // Clone attributes from source geometry to avoid sharing disposal lifecycle.
-    // Setting by reference causes WebGPU "setIndexBuffer" errors when the source
-    // geometry is disposed elsewhere while this geometry is still in use.
-    // CRITICAL: Mark cloned attributes as needsUpdate to force WebGPU to create
-    // fresh GPU buffers. Without this, WebGPU may lazily share buffers with the
-    // source geometry, which become invalid when the source is disposed.
+    // Clone attributes from source geometry with completely fresh TypedArrays.
+    // This ensures zero shared state with the source geometry, preventing
+    // "setIndexBuffer" crashes when source geometry is disposed.
     for (const name of Object.keys(geometry.attributes)) {
-      const clonedAttr = geometry.attributes[name].clone();
-      clonedAttr.needsUpdate = true;
-      instancedGeometry.setAttribute(name, clonedAttr);
+      const srcAttr = geometry.attributes[name];
+      // Create a completely new TypedArray by slicing (creates a copy)
+      const newArray = srcAttr.array.slice(0);
+      const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
+      newAttr.needsUpdate = true;
+      instancedGeometry.setAttribute(name, newAttr);
     }
 
-    // Clone index if present - critical to avoid shared buffer disposal issues
+    // Clone index with fresh TypedArray if present
     if (geometry.index) {
-      const clonedIndex = geometry.index.clone();
-      clonedIndex.needsUpdate = true;
-      instancedGeometry.setIndex(clonedIndex);
+      const srcIndex = geometry.index;
+      const newIndexArray = srcIndex.array.slice(0);
+      const newIndex = new THREE.BufferAttribute(newIndexArray, srcIndex.itemSize, srcIndex.normalized);
+      newIndex.needsUpdate = true;
+      instancedGeometry.setIndex(newIndex);
+    }
+
+    // Copy morph attributes if present
+    if (geometry.morphAttributes) {
+      for (const name of Object.keys(geometry.morphAttributes)) {
+        const srcMorphArray = geometry.morphAttributes[name];
+        instancedGeometry.morphAttributes[name] = srcMorphArray.map(srcAttr => {
+          const newArray = srcAttr.array.slice(0);
+          const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
+          newAttr.needsUpdate = true;
+          return newAttr;
+        });
+      }
+    }
+
+    // Copy bounding volumes if computed
+    if (geometry.boundingBox) {
+      instancedGeometry.boundingBox = geometry.boundingBox.clone();
+    }
+    if (geometry.boundingSphere) {
+      instancedGeometry.boundingSphere = geometry.boundingSphere.clone();
+    }
+
+    // Copy groups
+    for (const group of geometry.groups) {
+      instancedGeometry.addGroup(group.start, group.count, group.materialIndex);
     }
 
     // Ensure UV coordinates exist - required by many shaders (slot 1)

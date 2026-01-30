@@ -25,24 +25,67 @@ let _maxDistanceSq = 10000; // Squared distance for faster comparison
 // Distance culling multiplier from config
 const DISTANCE_CULL_MULTIPLIER = DECORATIONS.DISTANCE_CULL_MULTIPLIER;
 
+// Geometry disposal quarantine - prevents WebGPU "setIndexBuffer" crashes
+// by delaying geometry disposal until GPU has finished pending draw commands.
+// WebGPU typically has 2-3 frames in flight; 4 frames provides safety margin.
+const GEOMETRY_QUARANTINE_FRAMES = 4;
+
+// Shared frame counter for quarantine timing (updated by updateDecorationFrustum)
+let _frameCount = 0;
+
 /**
- * Clone geometry with proper GPU buffer initialization for WebGPU.
- * Setting needsUpdate on cloned attributes forces WebGPU to create fresh GPU buffers.
- * Without this, WebGPU may lazily share buffers with the source geometry, which
- * become invalid when the source is disposed, causing "setIndexBuffer" crashes.
+ * Clone geometry with completely fresh GPU buffers for WebGPU.
+ * Creates new TypedArrays for all attributes and index to ensure zero shared state
+ * with the source geometry. This prevents "setIndexBuffer" crashes when source
+ * geometry is disposed while clones are still being rendered.
  * Also ensures required attributes (like UVs) exist to prevent "Vertex buffer slot" errors.
  */
 function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry {
-  const cloned = source.clone();
+  const cloned = new THREE.BufferGeometry();
 
-  // Mark all attributes as needing GPU buffer upload
-  for (const name of Object.keys(cloned.attributes)) {
-    cloned.attributes[name].needsUpdate = true;
+  // Copy all attributes with fresh TypedArrays (no shared references)
+  for (const name of Object.keys(source.attributes)) {
+    const srcAttr = source.attributes[name];
+    // Create a completely new TypedArray by slicing (creates a copy)
+    const newArray = srcAttr.array.slice(0);
+    const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
+    newAttr.needsUpdate = true;
+    cloned.setAttribute(name, newAttr);
   }
 
-  // Mark index buffer as needing GPU buffer upload if present
-  if (cloned.index) {
-    cloned.index.needsUpdate = true;
+  // Copy index with fresh TypedArray if present
+  if (source.index) {
+    const srcIndex = source.index;
+    const newIndexArray = srcIndex.array.slice(0);
+    const newIndex = new THREE.BufferAttribute(newIndexArray, srcIndex.itemSize, srcIndex.normalized);
+    newIndex.needsUpdate = true;
+    cloned.setIndex(newIndex);
+  }
+
+  // Copy morph attributes if present
+  if (source.morphAttributes) {
+    for (const name of Object.keys(source.morphAttributes)) {
+      const srcMorphArray = source.morphAttributes[name];
+      cloned.morphAttributes[name] = srcMorphArray.map(srcAttr => {
+        const newArray = srcAttr.array.slice(0);
+        const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
+        newAttr.needsUpdate = true;
+        return newAttr;
+      });
+    }
+  }
+
+  // Copy bounding volumes if computed
+  if (source.boundingBox) {
+    cloned.boundingBox = source.boundingBox.clone();
+  }
+  if (source.boundingSphere) {
+    cloned.boundingSphere = source.boundingSphere.clone();
+  }
+
+  // Copy groups
+  for (const group of source.groups) {
+    cloned.addGroup(group.start, group.count, group.materialIndex);
   }
 
   // Ensure UV coordinates exist - required by many shaders (slot 1)
@@ -81,6 +124,9 @@ export function updateDecorationFrustum(camera: THREE.Camera): void {
   // Higher camera = see more = larger distance threshold
   const maxDist = Math.max(DECORATIONS.MIN_CULL_DISTANCE, _cameraY * DISTANCE_CULL_MULTIPLIER);
   _maxDistanceSq = maxDist * maxDist;
+
+  // Increment frame counter for quarantine timing
+  _frameCount++;
 }
 
 /**
@@ -229,6 +275,13 @@ export class InstancedTrees {
   private materials: THREE.Material[] = [];
   private treeCollisions: Array<{ x: number; z: number; radius: number }> = [];
 
+  // Geometry disposal quarantine for WebGPU safety
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    materials: THREE.Material[];
+    frameQueued: number;
+  }> = [];
+
   constructor(
     mapData: MapData,
     _biome: BiomeConfig,
@@ -349,6 +402,9 @@ export class InstancedTrees {
   }
 
   public update(): void {
+    // Process quarantine first
+    this.processGeometryQuarantine();
+
     for (const { mesh, instances, maxCount } of this.instancedMeshes) {
       let visibleCount = 0;
 
@@ -370,20 +426,71 @@ export class InstancedTrees {
     }
   }
 
+  private queueGeometryForDisposal(geometry: THREE.BufferGeometry, materials: THREE.Material[]): void {
+    this.geometryQuarantine.push({
+      geometry,
+      materials,
+      frameQueued: _frameCount,
+    });
+  }
+
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = _frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= GEOMETRY_QUARANTINE_FRAMES) {
+        // Safe to dispose now
+        entry.geometry.dispose();
+        for (const material of entry.materials) {
+          material.dispose();
+        }
+      } else {
+        // Keep in quarantine
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
+  }
+
   public getTreeCollisions(): Array<{ x: number; z: number; radius: number }> {
     return this.treeCollisions;
   }
 
   public dispose(): void {
+    // Remove meshes from scene
     for (const { mesh } of this.instancedMeshes) {
-      mesh.dispose();
+      this.group.remove(mesh);
     }
+
+    // Queue geometries and materials for delayed disposal (WebGPU safety)
     for (const geometry of this.geometries) {
-      geometry.dispose();
+      this.queueGeometryForDisposal(geometry, []);
     }
     for (const material of this.materials) {
-      material.dispose();
+      // Queue materials with empty geometry (they'll be disposed with the quarantine)
+      this.geometryQuarantine.push({
+        geometry: new THREE.BufferGeometry(), // Dummy geometry
+        materials: [material],
+        frameQueued: _frameCount,
+      });
     }
+
+    // Clear references
+    this.instancedMeshes = [];
+    this.geometries = [];
+    this.materials = [];
+
+    // Force process quarantine immediately if scene is being destroyed
+    // This is safe because no more rendering will happen
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const mat of entry.materials) {
+        mat.dispose();
+      }
+    }
+    this.geometryQuarantine = [];
   }
 }
 
@@ -398,6 +505,13 @@ export class InstancedRocks {
   private geometries: THREE.BufferGeometry[] = [];
   private materials: THREE.Material[] = [];
   private rockCollisions: Array<{ x: number; z: number; radius: number }> = [];
+
+  // Geometry disposal quarantine for WebGPU safety
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    materials: THREE.Material[];
+    frameQueued: number;
+  }> = [];
 
   constructor(
     mapData: MapData,
@@ -522,6 +636,9 @@ export class InstancedRocks {
   }
 
   public update(): void {
+    // Process quarantine first
+    this.processGeometryQuarantine();
+
     for (const { mesh, instances, maxCount } of this.instancedMeshes) {
       let visibleCount = 0;
 
@@ -543,20 +660,64 @@ export class InstancedRocks {
     }
   }
 
+  private queueGeometryForDisposal(geometry: THREE.BufferGeometry, materials: THREE.Material[]): void {
+    this.geometryQuarantine.push({
+      geometry,
+      materials,
+      frameQueued: _frameCount,
+    });
+  }
+
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = _frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= GEOMETRY_QUARANTINE_FRAMES) {
+        entry.geometry.dispose();
+        for (const material of entry.materials) {
+          material.dispose();
+        }
+      } else {
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
+  }
+
   public getRockCollisions(): Array<{ x: number; z: number; radius: number }> {
     return this.rockCollisions;
   }
 
   public dispose(): void {
     for (const { mesh } of this.instancedMeshes) {
-      mesh.dispose();
+      this.group.remove(mesh);
     }
+
     for (const geometry of this.geometries) {
-      geometry.dispose();
+      this.queueGeometryForDisposal(geometry, []);
     }
     for (const material of this.materials) {
-      material.dispose();
+      this.geometryQuarantine.push({
+        geometry: new THREE.BufferGeometry(),
+        materials: [material],
+        frameQueued: _frameCount,
+      });
     }
+
+    this.instancedMeshes = [];
+    this.geometries = [];
+    this.materials = [];
+
+    // Force process quarantine immediately if scene is being destroyed
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const mat of entry.materials) {
+        mat.dispose();
+      }
+    }
+    this.geometryQuarantine = [];
   }
 }
 
@@ -572,6 +733,13 @@ export class InstancedCrystals {
   private material: THREE.Material | null = null;
   private instances: InstanceData[] = [];
   private maxCount = 0;
+
+  // Geometry disposal quarantine for WebGPU safety
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    materials: THREE.Material[];
+    frameQueued: number;
+  }> = [];
 
   constructor(
     mapData: MapData,
@@ -645,6 +813,9 @@ export class InstancedCrystals {
   }
 
   public update(): void {
+    // Process quarantine first
+    this.processGeometryQuarantine();
+
     if (!this.instancedMesh) return;
 
     let visibleCount = 0;
@@ -665,14 +836,54 @@ export class InstancedCrystals {
     this.instancedMesh.instanceMatrix.needsUpdate = true;
   }
 
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = _frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= GEOMETRY_QUARANTINE_FRAMES) {
+        entry.geometry.dispose();
+        for (const material of entry.materials) {
+          material.dispose();
+        }
+      } else {
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
+  }
+
   public getInstancedMesh(): THREE.InstancedMesh | null {
     return this.instancedMesh;
   }
 
   public dispose(): void {
-    this.instancedMesh?.dispose();
-    this.geometry?.dispose();
-    this.material?.dispose();
+    if (this.instancedMesh) {
+      this.group.remove(this.instancedMesh);
+    }
+
+    // Queue for delayed disposal
+    if (this.geometry) {
+      this.geometryQuarantine.push({
+        geometry: this.geometry,
+        materials: this.material ? [this.material] : [],
+        frameQueued: _frameCount,
+      });
+    }
+
+    this.instancedMesh = null;
+    this.geometry = null;
+    this.material = null;
+
+    // Force process quarantine immediately if scene is being destroyed
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const mat of entry.materials) {
+        mat.dispose();
+      }
+    }
+    this.geometryQuarantine = [];
   }
 }
 
@@ -687,6 +898,13 @@ export class InstancedGrass {
   private material: THREE.Material | null = null;
   private instances: Array<{ x: number; y: number; z: number; scale: number; rotation: number }> = [];
   private maxCount = 0;
+
+  // Geometry disposal quarantine for WebGPU safety
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    materials: THREE.Material[];
+    frameQueued: number;
+  }> = [];
 
   constructor(
     mapData: MapData,
@@ -762,6 +980,9 @@ export class InstancedGrass {
   }
 
   public update(): void {
+    // Process quarantine first
+    this.processGeometryQuarantine();
+
     if (!this.instancedMesh) return;
 
     let visibleCount = 0;
@@ -782,10 +1003,49 @@ export class InstancedGrass {
     this.instancedMesh.instanceMatrix.needsUpdate = true;
   }
 
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = _frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= GEOMETRY_QUARANTINE_FRAMES) {
+        entry.geometry.dispose();
+        for (const material of entry.materials) {
+          material.dispose();
+        }
+      } else {
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
+  }
+
   public dispose(): void {
-    this.instancedMesh?.dispose();
-    this.geometry?.dispose();
-    this.material?.dispose();
+    if (this.instancedMesh) {
+      this.group.remove(this.instancedMesh);
+    }
+
+    if (this.geometry) {
+      this.geometryQuarantine.push({
+        geometry: this.geometry,
+        materials: this.material ? [this.material] : [],
+        frameQueued: _frameCount,
+      });
+    }
+
+    this.instancedMesh = null;
+    this.geometry = null;
+    this.material = null;
+
+    // Force process quarantine immediately if scene is being destroyed
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const mat of entry.materials) {
+        mat.dispose();
+      }
+    }
+    this.geometryQuarantine = [];
   }
 }
 
@@ -800,6 +1060,13 @@ export class InstancedPebbles {
   private material: THREE.Material | null = null;
   private instances: Array<{ x: number; y: number; z: number; scale: number; rotation: number }> = [];
   private maxCount = 0;
+
+  // Geometry disposal quarantine for WebGPU safety
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    materials: THREE.Material[];
+    frameQueued: number;
+  }> = [];
 
   constructor(
     mapData: MapData,
@@ -866,6 +1133,9 @@ export class InstancedPebbles {
   }
 
   public update(): void {
+    // Process quarantine first
+    this.processGeometryQuarantine();
+
     if (!this.instancedMesh) return;
 
     let visibleCount = 0;
@@ -886,9 +1156,48 @@ export class InstancedPebbles {
     this.instancedMesh.instanceMatrix.needsUpdate = true;
   }
 
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = _frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= GEOMETRY_QUARANTINE_FRAMES) {
+        entry.geometry.dispose();
+        for (const material of entry.materials) {
+          material.dispose();
+        }
+      } else {
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
+  }
+
   public dispose(): void {
-    this.instancedMesh?.dispose();
-    this.geometry?.dispose();
-    this.material?.dispose();
+    if (this.instancedMesh) {
+      this.group.remove(this.instancedMesh);
+    }
+
+    if (this.geometry) {
+      this.geometryQuarantine.push({
+        geometry: this.geometry,
+        materials: this.material ? [this.material] : [],
+        frameQueued: _frameCount,
+      });
+    }
+
+    this.instancedMesh = null;
+    this.geometry = null;
+    this.material = null;
+
+    // Force process quarantine immediately if scene is being destroyed
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const mat of entry.materials) {
+        mat.dispose();
+      }
+    }
+    this.geometryQuarantine = [];
   }
 }
