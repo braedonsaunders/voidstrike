@@ -457,6 +457,7 @@ export class AIBuildOrderExecutor {
   /**
    * Find a suitable spot to place a building.
    * Searches in expanding rings around the base with increasing density.
+   * AI buildings are placed with extra spacing for unit pathing.
    */
   private findBuildingSpot(
     playerId: string,
@@ -466,6 +467,9 @@ export class AIBuildOrderExecutor {
     excludeEntityId?: number
   ): { x: number; y: number } | null {
     const offsets: Array<{ x: number; y: number }> = [];
+
+    // Extra spacing between AI buildings for unit pathing (2 units on each side)
+    const AI_BUILDING_SPACING = 2;
 
     // Generate offsets in expanding rings around the base
     // Expanded range: 5-40 units with more angles per ring for better coverage
@@ -491,16 +495,74 @@ export class AIBuildOrderExecutor {
       }
     }
 
-    // Try each offset until we find a valid spot
+    // Try each offset until we find a valid spot with spacing
     for (const offset of offsets) {
       const pos = { x: basePos.x + offset.x, y: basePos.y + offset.y };
-      // Skip unit collision checks to match placement system (units will be pushed away)
-      if (this.game.isValidBuildingPlacement(pos.x, pos.y, width, height, excludeEntityId, true)) {
+      // Check core validity first (skip unit collision - units will be pushed away)
+      if (!this.game.isValidBuildingPlacement(pos.x, pos.y, width, height, excludeEntityId, true)) {
+        continue;
+      }
+      // Check for adequate spacing from other buildings for unit pathing
+      if (this.hasAdequateBuildingSpacing(pos.x, pos.y, width, height, AI_BUILDING_SPACING)) {
         return pos;
       }
     }
 
     return null;
+  }
+
+  /**
+   * Check if a building position has adequate spacing from other buildings.
+   * Used by AI to ensure units can walk between buildings.
+   */
+  private hasAdequateBuildingSpacing(
+    centerX: number,
+    centerY: number,
+    width: number,
+    height: number,
+    spacing: number
+  ): boolean {
+    const halfW = width / 2;
+    const halfH = height / 2;
+
+    // Query nearby buildings with extra padding for spacing check
+    const queryPadding = spacing + 10;
+    const nearbyBuildingIds = this.game.world.buildingGrid.queryRect(
+      centerX - halfW - queryPadding,
+      centerY - halfH - queryPadding,
+      centerX + halfW + queryPadding,
+      centerY + halfH + queryPadding
+    );
+
+    for (const buildingId of nearbyBuildingIds) {
+      const entity = this.game.world.getEntity(buildingId);
+      if (!entity) continue;
+
+      const transform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      if (!transform || !building) continue;
+
+      // Skip flying buildings
+      if (building.isFlying || building.state === 'lifting' ||
+          building.state === 'flying' || building.state === 'landing') {
+        continue;
+      }
+
+      const existingHalfW = building.width / 2;
+      const existingHalfH = building.height / 2;
+      const dx = Math.abs(centerX - transform.x);
+      const dy = Math.abs(centerY - transform.y);
+
+      // Check if buildings are too close (need spacing gap for unit pathing)
+      const requiredDx = halfW + existingHalfW + spacing;
+      const requiredDy = halfH + existingHalfH + spacing;
+
+      if (dx < requiredDx && dy < requiredDy) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   // === Addon Construction ===
