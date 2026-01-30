@@ -34,6 +34,7 @@ class UnitEntityAdapter implements IEntity {
   private unitComponent: UnitAdapter;
   private healthComponent: HealthAdapter;
   private selectableComponent: SelectableAdapter;
+  private velocityComponent: VelocityAdapter;
 
   constructor(data: UnitRenderState) {
     this.id = data.id;
@@ -43,6 +44,7 @@ class UnitEntityAdapter implements IEntity {
     this.unitComponent = new UnitAdapter(data);
     this.healthComponent = new HealthAdapter(data);
     this.selectableComponent = new SelectableAdapter(data);
+    this.velocityComponent = new VelocityAdapter(data);
   }
 
   public get<T>(componentType: string): T | undefined {
@@ -55,6 +57,8 @@ class UnitEntityAdapter implements IEntity {
         return this.healthComponent as unknown as T;
       case 'Selectable':
         return this.selectableComponent as unknown as T;
+      case 'Velocity':
+        return this.velocityComponent as unknown as T;
       default:
         return undefined;
     }
@@ -74,6 +78,7 @@ class UnitEntityAdapter implements IEntity {
     this.unitComponent.update(data);
     this.healthComponent.update(data);
     this.selectableComponent.update(data);
+    this.velocityComponent.update(data);
   }
 }
 
@@ -209,6 +214,29 @@ class SelectableAdapter {
     this.isSelected = data.isSelected;
     this.playerId = data.playerId;
     this.controlGroup = data.controlGroup ?? 0;
+  }
+}
+
+/**
+ * Velocity-like adapter - derives velocity from position delta (current - previous)
+ * This allows animation systems to detect movement for walk/idle transitions.
+ */
+class VelocityAdapter {
+  public x: number;
+  public y: number;
+  public z: number;
+
+  constructor(data: UnitRenderState) {
+    // Velocity is approximated from position change between frames
+    this.x = data.x - data.prevX;
+    this.y = data.y - data.prevY;
+    this.z = data.z - data.prevZ;
+  }
+
+  public update(data: UnitRenderState): void {
+    this.x = data.x - data.prevX;
+    this.y = data.y - data.prevY;
+    this.z = data.z - data.prevZ;
   }
 }
 
