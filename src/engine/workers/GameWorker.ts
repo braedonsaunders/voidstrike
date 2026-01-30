@@ -665,6 +665,20 @@ export class WorkerGame extends GameCore {
         repairTargetId: unit.repairTargetId,
         hasSpeedBuff: unit.hasBuff('stim'),
         hasDamageBuff: unit.hasBuff('damage_boost'),
+        // Movement/targeting for waypoint visualization
+        targetX: unit.targetX,
+        targetY: unit.targetY,
+        speed: unit.speed,
+        // Command queue (serialized for transfer)
+        commandQueue: unit.commandQueue.map(cmd => ({
+          type: cmd.type,
+          targetX: cmd.targetX,
+          targetY: cmd.targetY,
+          targetEntityId: cmd.targetEntityId,
+        })),
+        // Combat stats for range overlays
+        attackRange: unit.attackRange,
+        sightRange: unit.sightRange,
       });
     }
 
@@ -706,6 +720,9 @@ export class WorkerGame extends GameCore {
         hasProductionQueue: building.productionQueue.length > 0,
         rallyX: building.rallyX,
         rallyY: building.rallyY,
+        // Combat stats for range overlays
+        attackRange: building.attackRange,
+        sightRange: building.sightRange,
       });
     }
 

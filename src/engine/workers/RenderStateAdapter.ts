@@ -123,6 +123,15 @@ class UnitAdapter {
   public carryingMinerals: number;
   public carryingVespene: number;
   public gatherTargetId: number | null;
+  // Movement/targeting for waypoint visualization
+  public targetX: number | null;
+  public targetY: number | null;
+  public speed: number;
+  // Command queue for shift-click visualization
+  public commandQueue: Array<{ type: string; targetX?: number; targetY?: number; targetEntityId?: number }>;
+  // Combat stats for range overlays
+  public attackRange: number;
+  public sightRange: number;
 
   constructor(data: UnitRenderState) {
     this.unitId = data.unitId;
@@ -138,6 +147,12 @@ class UnitAdapter {
     this.carryingMinerals = data.carryingMinerals;
     this.carryingVespene = data.carryingVespene;
     this.gatherTargetId = data.gatherTargetId;
+    this.targetX = data.targetX;
+    this.targetY = data.targetY;
+    this.speed = data.speed;
+    this.commandQueue = data.commandQueue;
+    this.attackRange = data.attackRange;
+    this.sightRange = data.sightRange;
   }
 
   public update(data: UnitRenderState): void {
@@ -154,6 +169,12 @@ class UnitAdapter {
     this.carryingMinerals = data.carryingMinerals;
     this.carryingVespene = data.carryingVespene;
     this.gatherTargetId = data.gatherTargetId;
+    this.targetX = data.targetX;
+    this.targetY = data.targetY;
+    this.speed = data.speed;
+    this.commandQueue = data.commandQueue;
+    this.attackRange = data.attackRange;
+    this.sightRange = data.sightRange;
   }
 
   public isSelected(): boolean {
@@ -328,6 +349,9 @@ class BuildingComponentAdapter {
   public liftProgress: number;
   // Production queue simulation for renderer compatibility
   public productionQueue: { progress: number }[];
+  // Combat stats for range overlays
+  public attackRange: number;
+  public sightRange: number;
 
   constructor(data: BuildingRenderState) {
     this.buildingId = data.buildingId;
@@ -343,6 +367,8 @@ class BuildingComponentAdapter {
     this.productionQueue = data.hasProductionQueue
       ? [{ progress: data.productionProgress }]
       : [];
+    this.attackRange = data.attackRange;
+    this.sightRange = data.sightRange;
   }
 
   public update(data: BuildingRenderState): void {
@@ -359,6 +385,8 @@ class BuildingComponentAdapter {
     this.productionQueue = data.hasProductionQueue
       ? [{ progress: data.productionProgress }]
       : [];
+    this.attackRange = data.attackRange;
+    this.sightRange = data.sightRange;
   }
 
   public isReady(): boolean {
