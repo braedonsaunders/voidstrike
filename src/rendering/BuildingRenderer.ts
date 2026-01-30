@@ -165,6 +165,19 @@ export class BuildingRenderer {
   private constructionAnimTime: number = 0;
   private blueprintPulseTime: number = 0;
 
+  // Frame counter for quarantine timing
+  private frameCount: number = 0;
+
+  // Geometry disposal quarantine - prevents WebGPU "setIndexBuffer" crashes
+  // by delaying geometry disposal until GPU has finished pending draw commands.
+  // WebGPU typically has 2-3 frames in flight; 4 frames provides safety margin.
+  private static readonly GEOMETRY_QUARANTINE_FRAMES = 4;
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    materials: THREE.Material[];
+    frameQueued: number;
+  }> = [];
+
   // Fallback elevation heights when terrain isn't available
   private static readonly ELEVATION_HEIGHTS = BUILDING_RENDERER.ELEVATION_HEIGHTS;
 
@@ -237,17 +250,12 @@ export class BuildingRenderer {
     }
     this.buildingMeshes.clear();
 
-    // Clear instanced groups
+    // Clear instanced groups - use quarantine to prevent WebGPU crashes
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      // Dispose geometry (now safe since we clone it during creation)
-      group.mesh.geometry.dispose();
-      // Dispose materials
-      if (group.mesh.material instanceof THREE.Material) {
-        group.mesh.material.dispose();
-      } else if (Array.isArray(group.mesh.material)) {
-        group.mesh.material.forEach(m => m.dispose());
-      }
+      // Queue geometry and materials for delayed disposal
+      const materials = group.mesh.material;
+      this.queueGeometryForDisposal(group.mesh.geometry, materials);
     }
     this.instancedGroups.clear();
     // Meshes will be recreated on next update() call
@@ -475,6 +483,11 @@ export class BuildingRenderer {
     this.constructionAnimTime += dt;
     this.blueprintPulseTime += dt;
     this.debugFrameCount++;
+    this.frameCount++;
+
+    // Process quarantined geometries at the START of each frame
+    // This ensures GPU has finished with disposed buffers before we free them
+    this.processGeometryQuarantine();
 
     // Selection ring animation is handled by shared global time uniform
     // (updated by UnitRenderer.update via updateSelectionRingTime)
@@ -2337,6 +2350,47 @@ export class BuildingRenderer {
   }
 
   /**
+   * Queue geometry and materials for delayed disposal.
+   * This prevents WebGPU "setIndexBuffer" crashes by ensuring the GPU
+   * has finished all pending draw commands before buffers are freed.
+   */
+  private queueGeometryForDisposal(
+    geometry: THREE.BufferGeometry,
+    materials: THREE.Material | THREE.Material[]
+  ): void {
+    const materialArray = Array.isArray(materials) ? materials : [materials];
+    this.geometryQuarantine.push({
+      geometry,
+      materials: materialArray,
+      frameQueued: this.frameCount,
+    });
+  }
+
+  /**
+   * Process quarantined geometries and dispose those that are safe.
+   * Call this once per frame at the START of update.
+   */
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = this.frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= BuildingRenderer.GEOMETRY_QUARANTINE_FRAMES) {
+        // Safe to dispose - GPU has finished with these buffers
+        entry.geometry.dispose();
+        for (const material of entry.materials) {
+          material.dispose();
+        }
+      } else {
+        // Keep in quarantine
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
+  }
+
+  /**
    * Dispose only materials in a group, NOT geometry.
    * Use this for meshes with shared geometry (from asset cache).
    */
@@ -2353,23 +2407,30 @@ export class BuildingRenderer {
   }
 
   /**
-   * Dispose both geometry and materials in a group.
+   * Dispose both geometry and materials in a group via quarantine.
    * Only use this for groups with owned geometry (effects, particles, etc.).
+   * Uses quarantine to prevent WebGPU crashes from disposing while GPU still rendering.
    */
   private disposeGroup(group: THREE.Group): void {
     group.traverse((child) => {
       if (child instanceof THREE.Mesh || child instanceof THREE.Points) {
-        child.geometry.dispose();
-        if (child.material instanceof THREE.Material) {
-          child.material.dispose();
-        } else if (Array.isArray(child.material)) {
-          child.material.forEach(m => m.dispose());
-        }
+        // Queue geometry and materials for delayed disposal
+        const materials = child.material;
+        this.queueGeometryForDisposal(child.geometry, materials);
       }
     });
   }
 
   public dispose(): void {
+    // Flush any pending quarantined geometries first
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const material of entry.materials) {
+        material.dispose();
+      }
+    }
+    this.geometryQuarantine.length = 0;
+
     this.constructingMaterial.dispose();
     this.selectionRingRenderer.dispose();
     this.fireMaterial.dispose();
@@ -2422,12 +2483,10 @@ export class BuildingRenderer {
     }
     this.buildingMeshes.clear();
 
-    // Dispose instanced groups
+    // Dispose instanced groups - immediate disposal safe during full teardown
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      // Dispose geometry (now safe since we clone it during creation)
       group.mesh.geometry.dispose();
-      // Dispose materials
       if (group.mesh.material instanceof THREE.Material) {
         group.mesh.material.dispose();
       } else if (Array.isArray(group.mesh.material)) {
@@ -2436,5 +2495,13 @@ export class BuildingRenderer {
     }
     this.instancedGroups.clear();
 
+    // Flush any geometries queued during dispose
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+      for (const material of entry.materials) {
+        material.dispose();
+      }
+    }
+    this.geometryQuarantine.length = 0;
   }
 }

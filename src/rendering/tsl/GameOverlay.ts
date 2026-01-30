@@ -189,6 +189,18 @@ export class TSLGameOverlayManager {
   private showVisionRange: boolean = false;
   private selectedEntityIds: number[] = [];
 
+  // Frame counter for quarantine timing
+  private frameCount: number = 0;
+
+  // Geometry disposal quarantine - prevents WebGPU "setIndexBuffer" crashes
+  // by delaying geometry disposal until GPU has finished pending draw commands.
+  // WebGPU typically has 2-3 frames in flight; 4 frames provides safety margin.
+  private static readonly GEOMETRY_QUARANTINE_FRAMES = 4;
+  private geometryQuarantine: Array<{
+    geometry: THREE.BufferGeometry;
+    frameQueued: number;
+  }> = [];
+
   // Threat overlay update throttling
   private lastThreatUpdate: number = 0;
   private threatUpdateInterval: number = 500;
@@ -519,17 +531,50 @@ export class TSLGameOverlayManager {
   }
 
   /**
+   * Queue geometry for delayed disposal.
+   * This prevents WebGPU "setIndexBuffer" crashes by ensuring the GPU
+   * has finished all pending draw commands before buffers are freed.
+   */
+  private queueGeometryForDisposal(geometry: THREE.BufferGeometry): void {
+    this.geometryQuarantine.push({
+      geometry,
+      frameQueued: this.frameCount,
+    });
+  }
+
+  /**
+   * Process quarantined geometries and dispose those that are safe.
+   * Call this once per frame at the START of update.
+   */
+  private processGeometryQuarantine(): void {
+    let writeIndex = 0;
+    for (let i = 0; i < this.geometryQuarantine.length; i++) {
+      const entry = this.geometryQuarantine[i];
+      const framesInQuarantine = this.frameCount - entry.frameQueued;
+
+      if (framesInQuarantine >= TSLGameOverlayManager.GEOMETRY_QUARANTINE_FRAMES) {
+        // Safe to dispose - GPU has finished with these buffers
+        entry.geometry.dispose();
+      } else {
+        // Keep in quarantine
+        this.geometryQuarantine[writeIndex++] = entry;
+      }
+    }
+    this.geometryQuarantine.length = writeIndex;
+  }
+
+  /**
    * Update attack range rings for selected units
    */
   private updateAttackRangeRings(): void {
     if (!this.world || !this.showAttackRange) return;
 
-    // Clear existing rings
+    // Clear existing rings - use quarantine to prevent WebGPU crashes
     while (this.attackRangeGroup.children.length > 0) {
       const child = this.attackRangeGroup.children[0];
       this.attackRangeGroup.remove(child);
       if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
+        this.queueGeometryForDisposal(child.geometry);
       }
     }
 
@@ -572,12 +617,12 @@ export class TSLGameOverlayManager {
   private updateVisionRangeRings(): void {
     if (!this.world || !this.showVisionRange) return;
 
-    // Clear existing rings
+    // Clear existing rings - use quarantine to prevent WebGPU crashes
     while (this.visionRangeGroup.children.length > 0) {
       const child = this.visionRangeGroup.children[0];
       this.visionRangeGroup.remove(child);
       if (child instanceof THREE.Mesh) {
-        child.geometry.dispose();
+        this.queueGeometryForDisposal(child.geometry);
       }
     }
 
@@ -1161,6 +1206,12 @@ export class TSLGameOverlayManager {
   }
 
   public update(time: number): void {
+    this.frameCount++;
+
+    // Process quarantined geometries at the START of each frame
+    // This ensures GPU has finished with disposed buffers before we free them
+    this.processGeometryQuarantine();
+
     // Update threat overlay time for pulsing effect
     const threatMat = this.threatOverlayMesh?.material as THREE.Material | undefined;
     if ((threatMat as any)?._uTime) {
@@ -1205,6 +1256,12 @@ export class TSLGameOverlayManager {
   }
 
   public dispose(): void {
+    // Flush any pending quarantined geometries first
+    for (const entry of this.geometryQuarantine) {
+      entry.geometry.dispose();
+    }
+    this.geometryQuarantine.length = 0;
+
     const disposeOverlay = (mesh: THREE.Mesh | null, tex: THREE.DataTexture | null) => {
       if (mesh) {
         this.scene.remove(mesh);
@@ -1220,7 +1277,7 @@ export class TSLGameOverlayManager {
     disposeOverlay(this.resourceOverlayMesh, this.resourceTexture);
     disposeOverlay(this.buildableOverlayMesh, this.buildableTexture);
 
-    // Dispose range ring groups
+    // Dispose range ring groups - immediate disposal safe during full teardown
     const disposeGroup = (group: THREE.Group) => {
       while (group.children.length > 0) {
         const child = group.children[0];
