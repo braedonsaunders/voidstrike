@@ -615,7 +615,7 @@
   "buildings": {
     "headquarters": {
       "model": "/models/buildings/headquarters_LOD0.glb",
-      "scale": 5.5,
+      "scale": 5.0,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -662,7 +662,7 @@
     },
     "orbital_station": {
       "model": "/models/buildings/orbital_station_LOD0.glb",
-      "scale": 5.5,
+      "scale": 5.0,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -700,7 +700,7 @@
     },
     "bastion": {
       "model": "/models/buildings/bastion_LOD0.glb",
-      "scale": 5.5,
+      "scale": 5.0,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -713,7 +713,7 @@
     },
     "supply_cache": {
       "model": "/models/buildings/supply_cache_LOD0.glb",
-      "scale": 2.5,
+      "scale": 2.0,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -726,7 +726,7 @@
     },
     "extractor": {
       "model": "/models/buildings/extractor_LOD0.glb",
-      "scale": 3.5,
+      "scale": 3.0,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -741,7 +741,7 @@
     },
     "infantry_bay": {
       "model": "/models/buildings/infantry_bay_LOD0.glb",
-      "scale": 4.0,
+      "scale": 3.5,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -780,7 +780,7 @@
     },
     "tech_center": {
       "model": "/models/buildings/tech_center_LOD0.glb",
-      "scale": 3.5,
+      "scale": 3.0,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -794,7 +794,7 @@
     },
     "garrison": {
       "model": "/models/buildings/garrison_LOD0.glb",
-      "scale": 3.0,
+      "scale": 2.5,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -807,7 +807,7 @@
     },
     "forge": {
       "model": "/models/buildings/forge_LOD0.glb",
-      "scale": 5.0,
+      "scale": 3.5,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -848,7 +848,7 @@
     },
     "arsenal": {
       "model": "/models/buildings/arsenal_LOD0.glb",
-      "scale": 4.0,
+      "scale": 3.0,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -900,7 +900,7 @@
     },
     "drydock": {
       "model": "/models/buildings/drydock_LOD0.glb",
-      "scale": 5.5,
+      "scale": 4.5,
       "rotation": { "y": -90 },
       "animations": {
         "idle": ["idle", "active"],
@@ -920,7 +920,7 @@
     },
     "power_core": {
       "model": "/models/buildings/power_core_LOD0.glb",
-      "scale": 4.0,
+      "scale": 3.5,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -935,7 +935,7 @@
     },
     "ops_center": {
       "model": "/models/buildings/ops_center_LOD0.glb",
-      "scale": 4.0,
+      "scale": 3.0,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -949,7 +949,7 @@
     },
     "radar_array": {
       "model": "/models/buildings/radar_array_LOD0.glb",
-      "scale": 5.0,
+      "scale": 4.0,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
@@ -964,7 +964,7 @@
     },
     "defense_turret": {
       "model": "/models/buildings/defense_turret_LOD0.glb",
-      "scale": 3.5,
+      "scale": 2.5,
       "rotation": { "y": -90 },
       "animations": {
         "idle": [
