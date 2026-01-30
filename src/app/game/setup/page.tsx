@@ -293,12 +293,23 @@ function SettingSelect<T extends string>({
 
 export default function GameSetupPage() {
   const router = useRouter();
-  const musicEnabled = useUIStore((state) => state.musicEnabled);
+  const [hasMounted, setHasMounted] = useState(false);
+
+  const musicEnabledStore = useUIStore((state) => state.musicEnabled);
   const musicVolume = useUIStore((state) => state.musicVolume);
   const toggleMusic = useUIStore((state) => state.toggleMusic);
-  const isFullscreen = useUIStore((state) => state.isFullscreen);
+  const isFullscreenStore = useUIStore((state) => state.isFullscreen);
   const toggleFullscreen = useUIStore((state) => state.toggleFullscreen);
   const setFullscreen = useUIStore((state) => state.setFullscreen);
+
+  // Use default values during SSR/hydration to avoid mismatch, then sync after mount
+  const musicEnabled = hasMounted ? musicEnabledStore : true;
+  const isFullscreen = hasMounted ? isFullscreenStore : false;
+
+  // Mark as mounted after hydration
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   // Join lobby modal state
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -310,14 +321,14 @@ export default function GameSetupPage() {
 
   const handleMusicToggle = useCallback(() => {
     toggleMusic();
-    const newEnabled = !musicEnabled;
+    const newEnabled = !musicEnabledStore;
     MusicPlayer.setMuted(!newEnabled);
     if (!newEnabled) {
       MusicPlayer.pause();
     } else {
       MusicPlayer.resume();
     }
-  }, [toggleMusic, musicEnabled]);
+  }, [toggleMusic, musicEnabledStore]);
 
   // Continue menu music (or start if navigated directly here)
   // Also start preloading 3D assets in background while player is in lobby
@@ -343,11 +354,11 @@ export default function GameSetupPage() {
     // Don't stop on unmount - music stops when game starts
   }, []);
 
-  // Sync volume changes
+  // Sync volume changes - use store value directly since MusicPlayer only runs client-side
   useEffect(() => {
     MusicPlayer.setVolume(musicVolume);
-    MusicPlayer.setMuted(!musicEnabled);
-  }, [musicVolume, musicEnabled]);
+    MusicPlayer.setMuted(!musicEnabledStore);
+  }, [musicVolume, musicEnabledStore]);
 
   // Sync fullscreen state with browser
   useEffect(() => {
