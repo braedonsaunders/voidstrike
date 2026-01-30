@@ -324,12 +324,20 @@ export class AIBuildOrderExecutor {
     switch (action.type) {
       case 'train':
         if (action.targetId) {
+          // Pre-check resources before attempting to train
+          if (!this.canAffordUnit(ai, action.targetId)) {
+            return false;
+          }
           return this.tryTrainUnit(ai, action.targetId);
         } else if (action.options) {
-          // Weighted random selection
-          const totalWeight = action.options.reduce((sum: number, opt: { id: string; weight: number }) => sum + opt.weight, 0);
+          // Filter options to only those we can afford, then do weighted random selection
+          const affordableOptions = action.options.filter(opt => this.canAffordUnit(ai, opt.id));
+          if (affordableOptions.length === 0) {
+            return false;
+          }
+          const totalWeight = affordableOptions.reduce((sum: number, opt: { id: string; weight: number }) => sum + opt.weight, 0);
           let random = this.coordinator.getRandom().next() * totalWeight;
-          for (const option of action.options) {
+          for (const option of affordableOptions) {
             random -= option.weight;
             if (random <= 0) {
               return this.tryTrainUnit(ai, option.id);
@@ -625,16 +633,14 @@ export class AIBuildOrderExecutor {
     const shouldLog = currentTick % 100 === 0;
 
     if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) {
-      // Log resource failures with console.warn to ensure visibility
       if (shouldLog) {
-        console.warn(`[AIBuildOrder] ${ai.playerId}: INSUFFICIENT RESOURCES for ${unitType} (need ${unitDef.mineralCost}M/${unitDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+        debugAI.warn(`[AIBuildOrder] ${ai.playerId}: INSUFFICIENT RESOURCES for ${unitType} (need ${unitDef.mineralCost}M/${unitDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
       }
       return false;
     }
     if (ai.supply + unitDef.supplyCost > ai.maxSupply) {
-      // Log supply failures with console.warn to ensure visibility
       if (shouldLog) {
-        console.warn(`[AIBuildOrder] ${ai.playerId}: SUPPLY BLOCKED for ${unitType} (${ai.supply}+${unitDef.supplyCost} > ${ai.maxSupply})`);
+        debugAI.warn(`[AIBuildOrder] ${ai.playerId}: SUPPLY BLOCKED for ${unitType} (${ai.supply}+${unitDef.supplyCost} > ${ai.maxSupply})`);
       }
       return false;
     }
@@ -678,6 +684,23 @@ export class AIBuildOrderExecutor {
       }
     }
     return false;
+  }
+
+  /**
+   * Check if the AI can afford to train a unit (resources and supply).
+   * Used as a pre-check before attempting training to reduce log spam.
+   */
+  private canAffordUnit(ai: AIPlayer, unitType: string): boolean {
+    const unitDef = UNIT_DEFINITIONS[unitType];
+    if (!unitDef) return false;
+
+    if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) {
+      return false;
+    }
+    if (ai.supply + unitDef.supplyCost > ai.maxSupply) {
+      return false;
+    }
+    return true;
   }
 
   /**
