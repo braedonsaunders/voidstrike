@@ -72,6 +72,26 @@ export interface UnitRenderState {
   // Buff indicators
   hasSpeedBuff: boolean;
   hasDamageBuff: boolean;
+  // Movement/targeting for waypoint visualization
+  targetX: number | null;
+  targetY: number | null;
+  speed: number;
+  // Command queue for shift-click visualization (serialized)
+  commandQueue: SerializedQueuedCommand[];
+  // Combat stats for range overlays
+  attackRange: number;
+  sightRange: number;
+}
+
+/**
+ * Serialized form of QueuedCommand for transfer to main thread.
+ * Simplified to only include render-relevant data.
+ */
+export interface SerializedQueuedCommand {
+  type: string;
+  targetX?: number;
+  targetY?: number;
+  targetEntityId?: number;
 }
 
 /**
@@ -111,6 +131,9 @@ export interface BuildingRenderState {
   // Rally point
   rallyX: number | null;
   rallyY: number | null;
+  // Combat stats for range overlays
+  attackRange: number;
+  sightRange: number;
 }
 
 /**
