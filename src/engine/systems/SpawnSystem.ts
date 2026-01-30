@@ -13,6 +13,7 @@ import { DOMINION_ABILITIES } from '../components/Ability';
 import { debugSpawning } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { AssetManager } from '@/assets/AssetManager';
+import { EnhancedAISystem } from './EnhancedAISystem';
 
 // Note: Airborne height is now configured per-unit-type in assets.json
 // Use AssetManager.getAirborneHeight(unitType) to get the configured height
@@ -25,9 +26,19 @@ export class SpawnSystem extends System {
   public readonly name = 'SpawnSystem';
   // Priority is set by SystemRegistry based on dependencies (no deps, runs early)
 
+  // Cached reference to AI system (lazy loaded)
+  private aiSystem: EnhancedAISystem | null = null;
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
+  }
+
+  private getAISystem(): EnhancedAISystem | null {
+    if (!this.aiSystem) {
+      this.aiSystem = this.world.getSystem(EnhancedAISystem) || null;
+    }
+    return this.aiSystem;
   }
 
   private setupEventListeners(): void {
@@ -210,14 +221,20 @@ export class SpawnSystem extends System {
   private handleUnitDeath(data: { entityId: number }): void {
     const entity = this.world.getEntity(data.entityId);
     if (entity) {
-      // Reduce supply for local player's units
+      // Reduce supply for local player's units (AI supply is recalculated from entities)
       const unit = entity.get<Unit>('Unit');
       const selectable = entity.get<Selectable>('Selectable');
 
-      if (unit && selectable && selectable.playerId && isLocalPlayer(selectable.playerId)) {
+      if (unit && selectable && selectable.playerId) {
         const definition = UNIT_DEFINITIONS[unit.unitId];
         if (definition && definition.supplyCost > 0) {
-          this.game.statePort.addSupply(-definition.supplyCost);
+          // Check AI status FIRST - AI supply is recalculated, don't touch human store
+          const aiSystem = this.getAISystem();
+          const isAI = aiSystem?.isAIPlayer(selectable.playerId) ?? false;
+
+          if (!isAI && isLocalPlayer(selectable.playerId)) {
+            this.game.statePort.addSupply(-definition.supplyCost);
+          }
         }
       }
 
