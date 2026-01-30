@@ -79,6 +79,11 @@ export class WorkerBridge {
   private _running = false;
   private initPromise: Promise<void> | null = null;
 
+  // First render state synchronization
+  private firstRenderStateReceived = false;
+  private firstRenderStateResolver: (() => void) | null = null;
+  private firstRenderStatePromise: Promise<void> | null = null;
+
   // Multiplayer message handler cleanup
   private multiplayerMessageCleanup: (() => void) | null = null;
   private multiplayerMessageHandler: ((data: unknown) => void) | null = null;
@@ -222,6 +227,13 @@ export class WorkerBridge {
             hasCallback: !!this.onRenderState,
           });
           this.hasLoggedFirstRenderState = true;
+
+          // Signal that first render state has been received
+          this.firstRenderStateReceived = true;
+          if (this.firstRenderStateResolver) {
+            this.firstRenderStateResolver();
+            this.firstRenderStateResolver = null;
+          }
         }
         this._renderState = renderState;
 
@@ -306,6 +318,31 @@ export class WorkerBridge {
         this.multiplayerMessageHandler = null;
       }
     };
+  }
+
+  // ============================================================================
+  // SYNCHRONIZATION
+  // ============================================================================
+
+  /**
+   * Wait for the first render state with entities to be received from the worker.
+   * This ensures entities are ready to render before the loading screen completes.
+   * Resolves immediately if first render state has already been received.
+   */
+  public waitForFirstRenderState(): Promise<void> {
+    // Already received - resolve immediately
+    if (this.firstRenderStateReceived) {
+      return Promise.resolve();
+    }
+
+    // Create promise if not already waiting
+    if (!this.firstRenderStatePromise) {
+      this.firstRenderStatePromise = new Promise((resolve) => {
+        this.firstRenderStateResolver = resolve;
+      });
+    }
+
+    return this.firstRenderStatePromise;
   }
 
   // ============================================================================
@@ -589,6 +626,12 @@ export class WorkerBridge {
     this._initialized = false;
     this._running = false;
     this.initPromise = null;
+
+    // Clear first render state tracking
+    this.firstRenderStateReceived = false;
+    this.firstRenderStateResolver = null;
+    this.firstRenderStatePromise = null;
+    this.hasLoggedFirstRenderState = false;
 
     // Clear event bus
     this.eventBus.clear();
