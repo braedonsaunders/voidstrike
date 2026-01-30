@@ -232,6 +232,8 @@ export function WebGPUGameCanvas() {
   const handleLoadingComplete = useCallback(() => {
     setIsLoading(false);
     useGameStore.getState().setGameReady(true);
+    // Sync playerId with game setup (handles spectator mode where localPlayerId is null)
+    useGameStore.getState().syncWithGameSetup();
 
     setTimeout(() => {
       const eventBus = workerBridgeRef.current?.eventBus;
