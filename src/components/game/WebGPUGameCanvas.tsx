@@ -61,6 +61,7 @@ import { OverlayScene } from '@/phaser/scenes/OverlayScene';
 import { debugInitialization, debugNetworking } from '@/utils/debugLogger';
 import AssetManager from '@/assets/AssetManager';
 import { useUIStore, UIState } from '@/store/uiStore';
+import { getOverlayCoordinator, resetOverlayCoordinator } from '@/engine/overlay';
 
 import { useWebGPURenderer, useGameInput, useCameraControl, usePostProcessing } from './hooks';
 
@@ -409,6 +410,14 @@ export function WebGPUGameCanvas() {
         setLoadingStatus('Initializing overlay system');
         setLoadingProgress(80);
 
+        // Initialize OverlayCoordinator with renderer and event bus
+        const overlayCoordinator = getOverlayCoordinator();
+        if (refs.overlayManager.current) {
+          overlayCoordinator.setOverlayManager(refs.overlayManager.current);
+        }
+        overlayCoordinator.setEventBus(bridge.eventBus);
+        overlayCoordinator.initializeFromStore();
+
         // Initialize Phaser overlay
         initializePhaserOverlay();
 
@@ -554,6 +563,8 @@ export function WebGPUGameCanvas() {
         WorkerBridge.resetInstance();
         workerBridgeRef.current = null;
       }
+      // Reset overlay coordinator
+      resetOverlayCoordinator();
       RenderStateWorldAdapter.resetInstance();
       worldProviderRef.current = null;
       eventBusRef.current = null;
@@ -621,7 +632,8 @@ export function WebGPUGameCanvas() {
     return () => unsubscribe();
   }, []);
 
-  // Subscribe to overlay settings changes
+  // Subscribe to overlay settings changes from UI (e.g., HUD overlay menu)
+  // The OverlayCoordinator handles forwarding to TSLGameOverlayManager
   useEffect(() => {
     const unsubscribe = useUIStore.subscribe((state: UIState, prevState: UIState) => {
       const overlaySettings = state.overlaySettings;
@@ -629,26 +641,27 @@ export function WebGPUGameCanvas() {
 
       if (overlaySettings === prevOverlaySettings) return;
 
-      if (refs.overlayManager.current) {
-        refs.overlayManager.current.setActiveOverlay(overlaySettings.activeOverlay);
+      // Use coordinator to handle all overlay changes
+      const coordinator = getOverlayCoordinator();
 
-        const opacityKey = `${overlaySettings.activeOverlay}OverlayOpacity` as keyof typeof overlaySettings;
-        if (opacityKey in overlaySettings && typeof overlaySettings[opacityKey] === 'number') {
-          refs.overlayManager.current.setOpacity(overlaySettings[opacityKey] as number);
-        }
+      // Active overlay changed
+      if (overlaySettings.activeOverlay !== prevOverlaySettings.activeOverlay) {
+        coordinator.setActiveOverlay(overlaySettings.activeOverlay);
+      }
 
-        // Wire up range overlay toggles (Alt+A, Alt+V shortcuts)
-        if (overlaySettings.showAttackRange !== prevOverlaySettings.showAttackRange) {
-          refs.overlayManager.current.setShowAttackRange(overlaySettings.showAttackRange);
-        }
-        if (overlaySettings.showVisionRange !== prevOverlaySettings.showVisionRange) {
-          refs.overlayManager.current.setShowVisionRange(overlaySettings.showVisionRange);
-        }
+      // Attack range visibility changed (from UI, not keyboard)
+      if (overlaySettings.showAttackRange !== prevOverlaySettings.showAttackRange) {
+        coordinator.setShowAttackRange(overlaySettings.showAttackRange);
+      }
+
+      // Vision range visibility changed (from UI, not keyboard)
+      if (overlaySettings.showVisionRange !== prevOverlaySettings.showVisionRange) {
+        coordinator.setShowVisionRange(overlaySettings.showVisionRange);
       }
     });
 
     return () => unsubscribe();
-  }, [refs.overlayManager]);
+  }, []);
 
   return (
     <div

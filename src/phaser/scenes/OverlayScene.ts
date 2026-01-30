@@ -1,5 +1,5 @@
 import * as Phaser from 'phaser';
-import { debugAudio } from '@/utils/debugLogger';
+import { debugAudio, debugPathfinding } from '@/utils/debugLogger';
 import { EventBus } from '@/engine/core/EventBus';
 import { Game } from '@/engine/core/Game';
 import { Transform } from '@/engine/components/Transform';
@@ -9,6 +9,10 @@ import { useProjectionStore } from '@/store/projectionStore';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { DamageNumberSystem } from '../systems/DamageNumberSystem';
 import { ScreenEffectsSystem } from '../systems/ScreenEffectsSystem';
+import type {
+  OverlayTypeChangedEvent,
+  OverlayRangeToggleEvent,
+} from '@/engine/overlay';
 
 /**
  * Phaser 4 Overlay Scene
@@ -150,11 +154,8 @@ export class OverlayScene extends Phaser.Scene {
   private damageNumberSystem: DamageNumberSystem | null = null;
   private screenEffectsSystem: ScreenEffectsSystem | null = null;
 
-  // Note: SC2-style range overlays now handled by TSLGameOverlayManager
-  // The following graphics are kept for destroy() cleanup but no longer used:
-  private attackRangeGraphics!: Phaser.GameObjects.Graphics;
-  private visionRangeGraphics!: Phaser.GameObjects.Graphics;
-  private resourceOverlayGraphics!: Phaser.GameObjects.Graphics;
+  // Note: SC2-style range overlays and resource overlays are now handled
+  // exclusively by TSLGameOverlayManager in the WebGPU renderer.
 
   constructor() {
     // Set active: false to prevent auto-start before eventBus is passed
@@ -196,15 +197,8 @@ export class OverlayScene extends Phaser.Scene {
     this.groundClickGraphics = this.add.graphics();
     this.groundClickGraphics.setDepth(36);
 
-    // SC2-style range preview graphics
-    this.attackRangeGraphics = this.add.graphics();
-    this.attackRangeGraphics.setDepth(37);
-
-    this.visionRangeGraphics = this.add.graphics();
-    this.visionRangeGraphics.setDepth(38);
-
-    this.resourceOverlayGraphics = this.add.graphics();
-    this.resourceOverlayGraphics.setDepth(39);
+    // Note: Attack range, vision range, and resource overlay graphics
+    // are now handled by TSLGameOverlayManager in the WebGPU renderer.
 
     // Ability splash container
     this.splashContainer = this.add.container(0, 0);
@@ -507,6 +501,15 @@ export class OverlayScene extends Phaser.Scene {
       // Only show errors from local player (skip AI player errors)
       if (data.playerId && !isLocalPlayer(data.playerId)) return;
       this.showAlert(data.message.toUpperCase(), 0xff4444, 2000);
+    });
+
+    // Overlay system events (typed events from OverlayCoordinator)
+    this.registerEvent<OverlayTypeChangedEvent>('overlay:typeChanged', (data) => {
+      debugPathfinding.log(`[OverlayScene] Overlay changed: ${data.previousOverlay} -> ${data.overlay}`);
+    });
+
+    this.registerEvent<OverlayRangeToggleEvent>('overlay:rangeToggle', (data) => {
+      debugPathfinding.log(`[OverlayScene] Range toggle: ${data.rangeType} = ${data.show}`);
     });
   }
 
@@ -1607,9 +1610,6 @@ export class OverlayScene extends Phaser.Scene {
     this.threatZoneGraphics.clear();
     this.rallyPathGraphics.clear();
     this.vignetteGraphics.clear();
-    this.attackRangeGraphics.clear();
-    this.visionRangeGraphics.clear();
-    this.resourceOverlayGraphics.clear();
 
     // Draw tactical overlay if enabled
     if (this.tacticalMode) {
@@ -2272,9 +2272,6 @@ export class OverlayScene extends Phaser.Scene {
     this.countdownContainer?.destroy();
     this.attackTargetGraphics?.destroy();
     this.groundClickGraphics?.destroy();
-    this.attackRangeGraphics?.destroy();
-    this.visionRangeGraphics?.destroy();
-    this.resourceOverlayGraphics?.destroy();
 
     for (const alert of this.alerts) {
       alert.graphics?.destroy();

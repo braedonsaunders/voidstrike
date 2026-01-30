@@ -19,7 +19,7 @@ import type {
 import { MouseButton } from '../types';
 import { InputManager } from '../InputManager';
 import { useGameStore } from '@/store/gameStore';
-import { useUIStore, GameOverlayType } from '@/store/uiStore';
+import { useUIStore } from '@/store/uiStore';
 import { Transform } from '@/engine/components/Transform';
 import { Unit } from '@/engine/components/Unit';
 import { Health } from '@/engine/components/Health';
@@ -27,6 +27,7 @@ import { Resource } from '@/engine/components/Resource';
 import { Selectable } from '@/engine/components/Selectable';
 import { Building } from '@/engine/components/Building';
 import { isBattleSimulatorMode, isMultiplayerMode } from '@/store/gameSetupStore';
+import { getOverlayCoordinator } from '@/engine/overlay';
 
 // =============================================================================
 // CONSTANTS
@@ -106,6 +107,38 @@ export class GameplayInputHandler implements InputHandler {
         world,
         camera
       );
+    }
+
+    return false;
+  }
+
+  // =============================================================================
+  // KEYBOARD INPUT - KEY UP (for hold-to-show overlays)
+  // =============================================================================
+
+  onKeyUp(
+    event: KeyboardInputEvent,
+    state: InputState,
+    deps: InputHandlerDependencies
+  ): boolean {
+    const { key } = event;
+
+    // Hide attack range when 'a' is released (regardless of alt state)
+    // or when alt is released while showing
+    if (key === 'a' || key === 'alt') {
+      const coordinator = getOverlayCoordinator();
+      if (coordinator.isShowingAttackRange()) {
+        return this.handleAttackRangeOverlayRelease();
+      }
+    }
+
+    // Hide vision range when 'v' is released (regardless of alt state)
+    // or when alt is released while showing
+    if (key === 'v' || key === 'alt') {
+      const coordinator = getOverlayCoordinator();
+      if (coordinator.isShowingVisionRange()) {
+        return this.handleVisionRangeOverlayRelease();
+      }
     }
 
     return false;
@@ -529,12 +562,8 @@ export class GameplayInputHandler implements InputHandler {
   }
 
   private handleOverlayToggle(): boolean {
-    const uiStore = useUIStore.getState();
-    const currentOverlay = uiStore.overlaySettings.activeOverlay;
-    const overlayOrder: GameOverlayType[] = ['none', 'elevation', 'threat', 'navmesh', 'resource', 'buildable'];
-    const currentIndex = overlayOrder.indexOf(currentOverlay);
-    const nextIndex = (currentIndex + 1) % overlayOrder.length;
-    uiStore.setActiveOverlay(overlayOrder[nextIndex]);
+    const coordinator = getOverlayCoordinator();
+    coordinator.cycleOverlay();
     return true;
   }
 
@@ -556,17 +585,41 @@ export class GameplayInputHandler implements InputHandler {
     return true;
   }
 
+  /**
+   * Show attack range overlay (hold-to-show, SC2-style).
+   * Called on Alt+A keydown.
+   */
   private handleAttackRangeOverlay(): boolean {
-    const store = useUIStore.getState();
-    const current = store.overlaySettings.showAttackRange;
-    store.setShowAttackRange(!current);
+    const coordinator = getOverlayCoordinator();
+    coordinator.setShowAttackRange(true);
     return true;
   }
 
+  /**
+   * Show vision range overlay (hold-to-show, SC2-style).
+   * Called on Alt+V keydown.
+   */
   private handleVisionRangeOverlay(): boolean {
-    const store = useUIStore.getState();
-    const current = store.overlaySettings.showVisionRange;
-    store.setShowVisionRange(!current);
+    const coordinator = getOverlayCoordinator();
+    coordinator.setShowVisionRange(true);
+    return true;
+  }
+
+  /**
+   * Hide attack range overlay when Alt+A is released.
+   */
+  private handleAttackRangeOverlayRelease(): boolean {
+    const coordinator = getOverlayCoordinator();
+    coordinator.setShowAttackRange(false);
+    return true;
+  }
+
+  /**
+   * Hide vision range overlay when Alt+V is released.
+   */
+  private handleVisionRangeOverlayRelease(): boolean {
+    const coordinator = getOverlayCoordinator();
+    coordinator.setShowVisionRange(false);
     return true;
   }
 
