@@ -238,11 +238,14 @@ class PerformanceMonitorClass {
     const frameTime = now - this.lastFrameTime;
     this.lastFrameTime = now;
 
-    // Record frame time - RingBuffer handles capacity automatically
-    this.frameTimeHistory.push(frameTime);
+    // Clamp frame time to minimum 2ms (max 500fps) to filter anomalous values
+    const clampedFrameTime = Math.max(2, frameTime);
 
-    // Calculate FPS
-    const fps = frameTime > 0 ? 1000 / frameTime : 0;
+    // Record frame time - RingBuffer handles capacity automatically
+    this.frameTimeHistory.push(clampedFrameTime);
+
+    // Calculate FPS (clamped to reasonable range)
+    const fps = clampedFrameTime > 0 ? Math.min(500, 1000 / clampedFrameTime) : 0;
     this.fpsHistory.push(fps);
 
     // Update memory metrics (throttled - every 30 frames)

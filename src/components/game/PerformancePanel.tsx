@@ -97,7 +97,9 @@ export const PerformancePanel = memo(function PerformancePanel() {
         <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px' }}>
           {/* Per-frame metrics (calculated from 1-second accumulated values) */}
           {(() => {
-            const fps = performanceMetrics.frameTime > 0 ? 1000 / performanceMetrics.frameTime : 60;
+            // Clamp FPS to reasonable range (1-500) to handle initial/anomalous values
+            const rawFps = performanceMetrics.frameTime > 0 ? 1000 / performanceMetrics.frameTime : 60;
+            const fps = Math.min(500, Math.max(1, rawFps));
             const trianglesPerFrame = Math.round(performanceMetrics.triangles / fps);
             const drawCallsPerFrame = Math.round(performanceMetrics.drawCalls / fps);
             return (
