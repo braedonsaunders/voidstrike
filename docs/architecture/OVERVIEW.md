@@ -554,9 +554,11 @@ voidstrike/
     │   └── workers/ # Web Workers
     │       └── gameWorker.test.ts
     └── utils/ # Utility functions
+        ├── BenchmarkRunner.ts
         ├── debugLogger.test.ts
         ├── fixedPoint.test.ts
         ├── math.test.ts
+        ├── performanceTestHelpers.ts
         └── vectorPool.test.ts
 ```
 
