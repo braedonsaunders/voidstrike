@@ -247,6 +247,7 @@ voidstrike/
 │   │   │   ├── EventBus.ts # Event system
 │   │   │   ├── Game.ts # Main game class
 │   │   │   ├── GameCommand.ts
+│   │   │   ├── GameCore.ts
 │   │   │   ├── GameLoop.ts # Fixed timestep loop
 │   │   │   ├── GameStatePort.ts
 │   │   │   ├── PerformanceMonitor.ts
