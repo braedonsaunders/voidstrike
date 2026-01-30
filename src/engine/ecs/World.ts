@@ -41,9 +41,6 @@ export class World {
   /** Generational entity ID allocator - handles ID recycling with stale reference detection */
   private entityIdAllocator: EntityIdAllocator = new EntityIdAllocator(MAX_ENTITIES);
 
-  // Component storage for faster queries (kept for backwards compatibility)
-  private componentIndex: Map<ComponentType, Set<EntityId>> = new Map();
-
   // ARCHETYPE SYSTEM: Group entities by component signature
   private archetypes: Map<string, Archetype> = new Map();      // signature → Archetype
   private entityArchetype: Map<EntityId, string> = new Map();  // entityId → signature
@@ -102,11 +99,6 @@ export class World {
 
     // Remove from archetype (uses full EntityId for archetype tracking)
     this.removeEntityFromArchetype(entity.id);
-
-    // Remove from component indices (kept for backwards compatibility)
-    for (const [type, entityIds] of this.componentIndex) {
-      entityIds.delete(entity.id);
-    }
 
     // Mark entity as destroyed
     entity.destroy();
@@ -367,13 +359,7 @@ export class World {
   }
 
   // Called by Entity when a component is added
-  public onComponentAdded(entityId: EntityId, type: ComponentType): void {
-    // Update component index (kept for backwards compatibility)
-    if (!this.componentIndex.has(type)) {
-      this.componentIndex.set(type, new Set());
-    }
-    this.componentIndex.get(type)!.add(entityId);
-
+  public onComponentAdded(entityId: EntityId, _type: ComponentType): void {
     // Update archetype - entity's component signature has changed
     const index = getEntityIndex(entityId);
     const entity = this.entities.get(index);
@@ -386,10 +372,7 @@ export class World {
   }
 
   // Called by Entity when a component is removed
-  public onComponentRemoved(entityId: EntityId, type: ComponentType): void {
-    // Update component index (kept for backwards compatibility)
-    this.componentIndex.get(type)?.delete(entityId);
-
+  public onComponentRemoved(entityId: EntityId, _type: ComponentType): void {
     // Update archetype - entity's component signature has changed
     const entity = this.entities.get(getEntityIndex(entityId));
     if (entity && !entity.isDestroyed()) {
@@ -399,7 +382,6 @@ export class World {
 
   public clear(): void {
     this.entities.clear();
-    this.componentIndex.clear();
     this.archetypes.clear();
     this.entityArchetype.clear();
     this.queryCache.clear();
