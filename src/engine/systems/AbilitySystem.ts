@@ -346,7 +346,8 @@ export class AbilitySystem extends System {
     radius: number,
     duration: number
   ): void {
-    // Reveal area temporarily (would need proper implementation with vision system)
+    // Reveal area temporarily - VisionSystem listens for this event
+    // and handles temporary vision reveals with cloaked unit detection
     this.game.eventBus.emit('vision:reveal', {
       playerId,
       position,

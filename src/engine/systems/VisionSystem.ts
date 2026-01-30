@@ -26,6 +26,15 @@ export interface ActiveWatchTower extends WatchTower {
   controllingPlayers: Set<string>; // Players with units in range
 }
 
+// Temporary vision reveal (from scanner sweep, etc.)
+export interface TemporaryReveal {
+  playerId: string;
+  position: { x: number; y: number };
+  radius: number;
+  expirationTick: number;
+  detectsCloaked: boolean; // Whether this reveal can detect cloaked units
+}
+
 export interface VisionMap {
   width: number;
   height: number;
@@ -51,6 +60,9 @@ export class VisionSystem extends System {
   // Watch towers (Xel'naga towers)
   private watchTowers: ActiveWatchTower[] = [];
   private readonly WATCH_TOWER_CAPTURE_RADIUS = 3; // Units within 3 units capture the tower
+
+  // Temporary vision reveals (scanner sweep, etc.)
+  private temporaryReveals: TemporaryReveal[] = [];
 
   // Throttle vision updates for performance - update every N ticks
   // PERF: Increased from 3 to 10 ticks (500ms at 20 TPS) - vision doesn't need 150ms precision
@@ -84,6 +96,50 @@ export class VisionSystem extends System {
     this.mapHeight = mapHeight;
     this.cellSize = cellSize;
     this.initializeWorker();
+    this.setupEventListeners();
+  }
+
+  /**
+   * Set up event listeners for vision-related events
+   */
+  private setupEventListeners(): void {
+    // Listen for temporary vision reveals (scanner sweep, etc.)
+    this.game.eventBus.on('vision:reveal', this.handleVisionReveal.bind(this));
+  }
+
+  /**
+   * Handle vision:reveal event (from scanner sweep, etc.)
+   */
+  private handleVisionReveal(event: {
+    playerId: string;
+    position: { x: number; y: number };
+    radius: number;
+    duration: number;
+  }): void {
+    const currentTick = this.game.getCurrentTick();
+    // Convert duration (seconds) to ticks (20 TPS)
+    const durationTicks = Math.ceil(event.duration * 20);
+
+    this.temporaryReveals.push({
+      playerId: event.playerId,
+      position: event.position,
+      radius: event.radius,
+      expirationTick: currentTick + durationTicks,
+      detectsCloaked: true, // Scanner sweep detects cloaked units
+    });
+
+    debugPathfinding.log(
+      `[VisionSystem] Added temporary reveal for ${event.playerId} at (${event.position.x.toFixed(1)}, ${event.position.y.toFixed(1)}) radius=${event.radius} for ${event.duration}s`
+    );
+
+    // Immediately reveal the area
+    this.revealArea(event.playerId, event.position.x, event.position.y, event.radius);
+
+    // Detect cloaked units in the area
+    this.detectCloakedUnitsInArea(event.playerId, event.position, event.radius);
+
+    // Increment version to trigger re-render
+    this.visionVersion++;
   }
 
   /**
@@ -236,6 +292,7 @@ export class VisionSystem extends System {
     this.mapHeight = mapHeight;
     this.knownPlayers.clear();
     this.watchTowers = [];
+    this.temporaryReveals = [];
     this.playerIdToIndex.clear();
     this.indexToPlayerId.clear();
     this.activeComputePath = null; // Reset to log path on next compute
@@ -363,6 +420,7 @@ export class VisionSystem extends System {
     }
     this.workerReady = false;
     this.pendingWorkerUpdate = false;
+    this.temporaryReveals = [];
 
     if (this.gpuVisionCompute) {
       this.gpuVisionCompute.dispose();
@@ -469,6 +527,10 @@ export class VisionSystem extends System {
     // Collect watch tower data
     this.updateWatchTowersGPU(casters, unitEntities);
 
+    // Add temporary reveals as vision casters
+    const currentTick = this.game.getCurrentTick();
+    this.addTemporaryRevealCastersGPU(casters, currentTick);
+
     // Get player indices to update
     const playerIndices = new Set<number>();
     for (const playerId of this.knownPlayers) {
@@ -520,6 +582,40 @@ export class VisionSystem extends System {
             playerId: this.getPlayerIndex(playerId),
           });
         }
+      }
+    }
+  }
+
+  /**
+   * Add temporary reveals as vision casters for GPU path
+   */
+  private addTemporaryRevealCastersGPU(casters: VisionCaster[], currentTick: number): void {
+    // Remove expired reveals and add active ones as casters
+    let i = 0;
+    while (i < this.temporaryReveals.length) {
+      const reveal = this.temporaryReveals[i];
+
+      if (reveal.expirationTick <= currentTick) {
+        // Expired - remove it (swap with last for O(1) removal)
+        this.temporaryReveals[i] = this.temporaryReveals[this.temporaryReveals.length - 1];
+        this.temporaryReveals.pop();
+        // Don't increment i, check the swapped element
+      } else {
+        // Still active - add as vision caster
+        this.ensurePlayerRegistered(reveal.playerId);
+        casters.push({
+          x: reveal.position.x,
+          y: reveal.position.y,
+          sightRange: reveal.radius,
+          playerId: this.getPlayerIndex(reveal.playerId),
+        });
+
+        // Detect cloaked units if this reveal can detect them
+        if (reveal.detectsCloaked) {
+          this.detectCloakedUnitsInArea(reveal.playerId, reveal.position, reveal.radius);
+        }
+
+        i++;
       }
     }
   }
@@ -663,6 +759,7 @@ export class VisionSystem extends System {
   private updateVisionMainThread(): void {
     // Clear currently visible cells
     const gridWidth = this.visionMap.width;
+    const currentTick = this.game.getCurrentTick();
 
     for (const playerId of this.knownPlayers) {
       const currentVisible = this.visionMap.currentlyVisible.get(playerId);
@@ -696,8 +793,39 @@ export class VisionSystem extends System {
     // Update watch towers
     this.updateWatchTowers(units);
 
+    // Process temporary reveals (scanner sweep, etc.)
+    this.processTemporaryReveals(currentTick);
+
     // Increment version for dirty checking by renderers
     this.visionVersion++;
+  }
+
+  /**
+   * Process temporary vision reveals - apply active ones and expire old ones
+   */
+  private processTemporaryReveals(currentTick: number): void {
+    // Remove expired reveals and process active ones
+    let i = 0;
+    while (i < this.temporaryReveals.length) {
+      const reveal = this.temporaryReveals[i];
+
+      if (reveal.expirationTick <= currentTick) {
+        // Expired - remove it (swap with last for O(1) removal)
+        this.temporaryReveals[i] = this.temporaryReveals[this.temporaryReveals.length - 1];
+        this.temporaryReveals.pop();
+        // Don't increment i, check the swapped element
+      } else {
+        // Still active - apply the reveal
+        this.revealArea(reveal.playerId, reveal.position.x, reveal.position.y, reveal.radius);
+
+        // Detect cloaked units if this reveal can detect them
+        if (reveal.detectsCloaked) {
+          this.detectCloakedUnitsInArea(reveal.playerId, reveal.position, reveal.radius);
+        }
+
+        i++;
+      }
+    }
   }
 
   /**
@@ -804,6 +932,47 @@ export class VisionSystem extends System {
             currentVisible.add(y * gridWidth + x);
           }
         }
+      }
+    }
+  }
+
+  /**
+   * Detect and mark cloaked units within an area (for scanner sweep, detectors, etc.)
+   * Emits events for each detected cloaked unit.
+   */
+  private detectCloakedUnitsInArea(
+    playerId: string,
+    position: { x: number; y: number },
+    radius: number
+  ): void {
+    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
+    const radiusSq = radius * radius;
+
+    for (const entity of units) {
+      const unit = entity.get<Unit>('Unit')!;
+      const transform = entity.get<Transform>('Transform')!;
+      const selectable = entity.get<Selectable>('Selectable')!;
+
+      // Only detect enemy cloaked units
+      if (selectable.playerId === playerId) continue;
+      if (!unit.isCloaked) continue;
+
+      // Check if within detection radius
+      const dx = transform.x - position.x;
+      const dy = transform.y - position.y;
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq <= radiusSq) {
+        // Emit detection event
+        this.game.eventBus.emit('unit:detected', {
+          entityId: entity.id,
+          detectedBy: playerId,
+          position: { x: transform.x, y: transform.y },
+        });
+
+        debugPathfinding.log(
+          `[VisionSystem] Detected cloaked unit ${entity.id} at (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`
+        );
       }
     }
   }
