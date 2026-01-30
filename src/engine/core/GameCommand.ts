@@ -48,7 +48,8 @@ export type GameCommandType =
   | 'BUILD_WALL'
   | 'ADDON_LIFT'
   | 'ADDON_LAND'
-  | 'SUBMERGE';
+  | 'SUBMERGE'
+  | 'HEARTBEAT'; // Lockstep sync - no-op command to acknowledge tick
 
 /**
  * Game command structure for all player actions
@@ -150,6 +151,7 @@ const COMMAND_EVENTS: Record<GameCommandType, string> = {
   ADDON_LIFT: 'addon:lift',
   ADDON_LAND: 'addon:land',
   SUBMERGE: 'command:submerge',
+  HEARTBEAT: 'command:heartbeat', // No-op for lockstep sync
 };
 
 /**
@@ -389,6 +391,11 @@ export function dispatchCommand(eventBus: EventBus, command: GameCommand): void 
         entityIds: command.entityIds,
         playerId: command.playerId,
       });
+      break;
+
+    case 'HEARTBEAT':
+      // No-op command for lockstep sync - just acknowledges player is alive for this tick
+      // The command:received event already fired at the start of dispatchCommand
       break;
   }
 }
