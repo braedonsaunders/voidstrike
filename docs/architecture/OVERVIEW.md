@@ -97,6 +97,13 @@ voidstrike/
 │   │   │   ├── SoundOptionsPanel.tsx
 │   │   │   ├── TechTreePanel.tsx
 │   │   │   └── WebGPUGameCanvas.tsx
+│   │   ├── game-setup/
+│   │   │   ├── index.ts
+│   │   │   ├── JoinLobbyModal.tsx
+│   │   │   ├── MapPreview.tsx
+│   │   │   ├── PlayerSlotRow.tsx
+│   │   │   ├── SettingSelect.tsx
+│   │   │   └── utils.ts
 │   │   ├── home/
 │   │   │   └── HomeBackground.tsx
 │   │   ├── lobby/
@@ -346,6 +353,9 @@ voidstrike/
 │   │       ├── types.ts
 │   │       └── WorkerBridge.ts
 │   ├── hooks/ # React hooks
+│   │   ├── useGameSetupMusic.ts
+│   │   ├── useGameStart.ts
+│   │   ├── useLobbySync.ts
 │   │   ├── useMultiplayer.ts
 │   │   ├── useP2P.ts
 │   │   └── usePublicLobbies.ts
