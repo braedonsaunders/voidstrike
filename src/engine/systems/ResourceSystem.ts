@@ -514,12 +514,21 @@ export class ResourceSystem extends System {
   ): void {
     // PERF: Use cached bases instead of querying every worker return
     const bases = this.getCachedBases();
-    let nearestBase: { transform: Transform; building: Building } | null = null;
+    let nearestBase: { transform: Transform; building: Building; entityId: number } | null = null;
     let nearestDistance = Infinity;
 
     // Get worker's owner to match against bases
     const workerSelectable = workerEntity.get<Selectable>('Selectable');
     const workerOwner = workerSelectable?.playerId;
+
+    const resourceDropOffBuildings = [
+      'headquarters', 'orbital_station', 'bastion',
+      'nexus',
+      'hatchery', 'lair', 'hive'
+    ];
+
+    // Track all valid bases for debugging
+    const validBases: Array<{ entityId: number; buildingId: string; distance: number; x: number; y: number }> = [];
 
     for (const baseEntity of bases) {
       const building = baseEntity.get<Building>('Building');
@@ -533,19 +542,22 @@ export class ResourceSystem extends System {
       // Only use bases owned by the same player
       if (baseSelectable?.playerId !== workerOwner) continue;
 
-      const resourceDropOffBuildings = [
-        'headquarters', 'orbital_station', 'bastion',
-        'nexus',
-        'hatchery', 'lair', 'hive'
-      ];
       if (!resourceDropOffBuildings.includes(building.buildingId)) {
         continue;
       }
 
-      const distance = transform.distanceTo(baseTransform);
-      if (distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestBase = { transform: baseTransform, building };
+      const dist = transform.distanceTo(baseTransform);
+      validBases.push({
+        entityId: baseEntity.id,
+        buildingId: building.buildingId,
+        distance: dist,
+        x: baseTransform.x,
+        y: baseTransform.y
+      });
+
+      if (dist < nearestDistance) {
+        nearestDistance = dist;
+        nearestBase = { transform: baseTransform, building, entityId: baseEntity.id };
       }
     }
 
@@ -553,6 +565,12 @@ export class ResourceSystem extends System {
       // No base to return to
       unit.state = 'idle';
       return;
+    }
+
+    // Debug: Log base selection when multiple bases exist (periodic sampling)
+    if (validBases.length > 1 && this.game.getCurrentTick() % 100 === 0 && workerEntity.id % 10 === 0) {
+      const basesInfo = validBases.map(b => `${b.buildingId}@(${b.x.toFixed(0)},${b.y.toFixed(0)})=${b.distance.toFixed(1)}`).join(', ');
+      debugResources.log(`[ResourceSystem] Worker ${workerEntity.id} at (${transform.x.toFixed(0)},${transform.y.toFixed(0)}) choosing nearest base: ${nearestBase.building.buildingId}@(${nearestBase.transform.x.toFixed(0)},${nearestBase.transform.y.toFixed(0)}) dist=${nearestDistance.toFixed(1)}. All bases: [${basesInfo}]`);
     }
 
     // Calculate drop-off range based on building size
@@ -679,6 +697,16 @@ export class ResourceSystem extends System {
     const workerSelectable = workerEntity.get<Selectable>('Selectable');
     const workerOwner = workerSelectable?.playerId;
 
+    // Find the NEAREST valid base (not just first found)
+    let nearestBase: { transform: Transform; building: Building } | null = null;
+    let nearestDistance = Infinity;
+
+    const resourceDropOffBuildings = [
+      'headquarters', 'orbital_station', 'bastion',
+      'nexus',
+      'hatchery', 'lair', 'hive'
+    ];
+
     for (const baseEntity of bases) {
       const building = baseEntity.get<Building>('Building');
       const baseTransform = baseEntity.get<Transform>('Transform');
@@ -691,32 +719,38 @@ export class ResourceSystem extends System {
       // Only return to bases owned by the same player
       if (baseSelectable?.playerId !== workerOwner) continue;
 
-      const resourceDropOffBuildings = [
-        'headquarters', 'orbital_station', 'bastion',
-        'nexus',
-        'hatchery', 'lair', 'hive'
-      ];
       if (!resourceDropOffBuildings.includes(building.buildingId)) {
         continue;
       }
 
-      // Move toward edge of building, not center (prevents fighting building collision)
-      // Target must be outside the avoidance zone (halfWidth + 1.0)
-      const buildingHalfWidth = (building.width || 5) / 2;
-      const dx = transform.x - baseTransform.x;
-      const dy = transform.y - baseTransform.y;
-      const dist = distance(transform.x, transform.y, baseTransform.x, baseTransform.y);
-
-      if (dist > 0.1) {
-        const dirX = dx / dist;
-        const dirY = dy / dist;
-        const edgeDistance = buildingHalfWidth + 2.0; // Outside avoidance zone
-        unit.moveToPosition(baseTransform.x + dirX * edgeDistance, baseTransform.y + dirY * edgeDistance);
-      } else {
-        unit.moveToPosition(baseTransform.x + buildingHalfWidth + 2, baseTransform.y);
+      const dist = transform.distanceTo(baseTransform);
+      if (dist < nearestDistance) {
+        nearestDistance = dist;
+        nearestBase = { transform: baseTransform, building };
       }
-      unit.state = 'gathering';
+    }
+
+    if (!nearestBase) {
+      // No base to return to
+      unit.state = 'idle';
       return;
     }
+
+    // Move toward edge of building, not center (prevents fighting building collision)
+    // Target must be outside the avoidance zone (halfWidth + 1.0)
+    const buildingHalfWidth = (nearestBase.building.width || 5) / 2;
+    const dx = transform.x - nearestBase.transform.x;
+    const dy = transform.y - nearestBase.transform.y;
+    const dist = distance(transform.x, transform.y, nearestBase.transform.x, nearestBase.transform.y);
+
+    if (dist > 0.1) {
+      const dirX = dx / dist;
+      const dirY = dy / dist;
+      const edgeDistance = buildingHalfWidth + 2.0; // Outside avoidance zone
+      unit.moveToPosition(nearestBase.transform.x + dirX * edgeDistance, nearestBase.transform.y + dirY * edgeDistance);
+    } else {
+      unit.moveToPosition(nearestBase.transform.x + buildingHalfWidth + 2, nearestBase.transform.y);
+    }
+    unit.state = 'gathering';
   }
 }
