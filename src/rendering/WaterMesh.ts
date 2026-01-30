@@ -831,7 +831,7 @@ export class WaterMesh {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 4));
-    geometry.setIndex(indices);
+    geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
     geometry.computeVertexNormals();
 
     // Softer blending - normal blend with lower opacity feels more natural

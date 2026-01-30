@@ -597,7 +597,7 @@ export class Terrain {
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setAttribute('aSlope', new THREE.Float32BufferAttribute(slopes, 1));
     geometry.setAttribute('aTerrainType', new THREE.Float32BufferAttribute(terrainTypes, 1));
-    geometry.setIndex(indices);
+    geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
     geometry.computeVertexNormals();
 
     return geometry;
@@ -765,7 +765,7 @@ export class Terrain {
     this.guardrailGeometry = new THREE.BufferGeometry();
     this.guardrailGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     this.guardrailGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    this.guardrailGeometry.setIndex(indices);
+    this.guardrailGeometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
 
     // RTS-style yellow/orange hazard color for guardrails
     const guardrailMaterial = new THREE.MeshStandardMaterial({

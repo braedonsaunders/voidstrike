@@ -524,7 +524,7 @@ export class BuildingPlacementPreview {
 
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-    geometry.setIndex(indices);
+    geometry.setIndex(new THREE.Uint32BufferAttribute(indices, 1));
 
     const material = new THREE.MeshBasicMaterial({
       vertexColors: true,
