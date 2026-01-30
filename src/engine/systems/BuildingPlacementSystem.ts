@@ -360,10 +360,14 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    const isPlayerLocal = isLocalPlayer(playerId);
+    // FIX: Check AI status FIRST before checking local player
+    // In worker context, isLocalPlayer may incorrectly return true for AI players
+    // because the Zustand store isn't synchronized with the main thread
     const aiSystem = this.getAISystem();
-    const aiPlayer = !isPlayerLocal ? aiSystem?.getAIPlayer(playerId) : undefined;
+    const aiPlayer = aiSystem?.getAIPlayer(playerId);
     const isPlayerAI = aiPlayer !== undefined;
+    // Only consider as local human player if NOT an AI player
+    const isPlayerLocal = !isPlayerAI && isLocalPlayer(playerId);
 
     // Check resources (local player via game store, AI via AI state)
     if (isPlayerLocal) {
