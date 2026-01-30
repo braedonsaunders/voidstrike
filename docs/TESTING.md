@@ -352,3 +352,213 @@ Tests run automatically on:
 - Manual workflow dispatch
 
 Coverage reports are generated and can be viewed in CI artifacts.
+
+---
+
+## Performance Testing Guidelines
+
+Performance tests require special care to avoid flakiness. VOIDSTRIKE uses a statistical benchmarking framework inspired by Google Benchmark and Vitest bench.
+
+### Why Performance Tests Are Flaky
+
+Common causes of flaky performance tests:
+- **JIT compilation variance** - First runs are slower before V8 optimizes
+- **System load fluctuations** - CI runners have variable load
+- **GC pauses** - Garbage collection can spike execution time
+- **CPU scheduling** - Event loop contention affects timing
+- **Environment differences** - Local vs CI have different clock precision
+
+### The Solution: Statistical Benchmarking
+
+Located in `tests/utils/BenchmarkRunner.ts` and `tests/utils/performanceTestHelpers.ts`.
+
+#### Key Principles
+
+| Principle | Bad Approach | Good Approach |
+|-----------|--------------|---------------|
+| **Measurements** | Single `performance.now()` | Multiple iterations with warmup |
+| **Assertions** | `expect(time).toBeLessThan(50)` | Percentile-based with adaptive thresholds |
+| **Comparison** | Fixed ratio `< 0.5` | Statistical significance test |
+| **Complexity** | Absolute time limits | Algorithmic O(n) verification |
+| **Timers** | Real `setTimeout` | Vitest fake timers |
+
+#### Using BenchmarkRunner
+
+```typescript
+import { getBenchmarkRunner } from '@/tests/utils/BenchmarkRunner';
+import { assertBenchmarkPasses } from '@/tests/utils/performanceTestHelpers';
+
+describe('MySystem Performance', () => {
+  it('processes 500 entities within budget', () => {
+    const runner = getBenchmarkRunner();
+
+    const result = runner.run(
+      'my-benchmark',
+      () => {
+        // Code to benchmark
+        mySystem.process(entities);
+      },
+      {
+        warmupIterations: 3,  // JIT warmup
+        sampleIterations: 15  // Statistical samples
+      }
+    );
+
+    // Threshold is adaptive: adjusts to environment
+    assertBenchmarkPasses(result, 25); // 25ms base threshold
+  });
+});
+```
+
+#### Algorithmic Complexity Testing
+
+Instead of absolute timing thresholds, verify algorithmic complexity:
+
+```typescript
+import { assertComplexity } from '@/tests/utils/performanceTestHelpers';
+
+it('scales sub-quadratically with input size', () => {
+  const measureTime = (inputSize: number): number => {
+    const scenario = createScenario(inputSize);
+    const start = performance.now();
+    processScenario(scenario);
+    return performance.now() - start;
+  };
+
+  // Verify O(n log n), not O(n²)
+  assertComplexity(
+    measureTime,
+    [100, 200, 400],     // Input sizes (double each)
+    'O(n log n)',        // Expected complexity
+    3.0                  // Tolerance factor
+  );
+});
+```
+
+#### Cache Effectiveness Testing
+
+Use statistical comparison instead of fragile ratios:
+
+```typescript
+import { assertCacheEffectiveness } from '@/tests/utils/performanceTestHelpers';
+
+it('cache improves performance', () => {
+  const coldFn = () => {
+    const fresh = new MyCache();
+    fresh.process(data);
+  };
+
+  const warmFn = () => {
+    cache.process(data); // Pre-populated cache
+  };
+
+  // Statistical test: expects at least 1.2x speedup
+  assertCacheEffectiveness(coldFn, warmFn, 1.2);
+});
+```
+
+#### Deterministic Timer Testing
+
+For tests that involve `setTimeout`/`setInterval`, use fake timers:
+
+```typescript
+import { vi, beforeEach, afterEach } from 'vitest';
+
+describe('GameLoop timing', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('ticks at configured rate', () => {
+    const updates: number[] = [];
+    const loop = new GameLoop(20, (delta) => updates.push(delta));
+
+    loop.start();
+    vi.advanceTimersByTime(250); // Deterministic: exactly 250ms
+    loop.stop();
+
+    expect(updates.length).toBe(5); // Exactly 5 ticks
+  });
+});
+```
+
+### Performance Test File Naming
+
+- Performance benchmarks: `*.perf.test.ts`
+- Regular tests: `*.test.ts`
+
+### BenchmarkRunner API Reference
+
+```typescript
+interface BenchmarkResult {
+  name: string;
+  iterations: number;
+  min: number;
+  max: number;
+  mean: number;
+  median: number;
+  p75: number;
+  p95: number;
+  p99: number;
+  stddev: number;
+  operationsPerSecond: number;
+}
+
+class BenchmarkRunner {
+  // Calibrate to current environment (auto-called)
+  calibrate(): number;
+
+  // Run benchmark with statistical collection
+  run(name: string, fn: () => void, options?: {
+    warmupIterations?: number;    // Default: 5
+    sampleIterations?: number;    // Default: 20
+    minTime?: number;             // Default: 100ms
+    removeOutliers?: boolean;     // Default: true
+  }): BenchmarkResult;
+
+  // Assert with environment-adaptive threshold
+  assertWithinThreshold(
+    result: BenchmarkResult,
+    thresholdMs: number,
+    options?: { percentile?: 'median' | 'p75' | 'p95' }
+  ): void;
+
+  // Statistical comparison (Welch's t-test)
+  isSignificantlyDifferent(
+    resultA: BenchmarkResult,
+    resultB: BenchmarkResult,
+    confidenceLevel?: number
+  ): { significant: boolean; pValue: number; speedup: number };
+}
+```
+
+### Performance Budget Guidelines
+
+| Operation | Budget (Reference Hardware) |
+|-----------|----------------------------|
+| Single force calculation (100 units) | 8ms |
+| Single force calculation (500 units) | 25ms |
+| Full steering (500 units, 4 forces) | 100ms |
+| Pathfinding update (500 units) | 50ms |
+| AI decision tree (per unit) | 0.1ms |
+| Render state update | 16ms (60fps) |
+
+These are **base budgets** calibrated on M1 MacBook Pro. The `BenchmarkRunner` automatically scales these for slower environments.
+
+### When to Use Performance Tests
+
+**DO use performance tests for:**
+- Algorithms with complexity guarantees (spatial queries, pathfinding)
+- Critical game loop systems (movement, combat, rendering)
+- Cache effectiveness validation
+- Memory allocation patterns
+
+**DON'T use performance tests for:**
+- Simple getter/setter operations
+- One-time initialization code
+- Code already covered by unit tests
+- UI rendering (use browser devtools instead)
