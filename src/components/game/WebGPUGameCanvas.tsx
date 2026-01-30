@@ -384,6 +384,13 @@ export function WebGPUGameCanvas() {
             aiDifficulty: slot.aiDifficulty,
           }));
           workerBridgeRef.current.spawnInitialEntities(CURRENT_MAP, playerSlots);
+
+          // Wait for first render state with entities before completing loading
+          // This prevents terrain-only rendering before entities appear
+          setLoadingStatus('Synchronizing game state');
+          setLoadingProgress(75);
+          await workerBridgeRef.current.waitForFirstRenderState();
+          debugInitialization.log('[WebGPUGameCanvas] First render state received, entities ready');
         }
 
         // Re-set player ID on fog of war now that players are registered
