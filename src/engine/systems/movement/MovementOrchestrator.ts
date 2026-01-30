@@ -864,6 +864,10 @@ export class MovementOrchestrator {
 
   /**
    * Handle unit arrival at destination
+   *
+   * SC2-STYLE: Attack-move units that arrive at their destination don't go fully idle.
+   * Instead they stay in "assault mode" - idle but aggressively scanning for enemies.
+   * This prevents units from standing around in enemy bases doing nothing.
    */
   private handleArrival(
     entityId: number,
@@ -883,6 +887,18 @@ export class MovementOrchestrator {
         this.pathfinding.requestPathWithCooldown(entityId, unit.targetX, unit.targetY, true);
       }
       return false;
+    } else if (unit.state === 'attackmoving') {
+      // SC2-STYLE: Attack-move arrived at destination
+      // Don't go fully idle - stay in assault mode, keep scanning for enemies
+      unit.targetX = null;
+      unit.targetY = null;
+      unit.path = [];
+      unit.pathIndex = 0;
+      unit.state = 'idle';
+      // Assault mode is preserved! Unit will keep scanning for targets in CombatSystem
+      // The isInAssaultMode flag was set when setAttackMoveTarget() was called
+      velocity.zero();
+      return true;
     } else {
       if (unit.state === 'gathering') {
         const isCarryingResources = unit.carryingMinerals > 0 || unit.carryingVespene > 0;

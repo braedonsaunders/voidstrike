@@ -334,8 +334,10 @@ export class AIMicroSystem extends System {
       if (unit.isWorker) continue;
 
       // Process units in combat-related states
+      // SC2-STYLE: Also process idle units in assault mode - they need micro to find targets
       const canProcessUnit = unit.state === 'attacking' || unit.state === 'moving' ||
-        unit.state === 'attackmoving' || (unit.canTransform && unit.state === 'idle');
+        unit.state === 'attackmoving' || (unit.canTransform && unit.state === 'idle') ||
+        (unit.isInAssaultMode && unit.state === 'idle');
       if (!canProcessUnit) continue;
 
       // Get or create micro state
@@ -384,8 +386,10 @@ export class AIMicroSystem extends System {
 
       // Process units in combat-related states
       // attackmoving = moving to position while engaging enemies along the way
+      // SC2-STYLE: Also process idle units in assault mode - they need micro to find targets
       const canProcessUnit = unit.state === 'attacking' || unit.state === 'moving' ||
-        unit.state === 'attackmoving' || (unit.canTransform && unit.state === 'idle');
+        unit.state === 'attackmoving' || (unit.canTransform && unit.state === 'idle') ||
+        (unit.isInAssaultMode && unit.state === 'idle');
       if (!canProcessUnit) continue;
 
       // Get or create micro state
