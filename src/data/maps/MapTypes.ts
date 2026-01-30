@@ -74,28 +74,16 @@ export const TERRAIN_FEATURE_CONFIG: Record<TerrainFeature, TerrainFeatureConfig
 /**
  * Elevation now uses 0-255 range for smooth terrain.
  * Gameplay zones for high-ground advantage:
- * - Low ground: 0-85
- * - Mid ground: 86-170
- * - High ground: 171-255
+ * - Low ground: 0-85 (use ~60 for standard low)
+ * - Mid ground: 86-170 (use ~140 for standard mid)
+ * - High ground: 171-255 (use ~220 for standard high)
  */
 export type Elevation = number; // 0-255
 
-/**
- * Legacy elevation levels for backwards compatibility with ramps
- */
-export type ElevationLevel = 0 | 1 | 2;
-
-/**
- * Convert legacy 0-2 elevation to 0-255 scale
- */
-export function legacyElevationTo256(level: ElevationLevel): Elevation {
-  const mapping: Record<ElevationLevel, Elevation> = {
-    0: 60,   // Low ground
-    1: 140,  // Mid ground
-    2: 220,  // High ground
-  };
-  return mapping[level];
-}
+/** Standard elevation values for gameplay zones */
+export const ELEVATION_LOW = 60;
+export const ELEVATION_MID = 140;
+export const ELEVATION_HIGH = 220;
 
 /**
  * Convert 0-255 elevation to gameplay zone (low/mid/high)
@@ -249,22 +237,17 @@ export function createTerrainGrid(
   width: number,
   height: number,
   defaultTerrain: TerrainType = 'ground',
-  defaultElevation: ElevationLevel | Elevation = 1,
+  defaultElevation: Elevation = ELEVATION_MID,
   defaultFeature: TerrainFeature = 'none'
 ): MapCell[][] {
   const grid: MapCell[][] = [];
-
-  // Convert legacy elevation if needed
-  const elevation256 = typeof defaultElevation === 'number' && defaultElevation <= 2
-    ? legacyElevationTo256(defaultElevation as ElevationLevel)
-    : defaultElevation as Elevation;
 
   for (let y = 0; y < height; y++) {
     grid[y] = [];
     for (let x = 0; x < width; x++) {
       grid[y][x] = {
         terrain: defaultTerrain,
-        elevation: elevation256,
+        elevation: defaultElevation,
         feature: defaultFeature,
         textureId: Math.floor(Math.random() * 4), // Random texture variation
       };
@@ -452,14 +435,9 @@ export function fillTerrainRect(
   width: number,
   height: number,
   terrain: TerrainType,
-  elevation?: ElevationLevel | Elevation,
+  elevation?: Elevation,
   feature?: TerrainFeature
 ): void {
-  // Convert legacy elevation if provided
-  const elevation256 = elevation !== undefined
-    ? (elevation <= 2 ? legacyElevationTo256(elevation as ElevationLevel) : elevation)
-    : undefined;
-
   for (let dy = 0; dy < height; dy++) {
     for (let dx = 0; dx < width; dx++) {
       const px = Math.floor(x + dx);
@@ -472,8 +450,8 @@ export function fillTerrainRect(
         }
 
         grid[py][px].terrain = terrain;
-        if (elevation256 !== undefined) {
-          grid[py][px].elevation = elevation256;
+        if (elevation !== undefined) {
+          grid[py][px].elevation = elevation;
         }
         if (feature !== undefined) {
           grid[py][px].feature = feature;
@@ -491,14 +469,9 @@ export function fillTerrainCircle(
   centerY: number,
   radius: number,
   terrain: TerrainType,
-  elevation?: ElevationLevel | Elevation,
+  elevation?: Elevation,
   feature?: TerrainFeature
 ): void {
-  // Convert legacy elevation if provided
-  const elevation256 = elevation !== undefined
-    ? (elevation <= 2 ? legacyElevationTo256(elevation as ElevationLevel) : elevation)
-    : undefined;
-
   for (let y = -radius; y <= radius; y++) {
     for (let x = -radius; x <= radius; x++) {
       if (x * x + y * y <= radius * radius) {
@@ -512,8 +485,8 @@ export function fillTerrainCircle(
           }
 
           grid[py][px].terrain = terrain;
-          if (elevation256 !== undefined) {
-            grid[py][px].elevation = elevation256;
+          if (elevation !== undefined) {
+            grid[py][px].elevation = elevation;
           }
           if (feature !== undefined) {
             grid[py][px].feature = feature;
@@ -577,7 +550,7 @@ export function createRampInTerrain(
  * @param centerX - Center X of the platform
  * @param centerY - Center Y of the platform
  * @param radius - Radius of the buildable area
- * @param elevation - Elevation level (0, 1, or 2)
+ * @param elevation - Elevation value (0-255, use ELEVATION_LOW/MID/HIGH constants)
  * @param cliffWidth - Width of the cliff ring around the platform (default 3)
  */
 export function createRaisedPlatform(
@@ -585,10 +558,9 @@ export function createRaisedPlatform(
   centerX: number,
   centerY: number,
   radius: number,
-  elevation: ElevationLevel,
+  elevation: Elevation,
   cliffWidth: number = 3
 ): void {
-  const elevation256 = legacyElevationTo256(elevation);
   const outerRadius = radius + cliffWidth;
 
   for (let dy = -outerRadius; dy <= outerRadius; dy++) {
@@ -607,7 +579,7 @@ export function createRaisedPlatform(
           // Inner buildable area
           grid[py][px] = {
             terrain: 'ground',
-            elevation: elevation256,
+            elevation: elevation,
             feature: 'none',
             textureId: Math.floor(Math.random() * 4),
           };
@@ -616,7 +588,7 @@ export function createRaisedPlatform(
           if (!isRampOrNearRamp(grid, px, py, cliffWidth + 1)) {
             grid[py][px] = {
               terrain: 'unwalkable',
-              elevation: elevation256,
+              elevation: elevation,
               feature: 'cliff',
               textureId: Math.floor(Math.random() * 4),
             };
@@ -630,6 +602,7 @@ export function createRaisedPlatform(
 /**
  * Create a raised rectangular platform with cliff edges.
  * Useful for bases that need non-circular shapes.
+ * @param elevation - Elevation value (0-255, use ELEVATION_LOW/MID/HIGH constants)
  */
 export function createRaisedRect(
   grid: MapCell[][],
@@ -637,10 +610,9 @@ export function createRaisedRect(
   y: number,
   width: number,
   height: number,
-  elevation: ElevationLevel,
+  elevation: Elevation,
   cliffWidth: number = 3
 ): void {
-  const elevation256 = legacyElevationTo256(elevation);
 
   // Create outer cliff ring first
   for (let dy = -cliffWidth; dy < height + cliffWidth; dy++) {
@@ -661,7 +633,7 @@ export function createRaisedRect(
           // Inner buildable area
           grid[py][px] = {
             terrain: 'ground',
-            elevation: elevation256,
+            elevation: elevation,
             feature: 'none',
             textureId: Math.floor(Math.random() * 4),
           };
@@ -669,7 +641,7 @@ export function createRaisedRect(
           // Cliff edge - buffer must be >= cliff width to ensure gap for ramps
           grid[py][px] = {
             terrain: 'unwalkable',
-            elevation: elevation256,
+            elevation: elevation,
             feature: 'cliff',
             textureId: Math.floor(Math.random() * 4),
           };

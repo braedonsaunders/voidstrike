@@ -49,14 +49,6 @@ export interface UseGameInputProps {
 
 export interface UseGameInputReturn {
   selectionState: SelectionState;
-  /** @deprecated Use InputManager.getInstance() directly */
-  handleMouseDown: (e: React.MouseEvent) => void;
-  /** @deprecated Use InputManager.getInstance() directly */
-  handleMouseMove: (e: React.MouseEvent) => void;
-  /** @deprecated Use InputManager.getInstance() directly */
-  handleMouseUp: (e: React.MouseEvent) => void;
-  /** @deprecated Use InputManager.getInstance() directly */
-  handleContextMenu: (e: React.MouseEvent) => void;
 }
 
 // Default selection state for SSR or before initialization
@@ -185,39 +177,7 @@ export function useGameInput({
     () => defaultSelectionState // Server snapshot
   );
 
-  // =============================================================================
-  // LEGACY EVENT HANDLERS (for backwards compatibility)
-  // =============================================================================
-
-  // These are kept for backwards compatibility but are no longer needed
-  // since InputManager handles events directly on the container
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    // Events are now handled by InputManager
-    // This handler is kept for backwards compatibility
-  }, []);
-
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    // Events are now handled by InputManager
-  }, []);
-
-  const handleMouseUp = useCallback((e: React.MouseEvent) => {
-    // Events are now handled by InputManager
-  }, []);
-
-  const handleContextMenu = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    // Events are now handled by InputManager
-  }, []);
-
-  // =============================================================================
-  // RETURN
-  // =============================================================================
-
   return {
     selectionState,
-    handleMouseDown,
-    handleMouseMove,
-    handleMouseUp,
-    handleContextMenu,
   };
 }

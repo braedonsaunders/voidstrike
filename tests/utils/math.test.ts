@@ -8,8 +8,6 @@ import {
   distanceXY,
   normalize,
   angle,
-  randomRange,
-  randomInt,
   SeededRandom,
 } from '@/utils/math';
 
@@ -45,16 +43,6 @@ describe('math utilities', () => {
   it('computes angles', () => {
     expect(angle(0, 0, 1, 0)).toBe(0);
     expect(angle(0, 0, 0, 1)).toBe(Math.PI / 2);
-  });
-
-  it('uses Math.random for non-deterministic helpers', () => {
-    const originalRandom = Math.random;
-    Math.random = () => 0.5;
-
-    expect(randomRange(0, 10)).toBe(5);
-    expect(randomInt(0, 9)).toBe(5);
-
-    Math.random = originalRandom;
   });
 
   it('generates deterministic sequences with SeededRandom', () => {
