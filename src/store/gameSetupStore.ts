@@ -3,7 +3,6 @@ import { debugInitialization } from '@/utils/debugLogger';
 import type { MapData } from '@/data/maps/MapTypes';
 import type { EditorMapData } from '@/editor/config/EditorConfig';
 import {
-  safeSessionStorageRemove,
   setLargeData,
   getLargeData,
   removeLargeData,
@@ -331,13 +330,6 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
     if (slot) {
       return getColorHex(slot.colorId);
     }
-    // Fallback for legacy 'ai' player ID
-    if (playerId === 'ai') {
-      const aiSlot = get().playerSlots.find(s => s.type === 'ai');
-      if (aiSlot) {
-        return getColorHex(aiSlot.colorId);
-      }
-    }
     return 0x808080; // Default gray
   },
 
@@ -402,11 +394,8 @@ export const useGameSetupStore = create<GameSetupState>((set, get) => ({
   endGame: () => set({ gameStarted: false, isBattleSimulator: false, customMapData: null, isEditorPreview: false }),
   reset: () => set({ ...initialState, playerSlots: [...defaultPlayerSlots], localPlayerId: 'player1', customMapData: null, isEditorPreview: false }),
   clearEditorPreviewState: () => {
-    // Clear IndexedDB storage as well
     if (typeof window !== 'undefined') {
       removeLargeData('voidstrike_editor_map_data');
-      // Also clear legacy sessionStorage key for backwards compatibility
-      safeSessionStorageRemove('voidstrike_editor_map_data');
     }
     set({ editorMapData: null, isEditorPreview: false });
   },

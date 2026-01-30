@@ -386,8 +386,6 @@ export class EnvironmentManager {
   /**
    * Get decoration collision data for building placement validation and pathfinding
    * Returns array of { x, z, radius } for each blocking decoration (rocks AND trees)
-   * from both instanced and legacy decorations
-   * Note: Method name kept as getRockCollisions for backwards compatibility
    */
   public getRockCollisions(): Array<{ x: number; z: number; radius: number }> {
     const collisions: Array<{ x: number; z: number; radius: number }> = [];
