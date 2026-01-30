@@ -10,3 +10,6 @@ export { useCameraControl, type UseCameraControlProps, type UseCameraControlRetu
 export { useGameInput, type UseGameInputProps, type UseGameInputReturn } from './useGameInput';
 export type { SelectionState } from '@/engine/input';
 export { usePostProcessing, type UsePostProcessingProps } from './usePostProcessing';
+export { useWorkerBridge, type UseWorkerBridgeProps, type UseWorkerBridgeReturn } from './useWorkerBridge';
+export { usePhaserOverlay, type UsePhaserOverlayProps, type UsePhaserOverlayReturn } from './usePhaserOverlay';
+export { useLoadingState, type UseLoadingStateProps, type UseLoadingStateReturn } from './useLoadingState';
