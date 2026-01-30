@@ -15,6 +15,7 @@
  */
 
 import { GameCore, GameConfig } from '../core/GameCore';
+import { PerformanceMonitor } from '../core/PerformanceMonitor';
 import { debugInitialization, debugPerformance } from '@/utils/debugLogger';
 
 // Components
@@ -54,6 +55,7 @@ import type {
   ResourceRenderState,
   ProjectileRenderState,
   SpawnMapData,
+  WorkerPerformanceMetrics,
 } from './types';
 import type { GameState, TerrainCell } from '../core/GameCore';
 import type { GameCommand } from '../core/GameCommand';
@@ -105,6 +107,12 @@ export class WorkerGame extends GameCore {
   // Debug tracking
   private hasLoggedFirstRenderState = false;
   private renderStatesSent = 0;
+
+  // Performance collection (zero-cost when disabled)
+  private performanceCollectionEnabled = false;
+  private perfMetricsInterval: ReturnType<typeof setInterval> | null = null;
+  private lastTickDuration = 0;
+  private lastSystemTimings: Array<[string, number]> = [];
 
   constructor(config: GameConfig) {
     super(config);
@@ -478,8 +486,19 @@ export class WorkerGame extends GameCore {
     // Process queued commands for this tick
     this.processQueuedCommands();
 
+    // Track tick time only when performance collection is enabled (zero-cost when disabled)
+    let tickStart = 0;
+    if (this.performanceCollectionEnabled) {
+      tickStart = performance.now();
+    }
+
     // Update all systems
     this.world.update(deltaTime);
+
+    // Record tick duration for performance metrics
+    if (this.performanceCollectionEnabled) {
+      this.lastTickDuration = performance.now() - tickStart;
+    }
 
     // Update player resources
     this.updatePlayerResources();
@@ -804,6 +823,65 @@ export class WorkerGame extends GameCore {
   }
 
   // ============================================================================
+  // PERFORMANCE COLLECTION
+  // ============================================================================
+
+  /**
+   * Enable or disable performance metrics collection.
+   * When enabled, starts a 10Hz interval to send metrics to main thread.
+   * When disabled, all timing overhead is eliminated.
+   */
+  public setPerformanceCollection(enabled: boolean): void {
+    if (this.performanceCollectionEnabled === enabled) return;
+
+    this.performanceCollectionEnabled = enabled;
+    PerformanceMonitor.setCollecting(enabled);
+
+    if (enabled) {
+      // Start 10Hz metrics reporting (100ms interval)
+      this.perfMetricsInterval = setInterval(() => this.sendPerformanceMetrics(), 100);
+    } else {
+      // Stop metrics reporting
+      if (this.perfMetricsInterval !== null) {
+        clearInterval(this.perfMetricsInterval);
+        this.perfMetricsInterval = null;
+      }
+      // Clear cached data
+      this.lastTickDuration = 0;
+      this.lastSystemTimings = [];
+    }
+  }
+
+  /**
+   * Collect and send performance metrics to main thread.
+   * Called at 10Hz when collection is enabled.
+   */
+  private sendPerformanceMetrics(): void {
+    if (!this.performanceCollectionEnabled) return;
+
+    // Get system timings from PerformanceMonitor
+    const systemTimings = PerformanceMonitor.getSystemTimings();
+    const timingTuples: Array<[string, number]> = systemTimings.map(t => [t.name, t.duration]);
+
+    // Cache for next call (in case update hasn't run)
+    this.lastSystemTimings = timingTuples;
+
+    // Get entity counts (O(1) - just reading lengths)
+    const units = this.world.getEntitiesWith('Unit').length;
+    const buildings = this.world.getEntitiesWith('Building').length;
+    const resources = this.world.getEntitiesWith('Resource').length;
+    const projectiles = this.world.getEntitiesWith('Projectile').length;
+
+    const metrics: WorkerPerformanceMetrics = {
+      tickTime: this.lastTickDuration,
+      systemTimings: timingTuples,
+      entityCounts: [units, buildings, resources, projectiles],
+    };
+
+    postMessage({ type: 'performanceMetrics', metrics } satisfies WorkerToMainMessage);
+  }
+
+  // ============================================================================
   // ENTITY SPAWNING
   // ============================================================================
 
@@ -1106,6 +1184,11 @@ if (typeof self !== 'undefined') {
           } else {
             game?.start();
           }
+          break;
+        }
+
+        case 'setPerformanceCollection': {
+          game?.setPerformanceCollection(message.enabled);
           break;
         }
       }

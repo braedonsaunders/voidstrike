@@ -37,6 +37,7 @@ import {
   removeMultiplayerMessageHandler,
 } from '@/store/multiplayerStore';
 import { debugInitialization } from '@/utils/debugLogger';
+import { PerformanceMonitor } from '../core/PerformanceMonitor';
 
 // ============================================================================
 // TYPES
@@ -280,6 +281,15 @@ export class WorkerBridge {
           remoteChecksum: message.remoteChecksum,
         });
         break;
+
+      case 'performanceMetrics':
+        // Forward worker performance metrics to main thread's PerformanceMonitor
+        PerformanceMonitor.applyWorkerMetrics(
+          message.metrics.tickTime,
+          message.metrics.systemTimings,
+          message.metrics.entityCounts
+        );
+        break;
     }
   }
 
@@ -418,6 +428,19 @@ export class WorkerBridge {
 
   public setDebugSettings(settings: DebugSettings): void {
     this.worker?.postMessage({ type: 'setDebugSettings', settings } satisfies MainToWorkerMessage);
+  }
+
+  // ============================================================================
+  // PERFORMANCE COLLECTION
+  // ============================================================================
+
+  /**
+   * Enable or disable performance metrics collection in the worker.
+   * When enabled, the worker sends metrics at 10Hz for the performance dashboard.
+   * When disabled, zero overhead - no timing, no messages.
+   */
+  public setPerformanceCollection(enabled: boolean): void {
+    this.worker?.postMessage({ type: 'setPerformanceCollection', enabled } satisfies MainToWorkerMessage);
   }
 
   // ============================================================================
