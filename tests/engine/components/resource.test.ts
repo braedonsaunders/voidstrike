@@ -254,7 +254,7 @@ describe('Resource Component', () => {
         const resource = new Resource('minerals', 1500);
 
         expect(resource.getOptimalWorkers()).toBe(OPTIMAL_WORKERS_PER_MINERAL);
-        expect(resource.getOptimalWorkers()).toBe(1);
+        expect(resource.getOptimalWorkers()).toBe(2);
       });
 
       it('returns optimal for vespene', () => {
@@ -284,7 +284,7 @@ describe('Resource Component', () => {
     describe('isOptimallySaturated', () => {
       it('returns false when under optimal', () => {
         const resource = new Resource('minerals', 1500, 5);
-        // With optimal = 1, having 0 gatherers is under optimal
+        // With optimal = 2, having 0 or 1 gatherers is under optimal
 
         expect(resource.isOptimallySaturated()).toBe(false);
       });
@@ -292,7 +292,8 @@ describe('Resource Component', () => {
       it('returns true when at optimal', () => {
         const resource = new Resource('minerals', 1500, 5);
         resource.addGatherer(1);
-        // With optimal = 1, having 1 gatherer is at optimal
+        resource.addGatherer(2);
+        // With optimal = 2, having 2 gatherers is at optimal
 
         expect(resource.isOptimallySaturated()).toBe(true);
       });
@@ -331,7 +332,7 @@ describe('Resource Component', () => {
 
   describe('constants', () => {
     it('exports correct worker constants', () => {
-      expect(OPTIMAL_WORKERS_PER_MINERAL).toBe(1);
+      expect(OPTIMAL_WORKERS_PER_MINERAL).toBe(2);
       expect(MAX_WORKERS_PER_MINERAL).toBe(3);
       expect(OPTIMAL_WORKERS_PER_VESPENE).toBe(3);
       expect(MAX_WORKERS_PER_VESPENE).toBe(3);
