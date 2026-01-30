@@ -14,13 +14,8 @@
  * - Sends: RenderState snapshots, game events for audio/effects
  */
 
-// Debug flag for worker logging (workers can't access UI store)
-const DEBUG = true; // TEMP: Enable for render state debugging
-
-import { World } from '../ecs/World';
-import { EventBus } from '../core/EventBus';
-import { SystemRegistry } from '../core/SystemRegistry';
-import { bootstrapDefinitions } from '../definitions';
+import { GameCore, GameConfig } from '../core/GameCore';
+import { debugInitialization, debugPerformance } from '@/utils/debugLogger';
 
 // Components
 import { Transform } from '../components/Transform';
@@ -31,12 +26,10 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Projectile } from '../components/Projectile';
 import { Velocity } from '../components/Velocity';
-import { validateEntity } from '@/utils/EntityValidator';
 
 // Systems (worker-safe)
 import { SpawnSystem } from '../systems/SpawnSystem';
 import { BuildingPlacementSystem } from '../systems/BuildingPlacementSystem';
-import { PathfindingSystem } from '../systems/PathfindingSystem';
 import { BuildingMechanicsSystem } from '../systems/BuildingMechanicsSystem';
 import { WallSystem } from '../systems/WallSystem';
 import { UnitMechanicsSystem } from '../systems/UnitMechanicsSystem';
@@ -47,13 +40,8 @@ import { ProductionSystem } from '../systems/ProductionSystem';
 import { ResourceSystem } from '../systems/ResourceSystem';
 import { ResearchSystem } from '../systems/ResearchSystem';
 import { AbilitySystem } from '../systems/AbilitySystem';
-import { VisionSystem } from '../systems/VisionSystem';
-import { GameStateSystem } from '../systems/GameStateSystem';
-import { SaveLoadSystem } from '../systems/SaveLoadSystem';
-import { EnhancedAISystem, AIDifficulty } from '../systems/EnhancedAISystem';
+import { EnhancedAISystem } from '../systems/EnhancedAISystem';
 import { AIEconomySystem } from '../systems/AIEconomySystem';
-import { AIMicroSystem } from '../systems/AIMicroSystem';
-import { ChecksumSystem } from '../systems/ChecksumSystem';
 
 // Types
 import type {
@@ -67,54 +55,29 @@ import type {
   ProjectileRenderState,
   SpawnMapData,
 } from './types';
-import type { GameConfig, GameState, TerrainCell } from '../core/Game';
-import { dispatchCommand, type GameCommand } from '../core/GameCommand';
+import type { GameState, TerrainCell } from '../core/GameCore';
+import type { GameCommand } from '../core/GameCommand';
 import { setWorkerDebugSettings } from '@/utils/debugLogger';
+
+// Re-export types for backwards compatibility
+export type { GameState, TerrainCell };
 
 // ============================================================================
 // WORKER GAME CLASS
 // ============================================================================
 
 /**
- * WorkerGame - Self-contained game instance running in a Web Worker
+ * WorkerGame - Game instance running in a Web Worker
  *
- * This is a stripped-down version of Game.ts that runs entirely in the worker
- * without any main-thread dependencies (no Three.js, no Zustand, no Web Audio).
+ * Extends GameCore with worker-specific features:
+ * - setInterval-based game loop (NOT throttled in workers!)
+ * - Render state collection and postMessage
+ * - Event forwarding to main thread for audio/effects
+ *
+ * This is where the actual game simulation runs.
  */
-export class WorkerGame {
-  public world: World;
-  public eventBus: EventBus;
-  public config: GameConfig;
-
-  // Direct system references (initialized in constructor before initializeSystems)
-  public visionSystem: VisionSystem;
-  public gameStateSystem: GameStateSystem;
-  public saveLoadSystem: SaveLoadSystem;
-  public pathfindingSystem: PathfindingSystem;
-  public aiMicroSystem: AIMicroSystem;
-  public checksumSystem: ChecksumSystem | null = null;
-
-  // System assigned during initializeSystems() - null until then
-  private _projectileSystem: ProjectileSystem | null = null;
-
-  /**
-   * Get the ProjectileSystem instance.
-   * @throws Error if accessed before system initialization
-   */
-  public get projectileSystem(): ProjectileSystem {
-    if (!this._projectileSystem) {
-      throw new Error('[WorkerGame] ProjectileSystem accessed before initialization');
-    }
-    return this._projectileSystem;
-  }
-
-  // Terrain
-  private terrainGrid: TerrainCell[][] | null = null;
-  private decorationCollisions: Array<{ x: number; z: number; radius: number }> = [];
-
-  // Game state
-  private state: GameState = 'initializing';
-  private currentTick = 0;
+export class WorkerGame extends GameCore {
+  // Worker-specific state
   private gameTime = 0;
   private tickMs: number;
 
@@ -123,8 +86,7 @@ export class WorkerGame {
   private lastTickTime = 0;
   private accumulator = 0;
 
-  // Command queue
-  private commandQueue: Map<number, GameCommand[]> = new Map();
+  // Command delay for lockstep
   private readonly COMMAND_DELAY_TICKS = 4;
 
   // Event collection for main thread
@@ -137,42 +99,165 @@ export class WorkerGame {
   private selectedEntityIds: number[] = [];
   private controlGroups: Map<number, number[]> = new Map();
 
-  constructor(config: GameConfig) {
-    this.config = config;
-    this.tickMs = 1000 / config.tickRate;
+  // Debug tracking
+  private hasLoggedFirstRenderState = false;
+  private renderStatesSent = 0;
 
-    // Initialize ECS World
-    this.world = new World(config.mapWidth, config.mapHeight);
-    this.eventBus = new EventBus();
+  constructor(config: GameConfig) {
+    super(config);
+
+    this.tickMs = 1000 / config.tickRate;
 
     // Initialize player resources
     this.playerResources.set(config.playerId, { minerals: 50, vespene: 0, supply: 0, maxSupply: 0 });
 
-    // Bootstrap unit/building definitions
-    bootstrapDefinitions();
-
-    // Pre-create systems that need direct references (like Game.ts does)
-    this.visionSystem = new VisionSystem(this as any, config.mapWidth, config.mapHeight);
-    this.gameStateSystem = new GameStateSystem(this as any);
-    this.saveLoadSystem = new SaveLoadSystem(this as any);
-    this.pathfindingSystem = new PathfindingSystem(this as any, config.mapWidth, config.mapHeight);
-    this.aiMicroSystem = new AIMicroSystem(this as any);
-
-    if (config.isMultiplayer) {
-      this.checksumSystem = new ChecksumSystem(this as any, {
-        checksumInterval: 5,
-        emitNetworkChecksums: true,
-        logChecksums: false,
-        autoDumpOnDesync: true,
-      });
-    }
-
-    // Setup event listeners for game events we need to forward
+    // Setup event listeners for game events to forward
     this.setupEventListeners();
 
-    // Register and initialize systems
+    // Initialize systems
     this.initializeSystems();
   }
+
+  // ============================================================================
+  // SYSTEM DEFINITIONS (worker excludes Selection + Audio)
+  // ============================================================================
+
+  protected getSystemDefinitions(): any[] {
+    return [
+      // SPAWN LAYER
+      {
+        name: 'SpawnSystem',
+        dependencies: [] as string[],
+        factory: () => new SpawnSystem(this as any),
+      },
+
+      // PLACEMENT LAYER
+      {
+        name: 'BuildingPlacementSystem',
+        dependencies: [] as string[],
+        factory: () => new BuildingPlacementSystem(this as any),
+      },
+      {
+        name: 'PathfindingSystem',
+        dependencies: ['BuildingPlacementSystem'],
+        factory: () => this.pathfindingSystem,
+      },
+
+      // MECHANICS LAYER
+      {
+        name: 'BuildingMechanicsSystem',
+        dependencies: ['BuildingPlacementSystem'],
+        factory: () => new BuildingMechanicsSystem(this as any),
+      },
+      {
+        name: 'WallSystem',
+        dependencies: ['BuildingPlacementSystem'],
+        factory: () => new WallSystem(this as any),
+      },
+      {
+        name: 'UnitMechanicsSystem',
+        dependencies: [] as string[],
+        factory: () => new UnitMechanicsSystem(this as any),
+      },
+
+      // MOVEMENT LAYER
+      {
+        name: 'MovementSystem',
+        dependencies: ['PathfindingSystem', 'UnitMechanicsSystem'],
+        factory: () => new MovementSystem(this as any),
+      },
+
+      // VISION LAYER
+      {
+        name: 'VisionSystem',
+        dependencies: ['MovementSystem'],
+        factory: () => this.visionSystem,
+      },
+
+      // COMBAT LAYER
+      {
+        name: 'CombatSystem',
+        dependencies: ['MovementSystem', 'VisionSystem'],
+        factory: () => new CombatSystem(this as any),
+      },
+      {
+        name: 'ProjectileSystem',
+        dependencies: ['CombatSystem'],
+        factory: () => new ProjectileSystem(this as any),
+      },
+      {
+        name: 'AbilitySystem',
+        dependencies: ['CombatSystem'],
+        factory: () => new AbilitySystem(this as any),
+      },
+
+      // ECONOMY LAYER
+      {
+        name: 'ResourceSystem',
+        dependencies: ['MovementSystem'],
+        factory: () => new ResourceSystem(this as any),
+      },
+      {
+        name: 'ProductionSystem',
+        dependencies: ['ResourceSystem'],
+        factory: () => new ProductionSystem(this as any),
+      },
+      {
+        name: 'ResearchSystem',
+        dependencies: ['ProductionSystem'],
+        factory: () => new ResearchSystem(this as any),
+      },
+
+      // AI LAYER (conditional)
+      ...(this.config.aiEnabled ? [
+        {
+          name: 'EnhancedAISystem',
+          dependencies: ['CombatSystem', 'ResourceSystem'],
+          factory: () => new EnhancedAISystem(this as any, this.config.aiDifficulty),
+        },
+        {
+          name: 'AIEconomySystem',
+          dependencies: ['EnhancedAISystem'],
+          factory: () => new AIEconomySystem(this as any),
+        },
+        {
+          name: 'AIMicroSystem',
+          dependencies: ['EnhancedAISystem', 'CombatSystem'],
+          factory: () => this.aiMicroSystem,
+        },
+      ] : []),
+
+      // META LAYER
+      {
+        name: 'GameStateSystem',
+        dependencies: ['CombatSystem', 'ProductionSystem', 'ResourceSystem'],
+        factory: () => this.gameStateSystem,
+      },
+      ...(this.config.isMultiplayer && this.checksumSystem ? [{
+        name: 'ChecksumSystem',
+        dependencies: ['GameStateSystem'],
+        factory: () => this.checksumSystem!,
+      }] : []),
+      {
+        name: 'SaveLoadSystem',
+        dependencies: ['GameStateSystem'],
+        factory: () => this.saveLoadSystem,
+      },
+    ];
+  }
+
+  protected override onSystemCreated(system: any): void {
+    super.onSystemCreated(system);
+
+    // Capture ProjectileSystem reference
+    if (system.name === 'ProjectileSystem') {
+      this._projectileSystem = system as ProjectileSystem;
+    }
+  }
+
+  // ============================================================================
+  // EVENT FORWARDING
+  // ============================================================================
 
   private setupEventListeners(): void {
     // Combat events
@@ -304,165 +389,14 @@ export class WorkerGame {
     });
   }
 
-  private initializeSystems(): void {
-    // Use SystemRegistry for dependency-based ordering (like Game.ts)
-    const registry = new SystemRegistry();
-    registry.registerAll(this.getWorkerSystemDefinitions());
-
-    // Validate dependencies at startup
-    const errors = registry.validate();
-    if (errors.length > 0) {
-      console.error('[WorkerGame] System dependency errors:', errors);
-      throw new Error(`Invalid system dependencies:\n${errors.join('\n')}`);
-    }
-
-    // Create systems in dependency order
-    const systems = registry.createSystems(this as any);
-
-    // Add all systems to world
-    for (const system of systems) {
-      this.world.addSystem(system);
-
-      // Capture references to systems that are accessed elsewhere
-      if (system.name === 'ProjectileSystem') {
-        this._projectileSystem = system as ProjectileSystem;
-      }
-    }
-  }
-
-  private getWorkerSystemDefinitions() {
-    // Return system definitions excluding main-thread-only systems (AudioSystem)
-    return [
-      // SPAWN LAYER
-      {
-        name: 'SpawnSystem',
-        dependencies: [] as string[],
-        factory: () => new SpawnSystem(this as any),
-      },
-
-      // PLACEMENT LAYER
-      {
-        name: 'BuildingPlacementSystem',
-        dependencies: [] as string[],
-        factory: () => new BuildingPlacementSystem(this as any),
-      },
-      {
-        name: 'PathfindingSystem',
-        dependencies: ['BuildingPlacementSystem'],
-        factory: () => this.pathfindingSystem,
-      },
-
-      // MECHANICS LAYER
-      {
-        name: 'BuildingMechanicsSystem',
-        dependencies: ['BuildingPlacementSystem'],
-        factory: () => new BuildingMechanicsSystem(this as any),
-      },
-      {
-        name: 'WallSystem',
-        dependencies: ['BuildingPlacementSystem'],
-        factory: () => new WallSystem(this as any),
-      },
-      {
-        name: 'UnitMechanicsSystem',
-        dependencies: [] as string[],
-        factory: () => new UnitMechanicsSystem(this as any),
-      },
-
-      // MOVEMENT LAYER
-      {
-        name: 'MovementSystem',
-        dependencies: ['PathfindingSystem', 'UnitMechanicsSystem'],
-        factory: () => new MovementSystem(this as any),
-      },
-
-      // VISION LAYER
-      {
-        name: 'VisionSystem',
-        dependencies: ['MovementSystem'],
-        factory: () => this.visionSystem,
-      },
-
-      // COMBAT LAYER
-      {
-        name: 'CombatSystem',
-        dependencies: ['MovementSystem', 'VisionSystem'],
-        factory: () => new CombatSystem(this as any),
-      },
-      {
-        name: 'ProjectileSystem',
-        dependencies: ['CombatSystem'],
-        factory: () => new ProjectileSystem(this as any),
-      },
-      {
-        name: 'AbilitySystem',
-        dependencies: ['CombatSystem'],
-        factory: () => new AbilitySystem(this as any),
-      },
-
-      // ECONOMY LAYER
-      {
-        name: 'ResourceSystem',
-        dependencies: ['MovementSystem'],
-        factory: () => new ResourceSystem(this as any),
-      },
-      {
-        name: 'ProductionSystem',
-        dependencies: ['ResourceSystem'],
-        factory: () => new ProductionSystem(this as any),
-      },
-      {
-        name: 'ResearchSystem',
-        dependencies: ['ProductionSystem'],
-        factory: () => new ResearchSystem(this as any),
-      },
-
-      // AI LAYER (conditional)
-      ...(this.config.aiEnabled ? [
-        {
-          name: 'EnhancedAISystem',
-          dependencies: ['CombatSystem', 'ResourceSystem'],
-          factory: () => new EnhancedAISystem(this as any, this.config.aiDifficulty),
-        },
-        {
-          name: 'AIEconomySystem',
-          dependencies: ['EnhancedAISystem'],
-          factory: () => new AIEconomySystem(this as any),
-        },
-        {
-          name: 'AIMicroSystem',
-          dependencies: ['EnhancedAISystem', 'CombatSystem'],
-          factory: () => this.aiMicroSystem,
-        },
-      ] : []),
-
-      // META LAYER
-      {
-        name: 'GameStateSystem',
-        dependencies: ['CombatSystem', 'ProductionSystem', 'ResourceSystem'],
-        factory: () => this.gameStateSystem,
-      },
-      ...(this.config.isMultiplayer && this.checksumSystem ? [{
-        name: 'ChecksumSystem',
-        dependencies: ['GameStateSystem'],
-        factory: () => this.checksumSystem!,
-      }] : []),
-      {
-        name: 'SaveLoadSystem',
-        dependencies: ['GameStateSystem'],
-        factory: () => this.saveLoadSystem,
-      },
-    ];
-  }
-
   // ============================================================================
   // GAME LOOP (runs via setInterval in worker - NOT throttled!)
   // ============================================================================
 
-  public start(): void {
+  public override start(): void {
     if (this.state === 'running') return;
 
-    if (DEBUG) {
+    if (debugInitialization.isEnabled()) {
       console.log('[GameWorker] Starting game loop. Entity counts:', {
         units: this.world.getEntitiesWith('Unit').length,
         buildings: this.world.getEntitiesWith('Building').length,
@@ -478,7 +412,7 @@ export class WorkerGame {
     this.loopIntervalId = setInterval(() => this.tick(), this.tickMs);
   }
 
-  public stop(): void {
+  public override stop(): void {
     this.state = 'paused';
     if (this.loopIntervalId !== null) {
       clearInterval(this.loopIntervalId);
@@ -500,7 +434,7 @@ export class WorkerGame {
     // Fixed timestep updates
     let iterations = 0;
     const maxIterations = 10;
-    const timeBudgetMs = 40; // 40ms budget per tick for game logic
+    const timeBudgetMs = 40;
     const tickStart = performance.now();
 
     while (this.accumulator >= this.tickMs && iterations < maxIterations) {
@@ -528,7 +462,7 @@ export class WorkerGame {
     // Update all systems
     this.world.update(deltaTime);
 
-    // Update player resources from ResourceSystem
+    // Update player resources
     this.updatePlayerResources();
   }
 
@@ -558,257 +492,8 @@ export class WorkerGame {
     this.queueCommand(command);
   }
 
-  private queueCommand(command: GameCommand): void {
-    const tick = command.tick;
-    if (!this.commandQueue.has(tick)) {
-      this.commandQueue.set(tick, []);
-    }
-    this.commandQueue.get(tick)!.push(command);
-  }
-
-  private processQueuedCommands(): void {
-    const commands = this.commandQueue.get(this.currentTick);
-    if (!commands) return;
-
-    // Sort for determinism
-    commands.sort((a, b) => {
-      if (a.playerId !== b.playerId) return a.playerId.localeCompare(b.playerId);
-      if (a.type !== b.type) return a.type.localeCompare(b.type);
-      return (a.entityIds[0] ?? 0) - (b.entityIds[0] ?? 0);
-    });
-
-    for (const command of commands) {
-      this.processCommand(command);
-    }
-
-    this.commandQueue.delete(this.currentTick);
-  }
-
-  public processCommand(command: GameCommand): void {
-    // Dispatch command to appropriate event handlers via shared dispatcher
-    dispatchCommand(this.eventBus, command);
-  }
-
-  // ============================================================================
-  // TERRAIN & NAVMESH
-  // ============================================================================
-
-  public setTerrainGrid(terrain: TerrainCell[][]): void {
-    this.terrainGrid = terrain;
-    this.pathfindingSystem.loadTerrainData();
-  }
-
-  public getTerrainGrid(): TerrainCell[][] | null {
-    return this.terrainGrid;
-  }
-
-  public getTerrainAt(worldX: number, worldY: number): TerrainCell | null {
-    if (!this.terrainGrid || this.terrainGrid.length === 0) return null;
-    const gridX = Math.floor(worldX);
-    const gridY = Math.floor(worldY);
-    const firstRow = this.terrainGrid[0];
-    if (!firstRow || gridY < 0 || gridY >= this.terrainGrid.length ||
-        gridX < 0 || gridX >= firstRow.length) {
-      return null;
-    }
-    return this.terrainGrid[gridY][gridX];
-  }
-
-  /**
-   * Get terrain height at a specific world position.
-   * Converts elevation (0-255) to world height units.
-   * Returns 0 if terrain data is not available.
-   */
-  public getTerrainHeightAt(worldX: number, worldY: number): number {
-    const cell = this.getTerrainAt(worldX, worldY);
-    if (!cell) return 0;
-
-    // Convert elevation to height using same formula as Terrain.ts
-    // elevation * 0.04 gives range 0 to ~10.2 units
-    return cell.elevation * 0.04;
-  }
-
-  /**
-   * Check if a building position overlaps with decorations (rocks, trees).
-   */
-  public isPositionClearOfDecorations(centerX: number, centerY: number, width: number, height: number): boolean {
-    const halfW = width / 2 + 0.5; // Small buffer
-    const halfH = height / 2 + 0.5;
-
-    for (const deco of this.decorationCollisions) {
-      const dx = Math.abs(centerX - deco.x);
-      const dz = Math.abs(centerY - deco.z);
-
-      if (dx < halfW + deco.radius && dz < halfH + deco.radius) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
-  /**
-   * Check if a building can be placed at the given position.
-   * Returns true if all tiles under the building are buildable ground at the same elevation.
-   */
-  public isValidTerrainForBuilding(centerX: number, centerY: number, width: number, height: number): boolean {
-    if (!this.terrainGrid) {
-      // No terrain data - allow placement (legacy behavior)
-      return true;
-    }
-
-    const halfWidth = width / 2;
-    const halfHeight = height / 2;
-    let requiredElevation: number | null = null;
-
-    const firstRow = this.terrainGrid[0];
-    if (!firstRow) return false;
-
-    for (let dy = -Math.floor(halfHeight); dy < Math.ceil(halfHeight); dy++) {
-      for (let dx = -Math.floor(halfWidth); dx < Math.ceil(halfWidth); dx++) {
-        const tileX = Math.floor(centerX + dx);
-        const tileY = Math.floor(centerY + dy);
-
-        if (tileY < 0 || tileY >= this.terrainGrid.length ||
-            tileX < 0 || tileX >= firstRow.length) {
-          return false;
-        }
-
-        const cell = this.terrainGrid[tileY][tileX];
-
-        if (cell.terrain !== 'ground' && cell.terrain !== 'platform') {
-          return false;
-        }
-
-        if (requiredElevation === null) {
-          requiredElevation = cell.elevation;
-        } else if (cell.elevation !== requiredElevation) {
-          return false;
-        }
-      }
-    }
-
-    return true;
-  }
-
-  /**
-   * Check if a building can be placed at the given position.
-   * Mirrors Game.ts validation for worker parity.
-   */
-  public isValidBuildingPlacement(
-    centerX: number,
-    centerY: number,
-    width: number,
-    height: number,
-    excludeEntityId?: number,
-    skipUnitCheck: boolean = false
-  ): boolean {
-    const halfW = width / 2;
-    const halfH = height / 2;
-
-    if (centerX - halfW < 0 || centerY - halfH < 0 ||
-        centerX + halfW > this.config.mapWidth || centerY + halfH > this.config.mapHeight) {
-      return false;
-    }
-
-    if (!this.isValidTerrainForBuilding(centerX, centerY, width, height)) {
-      return false;
-    }
-
-    const queryPadding = 10;
-    const nearbyBuildingIds = this.world.buildingGrid.queryRect(
-      centerX - halfW - queryPadding,
-      centerY - halfH - queryPadding,
-      centerX + halfW + queryPadding,
-      centerY + halfH + queryPadding
-    );
-
-    for (const buildingId of nearbyBuildingIds) {
-      const entity = this.world.getEntity(buildingId);
-      if (!validateEntity(entity, buildingId, 'WorkerGame.isValidBuildingPlacement:building', this.currentTick)) continue;
-
-      const transform = entity.get<Transform>('Transform');
-      const building = entity.get<Building>('Building');
-      if (!transform || !building) continue;
-
-      if (building.isFlying || building.state === 'lifting' ||
-          building.state === 'flying' || building.state === 'landing') {
-        continue;
-      }
-
-      const existingHalfW = building.width / 2;
-      const existingHalfH = building.height / 2;
-      const dx = Math.abs(centerX - transform.x);
-      const dy = Math.abs(centerY - transform.y);
-
-      if (dx < halfW + existingHalfW && dy < halfH + existingHalfH) {
-        return false;
-      }
-    }
-
-    const resources = this.world.getEntitiesWith('Resource', 'Transform');
-    for (const entity of resources) {
-      const transform = entity.get<Transform>('Transform');
-      if (!transform) continue;
-
-      const dx = Math.abs(centerX - transform.x);
-      const dy = Math.abs(centerY - transform.y);
-
-      if (dx < halfW + 1.5 && dy < halfH + 1.5) {
-        return false;
-      }
-    }
-
-    if (!skipUnitCheck) {
-      const nearbyUnitIds = this.world.unitGrid.queryRect(
-        centerX - halfW - 2,
-        centerY - halfH - 2,
-        centerX + halfW + 2,
-        centerY + halfH + 2
-      );
-
-      for (const unitId of nearbyUnitIds) {
-        if (excludeEntityId !== undefined && unitId === excludeEntityId) {
-          continue;
-        }
-
-        const entity = this.world.getEntity(unitId);
-        if (!validateEntity(entity, unitId, 'WorkerGame.isValidBuildingPlacement:unit', this.currentTick)) continue;
-
-        const transform = entity.get<Transform>('Transform');
-        if (!transform) continue;
-
-        const dx = Math.abs(centerX - transform.x);
-        const dy = Math.abs(centerY - transform.y);
-
-        if (dx < halfW + 0.5 && dy < halfH + 0.5) {
-          return false;
-        }
-      }
-    }
-
-    if (!this.isPositionClearOfDecorations(centerX, centerY, width, height)) {
-      return false;
-    }
-
-    return true;
-  }
-
-  public async initializeNavMesh(positions: Float32Array, indices: Uint32Array): Promise<boolean> {
-    return this.pathfindingSystem.initializeNavMesh(positions, indices);
-  }
-
-  public async initializeWaterNavMesh(positions: Float32Array, indices: Uint32Array): Promise<boolean> {
-    return this.pathfindingSystem.initializeWaterNavMesh(positions, indices);
-  }
-
-  public setDecorationCollisions(collisions: Array<{ x: number; z: number; radius: number }>): void {
-    this.decorationCollisions = collisions;
-    this.pathfindingSystem.registerDecorationCollisions(collisions);
-  }
-
-  public getDecorationCollisions(): Array<{ x: number; z: number; radius: number }> {
-    return this.decorationCollisions;
+  public override getGameTime(): number {
+    return this.gameTime;
   }
 
   // ============================================================================
@@ -816,7 +501,6 @@ export class WorkerGame {
   // ============================================================================
 
   private updatePlayerResources(): void {
-    // Update resources for each player from their entities
     const buildings = this.world.getEntitiesWith('Building', 'Selectable');
     const playerSupply = new Map<string, { supply: number; maxSupply: number }>();
 
@@ -834,7 +518,6 @@ export class WorkerGame {
       }
     }
 
-    // Count unit supply
     const units = this.world.getEntitiesWith('Unit', 'Selectable');
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -842,11 +525,9 @@ export class WorkerGame {
       if (!playerSupply.has(selectable.playerId)) {
         playerSupply.set(selectable.playerId, { supply: 0, maxSupply: 0 });
       }
-      // Each unit costs 1 supply by default (could be expanded)
       playerSupply.get(selectable.playerId)!.supply += 1;
     }
 
-    // Update our cache
     for (const [playerId, supply] of playerSupply) {
       const current = this.playerResources.get(playerId) ?? { minerals: 50, vespene: 0, supply: 0, maxSupply: 0 };
       current.supply = supply.supply;
@@ -854,10 +535,6 @@ export class WorkerGame {
       this.playerResources.set(playerId, current);
     }
   }
-
-  // Debug: log first render state only
-  private hasLoggedFirstRenderState = false;
-  private renderStatesSent = 0;
 
   private sendRenderState(): void {
     const units = this.collectUnitRenderState();
@@ -867,14 +544,12 @@ export class WorkerGame {
 
     this.renderStatesSent++;
 
-    // Debug: log first 5 sends and every 100th send
-    if (DEBUG && (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0)) {
+    if (debugInitialization.isEnabled() && (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0)) {
       console.log(`[GameWorker] sendRenderState #${this.renderStatesSent}: units=${units.length}, buildings=${buildings.length}, resources=${resources.length}`);
     }
 
-    // Debug log first render state with entities
-    if (DEBUG && !this.hasLoggedFirstRenderState && (units.length > 0 || buildings.length > 0 || resources.length > 0)) {
-      console.log('[GameWorker] Sending first render state with entities:', {
+    if (debugInitialization.isEnabled() && !this.hasLoggedFirstRenderState && (units.length > 0 || buildings.length > 0 || resources.length > 0)) {
+      console.log('[GameWorker] First render state with entities:', {
         tick: this.currentTick,
         units: units.length,
         buildings: buildings.length,
@@ -883,7 +558,6 @@ export class WorkerGame {
       this.hasLoggedFirstRenderState = true;
     }
 
-    // Serialize Maps to arrays for postMessage (Maps can't be serialized)
     const serializedRenderState: SerializedRenderState = {
       tick: this.currentTick,
       gameTime: this.gameTime,
@@ -893,7 +567,7 @@ export class WorkerGame {
       buildings,
       resources,
       projectiles,
-      visionGrids: [], // Vision grids collected by VisionSystem - TODO if needed
+      visionGrids: [],
       playerResources: Array.from(this.playerResources.entries()),
       selectedEntityIds: [...this.selectedEntityIds],
       controlGroups: Array.from(this.controlGroups.entries()),
@@ -906,7 +580,6 @@ export class WorkerGame {
     const states: UnitRenderState[] = [];
     const entities = this.world.getEntitiesWith('Transform', 'Unit', 'Health', 'Selectable');
 
-    // TEMP: Diagnostic - log query results periodically
     if (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0) {
       const allEntities = this.world.getEntities();
       const unitsOnly = this.world.getEntitiesWith('Unit');
@@ -1064,20 +737,8 @@ export class WorkerGame {
   }
 
   // ============================================================================
-  // GETTERS FOR SYSTEMS
+  // SELECTION STATE (forwarded from main thread)
   // ============================================================================
-
-  public getCurrentTick(): number {
-    return this.currentTick;
-  }
-
-  public getGameTime(): number {
-    return this.gameTime;
-  }
-
-  public getState(): GameState {
-    return this.state;
-  }
 
   public setSelection(entityIds: number[]): void {
     // Deselect previous
@@ -1111,9 +772,12 @@ export class WorkerGame {
     }
   }
 
+  // ============================================================================
+  // CHECKSUM (multiplayer)
+  // ============================================================================
+
   public requestChecksum(): void {
     if (this.checksumSystem) {
-      // Get checksum data from the system
       const checksumData = this.checksumSystem.getLatestChecksum();
       if (checksumData) {
         postMessage({
@@ -1125,12 +789,11 @@ export class WorkerGame {
     }
   }
 
-  /**
-   * Spawn initial entities based on map data.
-   * Creates resources and player bases for all players.
-   */
+  // ============================================================================
+  // ENTITY SPAWNING
+  // ============================================================================
+
   public spawnInitialEntities(mapData: SpawnMapData): void {
-    // Always log spawn calls (helps debug duplicate registration issues)
     console.log('[GameWorker] spawnInitialEntities called:', {
       resourceCount: mapData.resources?.length ?? 0,
       spawnCount: mapData.spawns?.length ?? 0,
@@ -1148,24 +811,21 @@ export class WorkerGame {
             resourceDef.amount ?? (resourceDef.type === 'mineral' ? 1500 : 2500)
           ));
       }
-      if (DEBUG) console.log('[GameWorker] Spawned', mapData.resources.length, 'resources');
+      debugInitialization.log('[GameWorker] Spawned', mapData.resources.length, 'resources');
     }
 
-    // Get active player slots (human or AI)
+    // Get active player slots
     const activeSlots = mapData.playerSlots?.filter(
       slot => slot.type === 'human' || slot.type === 'ai'
     ) ?? [];
 
-    // Track used spawn indices to prevent duplicates
     const usedSpawnIndices = new Set<number>();
     const spawns = mapData.spawns ?? [];
 
     // Spawn bases for each active player
     for (const slot of activeSlots) {
-      // Find the slot's player number (1-8) from the slot.id (e.g., "player1" -> 1)
       const playerNumber = parseInt(slot.id.replace('player', ''), 10);
 
-      // Find spawn point for this player
       let spawnIndex = spawns.findIndex(s => s.playerSlot === playerNumber);
       if (spawnIndex === -1 || usedSpawnIndices.has(spawnIndex)) {
         spawnIndex = spawns.findIndex((_, idx) => !usedSpawnIndices.has(idx));
@@ -1179,7 +839,6 @@ export class WorkerGame {
       const spawn = spawns[spawnIndex];
       usedSpawnIndices.add(spawnIndex);
 
-      // Initialize player resources
       this.playerResources.set(slot.id, {
         minerals: 50,
         vespene: 0,
@@ -1187,16 +846,12 @@ export class WorkerGame {
         maxSupply: 11,
       });
 
-      // Spawn base for this player
       this.spawnBase(slot.id, spawn.x, spawn.y);
 
-      // Register AI players with the AI system
+      // Register AI players
       if (slot.type === 'ai' && this.config.aiEnabled) {
-        if (DEBUG) console.log(`[GameWorker] Registering AI for ${slot.id} (${slot.faction}, ${slot.aiDifficulty})`);
+        debugInitialization.log(`[GameWorker] Registering AI for ${slot.id}`);
 
-        // Register with EnhancedAISystem (which also emits ai:registered event
-        // that AIMicroSystem listens to for unit micro behavior)
-        // Note: AI player resources are tracked by AICoordinator, not playerResources
         const enhancedAI = this.world.getSystem(EnhancedAISystem);
         if (enhancedAI) {
           enhancedAI.registerAI(slot.id, slot.faction, slot.aiDifficulty ?? 'medium');
@@ -1204,7 +859,7 @@ export class WorkerGame {
       }
     }
 
-    // Fallback: If no player slots provided, spawn local player at first spawn
+    // Fallback
     if (activeSlots.length === 0 && spawns.length > 0) {
       this.playerResources.set(this.config.playerId, {
         minerals: 50,
@@ -1215,7 +870,7 @@ export class WorkerGame {
       this.spawnBase(this.config.playerId, spawns[0].x, spawns[0].y);
     }
 
-    // Set watch towers if available
+    // Set watch towers
     if (mapData.watchTowers) {
       this.visionSystem?.setWatchTowers(mapData.watchTowers);
     }
@@ -1224,7 +879,6 @@ export class WorkerGame {
   }
 
   private spawnBase(playerId: string, x: number, y: number): void {
-    // Spawn Headquarters using proper BuildingDefinition interface
     const ccDef = {
       id: 'headquarters',
       name: 'Headquarters',
@@ -1248,12 +902,10 @@ export class WorkerGame {
       .add(new Health(ccDef.maxHealth, ccDef.armor, 'structure'))
       .add(new Selectable(Math.max(ccDef.width, ccDef.height) * 0.6, 10, playerId));
 
-    // Mark as complete
     const building = headquarters.get<Building>('Building')!;
     building.buildProgress = 1;
     building.state = 'complete';
 
-    // Emit building placed event
     this.eventBus.emit('building:placed', {
       entityId: headquarters.id,
       buildingType: 'headquarters',
@@ -1263,7 +915,6 @@ export class WorkerGame {
       height: ccDef.height,
     });
 
-    // Set rally point
     building.setRallyPoint(x + ccDef.width / 2 + 3, y);
 
     // Spawn initial workers
@@ -1282,7 +933,6 @@ export class WorkerGame {
   }
 
   private spawnUnit(unitType: string, playerId: string, x: number, y: number): void {
-    // Spawn unit using proper UnitDefinition interface
     const unitDef = {
       id: unitType,
       name: 'Fabricator',
@@ -1310,7 +960,6 @@ export class WorkerGame {
       .add(new Selectable(0.5, 1, playerId))
       .add(new Velocity());
 
-    // Update supply
     const resources = this.playerResources.get(playerId);
     if (resources) {
       resources.supply += 1;
@@ -1326,124 +975,123 @@ let game: WorkerGame | null = null;
 
 if (typeof self !== 'undefined') {
   self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
-  const message = event.data;
+    const message = event.data;
 
-  try {
-    switch (message.type) {
-      case 'init': {
-        game = new WorkerGame(message.config);
-        postMessage({ type: 'initialized', success: true } satisfies WorkerToMainMessage);
-        break;
-      }
-
-      case 'start': {
-        if (DEBUG) console.log('[GameWorker] Received start command');
-        if (!game) {
-          console.error('[GameWorker] Game not initialized when start called');
-          postMessage({ type: 'error', message: 'Game not initialized' } satisfies WorkerToMainMessage);
-          return;
+    try {
+      switch (message.type) {
+        case 'init': {
+          game = new WorkerGame(message.config);
+          postMessage({ type: 'initialized', success: true } satisfies WorkerToMainMessage);
+          break;
         }
-        game.start();
-        break;
-      }
 
-      case 'stop': {
-        game?.stop();
-        break;
-      }
-
-      case 'pause': {
-        game?.stop();
-        break;
-      }
-
-      case 'resume': {
-        game?.start();
-        break;
-      }
-
-      case 'setDebugSettings': {
-        setWorkerDebugSettings(message.settings);
-        break;
-      }
-
-      case 'command': {
-        if (!game) return;
-        game.issueCommand(message.command);
-        break;
-      }
-
-      case 'multiplayerCommand': {
-        if (!game) return;
-        game.receiveMultiplayerCommand(message.command);
-        break;
-      }
-
-      case 'setTerrain': {
-        game?.setTerrainGrid(message.terrain);
-        break;
-      }
-
-      case 'setNavMesh': {
-        if (!game) return;
-        const success = await game.initializeNavMesh(message.positions, message.indices);
-        if (!success) {
-          postMessage({ type: 'error', message: 'Failed to initialize navmesh' } satisfies WorkerToMainMessage);
+        case 'start': {
+          debugInitialization.log('[GameWorker] Received start command');
+          if (!game) {
+            console.error('[GameWorker] Game not initialized when start called');
+            postMessage({ type: 'error', message: 'Game not initialized' } satisfies WorkerToMainMessage);
+            return;
+          }
+          game.start();
+          break;
         }
-        break;
-      }
 
-      case 'setWaterNavMesh': {
-        if (!game) return;
-        await game.initializeWaterNavMesh(message.positions, message.indices);
-        break;
-      }
-
-      case 'setDecorations': {
-        game?.setDecorationCollisions(message.collisions);
-        break;
-      }
-
-      case 'spawnEntities': {
-        console.log('[GameWorker] Received spawnEntities message');
-        game?.spawnInitialEntities(message.mapData);
-        break;
-      }
-
-      case 'setSelection': {
-        game?.setSelection(message.entityIds);
-        break;
-      }
-
-      case 'setControlGroup': {
-        game?.setControlGroup(message.groupNumber, message.entityIds);
-        break;
-      }
-
-      case 'requestChecksum': {
-        game?.requestChecksum();
-        break;
-      }
-
-      case 'networkPause': {
-        if (message.paused) {
+        case 'stop': {
           game?.stop();
-        } else {
-          game?.start();
+          break;
         }
-        break;
+
+        case 'pause': {
+          game?.stop();
+          break;
+        }
+
+        case 'resume': {
+          game?.start();
+          break;
+        }
+
+        case 'setDebugSettings': {
+          setWorkerDebugSettings(message.settings);
+          break;
+        }
+
+        case 'command': {
+          if (!game) return;
+          game.issueCommand(message.command);
+          break;
+        }
+
+        case 'multiplayerCommand': {
+          if (!game) return;
+          game.receiveMultiplayerCommand(message.command);
+          break;
+        }
+
+        case 'setTerrain': {
+          game?.setTerrainGrid(message.terrain);
+          break;
+        }
+
+        case 'setNavMesh': {
+          if (!game) return;
+          const success = await game.initializeNavMesh(message.positions, message.indices);
+          if (!success) {
+            postMessage({ type: 'error', message: 'Failed to initialize navmesh' } satisfies WorkerToMainMessage);
+          }
+          break;
+        }
+
+        case 'setWaterNavMesh': {
+          if (!game) return;
+          await game.initializeWaterNavMesh(message.positions, message.indices);
+          break;
+        }
+
+        case 'setDecorations': {
+          game?.setDecorationCollisions(message.collisions);
+          break;
+        }
+
+        case 'spawnEntities': {
+          console.log('[GameWorker] Received spawnEntities message');
+          game?.spawnInitialEntities(message.mapData);
+          break;
+        }
+
+        case 'setSelection': {
+          game?.setSelection(message.entityIds);
+          break;
+        }
+
+        case 'setControlGroup': {
+          game?.setControlGroup(message.groupNumber, message.entityIds);
+          break;
+        }
+
+        case 'requestChecksum': {
+          game?.requestChecksum();
+          break;
+        }
+
+        case 'networkPause': {
+          if (message.paused) {
+            game?.stop();
+          } else {
+            game?.start();
+          }
+          break;
+        }
       }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const stack = error instanceof Error ? error.stack : undefined;
+      postMessage({ type: 'error', message: errorMessage, stack } satisfies WorkerToMainMessage);
     }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const stack = error instanceof Error ? error.stack : undefined;
-    postMessage({ type: 'error', message: errorMessage, stack } satisfies WorkerToMainMessage);
-  }
   };
 }
 
 if (typeof self !== 'undefined') {
-  // Handle uncaught errors
   self.onerror = (event) => {
     const message = typeof event === 'string' ? event : (event as ErrorEvent).message ?? 'Unknown error';
     let stack: string | undefined;
