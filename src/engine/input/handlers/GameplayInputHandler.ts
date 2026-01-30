@@ -557,13 +557,17 @@ export class GameplayInputHandler implements InputHandler {
   }
 
   private handleAttackRangeOverlay(): boolean {
-    // TODO: Implement attack range overlay toggle when overlay system is available
-    return false;
+    const store = useUIStore.getState();
+    const current = store.overlaySettings.showAttackRange;
+    store.setShowAttackRange(!current);
+    return true;
   }
 
   private handleVisionRangeOverlay(): boolean {
-    // TODO: Implement vision range overlay toggle when overlay system is available
-    return false;
+    const store = useUIStore.getState();
+    const current = store.overlaySettings.showVisionRange;
+    store.setShowVisionRange(!current);
+    return true;
   }
 
   private handleControlGroup(
