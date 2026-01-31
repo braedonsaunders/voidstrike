@@ -569,12 +569,11 @@ export class AdvancedParticleSystem {
     });
 
     // Create MeshBasicNodeMaterial with custom fragment
-    const material = new MeshBasicNodeMaterial({
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-    });
+    const material = new MeshBasicNodeMaterial();
+    material.transparent = true;
+    material.depthWrite = false;
+    material.blending = THREE.AdditiveBlending;
+    material.side = THREE.DoubleSide;
 
     // Set the color/alpha output using the soft particle node
     material.colorNode = softParticleFragment();
