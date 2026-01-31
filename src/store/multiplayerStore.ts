@@ -87,6 +87,10 @@ export interface MultiplayerState {
   remotePeerId: string | null;  // Legacy: first peer for backwards compatibility
   remotePeerIds: string[];      // All remote peer IDs
 
+  // Peer ID to slot ID mapping (e.g., "pubkey123" -> "player2")
+  // This maps network peer IDs to game slot IDs for command validation
+  peerToSlotId: Map<string, string>;
+
   // WebRTC objects - supports multiple peers
   dataChannel: RTCDataChannel | null;  // Legacy: first channel for backwards compatibility
   peerChannels: Map<string, PeerConnection>;  // All peer connections by ID
@@ -120,6 +124,13 @@ export interface MultiplayerState {
   getPeerChannel: (peerId: string) => RTCDataChannel | null;
   getAllPeerIds: () => string[];
   getConnectedPeerCount: () => number;
+
+  // Peer-to-slot mapping for command validation
+  setPeerSlotMapping: (peerId: string, slotId: string) => void;
+  removePeerSlotMapping: (peerId: string) => void;
+  getSlotIdForPeer: (peerId: string) => string | null;
+  getPeerIdForSlot: (slotId: string) => string | null;
+  getAllRemoteSlotIds: () => string[];
 
   // Network pause
   setNetworkPaused: (paused: boolean, reason?: string) => void;
@@ -185,6 +196,7 @@ const initialState = {
   localPeerId: null,
   remotePeerId: null,
   remotePeerIds: [] as string[],
+  peerToSlotId: new Map<string, string>(),
   dataChannel: null,
   peerChannels: new Map<string, PeerConnection>(),
   reconnectCallback: null,
@@ -381,6 +393,39 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       }
     }
     return count;
+  },
+
+  // Peer-to-slot mapping for command validation
+  setPeerSlotMapping: (peerId: string, slotId: string) => {
+    const newMapping = new Map(get().peerToSlotId);
+    newMapping.set(peerId, slotId);
+    set({ peerToSlotId: newMapping });
+    debugNetworking.log(`[Multiplayer] Set peer-slot mapping: ${peerId} -> ${slotId}`);
+  },
+
+  removePeerSlotMapping: (peerId: string) => {
+    const newMapping = new Map(get().peerToSlotId);
+    newMapping.delete(peerId);
+    set({ peerToSlotId: newMapping });
+    debugNetworking.log(`[Multiplayer] Removed peer-slot mapping for ${peerId}`);
+  },
+
+  getSlotIdForPeer: (peerId: string) => {
+    return get().peerToSlotId.get(peerId) || null;
+  },
+
+  getPeerIdForSlot: (slotId: string) => {
+    const mapping = get().peerToSlotId;
+    for (const [peerId, slot] of mapping.entries()) {
+      if (slot === slotId) {
+        return peerId;
+      }
+    }
+    return null;
+  },
+
+  getAllRemoteSlotIds: () => {
+    return Array.from(get().peerToSlotId.values());
   },
 
   setDataChannel: (channel) => {
@@ -914,6 +959,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       latencyStats: { ...defaultLatencyStats },
       pendingPings: new Map(),
       peerChannels: new Map(),
+      peerToSlotId: new Map(),
       remotePeerIds: [],
     });
   },
@@ -1011,4 +1057,25 @@ export function broadcastMessage(data: unknown, excludePeerId?: string): number 
 
 export function sendToPeer(peerId: string, data: unknown): boolean {
   return useMultiplayerStore.getState().sendToPeer(peerId, data);
+}
+
+// Peer-to-slot mapping utilities
+export function setPeerSlotMapping(peerId: string, slotId: string): void {
+  useMultiplayerStore.getState().setPeerSlotMapping(peerId, slotId);
+}
+
+export function removePeerSlotMapping(peerId: string): void {
+  useMultiplayerStore.getState().removePeerSlotMapping(peerId);
+}
+
+export function getSlotIdForPeer(peerId: string): string | null {
+  return useMultiplayerStore.getState().getSlotIdForPeer(peerId);
+}
+
+export function getPeerIdForSlot(slotId: string): string | null {
+  return useMultiplayerStore.getState().getPeerIdForSlot(slotId);
+}
+
+export function getAllRemoteSlotIds(): string[] {
+  return useMultiplayerStore.getState().getAllRemoteSlotIds();
 }

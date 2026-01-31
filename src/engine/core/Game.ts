@@ -24,6 +24,8 @@ import {
   getAdaptiveCommandDelay,
   getLatencyStats,
   getAllPeerIds,
+  getSlotIdForPeer,
+  getAllRemoteSlotIds,
 } from '@/store/multiplayerStore';
 
 // Multiplayer message types
@@ -168,20 +170,26 @@ export class Game extends GameCore {
         if (message.payload) {
           const command = message.payload as GameCommand;
 
-          // SECURITY: Validate playerId matches remote peer
-          const remotePeerId = useMultiplayerStore.getState().remotePeerId;
-          if (command.playerId !== remotePeerId) {
-            console.error(
-              `[Game] SECURITY: Rejected command with spoofed playerId. ` +
-              `Expected: ${remotePeerId}, Got: ${command.playerId}`
-            );
-            this.eventBus.emit('security:spoofedPlayerId', {
-              expectedPlayerId: remotePeerId,
-              spoofedPlayerId: command.playerId,
-              commandType: command.type,
-              tick: command.tick,
-            });
-            return;
+          // SECURITY: Validate playerId is from a connected remote player
+          // Commands use slot IDs (e.g., "player1", "player2"), not peer IDs
+          const validRemoteSlotIds = getAllRemoteSlotIds();
+          if (!validRemoteSlotIds.includes(command.playerId)) {
+            // Also check legacy single-peer mode
+            const legacyPeerId = useMultiplayerStore.getState().remotePeerId;
+            const legacySlotId = legacyPeerId ? getSlotIdForPeer(legacyPeerId) : null;
+            if (command.playerId !== legacySlotId) {
+              console.error(
+                `[Game] SECURITY: Rejected command with invalid playerId. ` +
+                `Valid slot IDs: [${validRemoteSlotIds.join(', ')}], Got: ${command.playerId}`
+              );
+              this.eventBus.emit('security:spoofedPlayerId', {
+                expectedPlayerId: validRemoteSlotIds.join(', '),
+                spoofedPlayerId: command.playerId,
+                commandType: command.type,
+                tick: command.tick,
+              });
+              return;
+            }
           }
 
           // SECURITY: Validate command tick is within acceptable range
@@ -477,25 +485,30 @@ export class Game extends GameCore {
   // ============================================================================
 
   /**
-   * Get the set of player IDs that should send commands for lockstep.
-   * Supports up to 8 players: local player + all remote peers.
+   * Get the set of player slot IDs that should send commands for lockstep.
+   * Uses slot IDs (e.g., "player1", "player2") not network peer IDs.
+   * Supports up to 8 players: local player + all remote players.
    */
   private getExpectedPlayerIds(): string[] {
     const players: string[] = [this.config.playerId];
 
-    // Get all remote peer IDs (supports 2-8 players)
-    const remotePeerIds = getAllPeerIds();
-    for (const peerId of remotePeerIds) {
-      if (!players.includes(peerId)) {
-        players.push(peerId);
+    // Get all remote player slot IDs (supports 2-8 players)
+    // These are mapped from peer IDs to slot IDs when peers connect
+    const remoteSlotIds = getAllRemoteSlotIds();
+    for (const slotId of remoteSlotIds) {
+      if (!players.includes(slotId)) {
+        players.push(slotId);
       }
     }
 
-    // Fallback for legacy single-peer mode
-    if (remotePeerIds.length === 0) {
+    // Fallback for legacy single-peer mode: try to get slot ID from peer ID mapping
+    if (remoteSlotIds.length === 0) {
       const remotePeerId = useMultiplayerStore.getState().remotePeerId;
-      if (remotePeerId && !players.includes(remotePeerId)) {
-        players.push(remotePeerId);
+      if (remotePeerId) {
+        const slotId = getSlotIdForPeer(remotePeerId);
+        if (slotId && !players.includes(slotId)) {
+          players.push(slotId);
+        }
       }
     }
 
