@@ -6,16 +6,24 @@
  * - Scout target determination
  * - Scouting phase execution
  * - Tracking scouted locations
- * - Enemy intel gathering
+ * - Enemy intel gathering via ScoutingMemory primitive
+ *
+ * Integrates with ScoutingMemory for sophisticated intel tracking:
+ * - Building sightings with confidence decay
+ * - Unit type tracking with last-seen timestamps
+ * - Strategy inference (rush/macro/tech/air transition)
+ * - Tech tree reconstruction from observed buildings
  */
 
 import { Transform } from '../../components/Transform';
 import { Unit } from '../../components/Unit';
+import { Building } from '../../components/Building';
 import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
 import { Game, GameCommand } from '../../core/Game';
 import { debugAI } from '@/utils/debugLogger';
 import type { AICoordinator, AIPlayer } from './AICoordinator';
+import type { InferredStrategy, ScoutedBuilding, ScoutedUnitType, StrategicInference } from '../../ai/ScoutingMemory';
 
 export class AIScoutingManager {
   private game: Game;
@@ -72,6 +80,7 @@ export class AIScoutingManager {
 
   /**
    * Get the next scouting target based on map layout and what's been scouted.
+   * Uses ScoutingMemory to prioritize areas with stale intel.
    */
   public getScoutTarget(ai: AIPlayer): { x: number; y: number } | null {
     const config = this.game.config;
@@ -90,7 +99,7 @@ export class AIScoutingManager {
       { x: config.mapWidth - 30, y: config.mapHeight / 2 }, // Right middle
     ];
 
-    // Find first unscouted location
+    // Find first location we haven't scouted
     for (const target of targets) {
       const key = `${Math.floor(target.x / 20)},${Math.floor(target.y / 20)}`;
       if (!ai.scoutedLocations.has(key)) {
@@ -98,7 +107,7 @@ export class AIScoutingManager {
       }
     }
 
-    // All predefined locations scouted, pick random location
+    // All locations scouted, pick random location for re-scouting
     const random = this.coordinator.getRandom(ai.playerId);
     return {
       x: random.next() * config.mapWidth,
@@ -158,18 +167,24 @@ export class AIScoutingManager {
 
   /**
    * Update enemy intel based on what's visible.
+   * Uses ScoutingMemory for tracking enemy buildings and units.
    * Called periodically to track enemy composition and locations.
    */
   public updateEnemyIntel(ai: AIPlayer): void {
     const config = ai.config!;
     const baseTypes = config.roles.baseTypes;
+    const currentTick = this.game.getCurrentTick();
+    const scoutingMemory = ai.scoutingMemory;
+
+    // Gather visible enemy entity IDs for ScoutingMemory update
+    const visibleEnemyIds = new Set<number>();
 
     let enemyAirUnits = 0;
     let enemyArmyStrength = 0;
     let enemyBaseCount = 0;
     let lastKnownEnemyBase: { x: number; y: number } | null = null;
 
-    // Count enemy units
+    // Collect visible enemy units
     const units = this.coordinator.getCachedUnitsWithTransform();
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -178,6 +193,8 @@ export class AIScoutingManager {
 
       if (selectable.playerId === ai.playerId) continue;
       if (health.isDead()) continue;
+
+      visibleEnemyIds.add(entity.id);
 
       // Track air units
       if (unit.isFlying && !unit.isWorker) {
@@ -190,16 +207,18 @@ export class AIScoutingManager {
       }
     }
 
-    // Count enemy bases
+    // Collect visible enemy buildings
     const buildings = this.coordinator.getCachedBuildingsWithTransform();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
-      const building = entity.get<import('../../components/Building').Building>('Building')!;
+      const building = entity.get<Building>('Building')!;
       const transform = entity.get<Transform>('Transform')!;
       const health = entity.get<Health>('Health')!;
 
       if (selectable.playerId === ai.playerId) continue;
       if (health.isDead()) continue;
+
+      visibleEnemyIds.add(entity.id);
 
       if (baseTypes.includes(building.buildingId)) {
         enemyBaseCount++;
@@ -207,7 +226,10 @@ export class AIScoutingManager {
       }
     }
 
-    // Update AI's intel
+    // Update ScoutingMemory with visible enemies (handles intel tracking internally)
+    scoutingMemory.update(this.coordinator['world'], currentTick, visibleEnemyIds);
+
+    // Update AI's intel from direct observations
     ai.enemyAirUnits = enemyAirUnits;
     ai.enemyArmyStrength = enemyArmyStrength;
     ai.enemyBaseCount = Math.max(1, enemyBaseCount); // Assume at least 1 base
@@ -215,6 +237,54 @@ export class AIScoutingManager {
     if (lastKnownEnemyBase) {
       ai.enemyBaseLocation = lastKnownEnemyBase;
     }
+
+    // Log strategy inference periodically
+    if (currentTick % 500 === 0) {
+      // Get intel for each known enemy
+      for (const intel of scoutingMemory.getAllIntel()) {
+        debugAI.log(
+          `[AIScouting] ${ai.playerId}: Enemy ${intel.playerId} strategy: ` +
+          `${intel.strategy.strategy} (${intel.strategy.confidence}), ` +
+          `tech level: ${intel.tech.techLevel}, ` +
+          `army supply: ${intel.estimatedArmySupply}, ` +
+          `workers: ${intel.estimatedWorkers}`
+        );
+      }
+    }
+  }
+
+  /**
+   * Get the inferred enemy strategy from ScoutingMemory.
+   * Returns the most likely strategy the enemy is pursuing.
+   */
+  public getInferredEnemyStrategy(ai: AIPlayer, enemyPlayerId: string): InferredStrategy | null {
+    const intel = ai.scoutingMemory.getIntel(enemyPlayerId);
+    return intel?.strategy.strategy ?? null;
+  }
+
+  /**
+   * Get full strategic inference for an enemy.
+   */
+  public getStrategicInference(ai: AIPlayer, enemyPlayerId: string): StrategicInference | null {
+    const intel = ai.scoutingMemory.getIntel(enemyPlayerId);
+    return intel?.strategy ?? null;
+  }
+
+  /**
+   * Get known enemy buildings from ScoutingMemory.
+   * Includes confidence levels based on when they were last seen.
+   */
+  public getKnownEnemyBuildings(ai: AIPlayer, enemyPlayerId: string): ScoutedBuilding[] {
+    return ai.scoutingMemory.getConfirmedBuildings(enemyPlayerId);
+  }
+
+  /**
+   * Get known enemy unit types from ScoutingMemory.
+   */
+  public getKnownEnemyUnitTypes(ai: AIPlayer, enemyPlayerId: string): ScoutedUnitType[] {
+    const intel = ai.scoutingMemory.getIntel(enemyPlayerId);
+    if (!intel) return [];
+    return Array.from(intel.unitTypes.values());
   }
 
   /**
@@ -237,5 +307,68 @@ export class AIScoutingManager {
    */
   public clearScoutedLocations(ai: AIPlayer): void {
     ai.scoutedLocations.clear();
+  }
+
+  /**
+   * Get enemy intel summary for a specific enemy player.
+   */
+  public getEnemyIntelSummary(ai: AIPlayer, enemyPlayerId: string): {
+    knownBuildingCount: number;
+    knownUnitTypes: number;
+    averageIntelConfidence: number;
+    inferredStrategy: InferredStrategy | null;
+    strategyConfidence: string;
+    estimatedArmySupply: number;
+    estimatedWorkers: number;
+  } {
+    const intel = ai.scoutingMemory.getIntel(enemyPlayerId);
+
+    if (!intel) {
+      return {
+        knownBuildingCount: 0,
+        knownUnitTypes: 0,
+        averageIntelConfidence: 0,
+        inferredStrategy: null,
+        strategyConfidence: 'low',
+        estimatedArmySupply: 0,
+        estimatedWorkers: 0,
+      };
+    }
+
+    const buildings = ai.scoutingMemory.getConfirmedBuildings(enemyPlayerId);
+    const avgConfidence = buildings.length > 0
+      ? buildings.reduce((sum, b) => sum + b.confidence, 0) / buildings.length
+      : 0;
+
+    return {
+      knownBuildingCount: buildings.length,
+      knownUnitTypes: intel.unitTypes.size,
+      averageIntelConfidence: avgConfidence,
+      inferredStrategy: intel.strategy.strategy,
+      strategyConfidence: intel.strategy.confidence,
+      estimatedArmySupply: intel.estimatedArmySupply,
+      estimatedWorkers: intel.estimatedWorkers,
+    };
+  }
+
+  /**
+   * Check if we should build anti-air based on enemy intel.
+   */
+  public shouldBuildAntiAir(ai: AIPlayer, enemyPlayerId: string): boolean {
+    return ai.scoutingMemory.shouldBuildAntiAir(enemyPlayerId);
+  }
+
+  /**
+   * Get all known enemy players.
+   */
+  public getKnownEnemies(ai: AIPlayer): string[] {
+    return ai.scoutingMemory.getAllIntel().map(intel => intel.playerId);
+  }
+
+  /**
+   * Get strategic recommendation for dealing with an enemy.
+   */
+  public getStrategicRecommendation(ai: AIPlayer, enemyPlayerId: string): string {
+    return ai.scoutingMemory.getStrategicRecommendation(enemyPlayerId);
   }
 }

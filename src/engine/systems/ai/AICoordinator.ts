@@ -7,6 +7,14 @@
  * - AITacticsManager: Combat state, attack/defend/harass execution
  * - AIScoutingManager: Map exploration, intel gathering
  *
+ * Integrates AI primitive systems for sophisticated decision-making:
+ * - InfluenceMap: Spatial threat tracking for pathfinding and positioning
+ * - PositionalAnalysis: Map terrain analysis for chokes, expansions
+ * - ScoutingMemory: Enemy intel tracking with confidence decay
+ * - WorkerDistribution: Optimal worker saturation across bases
+ * - RetreatCoordination: Coordinated army retreat with rally points
+ * - FormationControl: Army positioning and formation management
+ *
  * This replaces the monolithic EnhancedAISystem with a modular architecture.
  */
 
@@ -40,6 +48,14 @@ import { AIEconomyManager } from './AIEconomyManager';
 import { AIBuildOrderExecutor } from './AIBuildOrderExecutor';
 import { AITacticsManager } from './AITacticsManager';
 import { AIScoutingManager } from './AIScoutingManager';
+
+// Import AI primitives for sophisticated decision-making
+import { InfluenceMap } from '../../ai/InfluenceMap';
+import { PositionalAnalysis } from '../../ai/PositionalAnalysis';
+import { ScoutingMemory } from '../../ai/ScoutingMemory';
+import { WorkerDistribution } from '../../ai/WorkerDistribution';
+import { RetreatCoordination } from '../../ai/RetreatCoordination';
+import { FormationControl } from '../../ai/FormationControl';
 
 export type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting' | 'harassing';
 export type { AIDifficulty };
@@ -216,6 +232,12 @@ export interface AIPlayer {
   // Research tracking
   completedResearch: Set<string>;
   researchInProgress: Map<string, number>; // researchId -> buildingId
+
+  // AI Primitive instances (per-player)
+  scoutingMemory: ScoutingMemory;
+  workerDistribution: WorkerDistribution;
+  retreatCoordinator: RetreatCoordination;
+  formationControl: FormationControl;
 }
 
 // Entity query cache - cleared each update cycle
@@ -254,6 +276,11 @@ export class AICoordinator extends System {
   private tacticsManager: AITacticsManager;
   private scoutingManager: AIScoutingManager;
 
+  // Shared AI primitives (across all AI players)
+  private influenceMap: InfluenceMap;
+  private positionalAnalysis: PositionalAnalysis;
+  private positionalAnalysisInitialized: boolean = false;
+
   constructor(game: Game, difficulty: AIDifficulty = 'medium') {
     super(game);
     this.defaultDifficulty = difficulty;
@@ -263,6 +290,14 @@ export class AICoordinator extends System {
     this.buildOrderExecutor = new AIBuildOrderExecutor(game, this);
     this.tacticsManager = new AITacticsManager(game, this);
     this.scoutingManager = new AIScoutingManager(game, this);
+
+    // Initialize shared AI primitives
+    this.influenceMap = new InfluenceMap(game.config.mapWidth, game.config.mapHeight, 4);
+    this.positionalAnalysis = new PositionalAnalysis(
+      game.config.mapWidth,
+      game.config.mapHeight,
+      4 // Cell size matching influence map
+    );
 
     // Wire up subsystem dependencies
     this.buildOrderExecutor.setEconomyManager(this.economyManager);
@@ -360,6 +395,56 @@ export class AICoordinator extends System {
     return this.entityCache.resources;
   }
 
+  // === Shared AI Primitives Accessors ===
+
+  /** Get the shared influence map for spatial threat analysis */
+  public getInfluenceMap(): InfluenceMap {
+    return this.influenceMap;
+  }
+
+  /** Get the shared positional analysis for map terrain data */
+  public getPositionalAnalysis(): PositionalAnalysis {
+    return this.positionalAnalysis;
+  }
+
+  /**
+   * Update shared AI primitives with current game state.
+   * Called once per update cycle, before individual AI updates.
+   */
+  private updateSharedPrimitives(): void {
+    // Initialize positional analysis on first update (needs passability data)
+    if (!this.positionalAnalysisInitialized) {
+      this.initializePositionalAnalysis();
+      this.positionalAnalysisInitialized = true;
+    }
+
+    // Update influence map with current unit positions
+    this.updateInfluenceMap();
+  }
+
+  /**
+   * Initialize positional analysis with map terrain data.
+   * Analyzes the map for choke points, expansion locations, etc.
+   */
+  private initializePositionalAnalysis(): void {
+    // Analyze map terrain using the World for building/obstacle detection
+    this.positionalAnalysis.analyzeMap(this.world);
+
+    const chokePoints = this.positionalAnalysis.getChokePoints();
+    const expansionLocations = this.positionalAnalysis.getExpansionLocations();
+
+    debugAI.log(`[AICoordinator] Positional analysis initialized: ${chokePoints.length} choke points, ${expansionLocations.length} expansion locations`);
+  }
+
+  /**
+   * Update influence map with current unit and building positions.
+   */
+  private updateInfluenceMap(): void {
+    const currentTick = this.game.getCurrentTick();
+    // InfluenceMap.update handles all influence tracking internally
+    this.influenceMap.update(this.world, currentTick);
+  }
+
   // === Public API ===
 
   public registerAI(
@@ -399,6 +484,32 @@ export class AICoordinator extends System {
     }
 
     const difficultySettings = factionConfig.difficultyConfig[difficulty];
+
+    // Initialize per-player AI primitives
+    const scoutingMemory = new ScoutingMemory(playerId);
+
+    const workerDistribution = new WorkerDistribution({
+      workersPerMineral: 2,
+      workersPerGas: 3,
+      baseRadius: 12,
+      oversaturationThreshold: 1.3,
+      undersaturationThreshold: 0.7,
+    });
+
+    const retreatCoordinator = new RetreatCoordination({
+      healthThreshold: 0.3,
+      strengthRetreatRatio: 0.6,
+      reengageRatio: 0.9,
+      minRetreatTicks: 60,
+      rallyDistance: 15,
+    });
+
+    const formationControl = new FormationControl({
+      unitSpacing: 1.5,
+      maxConcaveAngle: Math.PI * 0.6,
+      rangedOffset: 3,
+      splashSpread: 2.5,
+    });
 
     this.aiPlayers.set(playerId, {
       playerId,
@@ -463,6 +574,12 @@ export class AICoordinator extends System {
 
       completedResearch: new Set(),
       researchInProgress: new Map(),
+
+      // AI Primitive instances
+      scoutingMemory,
+      workerDistribution,
+      retreatCoordinator,
+      formationControl,
     });
   }
 
@@ -807,6 +924,11 @@ export class AICoordinator extends System {
 
     if (currentTick === 1) {
       debugAI.log(`[AICoordinator] Tick 1: Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ') || '(none)'}`);
+    }
+
+    // Update shared AI primitives once per cycle
+    if (this.aiPlayers.size > 0) {
+      this.updateSharedPrimitives();
     }
 
     for (const [playerId, ai] of this.aiPlayers) {
