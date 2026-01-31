@@ -55,7 +55,17 @@ export class DefinitionLoader {
    * Load and parse a JSON file
    */
   private async loadJSON<T>(path: string): Promise<LoadResult<T>> {
-    const fullPath = path.startsWith('http') ? path : `${this.basePath}/${path}`;
+    let fullPath = path.startsWith('http') ? path : `${this.basePath}/${path}`;
+
+    // In worker context, convert relative paths to absolute URLs
+    // Workers don't have the same URL context as the main thread
+    if (!fullPath.startsWith('http')) {
+      // Use self.location.origin in workers, or window.location.origin in main thread
+      const origin = typeof self !== 'undefined' && self.location
+        ? self.location.origin
+        : (typeof window !== 'undefined' ? window.location.origin : '');
+      fullPath = `${origin}${fullPath}`;
+    }
 
     // Check cache
     if (this.cache.has(fullPath)) {
