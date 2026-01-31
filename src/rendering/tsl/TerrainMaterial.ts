@@ -345,7 +345,7 @@ export class TSLTerrainMaterial {
 
       // Color palette - metallic blue-gray with subtle warmth
       const panelBase = vec3(0.38, 0.40, 0.45);      // Blue-gray metal
-      const panelHighlight = vec3(0.52, 0.54, 0.58); // Lighter highlight
+      const _panelHighlight = vec3(0.52, 0.54, 0.58); // Lighter highlight (reserved for future use)
       const borderColor = vec3(0.18, 0.19, 0.22);    // Dark seams
       const bevelColor = vec3(0.58, 0.60, 0.65);     // Bright bevel edge
 

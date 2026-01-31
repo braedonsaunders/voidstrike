@@ -1,7 +1,6 @@
 import * as Phaser from 'phaser';
 import { debugAudio, debugPathfinding } from '@/utils/debugLogger';
 import { EventBus } from '@/engine/core/EventBus';
-import type { Game } from '@/engine/core/Game';
 import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, isLocalPlayer, getLocalPlayerId, enableSpectatorMode, isBattleSimulatorMode } from '@/store/gameSetupStore';

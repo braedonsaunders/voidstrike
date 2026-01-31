@@ -14,7 +14,7 @@
 import { distance } from '@/utils/math';
 
 // Debug flag for worker logging (workers can't access UI store)
-const DEBUG = false;
+const _DEBUG = false;
 
 // Unit priority for focus fire (higher = more important to kill)
 const DEFAULT_UNIT_PRIORITY: Record<string, number> = {
@@ -127,7 +127,7 @@ interface ThreatInfo {
 }
 
 // State
-let config: AIWorkerConfig = {};
+const _config: AIWorkerConfig = {};
 let unitPriorities: Record<string, number> = DEFAULT_UNIT_PRIORITY;
 let threatWeights = THREAT_WEIGHTS;
 let focusFireThreshold = 0.3;

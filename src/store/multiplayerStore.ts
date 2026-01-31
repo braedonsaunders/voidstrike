@@ -612,7 +612,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   // Send message to all connected peers (broadcast for hosts, single peer for guests)
   sendMessage: (data) => {
     const state = get();
-    const { connectionStatus, isHost, peerChannels } = state;
+    const { connectionStatus, isHost: _isHost, peerChannels } = state;
 
     // If disconnected/reconnecting, buffer the command
     if (connectionStatus === 'reconnecting' || connectionStatus === 'waiting') {

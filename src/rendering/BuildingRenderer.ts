@@ -798,9 +798,9 @@ export class BuildingRenderer {
       const isConstructing = building.state === 'constructing';
       const isWaitingForWorker = building.state === 'waiting_for_worker';
       const isPaused = building.state === 'paused';
-      const isLifting = building.state === 'lifting';
-      const isFlying = building.state === 'flying';
-      const isLanding = building.state === 'landing';
+      const _isLifting = building.state === 'lifting';
+      const _isFlying = building.state === 'flying';
+      const _isLanding = building.state === 'landing';
       // Complete, lifting, flying, and landing states should show full opacity building
       const shouldShowComplete = !isConstructing && !isWaitingForWorker && !isPaused;
 

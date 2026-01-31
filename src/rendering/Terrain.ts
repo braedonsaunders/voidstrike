@@ -11,15 +11,15 @@ import {
   elevationToHeight,
   ELEVATION_TO_HEIGHT_FACTOR,
   RAMP_BOUNDARY_ELEVATION_THRESHOLD,
-  RAMP_SMOOTHING_MAX_DIAGONAL,
-  RAMP_SMOOTHING_PASSES,
+  RAMP_SMOOTHING_MAX_DIAGONAL as _RAMP_SMOOTHING_MAX_DIAGONAL,
+  RAMP_SMOOTHING_PASSES as _RAMP_SMOOTHING_PASSES,
 } from '@/data/pathfinding.config';
 
 // Import from central rendering config
 import { TERRAIN } from '@/data/rendering.config';
 
 // Terrain subdivision for smoother rendering
-const SUBDIVISIONS = TERRAIN.SUBDIVISIONS;
+const _SUBDIVISIONS = TERRAIN.SUBDIVISIONS;
 
 /**
  * Quantize elevation to strict discrete levels for cliff separation.
@@ -33,7 +33,7 @@ const SUBDIVISIONS = TERRAIN.SUBDIVISIONS;
  *
  * Gap between levels: 3.2 units >> 0.3 walkableClimb
  */
-function quantizeElevation(elevation: Elevation): number {
+function _quantizeElevation(elevation: Elevation): number {
   if (elevation < 100) return elevationToHeight(60);
   if (elevation < 180) return elevationToHeight(140);
   return elevationToHeight(220);
@@ -146,7 +146,7 @@ function fbmNoise(x: number, y: number, octaves: number, lacunarity: number = 2.
 }
 
 // Ridged multi-fractal noise (good for ridges and mountain ranges)
-function ridgedNoise(x: number, y: number, octaves: number, lacunarity: number = 2.0, persistence: number = 0.5): number {
+function _ridgedNoise(x: number, y: number, octaves: number, lacunarity: number = 2.0, persistence: number = 0.5): number {
   let total = 0;
   let amplitude = 1;
   let frequency = 1;
@@ -164,7 +164,7 @@ function ridgedNoise(x: number, y: number, octaves: number, lacunarity: number =
 }
 
 // Turbulence noise (absolute value creates harder edges)
-function turbulenceNoise(x: number, y: number, octaves: number): number {
+function _turbulenceNoise(x: number, y: number, octaves: number): number {
   let total = 0;
   let amplitude = 1;
   let frequency = 1;
@@ -181,7 +181,7 @@ function turbulenceNoise(x: number, y: number, octaves: number): number {
 }
 
 // Voronoi/Worley noise for cellular patterns
-function voronoiNoise(x: number, y: number, frequency: number = 4): number {
+function _voronoiNoise(x: number, y: number, frequency: number = 4): number {
   const fx = x * frequency;
   const fy = y * frequency;
   const ix = Math.floor(fx);
@@ -213,11 +213,11 @@ function noise2D(x: number, y: number, seed: number = 0): number {
   return n - Math.floor(n);
 }
 
-function smoothNoise(x: number, y: number, scale: number, seed: number = 0): number {
+function _smoothNoise(x: number, y: number, scale: number, seed: number = 0): number {
   return fbmNoise(x / scale + seed * 0.1, y / scale + seed * 0.1, 3, 2.0, 0.5) * 0.5 + 0.5;
 }
 
-function fractalNoise(x: number, y: number, octaves: number, persistence: number, seed: number = 0): number {
+function _fractalNoise(x: number, y: number, octaves: number, persistence: number, seed: number = 0): number {
   return fbmNoise(x * 0.1 + seed * 0.01, y * 0.1 + seed * 0.01, octaves, 2.0, persistence) * 0.5 + 0.5;
 }
 
@@ -617,7 +617,7 @@ export class Terrain {
     const RAIL_HEIGHT = 0.4;        // Height of guardrail
     const POST_WIDTH = 0.08;        // Width of posts
     const RAIL_THICKNESS = 0.05;    // Thickness of horizontal rails
-    const POST_SPACING = 1.0;       // One post per cell edge
+    const _POST_SPACING = 1.0;       // One post per cell edge
 
     // Helper to check if a cell is a platform (not ramp)
     const isPlatform = (x: number, y: number): boolean => {
@@ -1652,7 +1652,7 @@ interface TrackedEmissiveDecoration {
 }
 
 // Import DecorationLightManager type (will be passed in)
-import { DecorationLightManager, DecorationLightConfig } from './DecorationLightManager';
+import { DecorationLightManager, DecorationLightConfig as _DecorationLightConfig } from './DecorationLightManager';
 
 // Decorative elements (watch towers, destructible rocks, trees, etc.)
 export class MapDecorations {

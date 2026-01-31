@@ -12,7 +12,7 @@
  */
 
 // Debug flag for worker logging (workers can't access UI store)
-const DEBUG = false;
+const _DEBUG = false;
 
 // Vision states (encoded as numbers for efficient TypedArray transfer)
 const VISION_UNEXPLORED = 0;
