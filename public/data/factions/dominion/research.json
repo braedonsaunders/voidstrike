@@ -552,5 +552,179 @@
         "targets": ["operative"]
       }
     ]
+  },
+  "sensor_sweep": {
+    "id": "sensor_sweep",
+    "name": "Sensor Sweep",
+    "description": "Orbital Station can reveal any area of the map temporarily.",
+    "faction": "dominion",
+    "mineralCost": 100,
+    "vespeneCost": 100,
+    "researchTime": 79,
+    "effects": [
+      {
+        "type": "ability_unlock",
+        "value": 1,
+        "targets": ["orbital_station"]
+      }
+    ]
+  },
+  "supply_drop": {
+    "id": "supply_drop",
+    "name": "Supply Drop",
+    "description": "Orbital Station can call down extra supplies to boost economy.",
+    "faction": "dominion",
+    "mineralCost": 100,
+    "vespeneCost": 100,
+    "researchTime": 79,
+    "effects": [
+      {
+        "type": "ability_unlock",
+        "value": 1,
+        "targets": ["orbital_station"]
+      }
+    ]
+  },
+  "naval_weapons_1": {
+    "id": "naval_weapons_1",
+    "name": "Naval Weapons Level 1",
+    "description": "Increases the attack damage of naval units.",
+    "faction": "dominion",
+    "mineralCost": 100,
+    "vespeneCost": 100,
+    "researchTime": 114,
+    "level": 1,
+    "nextLevel": "naval_weapons_2",
+    "effects": [
+      {
+        "type": "damage_bonus",
+        "value": 1,
+        "unitTypes": ["naval"]
+      }
+    ]
+  },
+  "naval_weapons_2": {
+    "id": "naval_weapons_2",
+    "name": "Naval Weapons Level 2",
+    "description": "Further increases the attack damage of naval units.",
+    "faction": "dominion",
+    "mineralCost": 175,
+    "vespeneCost": 175,
+    "researchTime": 136,
+    "level": 2,
+    "nextLevel": "naval_weapons_3",
+    "requirements": ["naval_weapons_1"],
+    "effects": [
+      {
+        "type": "damage_bonus",
+        "value": 1,
+        "unitTypes": ["naval"]
+      }
+    ]
+  },
+  "naval_weapons_3": {
+    "id": "naval_weapons_3",
+    "name": "Naval Weapons Level 3",
+    "description": "Maximizes the attack damage of naval units.",
+    "faction": "dominion",
+    "mineralCost": 250,
+    "vespeneCost": 250,
+    "researchTime": 157,
+    "level": 3,
+    "requirements": ["naval_weapons_2"],
+    "effects": [
+      {
+        "type": "damage_bonus",
+        "value": 1,
+        "unitTypes": ["naval"]
+      }
+    ]
+  },
+  "naval_armor_1": {
+    "id": "naval_armor_1",
+    "name": "Naval Armor Level 1",
+    "description": "Increases the armor of naval units.",
+    "faction": "dominion",
+    "mineralCost": 100,
+    "vespeneCost": 100,
+    "researchTime": 114,
+    "level": 1,
+    "nextLevel": "naval_armor_2",
+    "effects": [
+      {
+        "type": "armor_bonus",
+        "value": 1,
+        "unitTypes": ["naval"]
+      }
+    ]
+  },
+  "naval_armor_2": {
+    "id": "naval_armor_2",
+    "name": "Naval Armor Level 2",
+    "description": "Further increases the armor of naval units.",
+    "faction": "dominion",
+    "mineralCost": 175,
+    "vespeneCost": 175,
+    "researchTime": 136,
+    "level": 2,
+    "nextLevel": "naval_armor_3",
+    "requirements": ["naval_armor_1"],
+    "effects": [
+      {
+        "type": "armor_bonus",
+        "value": 1,
+        "unitTypes": ["naval"]
+      }
+    ]
+  },
+  "naval_armor_3": {
+    "id": "naval_armor_3",
+    "name": "Naval Armor Level 3",
+    "description": "Maximizes the armor of naval units.",
+    "faction": "dominion",
+    "mineralCost": 250,
+    "vespeneCost": 250,
+    "researchTime": 157,
+    "level": 3,
+    "requirements": ["naval_armor_2"],
+    "effects": [
+      {
+        "type": "armor_bonus",
+        "value": 1,
+        "unitTypes": ["naval"]
+      }
+    ]
+  },
+  "advanced_sonar": {
+    "id": "advanced_sonar",
+    "name": "Advanced Sonar",
+    "description": "Increases naval unit sight range and enables detection of submerged units.",
+    "faction": "dominion",
+    "mineralCost": 100,
+    "vespeneCost": 100,
+    "researchTime": 79,
+    "effects": [
+      {
+        "type": "sight_bonus",
+        "value": 2,
+        "unitTypes": ["naval"]
+      }
+    ]
+  },
+  "reinforced_hull": {
+    "id": "reinforced_hull",
+    "name": "Reinforced Hull",
+    "description": "Increases the health of all naval units by 25.",
+    "faction": "dominion",
+    "mineralCost": 150,
+    "vespeneCost": 150,
+    "researchTime": 100,
+    "effects": [
+      {
+        "type": "health_bonus",
+        "value": 25,
+        "unitTypes": ["naval"]
+      }
+    ]
   }
 }
