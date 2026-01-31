@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * TSL Terrain Material
  *
@@ -283,7 +284,7 @@ export class TSLTerrainMaterial {
     cliffDiffuse: THREE.Texture,
     cliffNormal: THREE.Texture,
     cliffRoughness: THREE.Texture,
-    textureRepeat: number
+    _textureRepeat: number
   ): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
 

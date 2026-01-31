@@ -2,7 +2,6 @@ import { System } from '../ecs/System';
 // Use type-only import to avoid pulling in browser-only deps from Game.ts in worker context
 import type { Game } from '../core/Game';
 import { Building } from '../components/Building';
-import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { useGameSetupStore, TeamNumber } from '@/store/gameSetupStore';
@@ -166,7 +165,7 @@ export class GameStateSystem extends System {
     });
   }
 
-  public update(deltaTime: number): void {
+  public update(_deltaTime: number): void {
     if (this.isGameOver) return;
 
     const gameTime = this.game.getGameTime();
@@ -268,7 +267,7 @@ export class GameStateSystem extends System {
 
     // Victory condition: Only one team has players with buildings remaining
     if (teamsWithActivePlayers.size === 1 && players.size > 1) {
-      const [teamId, teamPlayers] = [...teamsWithActivePlayers.entries()][0];
+      const [_teamId, teamPlayers] = [...teamsWithActivePlayers.entries()][0];
       const winner = teamPlayers[0]; // First player of winning team
       const losers = [...players].filter(p => !teamPlayers.includes(p));
 

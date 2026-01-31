@@ -4,6 +4,8 @@
  * This eliminates the need for a serverless function that reads the filesystem
  */
 
+/* eslint-disable no-console */
+
 const fs = require('fs');
 const path = require('path');
 

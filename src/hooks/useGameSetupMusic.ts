@@ -24,8 +24,11 @@ export function useGameSetupMusic() {
   const isFullscreen = hasMounted ? isFullscreenStore : false;
 
   // Mark as mounted after hydration
+  // Use requestAnimationFrame to avoid sync setState warning
   useEffect(() => {
-    setHasMounted(true);
+    requestAnimationFrame(() => {
+      setHasMounted(true);
+    });
   }, []);
 
   const handleMusicToggle = useCallback(() => {

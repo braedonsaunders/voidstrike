@@ -542,7 +542,6 @@ export class SpatialGrid {
     this._cellBuffer.length = 0;
     this.getFineCellsForEntity(x, y, radius, this._cellBuffer);
 
-    const radiusSq = radius * radius;
     const seenReset: number[] = [];
 
     for (let c = 0; c < this._cellBuffer.length; c++) {
@@ -586,7 +585,6 @@ export class SpatialGrid {
     this._cellBuffer.length = 0;
     this.getCoarseCellsForEntity(x, y, radius, this._cellBuffer);
 
-    const radiusSq = radius * radius;
     const capacity = this.maxEntitiesPerCell * 4;
     const seenReset: number[] = [];
 
@@ -932,7 +930,6 @@ export class SpatialGrid {
    */
   public getHotCells(): Set<number> {
     const hotCells = new Set<number>();
-    const cellPlayers = new Map<number, Set<number>>();
 
     // Iterate all fine cells
     for (let cellIndex = 0; cellIndex < this.fineCols * this.fineRows; cellIndex++) {

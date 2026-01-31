@@ -9,7 +9,7 @@ interface LobbyBrowserProps {
   playerName: string;
 }
 
-export function LobbyBrowser({ onJoin, onClose, playerName }: LobbyBrowserProps) {
+export function LobbyBrowser({ onJoin, onClose, playerName: _playerName }: LobbyBrowserProps) {
   const { lobbies, isLoading, error, refresh, startBrowsing, stopBrowsing } = usePublicLobbies();
   const [filter, setFilter] = useState<'all' | 'available'>('available');
 

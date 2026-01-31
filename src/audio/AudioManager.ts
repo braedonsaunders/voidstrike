@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { debugAudio } from '@/utils/debugLogger';
-import { audioConfig, SoundPriorityName } from './audioConfig';
+import { audioConfig } from './audioConfig';
 import { clamp } from '@/utils/math';
 
 export type SoundCategory = 'ui' | 'combat' | 'unit' | 'building' | 'ambient' | 'music' | 'voice' | 'alert';

@@ -11,15 +11,10 @@ import type {
   ResearchDefinition,
   AbilityDefinition,
   AbilityTargetType,
-  WallDefinition,
-  WallUpgradeDefinition,
-  FactionManifest,
-  GameManifest,
   ValidationResult,
   ValidationError,
   ValidationWarning,
   TransformMode,
-  UpgradeEffect,
 } from './types';
 
 type DamageType = 'normal' | 'explosive' | 'concussive' | 'psionic';

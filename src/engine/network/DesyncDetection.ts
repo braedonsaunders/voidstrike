@@ -7,8 +7,8 @@
  */
 
 import { Game } from '../core/Game';
-import { ChecksumSystem, ChecksumData, GameStateSnapshot, DesyncReport } from '../systems/ChecksumSystem';
-import { quantize, QUANT_POSITION, QUANT_DAMAGE } from '@/utils/FixedPoint';
+import { ChecksumSystem, ChecksumData, DesyncReport } from '../systems/ChecksumSystem';
+import { QUANT_POSITION, QUANT_DAMAGE } from '@/utils/FixedPoint';
 import { debugNetworking } from '@/utils/debugLogger';
 import { distance } from '@/utils/math';
 
@@ -272,8 +272,8 @@ export class DesyncDetectionManager {
       const snapshot = report.localSnapshot;
 
       // Count entity types
-      const unitCount = snapshot.entities.filter(e => e.type === 'unit').length;
-      const buildingCount = snapshot.entities.filter(e => e.type === 'building').length;
+      const _unitCount = snapshot.entities.filter(e => e.type === 'unit').length;
+      const _buildingCount = snapshot.entities.filter(e => e.type === 'building').length;
 
       // Look for suspicious patterns
       for (const entity of snapshot.entities) {

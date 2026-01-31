@@ -9,16 +9,14 @@
  * Uses WALKABLE_CLIMB_ELEVATION from central pathfinding config.
  */
 
-import { type Point, toXY } from './ElevationMap';
+import { toXY } from './ElevationMap';
 import {
   type ConnectivityGraph,
   type ConnectivityNode,
   type ConnectivityIssue,
   type ConnectivityResult,
   type SuggestedFix,
-  type IssueSeverity,
   distance,
-  edgeKey,
 } from './ConnectivityGraph';
 import { WALKABLE_CLIMB_ELEVATION } from '@/data/pathfinding.config';
 import { clamp } from '@/utils/math';
@@ -216,8 +214,8 @@ function suggestRampBetween(
   // Calculate midpoint for ramp placement
   const posA = toXY(nodeA.position);
   const posB = toXY(nodeB.position);
-  const midX = (posA.x + posB.x) / 2;
-  const midY = (posA.y + posB.y) / 2;
+  const _midX = (posA.x + posB.x) / 2;
+  const _midY = (posA.y + posB.y) / 2;
 
   // Determine ramp direction and width based on distance
   const dist = distance(nodeA.position, nodeB.position);

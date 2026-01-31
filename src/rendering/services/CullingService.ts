@@ -97,7 +97,7 @@ export class CullingService {
         );
         this.isGPUAvailable = this.cullingCompute.isUsingGPU();
         debugShaders.log(`[CullingService] Initialized with GPU: ${this.isGPUAvailable}`);
-      } catch (e) {
+      } catch {
         debugShaders.warn('[CullingService] GPU init failed, using CPU fallback');
         this.isGPUAvailable = false;
       }

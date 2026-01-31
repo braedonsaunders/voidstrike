@@ -35,15 +35,6 @@ class UnitComponent implements Component {
   }
 }
 
-class BuildingComponent implements Component {
-  type: ComponentType = 'Building';
-  buildingType: string;
-
-  constructor(buildingType: string = 'generic') {
-    this.buildingType = buildingType;
-  }
-}
-
 describe('World', () => {
   let world: World;
 

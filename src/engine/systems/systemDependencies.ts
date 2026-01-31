@@ -5,7 +5,6 @@ import { Game } from '../core/Game';
 import { SelectionSystem } from './SelectionSystem';
 import { SpawnSystem } from './SpawnSystem';
 import { BuildingPlacementSystem } from './BuildingPlacementSystem';
-import { PathfindingSystem } from './PathfindingSystem';
 import { BuildingMechanicsSystem } from './BuildingMechanicsSystem';
 import { WallSystem } from './WallSystem';
 import { UnitMechanicsSystem } from './UnitMechanicsSystem';
@@ -16,14 +15,8 @@ import { ProductionSystem } from './ProductionSystem';
 import { ResourceSystem } from './ResourceSystem';
 import { ResearchSystem } from './ResearchSystem';
 import { AbilitySystem } from './AbilitySystem';
-import { VisionSystem } from './VisionSystem';
-import { AudioSystem } from './AudioSystem';
-import { GameStateSystem } from './GameStateSystem';
-import { SaveLoadSystem } from './SaveLoadSystem';
 import { EnhancedAISystem } from './EnhancedAISystem';
 import { AIEconomySystem } from './AIEconomySystem';
-import { AIMicroSystem } from './AIMicroSystem';
-import { ChecksumSystem } from './ChecksumSystem';
 
 /**
  * System Dependency Definitions

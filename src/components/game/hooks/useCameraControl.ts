@@ -26,7 +26,7 @@ export interface UseCameraControlReturn {
   centerOnPosition: (x: number, y: number) => void;
 }
 
-export function useCameraControl({ cameraRef, gameRef }: UseCameraControlProps): UseCameraControlReturn {
+export function useCameraControl({ cameraRef, gameRef: _gameRef }: UseCameraControlProps): UseCameraControlReturn {
   // Control group tracking for double-tap detection
   const lastControlGroupTap = useRef<{ group: number; time: number } | null>(null);
   const subgroupIndexRef = useRef(0);

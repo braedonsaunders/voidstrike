@@ -8,7 +8,6 @@
  * Also supports explicit formation commands using data-driven formations.
  */
 
-import { Entity } from '../../ecs/Entity';
 import { Transform } from '../../components/Transform';
 import { Unit } from '../../components/Unit';
 import { World } from '../../ecs/World';

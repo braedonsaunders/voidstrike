@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * Volumetric Fog TSL Implementation
  *
@@ -8,17 +9,13 @@
 import * as THREE from 'three';
 import {
   Fn,
-  vec2,
   vec3,
   vec4,
   float,
   int,
   uniform,
   uv,
-  clamp,
-  smoothstep,
   mix,
-  max,
   min,
   dot,
   normalize,

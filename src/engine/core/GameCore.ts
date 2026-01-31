@@ -26,7 +26,6 @@ import { ProjectileSystem } from '../systems/ProjectileSystem';
 // Components for validation
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
-import { Selectable } from '../components/Selectable';
 
 import { validateEntity } from '@/utils/EntityValidator';
 import { dispatchCommand, type GameCommand } from './GameCommand';

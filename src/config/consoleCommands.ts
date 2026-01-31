@@ -411,7 +411,7 @@ export const CONSOLE_COMMANDS: ConsoleCommand[] = [
     aliases: ['listunits', 'unittypes'],
     description: 'List all available unit types',
     category: 'info',
-    execute: (_args, ctx) => {
+    execute: (_args, _ctx) => {
       const { DefinitionRegistry } = require('@/engine/definitions');
       const unitsRecord = DefinitionRegistry.getAllUnits();
       const units = Object.values(unitsRecord) as Array<{ id: string; name: string; faction: string }>;
@@ -432,7 +432,7 @@ export const CONSOLE_COMMANDS: ConsoleCommand[] = [
     aliases: ['listbuildings', 'buildingtypes'],
     description: 'List all available building types',
     category: 'info',
-    execute: (_args, ctx) => {
+    execute: (_args, _ctx) => {
       const { DefinitionRegistry } = require('@/engine/definitions');
       const buildingsRecord = DefinitionRegistry.getAllBuildings();
       const buildings = Object.values(buildingsRecord) as Array<{ id: string; name: string; faction: string }>;
@@ -453,7 +453,7 @@ export const CONSOLE_COMMANDS: ConsoleCommand[] = [
     aliases: ['listplayers'],
     description: 'Show player information',
     category: 'info',
-    execute: (_args, ctx) => {
+    execute: (_args, _ctx) => {
       const { useGameSetupStore, getLocalPlayerId } = require('@/store/gameSetupStore');
       const store = useGameSetupStore.getState();
       const localId = getLocalPlayerId();

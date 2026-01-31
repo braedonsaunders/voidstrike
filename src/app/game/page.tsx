@@ -25,8 +25,10 @@ export default function GamePage() {
   const { gameStarted, endGame } = useGameSetupStore();
   const [mounted, setMounted] = useState(false);
 
+  // Hydration mount pattern: intentionally triggers re-render after client hydration
+  // to avoid SSR/client mismatch when rendering browser-only content
   useEffect(() => {
-    setMounted(true);
+    setMounted(true); // eslint-disable-line react-hooks/set-state-in-effect -- intentional hydration pattern
   }, []);
 
   useEffect(() => {

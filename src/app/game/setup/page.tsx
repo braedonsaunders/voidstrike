@@ -145,7 +145,7 @@ export default function GameSetupPage() {
   // Close join modal when connected
   useEffect(() => {
     if (lobbyStatus === 'connected' && showJoinModal) {
-      setShowJoinModal(false);
+      setShowJoinModal(false); // eslint-disable-line react-hooks/set-state-in-effect -- closing modal in response to connection status change
     }
   }, [lobbyStatus, showJoinModal]);
 
@@ -154,7 +154,7 @@ export default function GameSetupPage() {
   const firstSlotName = playerSlots[0]?.name;
   useEffect(() => {
     if (firstSlotId && !isGuestMode && playerName !== firstSlotName) {
-      setPlayerSlotName(firstSlotId, playerName);
+      setPlayerSlotName(firstSlotId, playerName); // eslint-disable-line react-hooks/set-state-in-effect -- syncing store state with local input
     }
   }, [playerName, firstSlotId, firstSlotName, isGuestMode, setPlayerSlotName]);
 
@@ -344,7 +344,7 @@ export default function GameSetupPage() {
                   </div>
 
                   <p className="text-void-500 text-[10px]">
-                    Share code with friends. Set slot to "Open" to let them join.
+                    Share code with friends. Set slot to &quot;Open&quot; to let them join.
                   </p>
 
                   {hasOpenSlot && (

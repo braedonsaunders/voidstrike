@@ -3,7 +3,7 @@ import type { Game } from '../core/Game';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
-import { Ability, AbilityDefinition, AbilityTargetType } from '../components/Ability';
+import { Ability, AbilityDefinition } from '../components/Ability';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { distance } from '@/utils/math';
@@ -695,7 +695,7 @@ export class AbilitySystem extends System {
     }
   }
 
-  private processAutoCast(deltaTime: number): void {
+  private processAutoCast(_deltaTime: number): void {
     const healers = this.world.getEntitiesWith('Unit', 'Ability', 'Transform', 'Selectable');
 
     for (const healer of healers) {

@@ -12,7 +12,6 @@
  */
 
 import * as THREE from 'three';
-import { EventBus } from '../core/EventBus';
 import { AudioManager } from '@/audio/AudioManager';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';

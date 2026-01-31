@@ -221,7 +221,7 @@ export function memorySelector(name: string, ...children: BehaviorNode[]): Behav
 
   return createNode(
     (context: BehaviorContext) => {
-      let startIndex = context.blackboard.get<number>(stateKey) ?? 0;
+      const startIndex = context.blackboard.get<number>(stateKey) ?? 0;
 
       for (let i = startIndex; i < children.length; i++) {
         const status = children[i](context);
@@ -254,7 +254,7 @@ export function memorySequence(name: string, ...children: BehaviorNode[]): Behav
 
   return createNode(
     (context: BehaviorContext) => {
-      let startIndex = context.blackboard.get<number>(stateKey) ?? 0;
+      const startIndex = context.blackboard.get<number>(stateKey) ?? 0;
 
       for (let i = startIndex; i < children.length; i++) {
         const status = children[i](context);

@@ -14,14 +14,12 @@ import { type Point, toXY } from './ElevationMap';
 import {
   type ConnectivityGraph,
   type ConnectivityNode,
-  type ConnectivityEdge,
   type NodeType,
   type EdgeType,
   createEmptyGraph,
   createNode,
   createEdge,
   edgeKey,
-  distance,
 } from './ConnectivityGraph';
 import { WALKABLE_CLIMB_ELEVATION } from '@/data/pathfinding.config';
 import { clamp } from '@/utils/math';
@@ -79,7 +77,7 @@ function floodFillFrom(
   // Clamp start position
   const sx = clamp(Math.floor(startX), 0, width - 1);
   const sy = clamp(Math.floor(startY), 0, height - 1);
-  const startIdx = sy * width + sx;
+  const _startIdx = sy * width + sx;
 
   // Find walkable cell near start if start isn't walkable
   let actualStart: { x: number; y: number } | null = null;

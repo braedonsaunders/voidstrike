@@ -83,7 +83,7 @@ export class WatchTowerRenderer {
     }
   }
 
-  private createParticleSystem(tower: ActiveWatchTower): THREE.Points {
+  private createParticleSystem(_tower: ActiveWatchTower): THREE.Points {
     const particleCount = 100;
     const geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(particleCount * 3);

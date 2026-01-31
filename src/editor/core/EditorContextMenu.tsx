@@ -57,7 +57,10 @@ function SubMenu({
 
     // Check if submenu would overflow right side
     if (parentRect.right + submenuRect.width > viewportWidth - 10) {
-      setPosition('left');
+      // Use requestAnimationFrame to avoid cascading renders
+      requestAnimationFrame(() => {
+        setPosition('left');
+      });
     }
   }, [parentRef]);
 

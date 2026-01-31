@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import type { EditorConfig, ToolConfig } from '../../config/EditorConfig';
 
 // Panel icons
@@ -516,13 +516,7 @@ export function RotationDial({
   const dialRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    updateRotation(e);
-  };
-
-  const updateRotation = (e: React.MouseEvent | MouseEvent) => {
+  const updateRotation = useCallback((e: React.MouseEvent | MouseEvent) => {
     if (!dialRef.current) return;
     const rect = dialRef.current.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
@@ -532,6 +526,12 @@ export function RotationDial({
     let angle = Math.atan2(dy, dx) * (180 / Math.PI) + 90;
     if (angle < 0) angle += 360;
     onChange(Math.round(angle) % 360);
+  }, [onChange]);
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+    updateRotation(e);
   };
 
   useEffect(() => {
@@ -546,7 +546,7 @@ export function RotationDial({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging]);
+  }, [isDragging, updateRotation]);
 
   // Quick snap buttons
   const snapAngles = [0, 45, 90, 135, 180, 225, 270, 315];
@@ -747,13 +747,19 @@ export function AnimatedPanelContent({
 
   useEffect(() => {
     if (isActive) {
-      setShouldRender(true);
-      // Small delay to trigger CSS transition
+      // Use requestAnimationFrame to avoid cascading renders
       requestAnimationFrame(() => {
-        setIsAnimating(true);
+        setShouldRender(true);
+        // Small delay to trigger CSS transition
+        requestAnimationFrame(() => {
+          setIsAnimating(true);
+        });
       });
     } else {
-      setIsAnimating(false);
+      // Use requestAnimationFrame to avoid cascading renders
+      requestAnimationFrame(() => {
+        setIsAnimating(false);
+      });
       // Wait for animation to complete before unmounting
       const timer = setTimeout(() => setShouldRender(false), 200);
       return () => clearTimeout(timer);

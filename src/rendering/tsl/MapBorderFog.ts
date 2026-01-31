@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * TSL Map Border Fog
  *
@@ -18,7 +19,6 @@ import {
   cos,
   uv,
   max,
-  abs,
 } from 'three/tsl';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import { MapData } from '@/data/maps';

@@ -17,7 +17,7 @@ import { debugPathfinding } from '@/utils/debugLogger';
 export type VisionState = 'unexplored' | 'explored' | 'visible';
 
 // Vision state encoding for worker communication
-const VISION_UNEXPLORED = 0;
+const _VISION_UNEXPLORED = 0;
 const VISION_EXPLORED = 1;
 const VISION_VISIBLE = 2;
 
@@ -844,7 +844,7 @@ export class VisionSystem extends System {
   /**
    * Update watch tower control and vision (main thread fallback)
    */
-  private updateWatchTowers(units: Entity[]): void {
+  private updateWatchTowers(_units: Entity[]): void {
     // Reset all tower controlling players
     for (const tower of this.watchTowers) {
       tower.controllingPlayers.clear();

@@ -6,8 +6,7 @@ import { Building } from '../components/Building';
 import { Wall } from '../components/Wall';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
-import { Unit } from '../components/Unit';
-import { WALL_DEFINITIONS, WALL_UPGRADE_DEFINITIONS, WallUpgradeType } from '@/data/buildings/walls';
+import { WALL_UPGRADE_DEFINITIONS, WallUpgradeType } from '@/data/buildings/walls';
 import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
 import { EnhancedAISystem } from './EnhancedAISystem';
 

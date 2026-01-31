@@ -3,6 +3,8 @@
  * Run on every commit via GitHub Actions to keep documentation in sync with codebase
  */
 
+/* eslint-disable no-console */
+
 const fs = require('fs');
 const path = require('path');
 

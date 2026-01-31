@@ -15,8 +15,6 @@ import { World } from '../ecs/World';
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
-import { Selectable } from '../components/Selectable';
-import { Health } from '../components/Health';
 import { distance } from '@/utils/math';
 
 /**
@@ -422,7 +420,7 @@ export class PositionalAnalysis {
   private findDefensiblePositions(): void {
     if (!this.analysis) return;
 
-    const { passable, edgeDistance, positions, defensibleIndices, chokeIndices } = this.analysis;
+    const { passable, positions, defensibleIndices, chokeIndices } = this.analysis;
 
     // Areas behind choke points are defensible
     for (const chokeIdx of chokeIndices) {

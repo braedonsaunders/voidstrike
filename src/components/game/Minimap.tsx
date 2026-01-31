@@ -271,8 +271,8 @@ export function Minimap() {
       const currentCameraY = storeState.cameraY;
       const viewWidth = (currentZoom * 2) * scale;
       const viewHeight = (currentZoom * 1.5) * scale;
-      let viewX = currentCameraX * scale - viewWidth / 2;
-      let viewY = currentCameraY * scale - viewHeight / 2;
+      const viewX = currentCameraX * scale - viewWidth / 2;
+      const viewY = currentCameraY * scale - viewHeight / 2;
 
       // Clamp viewport rectangle to stay within minimap bounds
       const clampedX = clamp(viewX, 0, MINIMAP_SIZE - viewWidth);

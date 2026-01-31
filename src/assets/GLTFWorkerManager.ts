@@ -9,7 +9,7 @@
  * less responsiveness during loading.
  */
 
-import type { FetchResponse, BatchFetchResponse, WorkerRequest, WorkerResponse } from '../workers/gltf.worker';
+import type { WorkerRequest, WorkerResponse } from '../workers/gltf.worker';
 import { debugAssets } from '@/utils/debugLogger';
 
 // Enable Web Worker for off-main-thread GLB fetching

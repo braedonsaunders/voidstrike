@@ -13,7 +13,6 @@ import {
   AIDifficulty,
   BuildOrder,
   BuildOrderStep,
-  AIBehaviorConfig,
 } from '@/data/ai/buildOrders';
 
 // Seeded random for deterministic tests
@@ -192,7 +191,7 @@ describe('AI Build Orders', () => {
       for (const faction of Object.keys(FACTION_UNIT_COMPOSITIONS)) {
         for (const difficulty of difficulties) {
           const composition = FACTION_UNIT_COMPOSITIONS[faction][difficulty];
-          for (const [unitId, weight] of Object.entries(composition)) {
+          for (const [, weight] of Object.entries(composition)) {
             expect(typeof weight).toBe('number');
             expect(weight).toBeGreaterThan(0);
           }

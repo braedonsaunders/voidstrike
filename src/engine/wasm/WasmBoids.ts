@@ -20,7 +20,7 @@ import { debugPerformance, debugInitialization } from '@/utils/debugLogger';
 
 // Unit state constants (must match lib.rs)
 const STATE_ACTIVE = 0;
-const STATE_DEAD = 1;
+const _STATE_DEAD = 1;
 const STATE_FLYING = 2;
 const STATE_GATHERING = 3;
 const STATE_WORKER = 4;
@@ -93,7 +93,7 @@ export interface BoidsForces {
 /**
  * Entity ID to WASM buffer index mapping
  */
-interface EntityMapping {
+interface _EntityMapping {
   entityId: number;
   wasmIndex: number;
 }

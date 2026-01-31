@@ -2,11 +2,10 @@ import { Entity } from './Entity';
 import {
   EntityId,
   EntityIdAllocator,
-  INVALID_ENTITY_ID,
   getEntityIndex,
   isInvalidEntityId,
 } from './EntityId';
-import { Component, ComponentType } from './Component';
+import { ComponentType } from './Component';
 import { System } from './System';
 import { SpatialGrid } from '../core/SpatialGrid';
 import { debugPerformance, debugInitialization } from '@/utils/debugLogger';

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLobby, LobbyState } from '@/hooks/useMultiplayer';
 import { useMultiplayerStore } from '@/store/multiplayerStore';
@@ -61,7 +61,6 @@ export interface LobbySyncState {
  */
 export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): LobbySyncState {
   const router = useRouter();
-  const [showJoinModal, setShowJoinModal] = useState(false);
 
   // Game setup store
   const {
@@ -220,12 +219,6 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
     });
   }, [isHost, onGameStart, receivedLobbyState, mySlotId, startGame, router]);
 
-  // Close join modal only when successfully connected
-  useEffect(() => {
-    if (lobbyStatus === 'connected' && showJoinModal) {
-      setShowJoinModal(false);
-    }
-  }, [lobbyStatus, showJoinModal]);
 
   // Compute display values based on mode
   const displayPlayerSlots = isGuestMode && receivedLobbyState ? receivedLobbyState.playerSlots : playerSlots;

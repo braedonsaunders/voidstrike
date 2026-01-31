@@ -1,5 +1,5 @@
 import { debugAudio } from '@/utils/debugLogger';
-import { audioConfig, MusicCategoryConfig } from './audioConfig';
+import { audioConfig } from './audioConfig';
 import musicManifest from '@/data/music-manifest.json';
 import { clamp } from '@/utils/math';
 

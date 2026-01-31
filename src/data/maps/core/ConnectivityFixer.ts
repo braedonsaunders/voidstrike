@@ -6,13 +6,11 @@
  */
 
 import type { MapData, MapCell, Ramp } from '../MapTypes';
-import { type Point, type RampCommand, ramp as createRampCommand, CLIFF_THRESHOLD, toXY } from './ElevationMap';
+import { type Point, type RampCommand, ramp as createRampCommand, toXY } from './ElevationMap';
 import { distance, clamp } from '@/utils/math';
 import type {
   ConnectivityResult,
-  ConnectivityIssue,
   SuggestedFix,
-  ConnectivityGraph,
 } from './ConnectivityGraph';
 import { analyzeConnectivity } from './ConnectivityAnalyzer';
 import { validateConnectivity, getSuggestedFixes } from './ConnectivityValidator';

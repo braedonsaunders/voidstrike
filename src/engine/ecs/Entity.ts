@@ -1,21 +1,15 @@
 import { Component, ComponentType } from './Component';
 import { World } from './World';
 import { debugInitialization } from '@/utils/debugLogger';
-import {
-  EntityId,
-  INVALID_ENTITY_ID,
-  getEntityIndex,
-  getEntityGeneration,
-  isInvalidEntityId,
-} from './EntityId';
+import type { EntityId } from './EntityId';
 
 // Re-export EntityId types and utilities for backwards compatibility
 export {
   type EntityId,
-  INVALID_ENTITY_ID,
-  getEntityIndex,
   getEntityGeneration,
   isInvalidEntityId,
+  INVALID_ENTITY_ID,
+  getEntityIndex,
 } from './EntityId';
 
 export class Entity {

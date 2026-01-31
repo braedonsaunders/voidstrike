@@ -79,7 +79,7 @@ export function EditorCore({
   dataProvider,
   mapId,
   initialMapData,
-  onSave,
+  onSave: _onSave,
   onCancel,
   onPlay,
   onChange,
@@ -158,7 +158,10 @@ export function EditorCore({
         categories[objType.category] = true;
       }
     }
-    setVisibility((prev) => ({ ...prev, categories }));
+    // Use requestAnimationFrame to avoid cascading renders
+    requestAnimationFrame(() => {
+      setVisibility((prev) => ({ ...prev, categories }));
+    });
   }, [config.objectTypes]);
 
   // Sync fullscreen state with browser

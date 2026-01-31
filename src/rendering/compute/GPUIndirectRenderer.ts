@@ -18,7 +18,7 @@
 
 import * as THREE from 'three';
 import { WebGPURenderer } from 'three/webgpu';
-import { Fn, positionLocal, attribute, vec3 } from 'three/tsl';
+import { Fn, positionLocal, attribute } from 'three/tsl';
 
 import { IndirectStorageBufferAttribute, MeshStandardNodeMaterial } from 'three/webgpu';
 

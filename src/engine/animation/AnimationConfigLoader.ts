@@ -7,13 +7,7 @@
 import {
   AnimationConfig,
   ParameterDefinition,
-  LayerConfig,
-  StateMachineConfig,
   AnimationStateConfig,
-  TransitionConfig,
-  SimpleStateConfig,
-  BracketStateConfig,
-  BlendTreeStateConfig,
 } from './AnimationTypes';
 
 /**

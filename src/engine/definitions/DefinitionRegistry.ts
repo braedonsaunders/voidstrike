@@ -8,7 +8,7 @@
  * This is the main entry point for the data-driven definition system.
  */
 
-import { DefinitionLoader, LoadResult } from './DefinitionLoader';
+import { DefinitionLoader } from './DefinitionLoader';
 import { debugAssets } from '@/utils/debugLogger';
 import type {
   UnitDefinition,
@@ -174,7 +174,7 @@ class DefinitionRegistryClass {
     this.researchModuleUnits.clear();
     this.productionModuleUnits.clear();
 
-    for (const [factionId, faction] of this.factions) {
+    for (const [_factionId, faction] of this.factions) {
       // Units
       for (const [id, unit] of Object.entries(faction.units)) {
         this.allUnits.set(id, unit);

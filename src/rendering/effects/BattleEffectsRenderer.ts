@@ -32,8 +32,6 @@ import {
   BATTLE_EFFECTS,
   RENDER_ORDER,
   FACTION_COLORS,
-  BATTLE_GEOMETRIES,
-  BATTLE_MATERIALS,
 } from '@/data/rendering.config';
 import { clamp } from '@/utils/math';
 

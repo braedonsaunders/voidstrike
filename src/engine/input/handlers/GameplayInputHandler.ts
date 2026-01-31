@@ -118,8 +118,8 @@ export class GameplayInputHandler implements InputHandler {
 
   onKeyUp(
     event: KeyboardInputEvent,
-    state: InputState,
-    deps: InputHandlerDependencies
+    _state: InputState,
+    _deps: InputHandlerDependencies
   ): boolean {
     const { key } = event;
 
@@ -153,7 +153,7 @@ export class GameplayInputHandler implements InputHandler {
     state: InputState,
     deps: InputHandlerDependencies
   ): boolean {
-    const { eventBus, game, getLocalPlayerId } = deps;
+    const { eventBus, game: _game, getLocalPlayerId: _getLocalPlayerId } = deps;
     const inputManager = InputManager.getInstance();
 
     if (event.button === MouseButton.Left) {
@@ -180,8 +180,8 @@ export class GameplayInputHandler implements InputHandler {
 
   onMouseMove(
     event: MouseInputEvent,
-    state: InputState,
-    deps: InputHandlerDependencies
+    _state: InputState,
+    _deps: InputHandlerDependencies
   ): boolean {
     const inputManager = InputManager.getInstance();
     const selectionState = inputManager.getSelectionState();
@@ -275,9 +275,9 @@ export class GameplayInputHandler implements InputHandler {
   }
 
   onContextMenu(
-    event: MouseInputEvent,
-    state: InputState,
-    deps: InputHandlerDependencies
+    _event: MouseInputEvent,
+    _state: InputState,
+    _deps: InputHandlerDependencies
   ): boolean {
     // Right-click is handled in onMouseDown
     return true;

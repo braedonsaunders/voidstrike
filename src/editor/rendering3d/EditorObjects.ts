@@ -386,9 +386,9 @@ export class EditorObjects {
 
     const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(x, y) : 0;
 
-    // Get the current total scale and calculate user scale
+    // Get the current total scale and calculate user scale (unused but kept for future use)
     const totalScale = instance.mesh.children[0]?.scale.x || 1;
-    const userScale = instance.baseScale > 0 ? totalScale / instance.baseScale : 1;
+    const _userScale = instance.baseScale > 0 ? totalScale / instance.baseScale : 1;
 
     // Get visual height from bounding box (at current scale)
     let scaledHeight = 2;

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { FlockingBehavior, FlockingEntityCache, FlockingSpatialGrid } from '@/engine/systems/movement/FlockingBehavior';
 import { Transform } from '@/engine/components/Transform';
 import { Unit, UnitState } from '@/engine/components/Unit';
@@ -8,10 +8,6 @@ import { PooledVector2 } from '@/utils/VectorPool';
 import {
   SEPARATION_THROTTLE_TICKS,
   COHESION_THROTTLE_TICKS,
-  ALIGNMENT_THROTTLE_TICKS,
-  PHYSICS_PUSH_THROTTLE_TICKS,
-  COHESION_RADIUS,
-  ALIGNMENT_RADIUS,
   VELOCITY_HISTORY_FRAMES,
 } from '@/data/movement.config';
 
@@ -213,7 +209,8 @@ describe('FlockingBehavior', () => {
 
       const idleStrength = flocking.getSeparationStrength(idleUnit, 10);
       const movingStrength = flocking.getSeparationStrength(movingUnit, 10);
-      const attackingStrength = flocking.getSeparationStrength(attackingUnit, 10);
+      // Calculate attacking strength to verify method works for all states
+      flocking.getSeparationStrength(attackingUnit, 10);
 
       // Moving strength should be weaker than idle (allows clumping)
       expect(movingStrength).toBeLessThanOrEqual(idleStrength);

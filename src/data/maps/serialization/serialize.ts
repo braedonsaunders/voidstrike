@@ -2,7 +2,7 @@
  * Map Serialization - Convert MapData to JSON format
  */
 
-import type { MapData, MapCell, TerrainFeature } from '../MapTypes';
+import type { MapData, MapCell } from '../MapTypes';
 import type {
   MapJson,
   TerrainJson,

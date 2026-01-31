@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * InstancedVelocity - Proper per-instance velocity for TAA with InstancedMesh
  *
@@ -27,13 +28,11 @@
  */
 
 import * as THREE from 'three';
-import { Fn, vec2, vec4, mat4, attribute } from 'three/tsl';
+import { Fn, vec4, mat4, attribute } from 'three/tsl';
 import { debugInitialization } from '@/utils/debugLogger';
 
 // WebGPU-specific imports (typed in src/types/three-webgpu.d.ts)
 import {
-  cameraProjectionMatrix,
-  cameraViewMatrix,
   modelWorldMatrix,
   positionGeometry,
   uniform,

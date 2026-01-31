@@ -1,10 +1,7 @@
 'use client';
 
 import React, { memo, useState, useCallback, useRef, useEffect } from 'react';
-import {
-  PerformanceMonitor,
-  PerformanceSnapshot,
-} from '@/engine/core/PerformanceMonitor';
+import { PerformanceMonitor } from '@/engine/core/PerformanceMonitor';
 import { useUIStore } from '@/store/uiStore';
 
 // Maximum recording duration in seconds
@@ -155,32 +152,45 @@ export const PerformanceRecorder = memo(function PerformanceRecorder() {
     };
   }, []);
 
-  /**
-   * Recording loop
-   */
-  const recordingLoop = useCallback(() => {
-    if (!recordingRef.current) return;
-
-    const now = performance.now();
-    const elapsed = now - startTimeRef.current;
-
-    // Stop if we've exceeded max duration
-    if (elapsed >= MAX_RECORDING_DURATION * 1000) {
-      stopRecording();
-      return;
-    }
-
-    // Collect sample at interval
-    if (now - lastSampleTimeRef.current >= SAMPLE_INTERVAL_MS) {
-      samplesRef.current.push(collectSample());
-      lastSampleTimeRef.current = now;
-    }
-
-    // Update progress
-    setRecordingProgress((elapsed / (MAX_RECORDING_DURATION * 1000)) * 100);
-
-    animationFrameRef.current = requestAnimationFrame(recordingLoop);
+  // Store collectSample in a ref for use in animation loop
+  const collectSampleRef = useRef(collectSample);
+  useEffect(() => {
+    collectSampleRef.current = collectSample;
   }, [collectSample]);
+
+  // Store the recording loop function in a ref for self-reference
+  const recordingLoopRef = useRef<() => void>(() => {});
+
+  /**
+   * Recording loop - uses refs to avoid circular dependency issues
+   */
+  useEffect(() => {
+    recordingLoopRef.current = () => {
+      if (!recordingRef.current) return;
+
+      const now = performance.now();
+      const elapsed = now - startTimeRef.current;
+
+      // Stop if we've exceeded max duration
+      if (elapsed >= MAX_RECORDING_DURATION * 1000) {
+        recordingRef.current = false;
+        setIsRecording(false);
+        return;
+      }
+
+      // Collect sample at interval
+      if (now - lastSampleTimeRef.current >= SAMPLE_INTERVAL_MS) {
+        samplesRef.current.push(collectSampleRef.current());
+        lastSampleTimeRef.current = now;
+      }
+
+      // Update progress
+      setRecordingProgress((elapsed / (MAX_RECORDING_DURATION * 1000)) * 100);
+
+      // Schedule next frame using ref
+      animationFrameRef.current = requestAnimationFrame(recordingLoopRef.current);
+    };
+  }, []);
 
   /**
    * Start recording
@@ -196,9 +206,9 @@ export const PerformanceRecorder = memo(function PerformanceRecorder() {
     setRecordingProgress(0);
     setShowResults(false);
 
-    // Start recording loop
-    animationFrameRef.current = requestAnimationFrame(recordingLoop);
-  }, [recordingLoop]);
+    // Start recording loop using ref
+    animationFrameRef.current = requestAnimationFrame(recordingLoopRef.current);
+  }, []);
 
   /**
    * Stop recording and generate summary

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * Temporal Effects Manager - Quarter-resolution temporal pipeline management
  *

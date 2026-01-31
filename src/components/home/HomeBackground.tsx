@@ -782,7 +782,8 @@ export default function HomeBackground() {
       }
 
       renderer.dispose();
-      containerRef.current?.removeChild(renderer.domElement);
+      // Use stored container reference since containerRef.current may change
+      container?.removeChild(renderer.domElement);
     };
   }, [
     createStarField,

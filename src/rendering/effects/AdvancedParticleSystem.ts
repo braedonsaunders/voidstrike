@@ -15,15 +15,11 @@ import * as THREE from 'three';
 import { MeshBasicNodeMaterial } from 'three/webgpu';
 import {
   Fn,
-  vec2,
-  vec3,
   vec4,
-  float,
   uniform,
   uv,
   texture,
   clamp,
-  smoothstep,
   mix,
   max,
   min,

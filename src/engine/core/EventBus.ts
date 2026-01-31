@@ -2,11 +2,6 @@ import { debugInitialization } from '@/utils/debugLogger';
 
 type EventCallback<T = unknown> = (data: T) => void;
 
-interface EventSubscription {
-  id: number;
-  callback: EventCallback;
-}
-
 /**
  * EventBus - Optimized pub/sub event system
  *

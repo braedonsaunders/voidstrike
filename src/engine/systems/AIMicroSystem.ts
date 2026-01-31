@@ -8,13 +8,8 @@ import { Building } from '../components/Building';
 import type { Game } from '../core/Game';
 import type { GameCommand } from '../core/GameCommand';
 import { distance, clamp } from '@/utils/math';
-import { BehaviorTreeRunner, Blackboard, globalBlackboard } from '../ai/BehaviorTree';
+import { BehaviorTreeRunner, globalBlackboard } from '../ai/BehaviorTree';
 import {
-  createCombatMicroTree,
-  createRangedCombatTree,
-  createMeleeCombatTree,
-  createUtilityCombatTree,
-  isRangedUnit,
   UnitBehaviorType,
   createBehaviorTree,
 } from '../ai/UnitBehaviors';
@@ -324,7 +319,7 @@ export class AIMicroSystem extends System {
   /**
    * Update behavior tree states (reduced scope when using worker)
    */
-  private updateBehaviorTreeStates(deltaTime: number, currentTick: number): void {
+  private updateBehaviorTreeStates(deltaTime: number, _currentTick: number): void {
     const entities = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
 
     for (const entity of entities) {
@@ -423,7 +418,7 @@ export class AIMicroSystem extends System {
       }
 
       // Run behavior tree
-      const status = state.behaviorTree.tick(
+      const _status = state.behaviorTree.tick(
         entity.id,
         this.world,
         this.game,
@@ -594,7 +589,7 @@ export class AIMicroSystem extends System {
    * Process retreat state timeouts (replaces setTimeout)
    */
   private processRetreatTimeouts(currentTick: number): void {
-    for (const [entityId, state] of this.unitStates) {
+    for (const [_entityId, state] of this.unitStates) {
       if (state.retreating && state.retreatEndTick !== null && currentTick >= state.retreatEndTick) {
         state.retreating = false;
         state.retreatEndTick = null;
@@ -925,7 +920,7 @@ export interface CounterRecommendation {
 }
 
 // Counter matrix: what counters what - from data-driven config
-const COUNTER_MATRIX: Record<string, string[]> = DOMINION_AI_CONFIG.tactical.counterMatrix;
+const _COUNTER_MATRIX: Record<string, string[]> = DOMINION_AI_CONFIG.tactical.counterMatrix;
 
 // PERF: Cache for enemy composition analysis (avoids O(n) scan every AI decision)
 const COMPOSITION_CACHE_DURATION = 40; // Ticks before cache expires

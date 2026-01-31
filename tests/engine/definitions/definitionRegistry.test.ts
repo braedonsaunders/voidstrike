@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { DefinitionRegistryClass } from '@/engine/definitions/DefinitionRegistry';
 import type {
   UnitDefinition,

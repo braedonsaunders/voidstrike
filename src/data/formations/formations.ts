@@ -331,7 +331,7 @@ function generateBoxPositions(
   const cols = Math.min(unitCount, formation.maxUnitsPerRow ?? 5);
   const rows = Math.ceil(unitCount / cols);
 
-  const totalWidth = (cols - 1) * formation.unitSpacing;
+  const _totalWidth = (cols - 1) * formation.unitSpacing;
   const totalHeight = (rows - 1) * formation.rowSpacing;
 
   const cos = Math.cos(facingAngle);

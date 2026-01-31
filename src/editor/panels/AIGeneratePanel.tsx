@@ -14,11 +14,7 @@ import { useState, useEffect } from 'react';
 import type { EditorConfig } from '../config/EditorConfig';
 import type { MapData } from '@/data/maps/MapTypes';
 import type { BiomeType } from '@/data/maps/core/ElevationMap';
-import {
-  useLLMGeneration,
-  type LLMGenerationState,
-  type LLMGenerationActions,
-} from '../hooks/useLLMGeneration';
+import { useLLMGeneration } from '../hooks/useLLMGeneration';
 import type { LLMProvider, MapGenerationSettings } from '../services/LLMMapGenerator';
 
 // ============================================================================
@@ -545,7 +541,7 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
               <button
                 key={entry.id}
                 onClick={() => {
-                  const blueprint = actions.loadFromHistory(entry.id);
+                  const _blueprint = actions.loadFromHistory(entry.id);
                   // Could regenerate from this blueprint's settings
                 }}
                 className="w-full p-2 rounded text-left text-[11px] transition-colors hover:bg-white/5"
@@ -581,19 +577,19 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
         <ul className="space-y-1.5 text-[11px]" style={{ color: theme.text.muted }}>
           <li className="flex items-start gap-2">
             <span style={{ color: theme.primary }}>•</span>
-            <span>Describe terrain features like "central high ground" or "island bases"</span>
+            <span>Describe terrain features like &quot;central high ground&quot; or &quot;island bases&quot;</span>
           </li>
           <li className="flex items-start gap-2">
             <span style={{ color: theme.primary }}>•</span>
-            <span>Mention expansion layout: "easy natural, contested third"</span>
+            <span>Mention expansion layout: &quot;easy natural, contested third&quot;</span>
           </li>
           <li className="flex items-start gap-2">
             <span style={{ color: theme.primary }}>•</span>
-            <span>Request strategic elements: "multiple attack paths", "watch tower at center"</span>
+            <span>Request strategic elements: &quot;multiple attack paths&quot;, &quot;watch tower at center&quot;</span>
           </li>
           <li className="flex items-start gap-2">
             <span style={{ color: theme.primary }}>•</span>
-            <span>Use Ctrl+Z to undo if you don't like the result</span>
+            <span>Use Ctrl+Z to undo if you don&apos;t like the result</span>
           </li>
         </ul>
       </Section>

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * Temporal Screen Space Reflections
  *
@@ -18,10 +19,7 @@ import * as THREE from 'three';
 import {
   Fn,
   vec2,
-  vec3,
-  vec4,
   float,
-  texture,
   uv,
   uniform,
   mix,
@@ -29,7 +27,6 @@ import {
   max,
   min,
   clamp,
-  length,
 } from 'three/tsl';
 import { debugShaders } from '@/utils/debugLogger';
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { VectorPool, normalize, clampMagnitude, PooledVector2 } from '@/utils/VectorPool';
 
 describe('VectorPool', () => {

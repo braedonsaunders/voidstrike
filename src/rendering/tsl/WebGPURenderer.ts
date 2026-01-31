@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * WebGPU Renderer Wrapper
  *
@@ -11,7 +12,7 @@
 
 import * as THREE from 'three';
 import { WebGPURenderer, PostProcessing } from 'three/webgpu';
-import { debugInitialization, debugShaders } from '@/utils/debugLogger';
+import { debugInitialization } from '@/utils/debugLogger';
 
 export interface WebGPURendererConfig {
   canvas: HTMLCanvasElement;

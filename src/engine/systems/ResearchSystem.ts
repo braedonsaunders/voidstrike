@@ -181,9 +181,9 @@ export class ResearchSystem extends System {
   }
 
   private updateBuildingResearch(
-    buildingId: number,
-    completedUpgrade: string,
-    nextLevel: string
+    _buildingId: number,
+    _completedUpgrade: string,
+    _nextLevel: string
   ): void {
     // When a tiered upgrade completes, update building's available research
     // This is handled automatically by checking requirements
@@ -199,7 +199,7 @@ export class ResearchSystem extends System {
     const available: ResearchDefinition[] = [];
 
     // Get base available research for this building type
-    const baseResearch = this.canBuildingResearch(buildingId, '');
+    const _baseResearch = this.canBuildingResearch(buildingId, '');
 
     // Check each research definition
     for (const [upgradeId, upgrade] of Object.entries(RESEARCH_DEFINITIONS)) {

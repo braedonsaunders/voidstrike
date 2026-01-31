@@ -268,7 +268,7 @@ export function getNearestSnapAngle(angle: number, mode: SnapMode): number | nul
   return nearest;
 }
 
-export default {
+const AngleConstraint = {
   snapToGrid,
   constrainEndpoint,
   snapToAngle,
@@ -279,3 +279,5 @@ export default {
   isNearSnapAngle,
   getNearestSnapAngle,
 };
+
+export default AngleConstraint;

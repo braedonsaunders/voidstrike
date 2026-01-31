@@ -871,6 +871,9 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Store reference for cleanup (containerRef.current may change by cleanup time)
+    const container = containerRef.current;
+
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x050010, 0.015);
     sceneRef.current = scene;
@@ -893,7 +896,7 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.3;
-    containerRef.current.appendChild(renderer.domElement);
+    container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
     // Create scene elements
@@ -1077,8 +1080,8 @@ export function LoadingScreen({ progress, status, onComplete }: LoadingScreenPro
       }
 
       renderer.dispose();
-      if (containerRef.current?.contains(renderer.domElement)) {
-        containerRef.current.removeChild(renderer.domElement);
+      if (container?.contains(renderer.domElement)) {
+        container.removeChild(renderer.domElement);
       }
     };
   }, [

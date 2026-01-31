@@ -13,7 +13,6 @@ import * as THREE from 'three';
 import {
   AnimationConfig,
   ParameterMap,
-  ParameterValue,
   RuntimeStateInfo,
   AnimationEventCallback,
 } from './AnimationTypes';

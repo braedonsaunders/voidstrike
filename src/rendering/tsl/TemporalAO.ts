@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * Temporal Ambient Occlusion
  *
@@ -21,7 +22,6 @@ import {
   texture,
   uv,
   uniform,
-  mix,
   abs,
   clamp,
 } from 'three/tsl';
@@ -63,7 +63,7 @@ export function createTemporalAONode(
   depthTexture: THREE.Texture,
   historyTexture: THREE.Texture,
   prevDepthTexture: THREE.Texture | null,
-  resolution: THREE.Vector2
+  _resolution: THREE.Vector2
 ): {
   node: ReturnType<typeof Fn>;
   uniforms: {

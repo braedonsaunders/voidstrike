@@ -1005,7 +1005,7 @@ export class AssetManager {
    */
   static hasEmissive(assetId: string): boolean {
     const hints = renderingHints.get(assetId);
-    return hints?.emissive != null && hints.emissive !== '';
+    return hints?.emissive !== null && hints?.emissive !== undefined && hints.emissive !== '';
   }
 
   /**
@@ -1846,7 +1846,7 @@ export class AssetManager {
     let lodSummary = '[AssetManager] LOD Summary: ';
     let assetsWithAllLODs = 0;
     let assetsWithSomeLODs = 0;
-    for (const [assetId, levels] of availableLODLevels) {
+    for (const [_assetId, levels] of availableLODLevels) {
       if (levels.size === 3) assetsWithAllLODs++;
       else if (levels.size > 1) assetsWithSomeLODs++;
     }

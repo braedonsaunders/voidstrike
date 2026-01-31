@@ -162,8 +162,8 @@ export function calculateWallLine(
     }
   } else {
     // Diagonal line (45 degrees)
-    const stepX = dx > 0 ? 1 : -1;
-    const stepY = dy > 0 ? 1 : -1;
+    const _stepX = dx > 0 ? 1 : -1;
+    const _stepY = dy > 0 ? 1 : -1;
     const steps = Math.max(absDx, absDy);
     for (let i = 0; i <= steps; i++) {
       const x = x1 + Math.round((i / steps) * dx);

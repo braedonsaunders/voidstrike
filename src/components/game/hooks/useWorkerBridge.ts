@@ -74,7 +74,9 @@ export function useWorkerBridge({
 
   // Store map in a ref so we always get the latest value
   const mapRef = useRef<MapData>(map);
-  mapRef.current = map;
+  useEffect(() => {
+    mapRef.current = map;
+  }, [map]);
 
   // Handle render state updates from worker
   const handleRenderState = useCallback((state: RenderState) => {

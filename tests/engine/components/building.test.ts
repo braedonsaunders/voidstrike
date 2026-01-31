@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Building, BuildingDefinition, BuildingState } from '@/engine/components/Building';
+import { Building, BuildingDefinition } from '@/engine/components/Building';
 
 function createBasicDefinition(overrides: Partial<BuildingDefinition> = {}): BuildingDefinition {
   return {

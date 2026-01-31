@@ -278,7 +278,7 @@ export class WorkerDistribution {
 
     for (const fromBase of oversaturated) {
       // How many to transfer from this base
-      let toTransfer = Math.min(
+      const toTransfer = Math.min(
         Math.abs(fromBase.workerNeed),
         this.config.minTransferBatch * 2
       );

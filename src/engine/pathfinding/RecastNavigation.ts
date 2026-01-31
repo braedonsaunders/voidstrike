@@ -18,9 +18,8 @@ import {
   exportNavMesh,
   importNavMesh,
   type CrowdAgentParams,
-  type Obstacle,
 } from 'recast-navigation';
-import { generateTileCache, generateSoloNavMesh, type TileCacheGeneratorConfig, type SoloNavMeshGeneratorConfig } from '@recast-navigation/generators';
+import { generateTileCache, generateSoloNavMesh } from '@recast-navigation/generators';
 import { threeToTileCache } from '@recast-navigation/three';
 import * as THREE from 'three';
 import { debugPathfinding, debugInitialization } from '@/utils/debugLogger';
@@ -496,8 +495,8 @@ export class RecastNavigation {
   public async generateWaterNavMesh(
     positions: Float32Array,
     indices: Uint32Array,
-    mapWidth: number,
-    mapHeight: number
+    _mapWidth: number,
+    _mapHeight: number
   ): Promise<boolean> {
     const startTime = performance.now();
 

@@ -207,7 +207,7 @@ export class PathfindingMovement {
    * CROWD FIX: Prepare all crowd agents before the crowd simulation update.
    * This syncs positions and sets targets so the crowd has fresh data.
    */
-  public prepareCrowdAgents(entities: Entity[], dt: number): void {
+  public prepareCrowdAgents(entities: Entity[], _dt: number): void {
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform');
       const unit = entity.get<Unit>('Unit');
