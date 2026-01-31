@@ -909,7 +909,7 @@ export class WorkerGame extends GameCore {
   public spawnInitialEntities(mapData: SpawnMapData): void {
     // Idempotency guard - prevent duplicate entity spawning
     if (this.entitiesAlreadySpawned) {
-      console.warn('[GameWorker] spawnInitialEntities called multiple times - skipping duplicate spawn');
+      debugInitialization.log('[GameWorker] spawnInitialEntities called multiple times - skipping duplicate spawn');
       return;
     }
     this.entitiesAlreadySpawned = true;
