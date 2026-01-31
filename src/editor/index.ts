@@ -60,8 +60,8 @@ export type { Editor3DCanvasProps } from './core/Editor3DCanvas';
 export { EditorHeader } from './core/EditorHeader';
 export type { EditorHeaderProps, MapListItem } from './core/EditorHeader';
 
-export { EditorPanels } from './core/EditorPanels';
-export type { EditorPanelsProps } from './core/EditorPanels';
+export { EditorPanels } from './core/panels';
+export type { EditorPanelsProps } from './core/panels';
 
 export { EditorToolbar } from './core/EditorToolbar';
 export type { EditorToolbarProps } from './core/EditorToolbar';
