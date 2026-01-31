@@ -795,6 +795,29 @@ export class AITacticsManager {
       return;
     }
 
+    // Check for individual unit retreats (e.g., low-health units in small skirmishes)
+    // This handles cases where individual units need to retreat but group retreat isn't triggered
+    let individualRetreatsIssued = 0;
+    for (const entityId of armyUnits) {
+      if (retreatCoordinator.shouldRetreat(ai.playerId, entityId)) {
+        const retreatTarget = retreatCoordinator.getRetreatTarget(ai.playerId, entityId);
+        if (retreatTarget) {
+          const command: GameCommand = {
+            tick: currentTick,
+            playerId: ai.playerId,
+            type: 'MOVE',
+            entityIds: [entityId],
+            targetPosition: retreatTarget,
+          };
+          this.game.issueAICommand(command);
+          individualRetreatsIssued++;
+        }
+      }
+    }
+    if (individualRetreatsIssued > 0) {
+      debugAI.log(`[AITactics] ${ai.playerId}: Issued ${individualRetreatsIssued} individual retreat orders`);
+    }
+
     // Find nearest enemy threat using InfluenceMap
     const threatAnalysis = influenceMap.getThreatAnalysis(basePos.x, basePos.y, ai.playerId);
 
