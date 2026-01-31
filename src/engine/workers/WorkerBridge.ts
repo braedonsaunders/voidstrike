@@ -138,18 +138,31 @@ export class WorkerBridge {
   }
 
   private async _initialize(): Promise<void> {
+    console.log('[WorkerBridge] _initialize() starting');
     debugInitialization.log('[WorkerBridge] _initialize() starting');
     // Create the worker
-    this.worker = new Worker(
-      new URL('./GameWorker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    try {
+      this.worker = new Worker(
+        new URL('./GameWorker.ts', import.meta.url),
+        { type: 'module' }
+      );
+      console.log('[WorkerBridge] Worker created successfully');
+    } catch (e) {
+      console.error('[WorkerBridge] Failed to create worker:', e);
+      throw e;
+    }
     debugInitialization.log('[WorkerBridge] Worker created:', !!this.worker);
 
     // Set up message handler
     this.worker.onmessage = this.handleWorkerMessage.bind(this);
     this.worker.onerror = (error) => {
-      console.error('[WorkerBridge] Worker error:', error);
+      console.error('[WorkerBridge] Worker error event:', error);
+      console.error('[WorkerBridge] Error details:', {
+        message: error.message,
+        filename: error.filename,
+        lineno: error.lineno,
+        colno: error.colno,
+      });
       this.onError?.(error.message);
     };
     debugInitialization.log('[WorkerBridge] Message handlers set up');
