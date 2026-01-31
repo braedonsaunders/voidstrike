@@ -2,7 +2,7 @@ import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
 import { Unit, DamageType } from '../components/Unit';
 import { Health, ArmorType } from '../components/Health';
-import { Game } from '../core/Game';
+import type { Game } from '../core/Game';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';

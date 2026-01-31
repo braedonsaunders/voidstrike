@@ -5,7 +5,7 @@ import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
 import { Selectable } from '../components/Selectable';
-import { Game } from '../core/Game';
+import type { Game } from '../core/Game';
 import { WatchTower } from '@/data/maps/MapTypes';
 // GPU vision imports are lazy-loaded to avoid breaking worker context
 // (WebGPU APIs are not available in Web Workers)

@@ -23,7 +23,7 @@ import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
 import { Ability, DOMINION_ABILITIES } from '../../components/Ability';
 import { Resource } from '../../components/Resource';
-import { Game } from '../../core/Game';
+import type { Game } from '../../core/Game';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { RESEARCH_DEFINITIONS } from '@/data/research/dominion';

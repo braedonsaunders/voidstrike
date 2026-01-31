@@ -1,5 +1,6 @@
 import { System } from '../ecs/System';
-import { Game } from '../core/Game';
+// Use type-only import to avoid pulling in browser-only deps from Game.ts in worker context
+import type { Game } from '../core/Game';
 import { Building } from '../components/Building';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';

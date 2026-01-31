@@ -26,7 +26,7 @@ import { Building } from '../../components/Building';
 import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
 import { Resource } from '../../components/Resource';
-import { Game } from '../../core/Game';
+import type { Game } from '../../core/Game';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { debugAI } from '@/utils/debugLogger';
 import { SeededRandom } from '@/utils/math';

@@ -15,7 +15,7 @@ import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
-import { Game } from '../core/Game';
+import type { Game } from '../core/Game';
 import {
   RecastNavigation,
   getRecastNavigation,

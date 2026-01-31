@@ -19,7 +19,7 @@ import { Transform } from '../../components/Transform';
 import { Unit } from '../../components/Unit';
 import { Velocity } from '../../components/Velocity';
 import { Selectable } from '../../components/Selectable';
-import { Game } from '../../core/Game';
+import type { Game } from '../../core/Game';
 import { World } from '../../ecs/World';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { RecastNavigation, getRecastNavigation } from '../../pathfinding/RecastNavigation';

@@ -16,7 +16,7 @@
  */
 
 import { System } from '../ecs/System';
-import { Game } from '../core/Game';
+import type { Game } from '../core/Game';
 import { MovementOrchestrator } from './movement/MovementOrchestrator';
 
 export class MovementSystem extends System {
