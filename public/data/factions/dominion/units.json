@@ -9,18 +9,28 @@
     "buildTime": 12,
     "supplyCost": 1,
     "speed": 4,
+    "acceleration": 50,
     "sightRange": 8,
     "attackRange": 1,
     "attackDamage": 5,
     "attackSpeed": 0.7,
     "damageType": "normal",
+    "projectileType": "instant_melee",
     "maxHealth": 45,
     "armor": 0,
     "isWorker": true,
     "isMechanical": true,
     "canRepair": true,
     "canAttackGround": true,
-    "canAttackAir": false
+    "canAttackAir": false,
+    "targetPriority": 10,
+    "category": "worker",
+    "armorType": "light",
+    "audio": {
+      "voiceGroupId": "fabricator",
+      "weaponSound": "attack_rifle",
+      "deathSound": "unit_death"
+    }
   },
   "trooper": {
     "id": "trooper",
@@ -31,18 +41,28 @@
     "vespeneCost": 0,
     "buildTime": 18,
     "supplyCost": 1,
-    "speed": 4.5,
+    "speed": 3.15,
+    "acceleration": 1000,
     "sightRange": 9,
     "attackRange": 5,
     "attackDamage": 6,
     "attackSpeed": 0.86,
     "damageType": "normal",
+    "projectileType": "bullet_rifle",
     "maxHealth": 45,
     "armor": 0,
     "abilities": ["stim_pack"],
     "isBiological": true,
     "canAttackGround": true,
-    "canAttackAir": true
+    "canAttackAir": true,
+    "targetPriority": 60,
+    "category": "infantry",
+    "armorType": "light",
+    "audio": {
+      "voiceGroupId": "trooper",
+      "weaponSound": "attack_rifle",
+      "deathSound": "unit_death_bio"
+    }
   },
   "breacher": {
     "id": "breacher",
@@ -53,18 +73,25 @@
     "vespeneCost": 25,
     "buildTime": 21,
     "supplyCost": 2,
-    "speed": 3.5,
+    "speed": 3.15,
+    "acceleration": 1000,
     "sightRange": 10,
     "attackRange": 6,
     "attackDamage": 10,
     "attackSpeed": 0.7,
     "damageType": "concussive",
+    "projectileType": "bullet_heavy",
     "maxHealth": 125,
     "armor": 1,
     "abilities": ["stim_pack", "concussive_shells"],
     "isBiological": true,
     "canAttackGround": true,
-    "canAttackAir": true
+    "canAttackAir": true,
+    "audio": {
+      "voiceGroupId": "breacher",
+      "weaponSound": "attack_grenade",
+      "deathSound": "unit_death_bio"
+    }
   },
   "vanguard": {
     "id": "vanguard",
@@ -76,17 +103,24 @@
     "buildTime": 32,
     "supplyCost": 1,
     "speed": 5.25,
+    "acceleration": 1000,
     "sightRange": 9,
     "attackRange": 5,
     "attackDamage": 4,
     "attackSpeed": 1.1,
     "damageType": "normal",
+    "projectileType": "bullet_rifle",
     "maxHealth": 60,
     "armor": 0,
     "abilities": ["jet_pack", "grenade"],
     "isBiological": true,
     "canAttackGround": true,
-    "canAttackAir": true
+    "canAttackAir": true,
+    "audio": {
+      "voiceGroupId": "vanguard",
+      "weaponSound": "attack_gatling",
+      "deathSound": "unit_death_bio"
+    }
   },
   "operative": {
     "id": "operative",
@@ -98,11 +132,13 @@
     "buildTime": 29,
     "supplyCost": 2,
     "speed": 3.94,
+    "acceleration": 1000,
     "sightRange": 11,
     "attackRange": 6,
     "attackDamage": 10,
     "attackSpeed": 0.86,
     "damageType": "normal",
+    "projectileType": "bullet_sniper",
     "maxHealth": 100,
     "armor": 0,
     "abilities": ["snipe", "emp_round", "cloak", "nuke"],
@@ -110,7 +146,12 @@
     "canCloak": true,
     "cloakEnergyCost": 1,
     "canAttackGround": true,
-    "canAttackAir": true
+    "canAttackAir": true,
+    "audio": {
+      "voiceGroupId": "operative",
+      "weaponSound": "attack_sniper",
+      "deathSound": "unit_death_bio"
+    }
   },
   "scorcher": {
     "id": "scorcher",
@@ -122,11 +163,13 @@
     "buildTime": 21,
     "supplyCost": 2,
     "speed": 5.95,
+    "acceleration": 800,
     "sightRange": 10,
     "attackRange": 5,
     "attackDamage": 8,
     "attackSpeed": 1.8,
     "damageType": "explosive",
+    "projectileType": "instant_flame",
     "maxHealth": 90,
     "armor": 0,
     "abilities": ["transform_inferno"],
@@ -146,7 +189,8 @@
         "canMove": true,
         "transformTime": 2,
         "canAttackGround": true,
-        "canAttackAir": false
+        "canAttackAir": false,
+        "projectileType": "instant_flame"
       },
       {
         "id": "inferno",
@@ -160,12 +204,18 @@
         "canMove": true,
         "transformTime": 2,
         "canAttackGround": true,
-        "canAttackAir": false
+        "canAttackAir": false,
+        "projectileType": "instant_flame"
       }
     ],
     "defaultMode": "scorcher",
     "canAttackGround": true,
-    "canAttackAir": false
+    "canAttackAir": false,
+    "audio": {
+      "voiceGroupId": "scorcher",
+      "weaponSound": "attack_flamethrower",
+      "deathSound": "unit_death_mech"
+    }
   },
   "devastator": {
     "id": "devastator",
@@ -177,11 +227,13 @@
     "buildTime": 32,
     "supplyCost": 3,
     "speed": 3.15,
+    "acceleration": 800,
     "sightRange": 11,
     "attackRange": 7,
     "attackDamage": 15,
     "attackSpeed": 0.74,
     "damageType": "explosive",
+    "projectileType": "shell_tank",
     "maxHealth": 175,
     "armor": 1,
     "abilities": ["bombardment_mode"],
@@ -201,7 +253,8 @@
         "canMove": true,
         "transformTime": 2,
         "canAttackGround": true,
-        "canAttackAir": false
+        "canAttackAir": false,
+        "projectileType": "shell_tank"
       },
       {
         "id": "siege",
@@ -215,12 +268,21 @@
         "canMove": false,
         "transformTime": 2,
         "canAttackGround": true,
-        "canAttackAir": false
+        "canAttackAir": false,
+        "projectileType": "shell_siege"
       }
     ],
     "defaultMode": "tank",
     "canAttackGround": true,
-    "canAttackAir": false
+    "canAttackAir": false,
+    "targetPriority": 100,
+    "category": "vehicle",
+    "armorType": "armored",
+    "audio": {
+      "voiceGroupId": "devastator",
+      "weaponSound": "attack_cannon",
+      "deathSound": "unit_death_mech"
+    }
   },
   "colossus": {
     "id": "colossus",
@@ -232,17 +294,24 @@
     "buildTime": 43,
     "supplyCost": 6,
     "speed": 2.62,
+    "acceleration": 600,
     "sightRange": 11,
     "attackRange": 7,
     "attackDamage": 30,
     "attackSpeed": 0.9,
     "damageType": "explosive",
+    "projectileType": "shell_tank",
     "maxHealth": 400,
     "armor": 2,
     "abilities": ["high_impact_payload"],
     "isMechanical": true,
     "canAttackGround": true,
-    "canAttackAir": true
+    "canAttackAir": true,
+    "audio": {
+      "voiceGroupId": "colossus",
+      "weaponSound": "attack_laser_battery",
+      "deathSound": "unit_death_mech"
+    }
   },
   "lifter": {
     "id": "lifter",
@@ -253,7 +322,8 @@
     "vespeneCost": 100,
     "buildTime": 30,
     "supplyCost": 2,
-    "speed": 4.13,
+    "speed": 3.5,
+    "acceleration": 3.15,
     "sightRange": 11,
     "attackRange": 0,
     "attackDamage": 0,
@@ -271,7 +341,11 @@
     "healRate": 12.6,
     "healEnergyCost": 1,
     "canAttackGround": false,
-    "canAttackAir": false
+    "canAttackAir": false,
+    "audio": {
+      "voiceGroupId": "lifter",
+      "deathSound": "unit_death_mech"
+    }
   },
   "valkyrie": {
     "id": "valkyrie",
@@ -283,11 +357,13 @@
     "buildTime": 30,
     "supplyCost": 2,
     "speed": 3.85,
+    "acceleration": 4.55,
     "sightRange": 10,
     "attackRange": 9,
     "attackDamage": 10,
     "attackSpeed": 0.71,
     "damageType": "explosive",
+    "projectileType": "missile_aa",
     "maxHealth": 135,
     "armor": 0,
     "abilities": ["transform_assault"],
@@ -307,7 +383,8 @@
         "canMove": true,
         "transformTime": 2.25,
         "canAttackGround": false,
-        "canAttackAir": true
+        "canAttackAir": true,
+        "projectileType": "missile_aa"
       },
       {
         "id": "assault",
@@ -321,12 +398,18 @@
         "canMove": true,
         "transformTime": 2.25,
         "canAttackGround": true,
-        "canAttackAir": false
+        "canAttackAir": false,
+        "projectileType": "missile_ground"
       }
     ],
     "defaultMode": "fighter",
     "canAttackGround": false,
-    "canAttackAir": true
+    "canAttackAir": true,
+    "audio": {
+      "voiceGroupId": "valkyrie",
+      "weaponSound": "attack_missile",
+      "deathSound": "unit_death_mech"
+    }
   },
   "specter": {
     "id": "specter",
@@ -338,11 +421,13 @@
     "buildTime": 43,
     "supplyCost": 3,
     "speed": 3.85,
+    "acceleration": 4.55,
     "sightRange": 10,
     "attackRange": 6,
     "attackDamage": 12,
     "attackSpeed": 0.89,
     "damageType": "normal",
+    "projectileType": "laser_fighter",
     "maxHealth": 140,
     "armor": 0,
     "abilities": ["cloak"],
@@ -351,7 +436,12 @@
     "canCloak": true,
     "cloakEnergyCost": 1,
     "canAttackGround": true,
-    "canAttackAir": true
+    "canAttackAir": true,
+    "audio": {
+      "voiceGroupId": "specter",
+      "weaponSound": "attack_laser",
+      "deathSound": "unit_death_mech"
+    }
   },
   "dreadnought": {
     "id": "dreadnought",
@@ -363,18 +453,31 @@
     "buildTime": 64,
     "supplyCost": 6,
     "speed": 2.62,
+    "acceleration": 1.4,
     "sightRange": 12,
-    "attackRange": 8,
+    "attackRange": 10,
     "attackDamage": 12,
     "attackSpeed": 2.0,
     "damageType": "psionic",
+    "projectileType": "instant_beam",
     "maxHealth": 550,
     "armor": 3,
     "abilities": ["power_cannon", "warp_jump"],
+    "maxEnergy": 200,
+    "energyRegen": 0.5625,
     "isFlying": true,
     "isMechanical": true,
     "canAttackGround": true,
-    "canAttackAir": true
+    "canAttackAir": true,
+    "canAttackWhileMoving": true,
+    "targetPriority": 95,
+    "category": "ship",
+    "armorType": "massive",
+    "audio": {
+      "voiceGroupId": "dreadnought",
+      "weaponSound": "attack_laser",
+      "deathSound": "explosion_large"
+    }
   },
   "overseer": {
     "id": "overseer",
@@ -385,7 +488,8 @@
     "vespeneCost": 200,
     "buildTime": 43,
     "supplyCost": 2,
-    "speed": 3.85,
+    "speed": 4.13,
+    "acceleration": 2.975,
     "sightRange": 11,
     "attackRange": 0,
     "attackDamage": 0,
@@ -399,6 +503,234 @@
     "isDetector": true,
     "detectionRange": 11,
     "canAttackGround": false,
-    "canAttackAir": false
+    "canAttackAir": false,
+    "audio": {
+      "voiceGroupId": "overseer",
+      "deathSound": "unit_death_mech"
+    }
+  },
+  "mariner": {
+    "id": "mariner",
+    "name": "Mariner",
+    "description": "Naval worker unit. Constructs naval buildings and repairs ships.",
+    "faction": "dominion",
+    "mineralCost": 75,
+    "vespeneCost": 0,
+    "buildTime": 15,
+    "supplyCost": 1,
+    "speed": 4.5,
+    "acceleration": 50,
+    "sightRange": 8,
+    "attackRange": 1,
+    "attackDamage": 5,
+    "attackSpeed": 0.7,
+    "damageType": "normal",
+    "projectileType": "instant_melee",
+    "maxHealth": 60,
+    "armor": 0,
+    "isWorker": true,
+    "isMechanical": true,
+    "canRepair": true,
+    "canAttackGround": false,
+    "canAttackAir": false,
+    "canAttackNaval": true,
+    "isNaval": true,
+    "movementDomain": "water",
+    "targetPriority": 10,
+    "category": "worker",
+    "armorType": "light",
+    "audio": {
+      "voiceGroupId": "mariner",
+      "weaponSound": "attack_rifle",
+      "deathSound": "unit_death_mech"
+    }
+  },
+  "stingray": {
+    "id": "stingray",
+    "name": "Stingray",
+    "description": "Fast patrol boat. Excellent for scouting and harassment. Attacks ground, air, and naval.",
+    "faction": "dominion",
+    "mineralCost": 100,
+    "vespeneCost": 0,
+    "buildTime": 20,
+    "supplyCost": 2,
+    "speed": 6.5,
+    "acceleration": 600,
+    "sightRange": 10,
+    "attackRange": 6,
+    "attackDamage": 8,
+    "attackSpeed": 0.9,
+    "damageType": "normal",
+    "projectileType": "bullet_rifle",
+    "maxHealth": 120,
+    "armor": 0,
+    "abilities": ["boost"],
+    "isMechanical": true,
+    "canAttackGround": true,
+    "canAttackAir": true,
+    "canAttackNaval": true,
+    "isNaval": true,
+    "movementDomain": "water",
+    "targetPriority": 65,
+    "category": "naval",
+    "armorType": "light",
+    "audio": {
+      "voiceGroupId": "stingray",
+      "weaponSound": "attack_gatling",
+      "deathSound": "unit_death_mech"
+    }
+  },
+  "corsair": {
+    "id": "corsair",
+    "name": "Corsair",
+    "description": "Anti-air missile frigate. Specializes in air defense with secondary torpedoes.",
+    "faction": "dominion",
+    "mineralCost": 150,
+    "vespeneCost": 75,
+    "buildTime": 30,
+    "supplyCost": 3,
+    "speed": 3.5,
+    "acceleration": 400,
+    "sightRange": 11,
+    "attackRange": 8,
+    "attackDamage": 24,
+    "attackSpeed": 0.7,
+    "damageType": "explosive",
+    "projectileType": "missile_aa",
+    "maxHealth": 200,
+    "armor": 1,
+    "abilities": ["flak_barrage"],
+    "maxEnergy": 100,
+    "energyRegen": 0.5625,
+    "isMechanical": true,
+    "canAttackGround": false,
+    "canAttackAir": true,
+    "canAttackNaval": true,
+    "isNaval": true,
+    "movementDomain": "water",
+    "targetPriority": 78,
+    "category": "naval",
+    "armorType": "armored",
+    "audio": {
+      "voiceGroupId": "corsair",
+      "weaponSound": "attack_missile",
+      "deathSound": "unit_death_mech"
+    }
+  },
+  "leviathan": {
+    "id": "leviathan",
+    "name": "Leviathan",
+    "description": "Heavy battlecruiser. Devastating shore bombardment and naval combat capability.",
+    "faction": "dominion",
+    "mineralCost": 350,
+    "vespeneCost": 250,
+    "buildTime": 60,
+    "supplyCost": 6,
+    "speed": 2.25,
+    "acceleration": 200,
+    "sightRange": 12,
+    "attackRange": 10,
+    "attackDamage": 25,
+    "attackSpeed": 0.5,
+    "damageType": "explosive",
+    "projectileType": "shell_siege",
+    "splashRadius": 1.5,
+    "maxHealth": 500,
+    "armor": 3,
+    "abilities": ["shore_bombardment", "yamato_cannon"],
+    "maxEnergy": 200,
+    "energyRegen": 0.5625,
+    "isMechanical": true,
+    "canAttackGround": true,
+    "canAttackAir": false,
+    "canAttackNaval": true,
+    "canAttackWhileMoving": true,
+    "isNaval": true,
+    "movementDomain": "water",
+    "targetPriority": 92,
+    "category": "naval",
+    "armorType": "massive",
+    "audio": {
+      "voiceGroupId": "leviathan",
+      "weaponSound": "attack_cannon",
+      "deathSound": "explosion_large"
+    }
+  },
+  "hunter": {
+    "id": "hunter",
+    "name": "Hunter",
+    "description": "Attack submarine. Cloaked when submerged. Devastating torpedoes against ships.",
+    "faction": "dominion",
+    "mineralCost": 200,
+    "vespeneCost": 150,
+    "buildTime": 45,
+    "supplyCost": 4,
+    "speed": 3.0,
+    "acceleration": 300,
+    "sightRange": 9,
+    "attackRange": 7,
+    "attackDamage": 35,
+    "attackSpeed": 0.4,
+    "damageType": "torpedo",
+    "projectileType": "torpedo",
+    "maxHealth": 175,
+    "armor": 1,
+    "abilities": ["submerge", "depth_charge_defense"],
+    "isMechanical": true,
+    "canCloak": true,
+    "cloakEnergyCost": 0,
+    "canAttackGround": false,
+    "canAttackAir": false,
+    "canAttackNaval": true,
+    "isNaval": true,
+    "isSubmarine": true,
+    "canSubmerge": true,
+    "submergedSpeed": 2.0,
+    "movementDomain": "water",
+    "targetPriority": 82,
+    "category": "naval",
+    "armorType": "armored",
+    "audio": {
+      "voiceGroupId": "hunter",
+      "weaponSound": "attack_torpedo",
+      "deathSound": "unit_death_mech"
+    }
+  },
+  "kraken": {
+    "id": "kraken",
+    "name": "Kraken",
+    "description": "Amphibious assault ship. Transports troops and operates on water and land.",
+    "faction": "dominion",
+    "mineralCost": 200,
+    "vespeneCost": 100,
+    "buildTime": 40,
+    "supplyCost": 3,
+    "speed": 3.5,
+    "acceleration": 400,
+    "sightRange": 10,
+    "attackRange": 6,
+    "attackDamage": 30,
+    "attackSpeed": 0.8,
+    "damageType": "normal",
+    "projectileType": "shell_tank",
+    "maxHealth": 250,
+    "armor": 2,
+    "abilities": ["beach_assault", "amphibious_mode"],
+    "isMechanical": true,
+    "isTransport": true,
+    "transportCapacity": 8,
+    "canAttackGround": true,
+    "canAttackAir": false,
+    "canAttackNaval": true,
+    "isNaval": true,
+    "movementDomain": "amphibious",
+    "targetPriority": 48,
+    "category": "naval",
+    "armorType": "armored",
+    "audio": {
+      "voiceGroupId": "kraken",
+      "weaponSound": "attack_cannon",
+      "deathSound": "unit_death_mech"
+    }
   }
 }

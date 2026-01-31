@@ -27,7 +27,7 @@ export type UpgradeEffectType =
   | 'health_bonus'
   | 'speed_bonus';
 
-export type UnitCategory = 'infantry' | 'vehicle' | 'ship';
+export type UnitCategory = 'infantry' | 'vehicle' | 'ship' | 'naval';
 
 export interface UpgradeEffect {
   type: UpgradeEffectType;

@@ -1,0 +1,312 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voidstrike.dev/schemas/unit.schema.json",
+  "title": "Unit Definition",
+  "description": "Schema for VOIDSTRIKE unit definitions",
+  "type": "object",
+  "additionalProperties": {
+    "$ref": "#/$defs/UnitDefinition"
+  },
+  "$defs": {
+    "UnitDefinition": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "faction",
+        "mineralCost",
+        "vespeneCost",
+        "buildTime",
+        "supplyCost",
+        "speed",
+        "sightRange",
+        "attackRange",
+        "attackDamage",
+        "attackSpeed",
+        "damageType",
+        "maxHealth",
+        "armor"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the unit"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Unit description"
+        },
+        "faction": {
+          "type": "string",
+          "description": "Faction this unit belongs to"
+        },
+        "mineralCost": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mineral cost to produce"
+        },
+        "vespeneCost": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Vespene cost to produce"
+        },
+        "buildTime": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Build time in seconds"
+        },
+        "supplyCost": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Supply cost"
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Movement speed"
+        },
+        "acceleration": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Acceleration rate (units/sec²)"
+        },
+        "sightRange": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Vision range"
+        },
+        "attackRange": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Attack range (0 for non-combat units)"
+        },
+        "attackDamage": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Damage per attack"
+        },
+        "attackSpeed": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Attacks per second"
+        },
+        "damageType": {
+          "type": "string",
+          "enum": ["normal", "explosive", "concussive", "psionic", "torpedo"],
+          "description": "Type of damage dealt"
+        },
+        "projectileType": {
+          "type": "string",
+          "description": "Projectile type for ranged attacks"
+        },
+        "maxHealth": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum health points"
+        },
+        "armor": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Armor value"
+        },
+        "abilities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "List of ability IDs"
+        },
+        "splashRadius": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Area of effect splash damage radius"
+        },
+        "isWorker": {
+          "type": "boolean",
+          "description": "Can gather resources and build"
+        },
+        "isFlying": {
+          "type": "boolean",
+          "description": "Air unit"
+        },
+        "isBiological": {
+          "type": "boolean",
+          "description": "Biological unit (can be healed)"
+        },
+        "isMechanical": {
+          "type": "boolean",
+          "description": "Mechanical unit (can be repaired)"
+        },
+        "canTransform": {
+          "type": "boolean",
+          "description": "Can transform between modes"
+        },
+        "transformModes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TransformMode" },
+          "description": "Available transform modes"
+        },
+        "defaultMode": {
+          "type": "string",
+          "description": "Initial transform mode"
+        },
+        "maxEnergy": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum energy pool"
+        },
+        "energyRegen": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Energy regeneration per second"
+        },
+        "canCloak": {
+          "type": "boolean",
+          "description": "Can become invisible"
+        },
+        "cloakEnergyCost": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Energy cost per second while cloaked"
+        },
+        "isTransport": {
+          "type": "boolean",
+          "description": "Can carry other units"
+        },
+        "transportCapacity": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of units that can be carried"
+        },
+        "isDetector": {
+          "type": "boolean",
+          "description": "Can detect cloaked units"
+        },
+        "detectionRange": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Detection range"
+        },
+        "canHeal": {
+          "type": "boolean",
+          "description": "Can heal biological units"
+        },
+        "healRange": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Healing range"
+        },
+        "healRate": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Health restored per second"
+        },
+        "healEnergyCost": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Energy cost per heal tick"
+        },
+        "canRepair": {
+          "type": "boolean",
+          "description": "Can repair mechanical units/buildings"
+        },
+        "canAttackGround": {
+          "type": "boolean",
+          "description": "Can attack ground units"
+        },
+        "canAttackAir": {
+          "type": "boolean",
+          "description": "Can attack air units"
+        },
+        "canAttackNaval": {
+          "type": "boolean",
+          "description": "Can attack naval units"
+        },
+        "canAttackWhileMoving": {
+          "type": "boolean",
+          "description": "Can fire while moving"
+        },
+        "isNaval": {
+          "type": "boolean",
+          "description": "Naval unit"
+        },
+        "movementDomain": {
+          "type": "string",
+          "enum": ["ground", "water", "amphibious", "air"],
+          "description": "Movement domain"
+        },
+        "isSubmarine": {
+          "type": "boolean",
+          "description": "Submarine unit"
+        },
+        "canSubmerge": {
+          "type": "boolean",
+          "description": "Can dive underwater"
+        },
+        "submergedSpeed": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Speed when submerged"
+        },
+        "targetPriority": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "AI targeting priority (higher = targeted first)"
+        },
+        "category": {
+          "type": "string",
+          "description": "Unit category for UI and upgrades"
+        },
+        "armorType": {
+          "type": "string",
+          "enum": ["light", "armored", "massive"],
+          "description": "Armor type for damage calculations"
+        },
+        "audio": {
+          "$ref": "#/$defs/UnitAudioConfig",
+          "description": "Audio configuration"
+        }
+      }
+    },
+    "TransformMode": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "speed",
+        "attackRange",
+        "attackDamage",
+        "attackSpeed",
+        "sightRange",
+        "canMove",
+        "transformTime"
+      ],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "speed": { "type": "number", "minimum": 0 },
+        "attackRange": { "type": "number", "minimum": 0 },
+        "attackDamage": { "type": "number", "minimum": 0 },
+        "attackSpeed": { "type": "number", "minimum": 0 },
+        "splashRadius": { "type": "number", "minimum": 0 },
+        "sightRange": { "type": "number", "minimum": 0 },
+        "isFlying": { "type": "boolean" },
+        "canMove": { "type": "boolean" },
+        "transformTime": { "type": "number", "minimum": 0 },
+        "canAttackGround": { "type": "boolean" },
+        "canAttackAir": { "type": "boolean" },
+        "projectileType": { "type": "string" }
+      }
+    },
+    "UnitAudioConfig": {
+      "type": "object",
+      "properties": {
+        "voiceGroupId": { "type": "string" },
+        "weaponSound": { "type": "string" },
+        "deathSound": { "type": "string" }
+      }
+    }
+  }
+}

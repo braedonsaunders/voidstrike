@@ -1,92 +1,28 @@
 /**
  * Definition Bootstrap
  *
- * This module provides backwards compatibility by registering the existing
- * TypeScript definitions with the DefinitionRegistry. This allows the game
- * to work exactly as before while enabling the data-driven system.
+ * This module initializes game definitions from JSON files.
+ * JSON is the single source of truth for all game data.
  *
  * Usage:
- *   // In your game initialization:
- *   import { bootstrapDefinitions, initializeDefinitions } from '@/engine/definitions/bootstrap';
+ *   import { initializeDefinitions, waitForDefinitions } from '@/engine/definitions/bootstrap';
  *
- *   // Option 1: Use existing TypeScript data (backwards compatible)
- *   bootstrapDefinitions();
+ *   // Initialize from JSON (call once at app startup)
+ *   await initializeDefinitions();
  *
- *   // Option 2: Load from JSON files (data-driven)
- *   await initializeDefinitions('/data/game.json');
+ *   // Or wait if initialization is in progress
+ *   await waitForDefinitions();
  */
 
 import { DefinitionRegistry } from './DefinitionRegistry';
 import { debugInitialization } from '@/utils/debugLogger';
 
-// Import existing TypeScript definitions
-import { UNIT_DEFINITIONS as DOMINION_UNITS } from '@/data/units/dominion';
-import {
-  BUILDING_DEFINITIONS as DOMINION_BUILDINGS,
-  RESEARCH_MODULE_UNITS,
-  PRODUCTION_MODULE_UNITS,
-} from '@/data/buildings/dominion';
-import {
-  RESEARCH_DEFINITIONS as DOMINION_RESEARCH,
-  UNIT_TYPES,
-} from '@/data/research/dominion';
-import { DOMINION_ABILITIES } from '@/engine/components/Ability';
-import {
-  WALL_DEFINITIONS,
-  WALL_UPGRADE_DEFINITIONS,
-} from '@/data/buildings/walls';
-
-import type { UnitDefinition, BuildingDefinition, ResearchDefinition, AbilityDefinition, WallDefinition, WallUpgradeDefinition, UnitCategory } from './types';
-
-/**
- * Bootstrap definitions from existing TypeScript data files.
- * This provides backwards compatibility - the game works exactly as before.
- */
-export function bootstrapDefinitions(): void {
-  if (DefinitionRegistry.isInitialized()) {
-    debugInitialization.log('[Bootstrap] Definitions already initialized, skipping');
-    return;
-  }
-
-  debugInitialization.log('[Bootstrap] Registering TypeScript definitions with registry...');
-
-  // Merge buildings with walls
-  const allBuildings: Record<string, BuildingDefinition> = {
-    ...DOMINION_BUILDINGS,
-  };
-
-  // Add wall definitions with proper typing
-  for (const [id, wall] of Object.entries(WALL_DEFINITIONS)) {
-    allBuildings[id] = wall as BuildingDefinition;
-  }
-
-  // Register the Dominion faction
-  DefinitionRegistry.registerFaction('dominion', {
-    manifest: {
-      id: 'dominion',
-      name: 'Dominion',
-      description: 'The Terran Dominion - A militaristic human faction with versatile units and powerful siege capabilities.',
-      color: '#4A90D9',
-    },
-    units: DOMINION_UNITS as Record<string, UnitDefinition>,
-    buildings: allBuildings,
-    research: DOMINION_RESEARCH as Record<string, ResearchDefinition>,
-    abilities: DOMINION_ABILITIES as Record<string, AbilityDefinition>,
-    walls: WALL_DEFINITIONS as Record<string, WallDefinition>,
-    wallUpgrades: WALL_UPGRADE_DEFINITIONS as Record<string, WallUpgradeDefinition>,
-    unitTypes: UNIT_TYPES as Record<string, UnitCategory>,
-    addonUnits: {
-      researchModule: RESEARCH_MODULE_UNITS,
-      productionModule: PRODUCTION_MODULE_UNITS,
-    },
-  });
-
-  debugInitialization.log('[Bootstrap] Definitions registered:', DefinitionRegistry.getStats());
-}
+// Re-export types for backwards compatibility
+export type { UnitDefinition, BuildingDefinition, ResearchDefinition, AbilityDefinition, WallDefinition, WallUpgradeDefinition, UnitCategory } from './types';
 
 /**
  * Initialize definitions from JSON files.
- * This is the data-driven approach for new games.
+ * This is the primary initialization method - JSON is the source of truth.
  *
  * @param manifestPath - Path to the game manifest JSON file
  */
@@ -113,4 +49,121 @@ export function definitionsReady(): boolean {
  */
 export async function waitForDefinitions(): Promise<void> {
   await DefinitionRegistry.waitForInitialization();
+}
+
+/**
+ * @deprecated Use initializeDefinitions() instead. This is kept for backwards compatibility.
+ * Will internally call initializeDefinitions() to load from JSON.
+ */
+export function bootstrapDefinitions(): void {
+  // Trigger async initialization but don't wait (for backwards compatibility with sync code)
+  if (!DefinitionRegistry.isInitialized()) {
+    debugInitialization.log('[Bootstrap] bootstrapDefinitions() called - starting async JSON load');
+    initializeDefinitions().catch((err) => {
+      console.error('[Bootstrap] Failed to load definitions from JSON:', err);
+    });
+  }
+}
+
+// ==================== BACKWARDS COMPATIBILITY EXPORTS ====================
+// These getters provide backwards-compatible access to definitions.
+// They pull from the DefinitionRegistry which loads from JSON.
+
+/**
+ * Get all unit definitions.
+ * @throws Error if definitions not initialized
+ */
+export function getUnitDefinitions() {
+  if (!DefinitionRegistry.isInitialized()) {
+    throw new Error('Definitions not initialized. Call initializeDefinitions() first.');
+  }
+  return DefinitionRegistry.getAllUnits();
+}
+
+/**
+ * Get all building definitions.
+ * @throws Error if definitions not initialized
+ */
+export function getBuildingDefinitions() {
+  if (!DefinitionRegistry.isInitialized()) {
+    throw new Error('Definitions not initialized. Call initializeDefinitions() first.');
+  }
+  return DefinitionRegistry.getAllBuildings();
+}
+
+/**
+ * Get all research definitions.
+ * @throws Error if definitions not initialized
+ */
+export function getResearchDefinitions() {
+  if (!DefinitionRegistry.isInitialized()) {
+    throw new Error('Definitions not initialized. Call initializeDefinitions() first.');
+  }
+  return DefinitionRegistry.getAllResearch();
+}
+
+/**
+ * Get all ability definitions.
+ * @throws Error if definitions not initialized
+ */
+export function getAbilityDefinitions() {
+  if (!DefinitionRegistry.isInitialized()) {
+    throw new Error('Definitions not initialized. Call initializeDefinitions() first.');
+  }
+  return DefinitionRegistry.getAllAbilities();
+}
+
+/**
+ * Get all wall definitions.
+ * @throws Error if definitions not initialized
+ */
+export function getWallDefinitions() {
+  if (!DefinitionRegistry.isInitialized()) {
+    throw new Error('Definitions not initialized. Call initializeDefinitions() first.');
+  }
+  return DefinitionRegistry.getAllWalls();
+}
+
+/**
+ * Get all wall upgrade definitions.
+ * @throws Error if definitions not initialized
+ */
+export function getWallUpgradeDefinitions() {
+  if (!DefinitionRegistry.isInitialized()) {
+    throw new Error('Definitions not initialized. Call initializeDefinitions() first.');
+  }
+  return DefinitionRegistry.getAllWallUpgrades();
+}
+
+/**
+ * Get research module unit mappings.
+ * @throws Error if definitions not initialized
+ */
+export function getResearchModuleUnits() {
+  if (!DefinitionRegistry.isInitialized()) {
+    throw new Error('Definitions not initialized. Call initializeDefinitions() first.');
+  }
+  return DefinitionRegistry.getAllResearchModuleUnits();
+}
+
+/**
+ * Get production module unit mappings.
+ * @throws Error if definitions not initialized
+ */
+export function getProductionModuleUnits() {
+  if (!DefinitionRegistry.isInitialized()) {
+    throw new Error('Definitions not initialized. Call initializeDefinitions() first.');
+  }
+  return DefinitionRegistry.getAllProductionModuleUnits();
+}
+
+/**
+ * Get unit type mappings.
+ * @throws Error if definitions not initialized
+ */
+export function getUnitTypes() {
+  if (!DefinitionRegistry.isInitialized()) {
+    throw new Error('Definitions not initialized. Call initializeDefinitions() first.');
+  }
+  return DefinitionRegistry.getUnitTypes();
 }

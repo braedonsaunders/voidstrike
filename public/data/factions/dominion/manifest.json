@@ -7,6 +7,7 @@
   "buildingsFile": "buildings.json",
   "researchFile": "research.json",
   "abilitiesFile": "abilities.json",
+  "wallUpgradesFile": "wall_upgrades.json",
   "unitTypes": {
     "fabricator": "infantry",
     "trooper": "infantry",
@@ -20,18 +21,26 @@
     "valkyrie": "ship",
     "specter": "ship",
     "dreadnought": "ship",
-    "overseer": "ship"
+    "overseer": "ship",
+    "mariner": "naval",
+    "stingray": "naval",
+    "corsair": "naval",
+    "leviathan": "naval",
+    "hunter": "naval",
+    "kraken": "naval"
   },
   "addonUnits": {
     "researchModule": {
       "infantry_bay": ["breacher", "operative"],
       "forge": ["devastator", "colossus"],
-      "hangar": ["overseer", "specter", "dreadnought"]
+      "hangar": ["overseer", "specter", "dreadnought"],
+      "drydock": ["corsair", "leviathan", "hunter", "kraken"]
     },
     "productionModule": {
       "infantry_bay": ["trooper", "vanguard"],
       "forge": ["scorcher"],
-      "hangar": ["lifter", "valkyrie"]
+      "hangar": ["lifter", "valkyrie"],
+      "drydock": ["mariner", "stingray"]
     }
   }
 }
