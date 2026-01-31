@@ -17,6 +17,7 @@
 import { GameCore, GameConfig } from '../core/GameCore';
 import { PerformanceMonitor } from '../core/PerformanceMonitor';
 import { debugInitialization, debugPerformance } from '@/utils/debugLogger';
+import { initializeDefinitions } from '../definitions/bootstrap';
 
 // Components
 import { Transform } from '../components/Transform';
@@ -1114,6 +1115,12 @@ if (typeof self !== 'undefined') {
     try {
       switch (message.type) {
         case 'init': {
+          // Load definitions in worker context before creating game
+          // Workers have their own JS context, so definitions must be loaded here too
+          debugInitialization.log('[GameWorker] Loading definitions in worker...');
+          await initializeDefinitions();
+          debugInitialization.log('[GameWorker] Definitions loaded, creating WorkerGame');
+
           game = new WorkerGame(message.config);
           postMessage({ type: 'initialized', success: true } satisfies WorkerToMainMessage);
           break;
