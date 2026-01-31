@@ -18,6 +18,7 @@ import {
   exportNavMesh,
   importNavMesh,
   type CrowdAgentParams,
+  type Obstacle,
 } from 'recast-navigation';
 import { generateTileCache, generateSoloNavMesh } from '@recast-navigation/generators';
 import { threeToTileCache } from '@recast-navigation/three';
