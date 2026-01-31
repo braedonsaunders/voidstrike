@@ -48,7 +48,7 @@ export interface DetailedValidationResult {
 
 // Components
 import { Editor3DCanvas } from './Editor3DCanvas';
-import { EditorPanels } from './EditorPanels';
+import { EditorPanels } from './panels';
 import { EditorHeader, type MapListItem } from './EditorHeader';
 import { EditorToolbar } from './EditorToolbar';
 import { EditorContextMenu, buildContextMenuActions, type ContextMenuAction } from './EditorContextMenu';
