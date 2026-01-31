@@ -74,12 +74,13 @@ function createMockEntity(
     current: overrides.health?.current ?? 100,
     max: overrides.health?.max ?? 100,
     armor: overrides.health?.armor ?? 0,
+    ...overrides.health,
+    // Mock functions must be after spread to avoid being overwritten
     getHealthPercent: vi
       .fn()
       .mockReturnValue((overrides.health?.current ?? 100) / (overrides.health?.max ?? 100)),
     isDead: vi.fn().mockReturnValue(false),
-    ...overrides.health,
-  } as unknown as Health;
+  };
 
   const mockSelectable = {
     playerId: overrides.selectable?.playerId ?? 'player1',

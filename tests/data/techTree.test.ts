@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   BUILDING_DISPLAY_NAMES,
   BUILDING_RESEARCH_MAP,
