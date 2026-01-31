@@ -652,33 +652,6 @@ export class Game extends GameCore {
     }
   }
 
-  /**
-   * Issue an AI command. In multiplayer, AI commands execute at current tick
-   * since AI logic is deterministic and runs identically on all clients.
-   * Commands are recorded for desync detection but not broadcast (both clients compute same AI).
-   */
-  public override issueAICommand(command: GameCommand): void {
-    // Ensure command tick is set to current tick for deterministic execution
-    command.tick = this.currentTick;
-
-    if (this.config.isMultiplayer) {
-      // In multiplayer, record the command for desync detection
-      // Both clients compute identical AI decisions, so no network broadcast needed
-      this.recordExecutedCommand(command);
-    }
-
-    // Execute command via parent class (bypasses multiplayer validation since AI is local)
-    super.processCommand(command);
-  }
-
-  /**
-   * Check if this client is in multiplayer mode.
-   * Used by AI systems to disable non-deterministic features.
-   */
-  public isInMultiplayerMode(): boolean {
-    return this.config.isMultiplayer;
-  }
-
   private queueCommandWithReceipt(command: GameCommand): void {
     this.queueCommand(command);
 
