@@ -6,7 +6,7 @@ import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { Velocity } from '@/engine/components/Velocity';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
-import { AssetManager, AnimationMappingConfig, LODLevel, DEFAULT_LOD_DISTANCES, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
+import { AssetManager, LODLevel, DEFAULT_LOD_DISTANCES, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
 import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
@@ -20,6 +20,11 @@ import {
   UNIT_HEALTH_BAR,
   RENDER_ORDER,
 } from '@/data/rendering.config';
+import {
+  AnimationController,
+  loadAnimationConfig,
+  updateAnimationParameters,
+} from '@/engine/animation';
 
 // Shared rendering utilities
 import {
@@ -125,10 +130,8 @@ interface InstancedUnitGroup {
 // Per-unit animated mesh data (for animated units)
 interface AnimatedUnitMesh {
   mesh: THREE.Object3D;
-  mixer: THREE.AnimationMixer;
-  animations: Map<string, THREE.AnimationAction>;
-  currentAction: string;
-  unitType: string; // Track unit type for animation speed multipliers
+  controller: AnimationController;
+  unitType: string;
 }
 
 // Per-unit overlay data - now tracks instance indices instead of individual meshes
@@ -156,15 +159,6 @@ const MAX_INSTANCES_PER_TYPE = UNIT_RENDERER.MAX_INSTANCES_PER_TYPE;
 const MAX_OVERLAY_INSTANCES = UNIT_RENDERER.MAX_OVERLAY_INSTANCES;
 // Note: Airborne height is configured per-unit-type in assets.json via "airborneHeight" property
 const INACTIVE_MESH_CLEANUP_FRAMES = UNIT_RENDERER.INACTIVE_MESH_CLEANUP_FRAMES;
-
-// Default animation name mappings (used when JSON config not available)
-// Each game action maps to a list of possible animation clip names to search for
-const DEFAULT_ANIMATION_MAPPINGS: AnimationMappingConfig = {
-  idle: ['idle', 'stand', 'pose'],
-  walk: ['walk', 'run', 'move', 'locomotion'],
-  attack: ['attack', 'shoot', 'fire', 'combat'],
-  death: ['death', 'die', 'dead'],
-};
 
 export class UnitRenderer {
   private scene: THREE.Scene;
@@ -600,12 +594,7 @@ export class UnitRenderer {
 
   /**
    * Get or create an animated mesh for a specific unit entity.
-   *
-   * Animation mapping priority:
-   * 1. JSON config (public/config/assets.json) - explicit mappings per asset
-   * 2. Exact name matches from default mappings
-   * 3. Partial name matches (e.g., "walk_cycle" matches "walk")
-   * 4. Fallback to idle animation
+   * Uses the data-driven AnimationController for state machine-based animation.
    */
   private getOrCreateAnimatedUnit(entityId: number, unitType: string, playerId: string): AnimatedUnitMesh {
     let animUnit = this.animatedUnits.get(entityId);
@@ -628,107 +617,44 @@ export class UnitRenderer {
 
       // Create animation mixer with the actual model (not the wrapper)
       const mixer = new THREE.AnimationMixer(animationRoot);
-      const animations = new Map<string, THREE.AnimationAction>();
 
-      // Get animations from asset manager and create actions
+      // Get animation clips from asset manager
       const clips = AssetManager.getAnimations(unitType);
 
-      // Get animation mappings - prefer JSON config, fall back to defaults
-      const configMappings = AssetManager.getAnimationMappings(unitType);
-      const animMappings = configMappings ?? DEFAULT_ANIMATION_MAPPINGS;
+      // Load animation config (handles both legacy and new format)
+      const assetConfig = AssetManager.getAssetConfig(unitType);
+      const animConfig = loadAnimationConfig(assetConfig ?? {});
 
-      debugAnimation.log(`[UnitRenderer] ${unitType}: Using ${configMappings ? 'JSON config' : 'default'} animation mappings`);
-
-      // Build a map of normalized clip names to actions for lookup
-      const clipNameToAction = new Map<string, THREE.AnimationAction>();
-      for (const clip of clips) {
-        const action = mixer.clipAction(clip);
-        // Normalize name: lowercase and strip common prefixes like "Armature|"
-        let name = clip.name.toLowerCase();
-        // Handle Blender-style naming (e.g., "Armature|idle" -> "idle")
-        if (name.includes('|')) {
-          name = name.split('|').pop() || name;
-        }
-        clipNameToAction.set(name, action);
-        // Also store original clip name for exact matches
-        clipNameToAction.set(clip.name.toLowerCase(), action);
-        debugAnimation.log(`[UnitRenderer] ${unitType}: Found animation clip "${clip.name}" -> normalized "${name}"`);
+      if (!animConfig) {
+        debugAnimation.warn(`[UnitRenderer] ${unitType}: No animation config found`);
+        // Create minimal controller with no animations
+        const controller = new AnimationController(
+          {
+            parameters: {},
+            layers: [],
+            stateMachines: {},
+            clipMappings: {},
+          },
+          mixer,
+          clips
+        );
+        animUnit = { mesh, controller, unitType };
+        this.animatedUnits.set(entityId, animUnit);
+        return animUnit;
       }
 
-      // Map game actions to animation clips using the configured mappings
-      // The first matching name in the array wins (priority order)
-      for (const [gameAction, clipNames] of Object.entries(animMappings)) {
-        if (!clipNames) continue;
+      // Create the AnimationController
+      const controller = new AnimationController(animConfig, mixer, clips);
 
-        // Try each configured clip name in order
-        for (const clipName of clipNames) {
-          const normalizedName = clipName.toLowerCase();
-
-          // First try exact match
-          if (clipNameToAction.has(normalizedName)) {
-            animations.set(gameAction, clipNameToAction.get(normalizedName)!);
-            debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped '${gameAction}' -> "${clipName}" (exact match)`);
-            break;
-          }
-
-          // Then try partial match (clip name contains the search term)
-          for (const [clipKey, action] of clipNameToAction) {
-            if (clipKey.includes(normalizedName)) {
-              animations.set(gameAction, action);
-              debugAnimation.log(`[UnitRenderer] ${unitType}: Mapped '${gameAction}' -> "${clipKey}" (partial match for "${clipName}")`);
-              break;
-            }
-          }
-
-          // If we found a match, stop searching
-          if (animations.has(gameAction)) break;
-        }
-      }
-
-      // Ensure we have fallbacks for missing animations
-      if (!animations.has('walk') && animations.has('idle')) {
-        animations.set('walk', animations.get('idle')!);
-        debugAnimation.log(`[UnitRenderer] ${unitType}: Using 'idle' as fallback for 'walk'`);
-      }
-      if (!animations.has('attack') && animations.has('idle')) {
-        animations.set('attack', animations.get('idle')!);
-        debugAnimation.log(`[UnitRenderer] ${unitType}: Using 'idle' as fallback for 'attack'`);
-      }
-
-      // Log final animation mappings
-      debugAnimation.log(`[UnitRenderer] ${unitType}: Final animation mappings:`);
-      for (const [key, action] of animations) {
-        const clipName = action.getClip().name;
-        debugAnimation.log(`[UnitRenderer]   '${key}' -> clip "${clipName}"`);
-      }
-
-      // Start with idle animation if available
-      const idleAction = animations.get('idle');
-      if (idleAction) {
-        debugAnimation.log(`[UnitRenderer] ${unitType}: Starting idle animation, clip name: "${idleAction.getClip().name}"`);
-        idleAction.play();
-      } else if (clips.length > 0) {
-        // Fall back to first NON-DEATH animation to avoid playing death as idle
-        let fallbackClip = clips[0];
-        for (const clip of clips) {
-          const lowerName = clip.name.toLowerCase();
-          // Skip death animations as fallback
-          if (!lowerName.includes('death') && !lowerName.includes('die') && !lowerName.includes('dead')) {
-            fallbackClip = clip;
-            break;
-          }
-        }
-        const firstAction = mixer.clipAction(fallbackClip);
-        firstAction.play();
-        animations.set('idle', firstAction);
-        debugAnimation.log(`[UnitRenderer] ${unitType}: No idle animation found, using fallback: ${fallbackClip.name}`);
-      }
+      // Log animation state for debugging
+      debugAnimation.log(
+        `[UnitRenderer] ${unitType}: Created AnimationController with ${clips.length} clips, ` +
+        `${animConfig.layers.length} layers, initial state: ${controller.getCurrentState()}`
+      );
 
       animUnit = {
         mesh,
-        mixer,
-        animations,
-        currentAction: 'idle',
+        controller,
         unitType,
       };
 
@@ -776,36 +702,6 @@ export class UnitRenderer {
     for (let i = tracksToRemove.length - 1; i >= 0; i--) {
       const removedTrack = clip.tracks.splice(tracksToRemove[i], 1)[0];
       debugAnimation.log(`[UnitRenderer] Removed root motion track: ${removedTrack.name} from ${clip.name}`);
-    }
-  }
-
-  /**
-   * Update animation state based on unit state
-   */
-  private updateAnimationState(animUnit: AnimatedUnitMesh, isMoving: boolean, isAttacking: boolean): void {
-    let targetAction = 'idle';
-    if (isAttacking) {
-      targetAction = 'attack';
-    } else if (isMoving) {
-      targetAction = 'walk';
-    }
-
-    if (animUnit.currentAction !== targetAction) {
-      const currentActionObj = animUnit.animations.get(animUnit.currentAction);
-      const targetActionObj = animUnit.animations.get(targetAction);
-
-      debugAnimation.log(`[UnitRenderer] Animation switch: ${animUnit.currentAction} -> ${targetAction} (isMoving=${isMoving}, isAttacking=${isAttacking})`);
-      debugAnimation.log(`[UnitRenderer] Available animations:`, Array.from(animUnit.animations.keys()));
-
-      if (targetActionObj) {
-        if (currentActionObj) {
-          currentActionObj.fadeOut(0.2);
-        }
-        targetActionObj.reset().fadeIn(0.2).play();
-        animUnit.currentAction = targetAction;
-      } else {
-        debugAnimation.warn(`[UnitRenderer] Target animation '${targetAction}' not found!`);
-      }
     }
   }
 
@@ -1164,7 +1060,7 @@ export class UnitRenderer {
       }
 
       if (this.isAnimatedUnitType(unit.unitId)) {
-        // Use individual animated mesh
+        // Use individual animated mesh with AnimationController
         const animUnit = this.getOrCreateAnimatedUnit(entity.id, unit.unitId, ownerId);
         animUnit.mesh.visible = true;
 
@@ -1174,19 +1070,13 @@ export class UnitRenderer {
         animUnit.mesh.position.set(transform.x, unitHeight, transform.y);
         animUnit.mesh.rotation.y = smoothRotation;
 
-        // Determine animation state
-        // isMoving: unit has non-zero velocity
-        const isMoving = velocity ? (Math.abs(velocity.x) > 0.01 || Math.abs(velocity.y) > 0.01) : false;
-        // isActuallyAttacking: unit is in attacking state AND stationary (in range, performing attack)
-        // When chasing a target (moving toward it), show walk animation, not attack
-        const isActuallyAttacking = unit.state === 'attacking' && !isMoving;
+        // Update animation parameters from game state
+        // The AnimationController's state machine handles transitions automatically
+        updateAnimationParameters(animUnit.controller, unit, velocity ?? null);
 
-        // Update animation
-        this.updateAnimationState(animUnit, isMoving, isActuallyAttacking);
-
-        // Update animation mixer with unit-specific speed multiplier (from JSON config or default 1.0)
+        // Update animation controller (handles state machine and mixer)
         const animSpeedMultiplier = AssetManager.getAnimationSpeed(animUnit.unitType);
-        animUnit.mixer.update(deltaTime * animSpeedMultiplier);
+        animUnit.controller.update(deltaTime * animSpeedMultiplier);
       } else {
         // Use instanced rendering for non-animated units
         // Calculate distance from camera for LOD selection
@@ -1348,16 +1238,15 @@ export class UnitRenderer {
     for (const [entityId, animUnit] of this.animatedUnits) {
       if (!this.entityIdTracker.has(entityId)) {
         this.scene.remove(animUnit.mesh);
-        animUnit.mixer.stopAllAction();
-        // Properly clean up mixer caches to prevent memory leaks
-        animUnit.mixer.uncacheRoot(animUnit.mesh);
+        // Dispose animation controller (handles mixer cleanup)
+        animUnit.controller.dispose();
         // Dispose materials but NOT geometry (geometry is shared with asset cache)
-        animUnit.mesh.traverse((child) => {
+        animUnit.mesh.traverse((child: THREE.Object3D) => {
           if (child instanceof THREE.Mesh) {
             if (child.material instanceof THREE.Material) {
               child.material.dispose();
             } else if (Array.isArray(child.material)) {
-              child.material.forEach(m => m.dispose());
+              child.material.forEach((m: THREE.Material) => m.dispose());
             }
           }
         });
@@ -1391,15 +1280,15 @@ export class UnitRenderer {
     // Clear animated units
     for (const animUnit of this.animatedUnits.values()) {
       this.scene.remove(animUnit.mesh);
-      animUnit.mixer.stopAllAction();
-      animUnit.mixer.uncacheRoot(animUnit.mesh);
+      // Dispose animation controller (handles mixer cleanup)
+      animUnit.controller.dispose();
       // Dispose materials but NOT geometry (shared with asset cache)
-      animUnit.mesh.traverse((child) => {
+      animUnit.mesh.traverse((child: THREE.Object3D) => {
         if (child instanceof THREE.Mesh) {
           if (child.material instanceof THREE.Material) {
             child.material.dispose();
           } else if (Array.isArray(child.material)) {
-            child.material.forEach(m => m.dispose());
+            child.material.forEach((m: THREE.Material) => m.dispose());
           }
         }
       });
@@ -1480,15 +1369,15 @@ export class UnitRenderer {
 
     for (const animUnit of this.animatedUnits.values()) {
       this.scene.remove(animUnit.mesh);
-      animUnit.mixer.stopAllAction();
-      animUnit.mixer.uncacheRoot(animUnit.mesh);
+      // Dispose animation controller (handles mixer cleanup)
+      animUnit.controller.dispose();
       // Dispose materials but NOT geometry (shared with asset cache)
-      animUnit.mesh.traverse((child) => {
+      animUnit.mesh.traverse((child: THREE.Object3D) => {
         if (child instanceof THREE.Mesh) {
           if (child.material instanceof THREE.Material) {
             child.material.dispose();
           } else if (Array.isArray(child.material)) {
-            child.material.forEach(m => m.dispose());
+            child.material.forEach((m: THREE.Material) => m.dispose());
           }
         }
       });

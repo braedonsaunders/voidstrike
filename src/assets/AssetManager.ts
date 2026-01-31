@@ -1565,6 +1565,31 @@ export class AssetManager {
   }
 
   /**
+   * Get configuration for a specific asset.
+   * Searches units, buildings, resources, and decorations.
+   * Returns null if not found or config not loaded.
+   */
+  static getAssetConfig(assetId: string): AssetConfig | null {
+    if (!assetsConfig) return null;
+
+    // Check each category for the asset
+    if (assetsConfig.units[assetId]) {
+      return assetsConfig.units[assetId];
+    }
+    if (assetsConfig.buildings[assetId]) {
+      return assetsConfig.buildings[assetId];
+    }
+    if (assetsConfig.resources[assetId]) {
+      return assetsConfig.resources[assetId];
+    }
+    if (assetsConfig.decorations[assetId]) {
+      return assetsConfig.decorations[assetId];
+    }
+
+    return null;
+  }
+
+  /**
    * Load asset configuration from public/config/assets.json.
    * This should be called before loadCustomModels().
    */
