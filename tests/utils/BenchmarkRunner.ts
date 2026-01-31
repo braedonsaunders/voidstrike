@@ -87,6 +87,7 @@ export class BenchmarkRunner {
         sum += Math.sqrt(j);
       }
       // Prevent optimization
+      // eslint-disable-next-line no-console -- Intentional: prevents JIT optimization
       if (sum < 0) console.log(sum);
     }
 
@@ -99,6 +100,7 @@ export class BenchmarkRunner {
       }
       const elapsed = performance.now() - start;
       samples.push(elapsed);
+      // eslint-disable-next-line no-console -- Intentional: prevents JIT optimization
       if (sum < 0) console.log(sum);
     }
 

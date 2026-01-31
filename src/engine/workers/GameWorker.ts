@@ -427,13 +427,11 @@ export class WorkerGame extends GameCore {
   public override start(): void {
     if (this.state === 'running') return;
 
-    if (debugInitialization.isEnabled()) {
-      console.log('[GameWorker] Starting game loop. Entity counts:', {
-        units: this.world.getEntitiesWith('Unit').length,
-        buildings: this.world.getEntitiesWith('Building').length,
-        resources: this.world.getEntitiesWith('Resource').length,
-      });
-    }
+    debugInitialization.log('[GameWorker] Starting game loop. Entity counts:', {
+      units: this.world.getEntitiesWith('Unit').length,
+      buildings: this.world.getEntitiesWith('Building').length,
+      resources: this.world.getEntitiesWith('Resource').length,
+    });
 
     this.state = 'running';
     this.lastTickTime = performance.now();
@@ -587,11 +585,11 @@ export class WorkerGame extends GameCore {
     this.renderStatesSent++;
 
     if (debugInitialization.isEnabled() && (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0)) {
-      console.log(`[GameWorker] sendRenderState #${this.renderStatesSent}: units=${units.length}, buildings=${buildings.length}, resources=${resources.length}`);
+      debugInitialization.log(`[GameWorker] sendRenderState #${this.renderStatesSent}: units=${units.length}, buildings=${buildings.length}, resources=${resources.length}`);
     }
 
     if (debugInitialization.isEnabled() && !this.hasLoggedFirstRenderState && (units.length > 0 || buildings.length > 0 || resources.length > 0)) {
-      console.log('[GameWorker] First render state with entities:', {
+      debugInitialization.log('[GameWorker] First render state with entities:', {
         tick: this.currentTick,
         units: units.length,
         buildings: buildings.length,
