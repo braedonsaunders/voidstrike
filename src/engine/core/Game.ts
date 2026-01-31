@@ -26,6 +26,7 @@ import {
   getAllPeerIds,
   getSlotIdForPeer,
   getAllRemoteSlotIds,
+  setOnReconnectedCallback,
 } from '@/store/multiplayerStore';
 
 // Multiplayer message types
@@ -138,6 +139,7 @@ export class Game extends GameCore {
 
       this.setupMultiplayerMessageHandler();
       this.setupDesyncHandler();
+      this.setupReconnectionHandler();
     }
 
     this.initializeSystems();
@@ -275,6 +277,18 @@ export class Game extends GameCore {
     });
   }
 
+  private setupReconnectionHandler(): void {
+    // Set up callback for when network reconnection succeeds
+    // This triggers game-level sync to restore command history
+    setOnReconnectedCallback(() => {
+      debugNetworking.log('[Game] Network reconnected, requesting sync');
+      this.requestSync();
+      this.eventBus.emit('multiplayer:reconnected', {
+        tick: this.currentTick,
+      });
+    });
+  }
+
   // ============================================================================
   // SINGLETON MANAGEMENT
   // ============================================================================
@@ -379,6 +393,11 @@ export class Game extends GameCore {
     if (this.multiplayerMessageHandler) {
       removeMultiplayerMessageHandler(this.multiplayerMessageHandler);
       this.multiplayerMessageHandler = null;
+    }
+
+    // Clean up reconnection handler
+    if (this.config.isMultiplayer) {
+      setOnReconnectedCallback(null);
     }
 
     this.eventBus.emit('game:ended', { tick: this.currentTick });

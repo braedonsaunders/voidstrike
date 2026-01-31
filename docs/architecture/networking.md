@@ -38,14 +38,25 @@ A groundbreaking multiplayer architecture that requires **zero servers** to oper
 | **Merkle Tree** | `MerkleTree.ts` | ✅ O(log n) divergence detection |
 | **Desync Detection** | `DesyncDetection.ts` | ✅ Debugging tools |
 
-### ⚠️ What's INCOMPLETE (Game Integration)
+### ✅ What's COMPLETE (Game Integration)
+
+| Component | File | Status |
+|-----------|------|--------|
+| **Lockstep Game Loop** | `Game.ts` | ✅ `hasAllCommandsForTick()` barrier waits for all players |
+| **Input Broadcasting** | `Game.ts` | ✅ `issueCommand()` sends via `sendMultiplayerMessage()` |
+| **Input Buffering** | `Game.ts` | ✅ Adaptive `currentCommandDelay` based on latency |
+| **Heartbeat System** | `Game.ts` | ✅ `sendHeartbeatForTick()` keeps lockstep flowing |
+| **Command Authorization** | `Game.ts` | ✅ Validates player ownership of entities |
+| **Reconnection** | `multiplayerStore.ts`, `Game.ts` | ✅ Auto-reconnect with exponential backoff + sync request |
+| **Multi-Peer Support** | `multiplayerStore.ts` | ✅ Full mesh topology for up to 8 players |
+| **Latency Measurement** | `multiplayerStore.ts` | ✅ Ping/pong with RTT, jitter, packet loss tracking |
+
+### ⚠️ What's INCOMPLETE
 
 | Component | Gap |
 |-----------|-----|
-| **Lockstep Game Loop** | Game doesn't wait for peer inputs |
-| **Input Broadcasting** | Commands not wired to network |
-| **Input Buffering** | No lag compensation |
-| **Reconnection** | Types exist, logic missing |
+| **LAN Discovery (mDNS)** | Requires Electron/Tauri for desktop build |
+| **ConnectionCode.ts** | Implementation file missing (only documented in networking.md) |
 
 ### ✅ Serverless Architecture (No Backend Required)
 
@@ -1328,6 +1339,93 @@ export class PeerRelayNetwork extends EventEmitter {
 
 ---
 
+## Reconnection and Sync Flow
+
+When a connection drops during gameplay, the system automatically attempts to reconnect and synchronize game state.
+
+### Reconnection Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                      AUTOMATIC RECONNECTION FLOW                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  GUEST (Lost Connection)              HOST (Waiting)                        │
+│  ═══════════════════                  ════════════════                      │
+│                                                                             │
+│  1. WebRTC data channel closes                                              │
+│         │                                                                   │
+│         ▼                                                                   │
+│  2. multiplayerStore detects                                                │
+│     connectionStatus = 'reconnecting'                                       │
+│     isNetworkPaused = true                                                  │
+│         │                                                                   │
+│         ▼                                                                   │
+│  3. attemptReconnect() called                                               │
+│     (exponential backoff: 2s, 4s, 8s, 16s)                                  │
+│         │                                                                   │
+│         ▼                                                                   │
+│  4. reconnectCallback() re-joins lobby ───────────────────────►             │
+│         │                                        │                          │
+│         │                          Host receives new join request           │
+│         │                                        │                          │
+│         │◄─────────────── WebRTC handshake ─────►│                          │
+│         │                                        │                          │
+│         ▼                                        ▼                          │
+│  5. Connection restored                                                     │
+│     setDataChannel() called                                                 │
+│         │                                                                   │
+│         ▼                                                                   │
+│  6. onReconnectedCallback() fires                                           │
+│         │                                                                   │
+│         ▼                                                                   │
+│  7. Game.requestSync() called                                               │
+│         │                                                                   │
+│         ▼                                                                   │
+│  8. Send sync-request: {lastKnownTick} ───────────────────────►│            │
+│         │                                        │                          │
+│         │                           Host sends sync-response with           │
+│         │                           command history since lastKnownTick     │
+│         │                                        │                          │
+│         │◄───────────── sync-response: {commands[]} ───────────│            │
+│         │                                                                   │
+│         ▼                                                                   │
+│  9. Replay missed commands                                                  │
+│     Resume game loop                                                        │
+│                                                                             │
+│  ═══════════════════════════════════════════════════════════════════════   │
+│                        GAME CONTINUES SYNCHRONIZED                          │
+│  ═══════════════════════════════════════════════════════════════════════   │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Implementation Details
+
+| Component | File | Function |
+|-----------|------|----------|
+| Connection detection | `multiplayerStore.ts` | `closeHandler` in `setDataChannel()` |
+| Reconnection logic | `multiplayerStore.ts` | `attemptReconnect()` with exponential backoff |
+| Lobby re-join | `useMultiplayer.ts` | `reconnect()` callback |
+| Sync trigger | `Game.ts` | `setupReconnectionHandler()` sets callback |
+| Sync request | `Game.ts` | `requestSync()` sends sync-request message |
+| Sync response | `Game.ts` | `handleSyncRequest()` sends command history |
+| Command replay | `Game.ts` | `handleSyncResponse()` queues/processes commands |
+
+### Reconnection Configuration
+
+```typescript
+// multiplayerStore.ts
+maxReconnectAttempts: 4,        // Try 4 times before giving up
+maxBufferedCommands: 500,       // Buffer commands during disconnect
+pingTimeoutMs: 2000,            // Consider ping lost after 2 seconds
+
+// Exponential backoff delays: 2s, 4s, 8s, 16s
+const delay = Math.pow(2, attempt) * 1000;
+```
+
+---
+
 ## Implementation Phases (Updated)
 
 ### Phase 1: Connection Codes
@@ -1364,20 +1462,22 @@ Tasks:
 ```
 
 ### Phase 3: Nostr Discovery
-**Status**: Ready to implement
+**Status**: ✅ Complete
 **Reliability**: 99%
 **Dependencies**: `nostr-tools` (~30KB)
+**Implementation**: `src/engine/network/p2p/NostrMatchmaking.ts`, `src/hooks/useMultiplayer.ts`
 
 ```
 Tasks:
-- [ ] NostrMatchmaking class implementation
-- [ ] Ephemeral keypair generation
-- [ ] Game seek event publishing
-- [ ] Game seek subscription and filtering
-- [ ] WebRTC offer/answer exchange via Nostr
-- [ ] Skill-based matchmaking
-- [ ] "Find Match" UI with status updates
-- [ ] Relay health monitoring
+- [x] NostrMatchmaking class implementation
+- [x] Ephemeral keypair generation
+- [x] Game seek event publishing
+- [x] Game seek subscription and filtering
+- [x] WebRTC offer/answer exchange via Nostr
+- [x] Skill-based matchmaking (300 point bracket)
+- [x] Lobby system with 4-char codes
+- [x] Relay health monitoring
+- [x] Public lobby listing
 ```
 
 ### Phase 4: Peer Relay
