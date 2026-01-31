@@ -731,7 +731,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       };
 
       try {
-        guest.dataChannel!.send(JSON.stringify(message));
+        guest.dataChannel?.send(JSON.stringify(message));
       } catch (e) {
         debugNetworking.error('[Lobby] Failed to send to guest:', e);
       }
@@ -760,7 +760,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     let successCount = 0;
     connectedGuests.forEach(guest => {
       try {
-        guest.dataChannel!.send(JSON.stringify(message));
+        guest.dataChannel?.send(JSON.stringify(message));
         successCount++;
       } catch (e) {
         debugNetworking.error('[Lobby] Failed to send game start to guest:', e);

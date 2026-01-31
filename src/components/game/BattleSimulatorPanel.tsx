@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback, memo } from 'react';
 import { Game } from '@/engine/core/Game';
-import { UNIT_DEFINITIONS, DOMINION_UNITS } from '@/data/units/dominion';
+import { UNIT_DEFINITIONS } from '@/data/units/dominion';
+import { DefinitionRegistry } from '@/engine/definitions/DefinitionRegistry';
 import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
 import { useGameStore } from '@/store/gameStore';
 import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
@@ -292,7 +293,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     setSelectedUnit(null);
   }, []);
 
-  const combatUnits = DOMINION_UNITS.filter(u => !u.isWorker);
+  const combatUnits = Object.values(DefinitionRegistry.getAllUnits()).filter(u => !u.isWorker);
 
   return (
     <div className="absolute top-12 left-2 w-64 bg-void-950/95 border border-void-700 rounded-lg shadow-xl pointer-events-auto">

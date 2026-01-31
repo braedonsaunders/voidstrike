@@ -147,12 +147,11 @@ export {
 
 // ==================== UNIT DEFINITIONS ====================
 // Re-export from faction-specific files for convenience
-export { UNIT_DEFINITIONS, DOMINION_UNITS } from './units/dominion';
+export { UNIT_DEFINITIONS } from './units/dominion';
 
 // ==================== BUILDING DEFINITIONS ====================
 export {
   BUILDING_DEFINITIONS,
-  DOMINION_BUILDINGS,
   RESEARCH_MODULE_UNITS,
   PRODUCTION_MODULE_UNITS,
 } from './buildings/dominion';
