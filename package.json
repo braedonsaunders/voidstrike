@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "optimize-models": "node scripts/optimize-models.js",
-    "generate-manifests": "node scripts/generate-music-manifest.js"
+    "generate-manifests": "node scripts/generate-music-manifest.js",
+    "prepare": "husky"
   },
   "dependencies": {
     "@recast-navigation/three": "^0.43.0",
@@ -30,6 +31,15 @@
     "three": "^0.182.0",
     "zustand": "^5.0.10"
   },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,mjs,cjs}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,css,scss,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  },
   "devDependencies": {
     "@types/node": "^20.10.5",
     "@types/pako": "^2.0.3",
@@ -41,6 +51,8 @@
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.6",
     "eslint-config-prettier": "^10.1.8",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
     "postcss": "^8.4.32",
     "prettier": "^3.8.1",
     "tailwindcss": "^3.4.0",
