@@ -598,6 +598,9 @@ export default function HomeBackground() {
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Store container reference for cleanup closure
+    const container = containerRef.current;
+
     // Scene setup
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x0a0015, 0.02);
