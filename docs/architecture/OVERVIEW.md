@@ -300,7 +300,6 @@ voidstrike/
 │   │   │   └── types.ts
 │   │   ├── network/
 │   │   │   ├── p2p/
-│   │   │   │   ├── ConnectionCode.ts
 │   │   │   │   ├── index.ts
 │   │   │   │   ├── NostrMatchmaking.ts
 │   │   │   │   ├── NostrRelays.ts
@@ -366,7 +365,6 @@ voidstrike/
 │   │   ├── useGameStart.ts
 │   │   ├── useLobbySync.ts
 │   │   ├── useMultiplayer.ts
-│   │   ├── useP2P.ts
 │   │   └── usePublicLobbies.ts
 │   ├── phaser/ # Phaser 4 2D overlay
 │   │   ├── scenes/
@@ -424,7 +422,6 @@ voidstrike/
 │   │   ├── EmissiveDecorationManager.ts
 │   │   ├── EnhancedDecorations.ts
 │   │   ├── EnvironmentManager.ts
-│   │   ├── GroundDetail.ts
 │   │   ├── InstancedDecorations.ts
 │   │   ├── LightPool.ts
 │   │   ├── RallyPointRenderer.ts
@@ -566,7 +563,6 @@ voidstrike/
     │   │   ├── entityId.test.ts
     │   │   └── world.test.ts
     │   ├── network/
-    │   │   ├── connectionCode.test.ts
     │   │   ├── desyncDetection.test.ts
     │   │   ├── merkleTree.test.ts
     │   │   └── types.test.ts
