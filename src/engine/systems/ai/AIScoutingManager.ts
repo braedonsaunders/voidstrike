@@ -99,9 +99,10 @@ export class AIScoutingManager {
     }
 
     // All predefined locations scouted, pick random location
+    const random = this.coordinator.getRandom(ai.playerId);
     return {
-      x: this.coordinator.getRandom().next() * config.mapWidth,
-      y: this.coordinator.getRandom().next() * config.mapHeight,
+      x: random.next() * config.mapWidth,
+      y: random.next() * config.mapHeight,
     };
   }
 

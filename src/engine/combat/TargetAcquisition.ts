@@ -57,6 +57,8 @@ export interface TargetQueryOptions {
   range: number;
   /** Player ID of the attacker (to exclude friendly units) */
   attackerPlayerId: string;
+  /** Attacker's team ID for alliance checking (0 = FFA, 1-4 = team) */
+  attackerTeamId?: number;
   /** Attacker's attack range for in-range bonus calculation */
   attackRange?: number;
   /** Whether attacker can attack air units */
@@ -71,6 +73,32 @@ export interface TargetQueryOptions {
   excludeEntityId?: number;
   /** Custom scoring config (uses defaults if not provided) */
   scoringConfig?: Partial<TargetScoringConfig>;
+}
+
+/**
+ * Check if two entities are enemies based on player ID and team.
+ * - Same playerId = always allies (never attack self)
+ * - Different playerId + teamId 0 = enemies (FFA mode)
+ * - Different playerId + same non-zero teamId = allies (team mode)
+ * - Different playerId + different non-zero teamId = enemies
+ */
+export function isEnemy(
+  attackerPlayerId: string,
+  attackerTeamId: number,
+  targetPlayerId: string,
+  targetTeamId: number
+): boolean {
+  // Same player = never an enemy
+  if (attackerPlayerId === targetPlayerId) return false;
+
+  // Team 0 means FFA - always enemies with other players
+  if (attackerTeamId === 0 || targetTeamId === 0) return true;
+
+  // Same non-zero team = allies
+  if (attackerTeamId === targetTeamId) return false;
+
+  // Different teams = enemies
+  return true;
 }
 
 /**
@@ -130,7 +158,9 @@ export function findBestTarget(
     const unit = entity.get<Unit>('Unit');
 
     if (!transform || !health || !selectable) continue;
-    if (selectable.playerId === options.attackerPlayerId) continue;
+    // Check alliance - skip if not an enemy (same player or same team)
+    const attackerTeam = options.attackerTeamId ?? 0;
+    if (!isEnemy(options.attackerPlayerId, attackerTeam, selectable.playerId, selectable.teamId)) continue;
     if (health.isDead()) continue;
 
     // Check air/ground targeting capability
@@ -187,7 +217,9 @@ export function findBestTarget(
       const building = entity.get<Building>('Building');
 
       if (!transform || !health || !selectable || !building) continue;
-      if (selectable.playerId === options.attackerPlayerId) continue;
+      // Check alliance - skip if not an enemy (same player or same team)
+      const attackerTeam = options.attackerTeamId ?? 0;
+      if (!isEnemy(options.attackerPlayerId, attackerTeam, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
 
       // Calculate distance to building edge
@@ -273,7 +305,9 @@ export function findAllTargets(
     const unit = entity.get<Unit>('Unit');
 
     if (!transform || !health || !selectable) continue;
-    if (selectable.playerId === options.attackerPlayerId) continue;
+    // Check alliance - skip if not an enemy (same player or same team)
+    const attackerTeam = options.attackerTeamId ?? 0;
+    if (!isEnemy(options.attackerPlayerId, attackerTeam, selectable.playerId, selectable.teamId)) continue;
     if (health.isDead()) continue;
 
     const targetIsFlying = unit?.isFlying ?? false;
@@ -325,7 +359,9 @@ export function findAllTargets(
       const building = entity.get<Building>('Building');
 
       if (!transform || !health || !selectable || !building) continue;
-      if (selectable.playerId === options.attackerPlayerId) continue;
+      // Check alliance - skip if not an enemy (same player or same team)
+      const attackerTeamBuilding = options.attackerTeamId ?? 0;
+      if (!isEnemy(options.attackerPlayerId, attackerTeamBuilding, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
 
       const halfW = building.width / 2;

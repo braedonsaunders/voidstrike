@@ -421,6 +421,8 @@ export interface PlayerSlotInfo {
   type: 'human' | 'ai' | 'empty';
   faction: string;
   aiDifficulty?: 'easy' | 'medium' | 'hard' | 'insane';
+  /** Team number: 0 = FFA (no alliance), 1-4 = team alliance */
+  team?: number;
 }
 
 /**

@@ -44,6 +44,103 @@ import { AIScoutingManager } from './AIScoutingManager';
 export type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting' | 'harassing';
 export type { AIDifficulty };
 
+/**
+ * Tracks relationship with a specific enemy player.
+ * Used for SC2-style threat assessment and grudge system.
+ */
+export interface EnemyRelation {
+  /** Last tick when this enemy attacked us */
+  lastAttackedUsTick: number;
+  /** Last tick when we attacked this enemy */
+  lastWeAttackedTick: number;
+  /** Cumulative damage this enemy dealt to us (decays over time) */
+  damageDealtToUs: number;
+  /** Cumulative damage we dealt to this enemy */
+  damageWeDealt: number;
+  /** Distance from our main base to their main base */
+  baseDistance: number;
+  /** Calculated threat score based on proximity, damage, military strength */
+  threatScore: number;
+  /** Known enemy base position */
+  basePosition: { x: number; y: number } | null;
+  /** Estimated enemy army supply near our territory */
+  armyNearUs: number;
+}
+
+/**
+ * Personality weight profiles for SC2-style AI differentiation.
+ * Each personality prioritizes different factors when selecting enemies.
+ */
+export interface PersonalityWeights {
+  /** How much to prioritize nearby enemies (0-1) */
+  proximity: number;
+  /** How much to prioritize enemies threatening us (0-1) */
+  threat: number;
+  /** How much to prioritize retaliation against attackers (0-1) */
+  retaliation: number;
+  /** How much to prioritize weak/exposed enemies (0-1) */
+  opportunity: number;
+  /** Multiplier for attack threshold (lower = more aggressive) */
+  attackThresholdMult: number;
+  /** Multiplier for expansion frequency (higher = more economic) */
+  expandFrequency: number;
+}
+
+/** SC2-style personality weight configurations */
+export const PERSONALITY_WEIGHTS: Record<AIPersonality, PersonalityWeights> = {
+  aggressive: {
+    proximity: 0.5,
+    threat: 0.1,
+    retaliation: 0.2,
+    opportunity: 0.2,
+    attackThresholdMult: 0.7,
+    expandFrequency: 0.5,
+  },
+  defensive: {
+    proximity: 0.2,
+    threat: 0.5,
+    retaliation: 0.2,
+    opportunity: 0.1,
+    attackThresholdMult: 1.3,
+    expandFrequency: 1.2,
+  },
+  economic: {
+    proximity: 0.3,
+    threat: 0.3,
+    retaliation: 0.1,
+    opportunity: 0.3,
+    attackThresholdMult: 1.5,
+    expandFrequency: 1.5,
+  },
+  balanced: {
+    proximity: 0.3,
+    threat: 0.3,
+    retaliation: 0.2,
+    opportunity: 0.2,
+    attackThresholdMult: 1.0,
+    expandFrequency: 1.0,
+  },
+  cheese: {
+    proximity: 0.6,
+    threat: 0.1,
+    retaliation: 0.1,
+    opportunity: 0.2,
+    attackThresholdMult: 0.5,
+    expandFrequency: 0.3,
+  },
+  turtle: {
+    proximity: 0.1,
+    threat: 0.6,
+    retaliation: 0.2,
+    opportunity: 0.1,
+    attackThresholdMult: 2.0,
+    expandFrequency: 0.8,
+  },
+};
+
+/** Half-life for grudge decay in ticks (~60 seconds at 20 ticks/second) */
+const GRUDGE_HALF_LIFE_TICKS = 1200;
+
 export interface AIPlayer {
   playerId: string;
   faction: string;
@@ -54,6 +151,16 @@ export interface AIPlayer {
   lastScoutTick: number;
   lastHarassTick: number;
   lastExpansionTick: number;
+
+  /** Per-AI seeded random for independent decision making */
+  random: SeededRandom;
+
+  /** SC2-style enemy relationship tracking */
+  enemyRelations: Map<string, EnemyRelation>;
+  /** Currently selected primary enemy to attack */
+  primaryEnemyId: string | null;
+  /** Personality-based weights for decision making */
+  personalityWeights: PersonalityWeights;
 
   // Economy
   minerals: number;
@@ -127,7 +234,10 @@ export class AICoordinator extends System {
   private aiPlayers: Map<string, AIPlayer> = new Map();
   private ticksBetweenActions = 20;
   private defaultDifficulty: AIDifficulty;
-  private random: SeededRandom = new SeededRandom(12345);
+  /** Base seed for per-AI random generation - each AI gets baseSeed + playerIndex */
+  private baseSeed: number = 12345;
+  /** Counter for assigning unique indices to AI players */
+  private aiPlayerIndex: number = 0;
 
   // Entity query cache
   private entityCache: EntityQueryCache = {
@@ -264,7 +374,24 @@ export class AICoordinator extends System {
       return;
     }
 
-    debugAI.log(`[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}`);
+    // Assign unique index for per-AI seeding
+    const aiIndex = this.aiPlayerIndex++;
+
+    // Create per-AI random with unique seed based on playerId and index
+    // This ensures each AI makes independent decisions
+    const playerIdHash = this.hashString(playerId);
+    const aiSeed = this.baseSeed + playerIdHash + aiIndex * 7919; // Use prime multiplier
+    const aiRandom = new SeededRandom(aiSeed);
+
+    // Select personality - if balanced is passed, randomly assign one for variety
+    let actualPersonality = personality;
+    if (personality === 'balanced' && aiIndex > 0) {
+      // Give subsequent AIs varied personalities for more interesting games
+      const personalities: AIPersonality[] = ['aggressive', 'defensive', 'economic', 'balanced', 'turtle'];
+      actualPersonality = personalities[aiIndex % personalities.length];
+    }
+
+    debugAI.log(`[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}, personality: ${actualPersonality}, seed: ${aiSeed}`);
 
     const factionConfig = getFactionAIConfig(faction);
     if (!factionConfig) {
@@ -277,12 +404,20 @@ export class AICoordinator extends System {
       playerId,
       faction,
       difficulty,
-      personality,
+      personality: actualPersonality,
       state: 'building',
       lastActionTick: 0,
       lastScoutTick: 0,
       lastHarassTick: 0,
       lastExpansionTick: 0,
+
+      // Per-AI random for independent decisions
+      random: aiRandom,
+
+      // SC2-style enemy tracking
+      enemyRelations: new Map(),
+      primaryEnemyId: null,
+      personalityWeights: PERSONALITY_WEIGHTS[actualPersonality],
 
       minerals: 50,
       vespene: 0,
@@ -313,7 +448,7 @@ export class AICoordinator extends System {
       lastEnemyContact: 0,
       scoutedLocations: new Set(),
 
-      buildOrder: this.loadBuildOrder(faction, difficulty),
+      buildOrder: this.loadBuildOrder(faction, difficulty, aiRandom),
       buildOrderIndex: 0,
       buildOrderFailureCount: 0,
 
@@ -329,6 +464,17 @@ export class AICoordinator extends System {
       completedResearch: new Set(),
       researchInProgress: new Map(),
     });
+  }
+
+  /** Simple string hash for generating unique seeds */
+  private hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    return Math.abs(hash);
   }
 
   public isAIPlayer(playerId: string): boolean {
@@ -368,8 +514,18 @@ export class AICoordinator extends System {
     }
   }
 
-  public getRandom(): SeededRandom {
-    return this.random;
+  /**
+   * Get the per-AI random instance for the given player.
+   * Each AI has its own SeededRandom to ensure independent decision making.
+   */
+  public getRandom(playerId: string): SeededRandom {
+    const ai = this.aiPlayers.get(playerId);
+    if (!ai) {
+      // Fallback - should not happen in normal operation
+      debugAI.warn(`[AICoordinator] getRandom called for unregistered player: ${playerId}`);
+      return new SeededRandom(this.baseSeed);
+    }
+    return ai.random;
   }
 
   // === State Snapshot for Rule Evaluation ===
@@ -490,8 +646,10 @@ export class AICoordinator extends System {
     return null;
   }
 
-  private loadBuildOrder(faction: string, difficulty: AIDifficulty): BuildOrderStep[] {
-    const buildOrder = getRandomBuildOrder(faction, difficulty, this.random);
+  private loadBuildOrder(faction: string, difficulty: AIDifficulty, aiRandom?: SeededRandom): BuildOrderStep[] {
+    // Use provided random or create a temporary one for build order selection
+    const randomToUse = aiRandom ?? new SeededRandom(this.baseSeed + this.aiPlayerIndex);
+    const buildOrder = getRandomBuildOrder(faction, difficulty, randomToUse);
     if (!buildOrder) {
       throw new Error(`[AICoordinator] No build order configured for faction ${faction} (${difficulty}).`);
     }
@@ -645,7 +803,7 @@ export class AICoordinator extends System {
     const currentTick = this.game.getCurrentTick();
 
     this.clearEntityCache();
-    this.random.reseed(currentTick * 31337 + 42);
+    // Per-AI random is now used instead of shared random - no global reseed needed
 
     if (currentTick === 1) {
       debugAI.log(`[AICoordinator] Tick 1: Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ') || '(none)'}`);
@@ -683,6 +841,9 @@ export class AICoordinator extends System {
 
       // Economic layer runs EVERY tick
       this.runEconomicLayer(ai, currentTick);
+
+      // SC2-style enemy relations update (determines which enemy to target)
+      this.tacticsManager.updateEnemyRelations(ai, currentTick);
 
       // Tactical state determination
       this.tacticsManager.updateTacticalState(ai, currentTick);
