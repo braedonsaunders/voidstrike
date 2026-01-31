@@ -6,7 +6,12 @@
  * - Data-driven macro rule evaluation and execution
  * - Building placement and addon construction
  * - Unit training
- * - Research initiation (NEW - implements the stubbed research feature)
+ * - Research initiation
+ *
+ * Integrates PositionalAnalysis primitive for strategic building placement:
+ * - Uses analyzed expansion locations near mineral clusters
+ * - Places defensive buildings near choke points
+ * - Considers terrain when placing buildings
  *
  * Uses the data-driven FactionAIConfig for all production decisions.
  */
@@ -441,7 +446,7 @@ export class AIBuildOrderExecutor {
         return false;
       }
     } else {
-      buildPos = this.findBuildingSpot(ai.playerId, basePos, buildingDef.width, buildingDef.height, workerId);
+      buildPos = this.findBuildingSpot(ai.playerId, basePos, buildingDef.width, buildingDef.height, workerId, buildingType);
       if (!buildPos) {
         if (shouldLog) {
           debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - no valid building spot for ${buildingType}`);
@@ -465,7 +470,8 @@ export class AIBuildOrderExecutor {
 
   /**
    * Find a suitable spot to place a building.
-   * Searches in expanding rings around the base with increasing density.
+   * Uses PositionalAnalysis for strategic placement when applicable.
+   * Defensive buildings are placed near choke points for better defense.
    * AI buildings are placed with extra spacing for unit pathing.
    */
   private findBuildingSpot(
@@ -473,17 +479,52 @@ export class AIBuildOrderExecutor {
     basePos: { x: number; y: number },
     width: number,
     height: number,
-    excludeEntityId?: number
+    excludeEntityId?: number,
+    buildingType?: string
   ): { x: number; y: number } | null {
-    const offsets: Array<{ x: number; y: number }> = [];
-
-    // Extra spacing between AI buildings for unit pathing (2 units on each side)
+    const positionalAnalysis = this.coordinator.getPositionalAnalysis();
     const AI_BUILDING_SPACING = 2;
 
-    // Generate offsets in expanding rings around the base
-    // Expanded range: 5-40 units with more angles per ring for better coverage
+    // Check if this is a defensive building that should be placed near chokes
+    const defensiveBuildings = ['bunker', 'turret', 'missile_turret', 'siege_turret', 'photon_cannon'];
+    const isDefensiveBuilding = buildingType && defensiveBuildings.includes(buildingType);
+
+    if (isDefensiveBuilding) {
+      // Try to place near a choke point for strategic defense
+      const chokePoints = positionalAnalysis.getChokePoints();
+      for (const choke of chokePoints) {
+        // Only consider chokes within reasonable range of base
+        const distToBase = Math.sqrt(
+          Math.pow(choke.x - basePos.x, 2) +
+          Math.pow(choke.y - basePos.y, 2)
+        );
+        if (distToBase > 40) continue;
+
+        // Try positions near the choke point
+        for (let offset = 2; offset <= 8; offset += 2) {
+          for (let angle = 0; angle < 8; angle++) {
+            const theta = (angle * Math.PI * 2) / 8;
+            const pos = {
+              x: choke.x + Math.cos(theta) * offset,
+              y: choke.y + Math.sin(theta) * offset,
+            };
+
+            if (!this.game.isValidBuildingPlacement(pos.x, pos.y, width, height, excludeEntityId, true)) {
+              continue;
+            }
+            if (this.hasAdequateBuildingSpacing(pos.x, pos.y, width, height, AI_BUILDING_SPACING)) {
+              debugAI.log(`[AIBuildOrder] Placing ${buildingType} near choke point at (${pos.x.toFixed(0)}, ${pos.y.toFixed(0)})`);
+              return pos;
+            }
+          }
+        }
+      }
+    }
+
+    // Default placement: expanding rings around base
+    const offsets: Array<{ x: number; y: number }> = [];
+
     for (let radius = 5; radius <= 40; radius += 2) {
-      // More angles at larger radii for better coverage
       const angleCount = radius <= 12 ? 8 : radius <= 24 ? 12 : 16;
       for (let angle = 0; angle < angleCount; angle++) {
         const theta = (angle * Math.PI * 2) / angleCount + this.coordinator.getRandom(playerId).next() * 0.3;
@@ -493,8 +534,7 @@ export class AIBuildOrderExecutor {
       }
     }
 
-    // Shuffle offsets for variety (but keep closer positions biased toward front)
-    // Shuffle in chunks to prefer closer positions while still adding variety
+    // Shuffle in chunks for variety while preferring closer positions
     const chunkSize = 24;
     const random = this.coordinator.getRandom(playerId);
     for (let chunkStart = 0; chunkStart < offsets.length; chunkStart += chunkSize) {
@@ -505,14 +545,11 @@ export class AIBuildOrderExecutor {
       }
     }
 
-    // Try each offset until we find a valid spot with spacing
     for (const offset of offsets) {
       const pos = { x: basePos.x + offset.x, y: basePos.y + offset.y };
-      // Check core validity first (skip unit collision - units will be pushed away)
       if (!this.game.isValidBuildingPlacement(pos.x, pos.y, width, height, excludeEntityId, true)) {
         continue;
       }
-      // Check for adequate spacing from other buildings for unit pathing
       if (this.hasAdequateBuildingSpacing(pos.x, pos.y, width, height, AI_BUILDING_SPACING)) {
         return pos;
       }
@@ -1198,15 +1235,14 @@ export class AIBuildOrderExecutor {
 
   /**
    * Find a suitable expansion location (near mineral patches).
+   * Uses PositionalAnalysis for pre-analyzed expansion locations when available.
    */
   private findExpansionLocation(ai: AIPlayer): { x: number; y: number } | null {
-    const resources = this.coordinator.getCachedResources();
+    const positionalAnalysis = this.coordinator.getPositionalAnalysis();
+    const existingBases = this.coordinator.getAIBasePositions(ai);
     const buildings = this.coordinator.getCachedBuildingsWithTransform();
 
-    // Find mineral clusters not near existing bases
-    const existingBases = this.coordinator.getAIBasePositions(ai);
-
-    // Also consider enemy bases to avoid
+    // Get enemy bases to avoid
     const enemyBases: Array<{ x: number; y: number }> = [];
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -1219,7 +1255,63 @@ export class AIBuildOrderExecutor {
       }
     }
 
-    // Find mineral clusters
+    // First try to use PositionalAnalysis expansion locations
+    const expansionLocations = positionalAnalysis.getExpansionLocations();
+
+    if (expansionLocations.length > 0) {
+      // Score each expansion location
+      const scoredLocations = expansionLocations.map(loc => {
+        let score = 100;
+
+        // Penalize if too close to existing bases
+        for (const base of existingBases) {
+          const dist = Math.sqrt(Math.pow(loc.x - base.x, 2) + Math.pow(loc.y - base.y, 2));
+          if (dist < 30) {
+            score -= 1000; // Disqualify
+          } else if (dist < 50) {
+            score -= 50;
+          }
+        }
+
+        // Penalize if close to enemy bases
+        for (const enemyBase of enemyBases) {
+          const dist = Math.sqrt(Math.pow(loc.x - enemyBase.x, 2) + Math.pow(loc.y - enemyBase.y, 2));
+          if (dist < 25) {
+            score -= 500;
+          } else if (dist < 40) {
+            score -= 100;
+          }
+        }
+
+        // Prefer closer expansions (shorter travel distance for workers)
+        const distToMain = existingBases.length > 0
+          ? Math.sqrt(Math.pow(loc.x - existingBases[0].x, 2) + Math.pow(loc.y - existingBases[0].y, 2))
+          : 0;
+        score -= distToMain * 0.5;
+
+        return { location: loc, score };
+      });
+
+      // Sort by score descending
+      scoredLocations.sort((a, b) => b.score - a.score);
+
+      // Try each location
+      for (const { location, score } of scoredLocations) {
+        if (score < 0) continue; // Skip disqualified locations
+
+        const buildPos = { x: location.x + 5, y: location.y + 5 };
+        const buildingDef = BUILDING_DEFINITIONS[ai.config!.roles.mainBase];
+
+        if (this.game.isValidBuildingPlacement(buildPos.x, buildPos.y, buildingDef.width, buildingDef.height, undefined, true)) {
+          debugAI.log(`[AIBuildOrder] Using analyzed expansion location at (${buildPos.x.toFixed(0)}, ${buildPos.y.toFixed(0)})`);
+          return buildPos;
+        }
+      }
+    }
+
+    // Fallback: manual mineral cluster detection
+    const resources = this.coordinator.getCachedResources();
+
     interface MineralCluster {
       x: number;
       y: number;
@@ -1231,7 +1323,7 @@ export class AIBuildOrderExecutor {
     const visited = new Set<string>();
 
     for (const entity of resources) {
-      const resource = entity.get<import('../../components/Resource').Resource>('Resource');
+      const resource = entity.get<Resource>('Resource');
       const transform = entity.get<Transform>('Transform');
 
       if (!resource || !transform) continue;
@@ -1251,16 +1343,14 @@ export class AIBuildOrderExecutor {
         distanceToNearestBase = Math.min(distanceToNearestBase, dist);
       }
 
-      // Skip if too close to existing base
       if (distanceToNearestBase < 30) continue;
 
-      // Check distance to enemy bases
+      // Check enemy proximity
       let tooCloseToEnemy = false;
       for (const enemyBase of enemyBases) {
         const dx = transform.x - enemyBase.x;
         const dy = transform.y - enemyBase.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 25) {
+        if (Math.sqrt(dx * dx + dy * dy) < 25) {
           tooCloseToEnemy = true;
           break;
         }
@@ -1270,7 +1360,7 @@ export class AIBuildOrderExecutor {
       // Count nearby minerals
       let mineralCount = 0;
       for (const other of resources) {
-        const otherResource = other.get<import('../../components/Resource').Resource>('Resource');
+        const otherResource = other.get<Resource>('Resource');
         const otherTransform = other.get<Transform>('Transform');
 
         if (!otherResource || !otherTransform) continue;
@@ -1293,7 +1383,7 @@ export class AIBuildOrderExecutor {
       }
     }
 
-    // Sort by mineral count (descending) then by distance (prefer closer)
+    // Sort by mineral count then distance
     mineralClusters.sort((a, b) => {
       if (b.mineralCount !== a.mineralCount) {
         return b.mineralCount - a.mineralCount;
@@ -1301,13 +1391,10 @@ export class AIBuildOrderExecutor {
       return a.distanceToNearestBase - b.distanceToNearestBase;
     });
 
-    // Return first valid location
     for (const cluster of mineralClusters) {
-      // Offset slightly from mineral cluster center
       const buildPos = { x: cluster.x + 5, y: cluster.y + 5 };
-
-      // Check if valid placement
       const buildingDef = BUILDING_DEFINITIONS[ai.config!.roles.mainBase];
+
       if (this.game.isValidBuildingPlacement(buildPos.x, buildPos.y, buildingDef.width, buildingDef.height, undefined, true)) {
         return buildPos;
       }

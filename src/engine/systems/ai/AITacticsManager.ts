@@ -4,19 +4,18 @@
  * Handles:
  * - Tactical state determination (attacking, defending, harassing, etc.)
  * - Attack phase execution with RTS-style engagement persistence
- * - Defense phase execution
+ * - Defense phase execution with coordinated retreat
  * - Harass phase execution
  * - Expand phase execution
  * - Army rallying and unit coordination
  * - Hunt mode for finishing off enemies (victory pursuit)
  *
- * Works with AIMicroSystem for unit-level micro (kiting, focus fire).
+ * Integrates AI primitives for sophisticated tactical decisions:
+ * - InfluenceMap: Spatial threat analysis and safe pathfinding
+ * - RetreatCoordination: Coordinated army retreat with rally points
+ * - FormationControl: Army positioning and formation management
  *
- * RTS-STYLE IMPROVEMENTS:
- * - Army stays in attacking state while engaged
- * - Idle assault units get re-commanded to continue fighting
- * - Hunt mode activates when enemy has few buildings left
- * - Actively seeks out remaining enemy buildings to trigger victory
+ * Works with AIMicroSystem for unit-level micro (kiting, focus fire).
  */
 
 import { Transform } from '../../components/Transform';
@@ -26,8 +25,10 @@ import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
 import { Game, GameCommand } from '../../core/Game';
 import { debugAI } from '@/utils/debugLogger';
-import type { AICoordinator, AIPlayer, AIState, EnemyRelation } from './AICoordinator';
+import type { AICoordinator, AIPlayer, EnemyRelation } from './AICoordinator';
 import { isEnemy } from '../../combat/TargetAcquisition';
+import type { ThreatAnalysis } from '../../ai/InfluenceMap';
+import type { FormationType } from '../../ai/FormationControl';
 
 // Threat assessment constants
 const THREAT_WINDOW_TICKS = 200; // ~10 seconds at 20 ticks/sec
@@ -37,7 +38,6 @@ const ENGAGEMENT_CHECK_INTERVAL = 10; // Check engagement every 10 ticks (~500ms
 const RE_COMMAND_IDLE_INTERVAL = 40; // Re-command idle units every 40 ticks (~2 sec)
 const DEFENSE_COMMAND_INTERVAL = 20; // Re-command defending units every 20 ticks (~1 sec)
 const HUNT_MODE_BUILDING_THRESHOLD = 3; // Enter hunt mode when enemy has <= 3 buildings
-const ASSAULT_IDLE_TIMEOUT_TICKS = 100; // If assault unit idle for 5 sec, consider it "stuck"
 
 export class AITacticsManager {
   private game: Game;
@@ -68,7 +68,7 @@ export class AITacticsManager {
 
   /**
    * Update enemy relations for an AI player.
-   * Calculates base distances, threat scores, and selects primary enemy.
+   * Uses InfluenceMap for threat analysis instead of manual calculations.
    */
   public updateEnemyRelations(ai: AIPlayer, currentTick: number): void {
     const lastUpdate = this.lastEnemyRelationsUpdate.get(ai.playerId) ?? 0;
@@ -81,6 +81,9 @@ export class AITacticsManager {
     const myBase = this.coordinator.findAIBase(ai);
     if (!myBase) return;
 
+    // Get influence map for threat analysis
+    const influenceMap = this.coordinator.getInfluenceMap();
+
     // Find all enemy players
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
     const enemyPlayerIds = new Set<string>();
@@ -88,8 +91,6 @@ export class AITacticsManager {
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       if (selectable.playerId === ai.playerId) continue;
-      // Check if this is actually an enemy (not an ally on the same team)
-      // In FFA (team 0), everyone is an enemy. In team games, only different teams are enemies.
       const myBuildings = buildings.filter(b => b.get<Selectable>('Selectable')?.playerId === ai.playerId);
       const myTeam = myBuildings[0]?.get<Selectable>('Selectable')?.teamId ?? 0;
       if (!isEnemy(ai.playerId, myTeam, selectable.playerId, selectable.teamId)) continue;
@@ -147,32 +148,16 @@ export class AITacticsManager {
       const decayFactor = Math.pow(0.5, (currentTick - relation.lastAttackedUsTick) / AITacticsManager.GRUDGE_HALF_LIFE_TICKS);
       relation.damageDealtToUs *= decayFactor;
 
-      // Calculate enemy army near our base (within 40 units)
-      const THREAT_RADIUS = 40;
-      let armyNearUs = 0;
-      const units = this.coordinator.getCachedUnitsWithTransform();
-      for (const entity of units) {
-        const selectable = entity.get<Selectable>('Selectable')!;
-        const unit = entity.get<Unit>('Unit')!;
-        const transform = entity.get<Transform>('Transform')!;
-        const health = entity.get<Health>('Health')!;
-        if (selectable.playerId !== enemyPlayerId) continue;
-        if (health.isDead() || unit.isWorker) continue;
-        const dx = transform.x - myBase.x;
-        const dy = transform.y - myBase.y;
-        if (Math.sqrt(dx * dx + dy * dy) < THREAT_RADIUS) {
-          // Unit component doesn't store supplyCost, use 1 as default
-          armyNearUs += 1;
-        }
-      }
-      relation.armyNearUs = armyNearUs;
+      // Use InfluenceMap for threat analysis near our base
+      const threatAnalysis = influenceMap.getThreatAnalysis(myBase.x, myBase.y, ai.playerId);
+      relation.armyNearUs = Math.round(threatAnalysis.enemyInfluence);
 
-      // Calculate threat score
-      relation.threatScore = this.calculateThreatScore(ai, relation, currentTick);
+      // Calculate threat score using influence map data
+      relation.threatScore = this.calculateThreatScoreWithInfluence(ai, relation, threatAnalysis, currentTick);
     }
 
     // Clean up relations for dead players
-    for (const [enemyId, _relation] of ai.enemyRelations) {
+    for (const [enemyId] of ai.enemyRelations) {
       if (!enemyPlayerIds.has(enemyId)) {
         ai.enemyRelations.delete(enemyId);
       }
@@ -191,27 +176,31 @@ export class AITacticsManager {
   }
 
   /**
-   * Calculate threat score for an enemy based on various factors.
+   * Calculate threat score using InfluenceMap threat analysis.
    */
-  private calculateThreatScore(ai: AIPlayer, relation: EnemyRelation, currentTick: number): number {
+  private calculateThreatScoreWithInfluence(
+    ai: AIPlayer,
+    relation: EnemyRelation,
+    threatAnalysis: ThreatAnalysis,
+    currentTick: number
+  ): number {
     const weights = ai.personalityWeights;
 
     // Normalize base distance (closer = higher score, max at 200 units)
     const maxDistance = 200;
     const proximityScore = Math.max(0, 1 - relation.baseDistance / maxDistance);
 
-    // Threat from army near our base (normalized by our army supply)
-    const myArmy = Math.max(1, ai.armySupply);
-    const threatScore = Math.min(1, relation.armyNearUs / myArmy);
+    // Use influence map threat data
+    const threatScore = Math.min(1, threatAnalysis.dangerLevel);
 
     // Retaliation score based on recent damage and recency
     const ticksSinceAttack = currentTick - relation.lastAttackedUsTick;
     const recency = Math.max(0, 1 - ticksSinceAttack / 2400); // 2 minute falloff
     const retaliationScore = Math.min(1, relation.damageDealtToUs / 500) * recency;
 
-    // Opportunity score - inversely proportional to their strength
-    // (we don't track enemy army supply directly, so use proximity as proxy)
-    const opportunityScore = proximityScore * 0.5; // Closer enemies are easier to attack
+    // Opportunity score - use influence data to determine if we have area control
+    const weHaveControl = threatAnalysis.friendlyInfluence > threatAnalysis.enemyInfluence;
+    const opportunityScore = proximityScore * (weHaveControl ? 0.7 : 0.3);
 
     // Weighted sum using personality weights
     return (
@@ -248,7 +237,6 @@ export class AITacticsManager {
 
   /**
    * Record damage dealt to this AI by an attacker.
-   * Called from event handler when units take damage.
    */
   public recordDamageReceived(ai: AIPlayer, attackerPlayerId: string, damage: number, currentTick: number): void {
     let relation = ai.enemyRelations.get(attackerPlayerId);
@@ -316,12 +304,23 @@ export class AITacticsManager {
   }
 
   /**
-   * Check if the AI is currently under attack.
+   * Check if the AI is currently under attack using InfluenceMap.
    */
   public isUnderAttack(ai: AIPlayer): boolean {
     const currentTick = this.game.getCurrentTick();
     const recentEnemyContact = (currentTick - ai.lastEnemyContact) < THREAT_WINDOW_TICKS;
 
+    // Use influence map for threat detection
+    const basePos = this.coordinator.findAIBase(ai);
+    if (basePos) {
+      const influenceMap = this.coordinator.getInfluenceMap();
+      const threatAnalysis = influenceMap.getThreatAnalysis(basePos.x, basePos.y, ai.playerId);
+
+      // High danger level indicates attack
+      if (threatAnalysis.dangerLevel > 0.5) return true;
+    }
+
+    // Also check building damage
     const buildings = this.coordinator.getCachedBuildings();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -329,9 +328,7 @@ export class AITacticsManager {
 
       if (selectable.playerId !== ai.playerId) continue;
 
-      // Critical damage always counts as under attack
       if (health.getHealthPercent() < 0.5) return true;
-      // Moderate damage with recent enemy contact
       if (health.getHealthPercent() < 0.9 && recentEnemyContact) return true;
     }
     return false;
@@ -369,13 +366,48 @@ export class AITacticsManager {
       if (selectable.playerId !== playerId) continue;
       if (unit.isWorker) continue;
       if (health.isDead()) continue;
-      // Exclude non-combat units (0 attack damage)
       if (unit.attackDamage === 0) continue;
 
       armyUnits.push(entity.id);
     }
 
     return armyUnits;
+  }
+
+  /**
+   * Get army units with their positions for formation calculations.
+   */
+  private getArmyUnitsWithPositions(playerId: string): Array<{
+    entityId: number;
+    x: number;
+    y: number;
+    unitId: string;
+    attackRange: number;
+  }> {
+    const units: Array<{ entityId: number; x: number; y: number; unitId: string; attackRange: number }> = [];
+    const entities = this.coordinator.getCachedUnitsWithTransform();
+
+    for (const entity of entities) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const health = entity.get<Health>('Health')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (selectable.playerId !== playerId) continue;
+      if (unit.isWorker) continue;
+      if (health.isDead()) continue;
+      if (unit.attackDamage === 0) continue;
+
+      units.push({
+        entityId: entity.id,
+        x: transform.x,
+        y: transform.y,
+        unitId: unit.unitId,
+        attackRange: unit.attackRange,
+      });
+    }
+
+    return units;
   }
 
   /**
@@ -407,20 +439,14 @@ export class AITacticsManager {
   // === Enemy Detection ===
 
   /**
-   * Find the enemy base location.
-   * Uses RTS-style primary enemy selection - each AI targets their own primary enemy
-   * based on proximity, threat, and personality-weighted scores.
-   *
-   * @param targetPlayerId - Optional specific enemy to target. If not provided, uses primary enemy.
+   * Find the enemy base location using primary enemy selection.
    */
   public findEnemyBase(ai: AIPlayer, targetPlayerId?: string): { x: number; y: number } | null {
     const config = ai.config!;
     const baseTypes = config.roles.baseTypes;
 
-    // Use primary enemy if no specific target provided
     const enemyToTarget = targetPlayerId ?? ai.primaryEnemyId;
 
-    // If we have a primary enemy with a known base position, use it directly
     if (enemyToTarget) {
       const relation = ai.enemyRelations.get(enemyToTarget);
       if (relation?.basePosition) {
@@ -430,7 +456,6 @@ export class AITacticsManager {
 
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
 
-    // If we have a specific enemy to target, find their base
     if (enemyToTarget) {
       for (const entity of buildings) {
         const selectable = entity.get<Selectable>('Selectable')!;
@@ -443,7 +468,6 @@ export class AITacticsManager {
         }
       }
 
-      // Fallback: any building from this enemy
       for (const entity of buildings) {
         const selectable = entity.get<Selectable>('Selectable')!;
         const transform = entity.get<Transform>('Transform')!;
@@ -453,8 +477,6 @@ export class AITacticsManager {
       }
     }
 
-    // No primary enemy selected - fallback to legacy behavior (first enemy found)
-    // This should rarely happen as updateEnemyRelations should set primaryEnemyId
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const building = entity.get<Building>('Building')!;
@@ -466,7 +488,6 @@ export class AITacticsManager {
       }
     }
 
-    // Return any enemy building
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const transform = entity.get<Transform>('Transform')!;
@@ -497,8 +518,62 @@ export class AITacticsManager {
       }
     }
 
-    // Otherwise target enemy base
     return this.findEnemyBase(ai);
+  }
+
+  // === Formation Control Integration ===
+
+  // Track active formation groups per player
+  private activeFormationGroups: Map<string, string> = new Map();
+
+  /**
+   * Calculate and apply formation positions for army units before attack.
+   */
+  private applyFormation(
+    ai: AIPlayer,
+    armyUnits: Array<{ entityId: number; x: number; y: number; unitId: string; attackRange: number }>,
+    targetPosition: { x: number; y: number },
+    formationType: FormationType
+  ): Array<{ entityId: number; position: { x: number; y: number } }> {
+    const formationControl = ai.formationControl;
+
+    // Get or create formation group for this player
+    let groupId = this.activeFormationGroups.get(ai.playerId);
+
+    // Delete old group and create new one with current unit IDs
+    if (groupId) {
+      formationControl.deleteGroup(groupId);
+    }
+
+    const unitIds = armyUnits.map(u => u.entityId);
+    groupId = formationControl.createGroup(this.world, unitIds, ai.playerId);
+    this.activeFormationGroups.set(ai.playerId, groupId);
+
+    // Calculate formation based on type (returns FormationSlot[])
+    let formationSlots;
+
+    switch (formationType) {
+      case 'concave':
+        formationSlots = formationControl.calculateConcaveFormation(this.world, groupId, targetPosition);
+        break;
+      case 'box':
+        formationSlots = formationControl.calculateBoxFormation(this.world, groupId);
+        break;
+      case 'spread':
+        formationSlots = formationControl.calculateSpreadFormation(this.world, groupId);
+        break;
+      case 'line':
+      default:
+        // Line formation - use box as fallback since line doesn't exist
+        formationSlots = formationControl.calculateBoxFormation(this.world, groupId);
+        break;
+    }
+
+    // Convert FormationSlot[] to expected return type
+    return formationSlots.map(slot => ({
+      entityId: slot.entityId,
+      position: slot.targetPosition,
+    }));
   }
 
   // === Phase Execution ===
@@ -510,13 +585,11 @@ export class AITacticsManager {
     const basePos = this.coordinator.findAIBase(ai);
     if (!basePos) return;
 
-    // Rally point slightly in front of base
     const rallyPoint = {
       x: basePos.x + 10,
       y: basePos.y + 10,
     };
 
-    // Find idle army units and rally them
     const units = this.coordinator.getCachedUnitsWithTransform();
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -529,7 +602,6 @@ export class AITacticsManager {
       if (health.isDead()) continue;
       if (unit.state !== 'idle') continue;
 
-      // Check if unit is far from rally point
       const dx = transform.x - rallyPoint.x;
       const dy = transform.y - rallyPoint.y;
       if (Math.sqrt(dx * dx + dy * dy) > 15) {
@@ -549,19 +621,11 @@ export class AITacticsManager {
    * Execute the expanding phase.
    */
   public executeExpandingPhase(ai: AIPlayer): void {
-    // Expansion is handled by AIBuildOrderExecutor
-    // Just switch state back to building
     ai.state = 'building';
   }
 
   /**
-   * Execute the attacking phase.
-   *
-   * RTS-STYLE: This is a persistent engagement system, not fire-and-forget.
-   * - Tracks whether army is currently engaged in combat
-   * - Re-commands idle assault units to continue fighting
-   * - Enters hunt mode when enemy has few buildings left
-   * - Only returns to building state when battle is over
+   * Execute the attacking phase with formation control.
    */
   public executeAttackingPhase(ai: AIPlayer, currentTick: number): void {
     const armyUnits = this.getArmyUnits(ai.playerId);
@@ -571,10 +635,7 @@ export class AITacticsManager {
       return;
     }
 
-    // Count enemy buildings to determine if we should enter hunt mode
     const enemyBuildingCount = this.countEnemyBuildings(ai);
-
-    // RTS-STYLE: Check if we should enter hunt mode
     const inHuntMode = enemyBuildingCount > 0 && enemyBuildingCount <= HUNT_MODE_BUILDING_THRESHOLD;
 
     // Check engagement status periodically
@@ -587,14 +648,12 @@ export class AITacticsManager {
 
     const engaged = this.isEngaged.get(ai.playerId) || false;
 
-    // Find target - use different strategy based on mode
+    // Find target
     let attackTarget: { x: number; y: number } | null = null;
 
     if (inHuntMode) {
-      // RTS-STYLE HUNT MODE: Find ANY enemy building, spread units to hunt
       attackTarget = this.findAnyEnemyBuilding(ai);
       if (!attackTarget) {
-        // No buildings found - enemy defeated or buildings are hidden
         ai.state = 'building';
         this.isEngaged.set(ai.playerId, false);
         debugAI.log(`[AITactics] ${ai.playerId}: Hunt mode - no enemy buildings found, returning to build`);
@@ -602,10 +661,8 @@ export class AITacticsManager {
       }
       debugAI.log(`[AITactics] ${ai.playerId}: HUNT MODE - targeting enemy building at (${attackTarget.x.toFixed(0)}, ${attackTarget.y.toFixed(0)})`);
     } else {
-      // Normal attack - target enemy base
       attackTarget = this.findEnemyBase(ai);
       if (!attackTarget) {
-        // Try finding ANY enemy building as fallback
         attackTarget = this.findAnyEnemyBuilding(ai);
         if (!attackTarget) {
           ai.state = 'building';
@@ -615,16 +672,33 @@ export class AITacticsManager {
       }
     }
 
-    // RTS-STYLE: Re-command idle assault units periodically
+    // Apply formation for coordinated attack
+    const armyWithPositions = this.getArmyUnitsWithPositions(ai.playerId);
+    if (armyWithPositions.length > 3 && !engaged) {
+      // Use concave formation for engaging enemy
+      const formation = this.applyFormation(ai, armyWithPositions, attackTarget, 'concave');
+
+      // Move units to formation positions before attack
+      for (const { entityId, position } of formation) {
+        const command: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'MOVE',
+          entityIds: [entityId],
+          targetPosition: position,
+        };
+        this.game.issueAICommand(command);
+      }
+    }
+
+    // Re-command idle assault units periodically
     const lastReCommand = this.lastReCommandTick.get(ai.playerId) || 0;
     const shouldReCommand = currentTick - lastReCommand >= RE_COMMAND_IDLE_INTERVAL;
 
     if (shouldReCommand) {
-      // Find units that are idle in assault mode or have been stuck
       const idleAssaultUnits = this.getIdleAssaultUnits(ai.playerId, armyUnits);
 
       if (idleAssaultUnits.length > 0) {
-        // Re-command idle assault units to attack
         const command: GameCommand = {
           tick: currentTick,
           playerId: ai.playerId,
@@ -639,11 +713,10 @@ export class AITacticsManager {
       this.lastReCommandTick.set(ai.playerId, currentTick);
     }
 
-    // Initial attack command (only when first entering attacking state)
+    // Initial attack command
     if (ai.lastAttackTick === 0 || currentTick - ai.lastAttackTick >= ai.attackCooldown) {
       ai.lastAttackTick = currentTick;
 
-      // Issue attack command to all army units
       const command: GameCommand = {
         tick: currentTick,
         playerId: ai.playerId,
@@ -656,34 +729,23 @@ export class AITacticsManager {
       debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units${inHuntMode ? ' (HUNT MODE)' : ''}`);
     }
 
-    // RTS-STYLE: Stay in attacking state while engaged or in hunt mode
-    // Only return to building when:
-    // 1. No enemy buildings exist (victory imminent)
-    // 2. Not engaged and no enemy buildings nearby
+    // State transition logic
     if (enemyBuildingCount === 0) {
-      // Victory pursuit complete
       ai.state = 'building';
       this.isEngaged.set(ai.playerId, false);
       debugAI.log(`[AITactics] ${ai.playerId}: No enemy buildings remaining, returning to build`);
     } else if (!engaged && !inHuntMode) {
-      // Not engaged and not in hunt mode - check if we should retreat
-      // Only retreat if we've been disengaged for a while
       const disengagedDuration = currentTick - (this.lastEngagementCheck.get(ai.playerId) || 0);
-      if (disengagedDuration > 100) { // 5 seconds of no combat
+      if (disengagedDuration > 100) {
         ai.state = 'building';
         this.isEngaged.set(ai.playerId, false);
         debugAI.log(`[AITactics] ${ai.playerId}: Disengaged for ${disengagedDuration} ticks, returning to build`);
       }
     }
-    // Otherwise stay in attacking state - RTS-style persistence
   }
 
   /**
-   * Execute the defending phase.
-   *
-   * FIX: Added throttling to prevent constant re-commanding which was causing units
-   * to move around without actually attacking. Now only re-commands idle units
-   * periodically, allowing engaged units to continue fighting.
+   * Execute the defending phase with RetreatCoordination.
    */
   public executeDefendingPhase(ai: AIPlayer, currentTick: number): void {
     const armyUnits = this.getArmyUnits(ai.playerId);
@@ -692,18 +754,71 @@ export class AITacticsManager {
       return;
     }
 
-    // Find our base to defend
     const basePos = this.coordinator.findAIBase(ai);
     if (!basePos) {
       ai.state = 'building';
       return;
     }
 
-    // Find nearest enemy threat - search wider radius for defense (100 units instead of 50)
+    // Get retreat coordinator and influence map
+    const retreatCoordinator = ai.retreatCoordinator;
+    const influenceMap = this.coordinator.getInfluenceMap();
+
+    // Update retreat coordination with current state
+    retreatCoordinator.update(this.world, currentTick, ai.playerId, influenceMap);
+
+    // Check group retreat status
+    const retreatStatus = retreatCoordinator.getGroupStatus(this.world, ai.playerId);
+    if (retreatStatus.isRetreating) {
+      // Issue retreat commands to retreating units
+      for (const entityId of armyUnits) {
+        if (retreatCoordinator.shouldRetreat(ai.playerId, entityId)) {
+          const retreatTarget = retreatCoordinator.getRetreatTarget(ai.playerId, entityId);
+          if (retreatTarget) {
+            const command: GameCommand = {
+              tick: currentTick,
+              playerId: ai.playerId,
+              type: 'MOVE',
+              entityIds: [entityId],
+              targetPosition: retreatTarget,
+            };
+            this.game.issueAICommand(command);
+          }
+        }
+      }
+
+      // Check if we can re-engage
+      if (retreatStatus.canReengage) {
+        retreatCoordinator.forceReengage(ai.playerId);
+        debugAI.log(`[AITactics] ${ai.playerId}: Re-engaging after retreat`);
+      }
+      return;
+    }
+
+    // Find nearest enemy threat using InfluenceMap
+    const threatAnalysis = influenceMap.getThreatAnalysis(basePos.x, basePos.y, ai.playerId);
+
+    // If threat is too high, force retreat for low health units
+    if (threatAnalysis.dangerLevel > 0.7 && armyUnits.length < 5) {
+      // Calculate retreat rally point (use safe direction from influence map)
+      const safeDir = threatAnalysis.safeDirection;
+      const rallyPoint = {
+        x: basePos.x + safeDir.x * 15,
+        y: basePos.y + safeDir.y * 15,
+      };
+
+      // Force retreat for all units
+      for (const entityId of armyUnits) {
+        retreatCoordinator.forceRetreat(ai.playerId, entityId, rallyPoint, currentTick);
+      }
+
+      debugAI.log(`[AITactics] ${ai.playerId}: Initiating coordinated retreat, danger level: ${threatAnalysis.dangerLevel.toFixed(2)}`);
+      return;
+    }
+
+    // Normal defense - find threat position
     const threatPos = this.findNearestThreat(ai, basePos);
 
-    // If no threat found near base, check if we're still under attack
-    // (enemy might have retreated or been killed)
     if (!threatPos) {
       if (!this.isUnderAttack(ai)) {
         ai.state = 'building';
@@ -712,27 +827,41 @@ export class AITacticsManager {
       return;
     }
 
-    // Throttle defense commands - don't re-command every tick
+    // Throttle defense commands
     const lastDefenseCommand = this.lastDefenseCommandTick.get(ai.playerId) || 0;
     const shouldCommand = currentTick - lastDefenseCommand >= DEFENSE_COMMAND_INTERVAL;
 
     if (shouldCommand) {
-      // Only command units that are idle or not yet engaged in combat
-      // Units already attacking or moving to attack should continue without interruption
       const idleDefenders = this.getIdleDefendingUnits(ai.playerId, armyUnits);
 
       if (idleDefenders.length > 0) {
-        // Issue attack-move command towards threat
-        // Using ATTACK with targetPosition triggers attack-move behavior
-        const command: GameCommand = {
-          tick: currentTick,
-          playerId: ai.playerId,
-          type: 'ATTACK',
-          entityIds: idleDefenders,
-          targetPosition: threatPos,
-        };
+        // Apply spread formation for defense
+        const armyWithPositions = this.getArmyUnitsWithPositions(ai.playerId);
+        if (armyWithPositions.length > 2) {
+          const formation = this.applyFormation(ai, armyWithPositions, threatPos, 'spread');
 
-        this.game.issueAICommand(command);
+          for (const { entityId, position } of formation) {
+            if (idleDefenders.includes(entityId)) {
+              const command: GameCommand = {
+                tick: currentTick,
+                playerId: ai.playerId,
+                type: 'ATTACK',
+                entityIds: [entityId],
+                targetPosition: position,
+              };
+              this.game.issueAICommand(command);
+            }
+          }
+        } else {
+          const command: GameCommand = {
+            tick: currentTick,
+            playerId: ai.playerId,
+            type: 'ATTACK',
+            entityIds: idleDefenders,
+            targetPosition: threatPos,
+          };
+          this.game.issueAICommand(command);
+        }
 
         debugAI.log(
           `[AITactics] ${ai.playerId}: Commanding ${idleDefenders.length}/${armyUnits.length} ` +
@@ -743,7 +872,6 @@ export class AITacticsManager {
       this.lastDefenseCommandTick.set(ai.playerId, currentTick);
     }
 
-    // Check if threat is eliminated
     if (!this.isUnderAttack(ai)) {
       ai.state = 'building';
       debugAI.log(`[AITactics] ${ai.playerId}: Threat eliminated, returning to build`);
@@ -751,8 +879,7 @@ export class AITacticsManager {
   }
 
   /**
-   * Get army units that are idle and need to be commanded for defense.
-   * Excludes units already engaged in combat or moving to attack.
+   * Get army units that are idle and need commanding for defense.
    */
   private getIdleDefendingUnits(playerId: string, armyUnits: number[]): number[] {
     const idleUnits: number[] = [];
@@ -766,16 +893,8 @@ export class AITacticsManager {
       if (!unit || !health) continue;
       if (health.isDead()) continue;
 
-      // Unit needs commanding if:
-      // 1. It's idle (not doing anything)
-      // 2. It's completely stopped (no target, no destination)
       const isIdle = unit.state === 'idle' && unit.targetEntityId === null;
       const isStuck = unit.state === 'idle' && !unit.isInAssaultMode;
-
-      // Don't interrupt units that are:
-      // - Currently attacking (has a target)
-      // - Moving to attack (attackmoving state)
-      // - In assault mode and actively scanning
       const isEngaged = unit.targetEntityId !== null ||
         unit.state === 'attacking' ||
         (unit.state === 'attackmoving' && unit.targetX !== null);
@@ -789,15 +908,12 @@ export class AITacticsManager {
   }
 
   /**
-   * Find the nearest enemy threat to a position.
-   * Searches within a reasonable radius of the base for enemy units.
+   * Find the nearest enemy threat using InfluenceMap for guidance.
    */
   private findNearestThreat(ai: AIPlayer, position: { x: number; y: number }): { x: number; y: number } | null {
     const units = this.coordinator.getCachedUnitsWithTransform();
     let nearestThreat: { x: number; y: number; distance: number } | null = null;
 
-    // Search radius for threats - 80 units should cover most base areas
-    // This is larger than before (50) to catch enemies that are attacking from range
     const THREAT_SEARCH_RADIUS = 80;
 
     for (const entity of units) {
@@ -808,15 +924,12 @@ export class AITacticsManager {
 
       if (selectable.playerId === ai.playerId) continue;
       if (health.isDead()) continue;
-      // Include workers too - they might be attacking or part of a worker rush
-      // Only skip if unit has 0 attack damage
       if (unit.attackDamage === 0) continue;
 
       const dx = transform.x - position.x;
       const dy = transform.y - position.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
-      // Only consider threats within search radius of base
       if (distance > THREAT_SEARCH_RADIUS) continue;
 
       if (!nearestThreat || distance < nearestThreat.distance) {
@@ -839,11 +952,39 @@ export class AITacticsManager {
       return;
     }
 
-    // Attack enemy workers or expansion
     const harassTarget = this.findHarassTarget(ai);
     if (!harassTarget) {
       ai.state = 'building';
       return;
+    }
+
+    // Use InfluenceMap to check if path is safe
+    const influenceMap = this.coordinator.getInfluenceMap();
+    const startPos = this.coordinator.findAIBase(ai);
+
+    if (startPos) {
+      // Check threat level at target - if too dangerous, find safer approach
+      const targetThreat = influenceMap.getThreatAnalysis(harassTarget.x, harassTarget.y, ai.playerId);
+      if (targetThreat.dangerLevel > 0.6) {
+        // Try to approach from safe direction
+        const safeOffset = {
+          x: targetThreat.safeDirection.x * 10,
+          y: targetThreat.safeDirection.y * 10,
+        };
+        const safeApproach = {
+          x: harassTarget.x + safeOffset.x,
+          y: harassTarget.y + safeOffset.y,
+        };
+        const command: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'MOVE',
+          entityIds: harassUnits,
+          targetPosition: safeApproach,
+        };
+        this.game.issueAICommand(command);
+        return; // Move to safe position first, attack next cycle
+      }
     }
 
     const command: GameCommand = {
@@ -861,40 +1002,31 @@ export class AITacticsManager {
     ai.state = 'building';
   }
 
-  // ==================== RTS-STYLE ENGAGEMENT TRACKING ====================
+  // === Engagement Tracking ===
 
   /**
    * Check if the AI's army is currently engaged in combat.
-   * Returns true if units are attacking or being attacked.
    */
   private checkEngagementStatus(ai: AIPlayer, armyUnits: number[]): boolean {
     let engagedCount = 0;
-    const entities = this.coordinator.getCachedUnitsWithTransform();
 
     for (const entityId of armyUnits) {
       const entity = this.world.getEntity(entityId);
       if (!entity) continue;
 
       const unit = entity.get<Unit>('Unit');
-      const health = entity.get<Health>('Health');
-      if (!unit || !health) continue;
+      if (!unit) continue;
 
-      // Unit is engaged if:
-      // 1. It has an active target
-      // 2. It's in attacking state
-      // 3. It recently took damage
       if (unit.targetEntityId !== null || unit.state === 'attacking') {
         engagedCount++;
       }
     }
 
-    // Consider engaged if >= 20% of army is in combat
     return engagedCount >= Math.max(1, armyUnits.length * 0.2);
   }
 
   /**
-   * Find army units that are idle in assault mode (need re-commanding).
-   * These are units that arrived at their destination and are scanning but found nothing.
+   * Find army units that are idle in assault mode.
    */
   private getIdleAssaultUnits(playerId: string, armyUnits: number[]): number[] {
     const idleUnits: number[] = [];
@@ -908,15 +1040,10 @@ export class AITacticsManager {
       if (!unit || !health) continue;
       if (health.isDead()) continue;
 
-      // Unit needs re-commanding if:
-      // 1. It's in assault mode AND
-      // 2. It's idle (no target, not moving) AND
-      // 3. It's been idle for a while (stuck or no enemies found)
       const isIdleAssault = unit.isInAssaultMode &&
         unit.state === 'idle' &&
         unit.targetEntityId === null;
 
-      // Also include units that are completely idle (not in assault mode but should be attacking)
       const isCompletelyIdle = unit.state === 'idle' &&
         unit.targetEntityId === null &&
         !unit.isInAssaultMode &&
@@ -931,7 +1058,7 @@ export class AITacticsManager {
   }
 
   /**
-   * Count all enemy buildings (for hunt mode determination).
+   * Count all enemy buildings.
    */
   private countEnemyBuildings(ai: AIPlayer): number {
     let count = 0;
@@ -944,7 +1071,7 @@ export class AITacticsManager {
 
       if (selectable.playerId === ai.playerId) continue;
       if (health.isDead()) continue;
-      if (!building.isOperational()) continue; // Don't count blueprints
+      if (!building.isOperational()) continue;
 
       count++;
     }
@@ -953,13 +1080,10 @@ export class AITacticsManager {
   }
 
   /**
-   * Find ANY enemy building (not just base buildings).
-   * Used for hunt mode to track down remaining structures.
+   * Find ANY enemy building for hunt mode.
    */
   private findAnyEnemyBuilding(ai: AIPlayer): { x: number; y: number } | null {
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
-
-    // First try to find a base building (higher priority)
     const config = ai.config!;
     const baseTypes = config.roles.baseTypes;
 
@@ -978,7 +1102,6 @@ export class AITacticsManager {
       }
     }
 
-    // If no base found, return ANY enemy building
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const transform = entity.get<Transform>('Transform')!;
@@ -996,8 +1119,7 @@ export class AITacticsManager {
   }
 
   /**
-   * Find all enemy buildings and return them for map sweeping.
-   * Used when in hunt mode to spread units across multiple targets.
+   * Find all enemy buildings for map sweeping.
    */
   public findAllEnemyBuildings(ai: AIPlayer): Array<{ x: number; y: number; entityId: number }> {
     const results: Array<{ x: number; y: number; entityId: number }> = [];
@@ -1017,5 +1139,53 @@ export class AITacticsManager {
     }
 
     return results;
+  }
+
+  /**
+   * Get safe retreat path using InfluenceMap.
+   * Returns array of waypoints from current position toward base via low-threat areas.
+   */
+  public getSafeRetreatPath(
+    ai: AIPlayer,
+    fromPosition: { x: number; y: number }
+  ): Array<{ x: number; y: number }> | null {
+    const basePos = this.coordinator.findAIBase(ai);
+    if (!basePos) return null;
+
+    const influenceMap = this.coordinator.getInfluenceMap();
+
+    // Get safe direction from current position
+    const threatAnalysis = influenceMap.getThreatAnalysis(fromPosition.x, fromPosition.y, ai.playerId);
+
+    // Build path using safe direction as guide
+    const path: Array<{ x: number; y: number }> = [];
+    const stepSize = 10;
+    let currentX = fromPosition.x;
+    let currentY = fromPosition.y;
+
+    // Generate waypoints toward base, biasing toward safe direction
+    for (let i = 0; i < 5; i++) {
+      // Direction to base
+      const dx = basePos.x - currentX;
+      const dy = basePos.y - currentY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      if (dist < stepSize) {
+        path.push(basePos);
+        break;
+      }
+
+      // Blend safe direction with direct path to base
+      const directX = dx / dist;
+      const directY = dy / dist;
+      const blendedX = directX * 0.7 + threatAnalysis.safeDirection.x * 0.3;
+      const blendedY = directY * 0.7 + threatAnalysis.safeDirection.y * 0.3;
+
+      currentX += blendedX * stepSize;
+      currentY += blendedY * stepSize;
+      path.push({ x: currentX, y: currentY });
+    }
+
+    return path.length > 0 ? path : null;
   }
 }
