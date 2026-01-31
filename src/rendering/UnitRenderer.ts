@@ -12,7 +12,6 @@ import { getPlayerColor, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { debugAnimation, debugAssets, debugMesh, debugPerformance } from '@/utils/debugLogger';
 import { setupInstancedVelocity, swapInstanceMatrices, commitInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
-import { updateSelectionRingTime, TEAM_COLORS } from './tsl/SelectionMaterial';
 import {
   UNIT_RENDERER,
   UNIT_SELECTION_RING,

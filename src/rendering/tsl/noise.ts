@@ -24,10 +24,7 @@ import {
   normalize,
   step,
   sin,
-  cos,
   sqrt,
-  length,
-  Loop,
   If,
   type ShaderNodeObject,
 } from 'three/tsl';

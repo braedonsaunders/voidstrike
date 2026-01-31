@@ -28,7 +28,7 @@ interface CountdownCompleteMessage {
   type: 'complete';
 }
 
-type WorkerOutMessage = CountdownTickMessage | CountdownCompleteMessage;
+type _WorkerOutMessage = CountdownTickMessage | CountdownCompleteMessage;
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let countdownStartTime = 0;

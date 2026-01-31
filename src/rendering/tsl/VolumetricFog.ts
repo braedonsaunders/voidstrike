@@ -19,9 +19,7 @@ import {
   min,
   dot,
   normalize,
-  length,
   exp,
-  abs,
   Loop,
   If,
   Break,
@@ -96,8 +94,8 @@ export function createVolumetricFogNode(
     // and Fn nodes (already computed values from previous effect chain like SSGI/SSR)
     const sceneColor = vec3(sceneColorTexture);
 
-    // Early exit if disabled
-    const enabled = uEnabled.greaterThan(0.5);
+    // Early exit if disabled (reserved for conditional fog rendering)
+    const _enabled = uEnabled.greaterThan(0.5);
 
     // Sample depth and convert to linear
     // depthTexture is already a texture node from scenePass.getTextureNode('depth'),
@@ -110,8 +108,8 @@ export function createVolumetricFogNode(
       uCameraFar.sub(z.mul(uCameraFar.sub(uCameraNear)))
     );
 
-    // Reconstruct world position from depth
-    const ndcPos = vec4(
+    // Reconstruct world position from depth (reserved for world-space fog calculations)
+    const _ndcPos = vec4(
       fragUV.x.mul(2.0).sub(1.0),
       fragUV.y.mul(2.0).sub(1.0),
       z,

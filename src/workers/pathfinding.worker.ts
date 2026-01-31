@@ -586,7 +586,7 @@ function findWaterPath(
   startY: number,
   endX: number,
   endY: number,
-  agentRadius: number
+  _agentRadius: number
 ): { path: Array<{ x: number; y: number }>; found: boolean } {
   if (!waterNavMeshQuery) {
     return { path: [], found: false };

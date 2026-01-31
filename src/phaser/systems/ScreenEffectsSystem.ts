@@ -322,7 +322,7 @@ export class ScreenEffectsSystem {
   /**
    * Update directional indicators
    */
-  private updateDirectionalIndicators(dt: number): void {
+  private updateDirectionalIndicators(_dt: number): void {
     const now = Date.now();
     const screenWidth = this.scene.scale.width;
     const screenHeight = this.scene.scale.height;
@@ -593,7 +593,7 @@ export class ScreenEffectsSystem {
   /**
    * Update explosion rings
    */
-  private updateExplosionRings(dt: number): void {
+  private updateExplosionRings(_dt: number): void {
     const now = Date.now();
 
     this.distortionGraphics.clear();

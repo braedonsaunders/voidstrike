@@ -44,10 +44,6 @@
 import type {
   Color,
   Vector2,
-  Vector3,
-  Vector4,
-  Matrix3,
-  Matrix4,
   Texture,
   Camera,
   Scene,
@@ -55,11 +51,8 @@ import type {
   Material,
   Side,
   Blending,
-  BufferGeometry,
   InstancedBufferAttribute,
   RenderTarget,
-  PerspectiveCamera,
-  Mesh,
 } from 'three';
 
 // ============================================
