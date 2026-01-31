@@ -74,6 +74,18 @@ export class Transform extends Component {
     this.rotation = Math.atan2(y - this.y, x - this.x);
   }
 
+  /**
+   * Sync previous position/rotation to current values.
+   * Call this when a unit stops moving to ensure velocity-based
+   * animation detection sees zero velocity.
+   */
+  public syncPrevious(): void {
+    this.prevX = this.x;
+    this.prevY = this.y;
+    this.prevZ = this.z;
+    this.prevRotation = this.rotation;
+  }
+
   public clone(): Transform {
     return new Transform(
       this.x,

@@ -898,6 +898,7 @@ export class MovementOrchestrator {
       // Assault mode is preserved! Unit will keep scanning for targets in CombatSystem
       // The isInAssaultMode flag was set when setAttackMoveTarget() was called
       velocity.zero();
+      transform.syncPrevious();
       return true;
     } else {
       if (unit.state === 'gathering') {
@@ -906,9 +907,11 @@ export class MovementOrchestrator {
           unit.targetX = null;
           unit.targetY = null;
           velocity.zero();
+          transform.syncPrevious();
           return true;
         }
         velocity.zero();
+        transform.syncPrevious();
         return true;
       }
 
@@ -917,6 +920,7 @@ export class MovementOrchestrator {
         unit.targetY = null;
         unit.currentSpeed = 0;
         velocity.zero();
+        transform.syncPrevious();
         return true;
       }
 
@@ -930,6 +934,7 @@ export class MovementOrchestrator {
         unit.clearTarget();
       }
       velocity.zero();
+      transform.syncPrevious();
       return true;
     }
   }
