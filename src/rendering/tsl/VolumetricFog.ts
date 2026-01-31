@@ -28,6 +28,7 @@ import {
   abs,
   Loop,
   If,
+  Break,
 } from 'three/tsl';
 
 // Quality presets - number of raymarch steps
@@ -135,8 +136,14 @@ export function createVolumetricFogNode(
     const inScattering = vec3(0.0).toVar();
 
     // Raymarch loop with manual counter
+    // Use max quality (128) with early exit for dynamic quality control
     const loopIndex = int(0).toVar();
-    Loop(32, () => {
+    Loop(128, () => {
+      // Early exit when we've done enough steps for current quality
+      If(loopIndex.greaterThanEqual(uSteps), () => {
+        Break();
+      });
+
       const t = float(loopIndex).mul(stepSize);
       const samplePos = uCameraPos.add(rayDir.mul(t));
 
