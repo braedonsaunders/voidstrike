@@ -747,7 +747,9 @@ export function createFogOfWarPass(
     const result = vec3(sceneColor).toVar();
 
     // Sample depth buffer (0-1 range in WebGPU)
-    const depthSample = texture(depthNode, fragUV).r;
+    // depthNode is already a texture node from scenePass.getTextureNode('depth'),
+    // so use .sample() instead of texture() which expects a raw THREE.Texture
+    const depthSample = depthNode.sample(fragUV).r;
 
     // Reconstruct view-space position using Three.js convention
     // For WebGPU: UV Y needs to be flipped, depth is 0-1 (not -1 to 1)
