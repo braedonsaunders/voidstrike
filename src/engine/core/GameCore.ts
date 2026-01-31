@@ -12,7 +12,7 @@
 import { World } from '../ecs/World';
 import { EventBus } from '../core/EventBus';
 import { SystemRegistry } from '../core/SystemRegistry';
-import { bootstrapDefinitions } from '../definitions';
+import { bootstrapDefinitions, definitionsReady } from '../definitions';
 
 // Systems with direct references
 import { VisionSystem } from '../systems/VisionSystem';
@@ -121,8 +121,13 @@ export abstract class GameCore {
   constructor(config: Partial<GameConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
 
-    // Bootstrap definition registry from TypeScript data
-    bootstrapDefinitions();
+    // Ensure definitions are loaded
+    // Callers should await initializeDefinitions() before creating GameCore
+    if (!definitionsReady()) {
+      console.warn('[GameCore] Definitions not initialized before GameCore creation. Starting async load...');
+      // Fire off async load, but this may cause race conditions
+      bootstrapDefinitions();
+    }
 
     // Initialize ECS World with map dimensions
     this.world = new World(this.config.mapWidth, this.config.mapHeight);

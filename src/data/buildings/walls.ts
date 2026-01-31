@@ -146,7 +146,28 @@ export const WALL_BUILDINGS: WallDefinition[] = new Proxy([] as WallDefinition[]
         yield* Object.values(allBuildings).filter((b) => (b as WallDefinition).isWall) as WallDefinition[];
       };
     }
+    // Delegate array methods - bind to the real array so 'this' works correctly
+    if (typeof prop === 'string' && typeof Array.prototype[prop as keyof typeof Array.prototype] === 'function') {
+      const allBuildings = DefinitionRegistry.isInitialized() ? DefinitionRegistry.getAllBuildings() : {};
+      const walls = Object.values(allBuildings).filter((b) => (b as WallDefinition).isWall);
+      const method = (walls as unknown as Record<string, unknown>)[prop];
+      if (typeof method === 'function') {
+        return method.bind(walls);
+      }
+      return method;
+    }
     return (target as unknown as Record<string | symbol, unknown>)[prop];
+  },
+  has(_target, prop) {
+    // Support 'in' operator for numeric indices so array algorithms work
+    if (typeof prop === 'string' && !isNaN(Number(prop))) {
+      if (!DefinitionRegistry.isInitialized()) return false;
+      const index = Number(prop);
+      const allBuildings = DefinitionRegistry.getAllBuildings();
+      const length = Object.values(allBuildings).filter((b) => (b as WallDefinition).isWall).length;
+      return index >= 0 && index < length;
+    }
+    return prop in Array.prototype;
   },
 });
 
