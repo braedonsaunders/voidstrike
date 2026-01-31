@@ -81,7 +81,7 @@ describe('Wall Definitions', () => {
     it('defines reinforced upgrade', () => {
       expect(WALL_UPGRADE_DEFINITIONS.reinforced).toBeDefined();
       expect(WALL_UPGRADE_DEFINITIONS.reinforced.name).toBe('Reinforced Plating');
-      expect(WALL_UPGRADE_DEFINITIONS.reinforced.researchBuilding).toBe('arsenal');
+      expect(WALL_UPGRADE_DEFINITIONS.reinforced.researchBuilding).toBe('tech_center');
     });
 
     it('defines shielded upgrade', () => {
@@ -92,8 +92,8 @@ describe('Wall Definitions', () => {
 
     it('defines weapon upgrade', () => {
       expect(WALL_UPGRADE_DEFINITIONS.weapon).toBeDefined();
-      expect(WALL_UPGRADE_DEFINITIONS.weapon.name).toBe('Integrated Weapons');
-      expect(WALL_UPGRADE_DEFINITIONS.weapon.researchBuilding).toBe('arsenal');
+      expect(WALL_UPGRADE_DEFINITIONS.weapon.name).toBe('Mounted Turret');
+      expect(WALL_UPGRADE_DEFINITIONS.weapon.researchBuilding).toBe('tech_center');
     });
 
     it('defines repair_drone upgrade', () => {
