@@ -396,6 +396,7 @@ voidstrike/
 │   │   ├── services/
 │   │   │   └── CullingService.ts
 │   │   ├── shared/
+│   │   │   ├── GeometryQuarantine.ts
 │   │   │   ├── HealthBarRenderer.ts
 │   │   │   ├── index.ts
 │   │   │   ├── InstancedMeshPool.ts
