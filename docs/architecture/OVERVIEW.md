@@ -501,7 +501,13 @@ voidstrike/
 │   │   │       ├── buildings.json
 │   │   │       ├── manifest.json
 │   │   │       ├── research.json
-│   │   │       └── units.json
+│   │   │       ├── units.json
+│   │   │       └── wall_upgrades.json
+│   │   ├── schemas/
+│   │   │   ├── ability.schema.json
+│   │   │   ├── building.schema.json
+│   │   │   ├── faction-manifest.schema.json
+│   │   │   └── unit.schema.json
 │   │   └── game.json
 │   ├── draco/
 │   │   ├── draco_decoder.js
@@ -578,13 +584,14 @@ voidstrike/
     │   │   └── visionSystem.test.ts
     │   └── workers/ # Web Workers
     │       └── gameWorker.test.ts
-    └── utils/ # Utility functions
-        ├── BenchmarkRunner.ts
-        ├── debugLogger.test.ts
-        ├── fixedPoint.test.ts
-        ├── math.test.ts
-        ├── performanceTestHelpers.ts
-        └── vectorPool.test.ts
+    ├── utils/ # Utility functions
+    │   ├── BenchmarkRunner.ts
+    │   ├── debugLogger.test.ts
+    │   ├── fixedPoint.test.ts
+    │   ├── math.test.ts
+    │   ├── performanceTestHelpers.ts
+    │   └── vectorPool.test.ts
+    └── setup.ts
 ```
 
 ## Data-Driven Game Configuration
