@@ -238,6 +238,16 @@ voidstrike/
 │   │   │   ├── ScoutingMemory.ts
 │   │   │   ├── UnitBehaviors.ts
 │   │   │   └── WorkerDistribution.ts
+│   │   ├── animation/
+│   │   │   ├── AnimationConfigLoader.ts
+│   │   │   ├── AnimationController.ts
+│   │   │   ├── AnimationLayer.ts
+│   │   │   ├── AnimationParameterBridge.ts
+│   │   │   ├── AnimationState.ts
+│   │   │   ├── AnimationStateMachine.ts
+│   │   │   ├── AnimationTransition.ts
+│   │   │   ├── AnimationTypes.ts
+│   │   │   └── index.ts
 │   │   ├── combat/
 │   │   │   └── TargetAcquisition.ts
 │   │   ├── components/ # React components
