@@ -599,7 +599,7 @@
       {
         "type": "damage_bonus",
         "value": 1,
-        "unitTypes": ["naval"]
+        "unitTypes": ["ship"]
       }
     ]
   },
@@ -618,7 +618,7 @@
       {
         "type": "damage_bonus",
         "value": 1,
-        "unitTypes": ["naval"]
+        "unitTypes": ["ship"]
       }
     ]
   },
@@ -636,7 +636,7 @@
       {
         "type": "damage_bonus",
         "value": 1,
-        "unitTypes": ["naval"]
+        "unitTypes": ["ship"]
       }
     ]
   },
@@ -654,7 +654,7 @@
       {
         "type": "armor_bonus",
         "value": 1,
-        "unitTypes": ["naval"]
+        "unitTypes": ["ship"]
       }
     ]
   },
@@ -673,7 +673,7 @@
       {
         "type": "armor_bonus",
         "value": 1,
-        "unitTypes": ["naval"]
+        "unitTypes": ["ship"]
       }
     ]
   },
@@ -691,23 +691,23 @@
       {
         "type": "armor_bonus",
         "value": 1,
-        "unitTypes": ["naval"]
+        "unitTypes": ["ship"]
       }
     ]
   },
   "advanced_sonar": {
     "id": "advanced_sonar",
     "name": "Advanced Sonar",
-    "description": "Increases naval unit sight range and enables detection of submerged units.",
+    "description": "Enables detection of submerged units for naval vessels.",
     "faction": "dominion",
     "mineralCost": 100,
     "vespeneCost": 100,
     "researchTime": 79,
     "effects": [
       {
-        "type": "sight_bonus",
-        "value": 2,
-        "unitTypes": ["naval"]
+        "type": "ability_unlock",
+        "value": 1,
+        "targets": ["mariner", "stingray", "hunter", "kraken"]
       }
     ]
   },
@@ -723,7 +723,7 @@
       {
         "type": "health_bonus",
         "value": 25,
-        "unitTypes": ["naval"]
+        "unitTypes": ["ship"]
       }
     ]
   }
