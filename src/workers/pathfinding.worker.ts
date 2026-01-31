@@ -232,6 +232,7 @@ function loadNavMeshFromGeometry(
   }
 
   if (DEBUG) {
+    // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
     console.log('[PathfindingWorker] Generating navmesh from geometry:', {
       vertices: positions.length / 3,
       triangles: indices.length / 3,
@@ -263,6 +264,7 @@ function loadNavMeshFromGeometry(
         heightMapWidth = heightMapW;
         heightMapHeight = heightMapH;
       }
+      // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
       if (DEBUG) console.log('[PathfindingWorker] TileCache navmesh generated successfully');
       return true;
     }
@@ -270,6 +272,7 @@ function loadNavMeshFromGeometry(
     // TileCache failed - try solo navmesh fallback
     if (DEBUG) {
       console.warn('[PathfindingWorker] TileCache generation failed:', (result as { error?: string }).error);
+      // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
       console.log('[PathfindingWorker] Trying solo navmesh fallback...');
     }
 
@@ -285,6 +288,7 @@ function loadNavMeshFromGeometry(
         heightMapWidth = heightMapW;
         heightMapHeight = heightMapH;
       }
+      // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
       if (DEBUG) console.log('[PathfindingWorker] Solo navmesh generated successfully');
       return true;
     }
@@ -553,6 +557,7 @@ function loadWaterNavMesh(positions: Float32Array, indices: Uint32Array): boolea
   }
 
   if (DEBUG) {
+    // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
     console.log('[PathfindingWorker] Generating water navmesh:', {
       vertices: positions.length / 3,
       triangles: indices.length / 3,
@@ -566,6 +571,7 @@ function loadWaterNavMesh(positions: Float32Array, indices: Uint32Array): boolea
     if (result.success && result.navMesh) {
       waterNavMesh = result.navMesh;
       waterNavMeshQuery = new NavMeshQuery(waterNavMesh);
+      // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
       if (DEBUG) console.log('[PathfindingWorker] Water navmesh generated successfully');
       return true;
     }
