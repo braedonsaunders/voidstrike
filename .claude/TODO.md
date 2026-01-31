@@ -2,8 +2,6 @@
 
 ## Current Priority: Core Features (Single-Player)
 
-> See **ROADMAP.md** for comprehensive feature breakdown
-
 ---
 
 ## Fog of War Post-Processing Overhaul (January 2026) ✓
@@ -1132,8 +1130,6 @@
 ---
 
 ## Future: Multiplayer - P2P Architecture (NEW DIRECTION)
-
-> See **P2P_ARCHITECTURE.md** for comprehensive design document
 
 ### Current Multiplayer Status (Supabase-Based)
 

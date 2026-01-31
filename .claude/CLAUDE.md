@@ -48,7 +48,6 @@ Load relevant documentation based on your current task. Don't load everything—
 | **Schema** | `docs/reference/schema.md` | Database changes, data persistence, entity schemas |
 | **Models** | `docs/reference/models.md` | 3D models, GLTF specs, model requirements |
 | **Textures** | `docs/reference/textures.md` | Texture specs, UV mapping, material setup |
-| **Security** | `docs/security/SECURITY_AUDIT.md` | Security review, vulnerability assessment |
 | **Testing** | `docs/TESTING.md` | Test framework, coverage reports, testing patterns |
 
 ### Project Management (in `.claude/`)
@@ -266,8 +265,6 @@ docs/
 │   ├── schema.md       # Database schema
 │   ├── models.md       # 3D model specs
 │   └── textures.md     # Texture specs
-├── security/           # Security docs
-│   └── SECURITY_AUDIT.md
 └── tools/              # Development tools
     ├── blender/        # Blender scripts
     ├── asset-pipeline/ # Asset processing
