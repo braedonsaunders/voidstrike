@@ -122,55 +122,6 @@ export const WALL_UPGRADE_DEFINITIONS: Record<WallUpgradeType, WallUpgradeDefini
   }
 );
 
-/**
- * Array of all wall building definitions.
- * @deprecated Use DefinitionRegistry.getAllWalls() instead
- */
-export const WALL_BUILDINGS: WallDefinition[] = new Proxy([] as WallDefinition[], {
-  get(target, prop) {
-    if (prop === 'length') {
-      if (!DefinitionRegistry.isInitialized()) return 0;
-      const allBuildings = DefinitionRegistry.getAllBuildings();
-      return Object.values(allBuildings).filter((b) => (b as WallDefinition).isWall).length;
-    }
-    if (typeof prop === 'string' && !isNaN(Number(prop))) {
-      if (!DefinitionRegistry.isInitialized()) return undefined;
-      const allBuildings = DefinitionRegistry.getAllBuildings();
-      const walls = Object.values(allBuildings).filter((b) => (b as WallDefinition).isWall);
-      return walls[Number(prop)] as WallDefinition | undefined;
-    }
-    if (prop === Symbol.iterator) {
-      return function* () {
-        if (!DefinitionRegistry.isInitialized()) return;
-        const allBuildings = DefinitionRegistry.getAllBuildings();
-        yield* Object.values(allBuildings).filter((b) => (b as WallDefinition).isWall) as WallDefinition[];
-      };
-    }
-    // Delegate array methods - bind to the real array so 'this' works correctly
-    if (typeof prop === 'string' && typeof Array.prototype[prop as keyof typeof Array.prototype] === 'function') {
-      const allBuildings = DefinitionRegistry.isInitialized() ? DefinitionRegistry.getAllBuildings() : {};
-      const walls = Object.values(allBuildings).filter((b) => (b as WallDefinition).isWall);
-      const method = (walls as unknown as Record<string, unknown>)[prop];
-      if (typeof method === 'function') {
-        return method.bind(walls);
-      }
-      return method;
-    }
-    return (target as unknown as Record<string | symbol, unknown>)[prop];
-  },
-  has(_target, prop) {
-    // Support 'in' operator for numeric indices so array algorithms work
-    if (typeof prop === 'string' && !isNaN(Number(prop))) {
-      if (!DefinitionRegistry.isInitialized()) return false;
-      const index = Number(prop);
-      const allBuildings = DefinitionRegistry.getAllBuildings();
-      const length = Object.values(allBuildings).filter((b) => (b as WallDefinition).isWall).length;
-      return index >= 0 && index < length;
-    }
-    return prop in Array.prototype;
-  },
-});
-
 // ==================== UTILITY FUNCTIONS ====================
 
 /**

@@ -109,8 +109,6 @@ export interface GameCommand {
   // Input modifiers
   /** Whether shift was held (for command queuing) */
   queue?: boolean;
-  /** @deprecated Use `queue` instead */
-  shiftHeld?: boolean;
 }
 
 /**

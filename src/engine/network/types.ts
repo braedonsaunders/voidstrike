@@ -354,20 +354,6 @@ export class CommandIdGenerator {
 // Game should call commandIdGenerator.setTick() at the start of each tick
 export const commandIdGenerator = new CommandIdGenerator();
 
-/**
- * @deprecated Use commandIdGenerator.generate() instead for deterministic IDs
- */
-export function generateCommandId(playerId: string = 'local'): string {
-  return commandIdGenerator.generate(playerId);
-}
-
-/**
- * @deprecated Use commandIdGenerator.reset() instead
- */
-export function resetCommandIdCounter(): void {
-  commandIdGenerator.reset();
-}
-
 // For creating unique lobby codes
 export function generateLobbyCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars
