@@ -860,6 +860,26 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     }
   }, [hostConnection]);
 
+  // Set up peer-to-slot mapping for guests once we receive lobby state
+  useEffect(() => {
+    if (!hostConnection || hostConnection.readyState !== 'open' || !receivedLobbyState) {
+      return;
+    }
+
+    const store = useMultiplayerStore.getState();
+    const hostPubkey = pubkeyRef.current ? `host-${pubkeyRef.current.slice(0, 8)}` : 'host';
+
+    // Find the host's slot - the first human player that isn't a guest
+    const hostSlot = receivedLobbyState.playerSlots.find(
+      slot => slot.type === 'human' && !slot.isGuest
+    );
+
+    if (hostSlot) {
+      debugNetworking.log(`[Lobby] Setting peer-slot mapping: ${hostPubkey} -> ${hostSlot.id}`);
+      store.setPeerSlotMapping(hostPubkey, hostSlot.id);
+    }
+  }, [hostConnection, receivedLobbyState]);
+
   // Sync ALL guest data channels to multiplayerStore (for host mode - 8 player support)
   useEffect(() => {
     const connectedGuests = guests.filter(g => g.dataChannel?.readyState === 'open');
@@ -871,7 +891,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       store.setMultiplayer(true);
       store.setHost(true);
 
-      // Add all connected guests to the peer channels
+      // Add all connected guests to the peer channels and set up peer-slot mapping
       for (const guest of connectedGuests) {
         if (guest.dataChannel) {
           // Check if this peer is already added
@@ -880,6 +900,9 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
             debugNetworking.log(`[Lobby] Adding guest ${guest.name} (${guest.pubkey.slice(0, 8)}...) to multiplayerStore`);
             store.addPeer(guest.pubkey, guest.dataChannel);
           }
+          // Set up peer-to-slot mapping for command validation
+          // This maps the guest's peer ID to their assigned player slot
+          store.setPeerSlotMapping(guest.pubkey, guest.slotId);
         }
       }
 
