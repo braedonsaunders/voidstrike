@@ -1,4 +1,5 @@
 import { describe, it, beforeEach, expect } from 'vitest';
+
 import { generateLobbyCode, commandIdGenerator } from '@/engine/network/types';
 
 describe('Network Types - Utility Functions', () => {
