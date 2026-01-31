@@ -521,7 +521,8 @@ export class AdvancedParticleSystem {
       const screenUV = viewportCoordinate.xy;
 
       // Sample scene depth and convert to linear
-      const sceneDepthSample = texture(depthTex, screenUV).r;
+      // depthTex is a uniform node wrapping a texture, so use .sample() instead of texture()
+      const sceneDepthSample = depthTex.sample(screenUV).r;
       const sceneNDC = sceneDepthSample.mul(2.0).sub(1.0);
       const sceneLinearDepth = near.mul(far).div(
         far.sub(sceneNDC.mul(far.sub(near)))
