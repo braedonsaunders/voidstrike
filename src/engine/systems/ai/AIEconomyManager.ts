@@ -503,13 +503,10 @@ export class AIEconomyManager {
     }
 
     // Process worker transfers first
+    // Note: WorkerDistribution may select workers that are actively gathering (not idle)
+    // when rebalancing oversaturated bases, so we issue commands regardless of idle state
     for (const transfer of transfers) {
-      // The transfer already specifies which worker to move
       const workerId = transfer.workerId;
-      const workerIndex = idleWorkers.findIndex(w => w.entityId === workerId);
-      if (workerIndex === -1) continue;
-
-      const worker = idleWorkers[workerIndex];
 
       // Find destination base
       const destBase = basePositions.find(b => b.entityId === transfer.toBase);
@@ -524,29 +521,34 @@ export class AIEconomyManager {
           entityIds: [workerId],
           targetEntityId: transfer.targetResource,
         });
-        idleWorkers.splice(workerIndex, 1);
-        continue;
+        debugAI.log(`[AIEconomy] ${ai.playerId}: Transferring worker ${workerId} to resource ${transfer.targetResource}`);
+      } else {
+        // Otherwise assign to undersaturated resource at destination
+        const refinery = destResources.refineries.find(r => r.currentWorkers < 3);
+        if (refinery) {
+          this.game.eventBus.emit('command:gather', {
+            entityIds: [workerId],
+            targetEntityId: refinery.resourceEntityId,
+          });
+          refinery.currentWorkers++;
+          debugAI.log(`[AIEconomy] ${ai.playerId}: Transferring worker ${workerId} to refinery at base ${transfer.toBase}`);
+          continue;
+        }
+
+        const mineral = destResources.minerals.find(m => m.currentWorkers < 2);
+        if (mineral) {
+          this.game.eventBus.emit('command:gather', {
+            entityIds: [workerId],
+            targetEntityId: mineral.entityId,
+          });
+          mineral.currentWorkers++;
+          debugAI.log(`[AIEconomy] ${ai.playerId}: Transferring worker ${workerId} to minerals at base ${transfer.toBase}`);
+        }
       }
 
-      // Otherwise assign to undersaturated resource at destination
-      const refinery = destResources.refineries.find(r => r.currentWorkers < 3);
-      if (refinery) {
-        this.game.eventBus.emit('command:gather', {
-          entityIds: [workerId],
-          targetEntityId: refinery.resourceEntityId,
-        });
-        refinery.currentWorkers++;
-        idleWorkers.splice(workerIndex, 1);
-        continue;
-      }
-
-      const mineral = destResources.minerals.find(m => m.currentWorkers < 2);
-      if (mineral) {
-        this.game.eventBus.emit('command:gather', {
-          entityIds: [workerId],
-          targetEntityId: mineral.entityId,
-        });
-        mineral.currentWorkers++;
+      // Remove from idle workers list if present (so we don't double-assign)
+      const workerIndex = idleWorkers.findIndex(w => w.entityId === workerId);
+      if (workerIndex !== -1) {
         idleWorkers.splice(workerIndex, 1);
       }
     }
