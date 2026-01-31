@@ -42,7 +42,7 @@ export interface Editor3DCanvasProps {
   onFillArea: (startX: number, startY: number, targetElevation: number, newElevation: number) => void;
   onObjectSelect: (ids: string[]) => void;
   onObjectUpdate: (id: string, updates: { x?: number; y?: number }) => void;
-  _onObjectAdd: (obj: { type: string; x: number; y: number; radius?: number; properties?: Record<string, unknown> }) => string;
+  onObjectAdd: (obj: { type: string; x: number; y: number; radius?: number; properties?: Record<string, unknown> }) => string;
   // Enhanced UI callbacks
   onCursorMove?: (gridPos: { x: number; y: number } | null, worldPos: { x: number; y: number; z: number } | null) => void;
   onObjectHover?: (obj: EditorObject | null) => void;
@@ -62,7 +62,7 @@ export function Editor3DCanvas({
   onFillArea,
   onObjectSelect,
   onObjectUpdate,
-  _onObjectAdd,
+  onObjectAdd: _onObjectAdd,
   onCursorMove,
   onObjectHover,
   onContextMenu,
