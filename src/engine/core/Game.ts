@@ -23,6 +23,7 @@ import {
   useMultiplayerStore,
   getAdaptiveCommandDelay,
   getLatencyStats,
+  getAllPeerIds,
 } from '@/store/multiplayerStore';
 
 // Multiplayer message types
@@ -477,14 +478,27 @@ export class Game extends GameCore {
 
   /**
    * Get the set of player IDs that should send commands for lockstep.
-   * In 2-player multiplayer, this is local player + remote peer.
+   * Supports up to 8 players: local player + all remote peers.
    */
   private getExpectedPlayerIds(): string[] {
     const players: string[] = [this.config.playerId];
-    const remotePeerId = useMultiplayerStore.getState().remotePeerId;
-    if (remotePeerId) {
-      players.push(remotePeerId);
+
+    // Get all remote peer IDs (supports 2-8 players)
+    const remotePeerIds = getAllPeerIds();
+    for (const peerId of remotePeerIds) {
+      if (!players.includes(peerId)) {
+        players.push(peerId);
+      }
     }
+
+    // Fallback for legacy single-peer mode
+    if (remotePeerIds.length === 0) {
+      const remotePeerId = useMultiplayerStore.getState().remotePeerId;
+      if (remotePeerId && !players.includes(remotePeerId)) {
+        players.push(remotePeerId);
+      }
+    }
+
     return players;
   }
 

@@ -48,6 +48,15 @@ export interface BufferedCommand {
   timestamp: number;
 }
 
+// Peer connection info for multi-player support
+export interface PeerConnection {
+  peerId: string;
+  dataChannel: RTCDataChannel;
+  latencyStats: LatencyStats;
+  connectionQuality: ConnectionQuality;
+  pendingPings: Map<number, number>;
+}
+
 export interface MultiplayerState {
   // Connection state
   isMultiplayer: boolean;
@@ -73,12 +82,14 @@ export interface MultiplayerState {
   desyncState: DesyncState;
   desyncTick: number | null;
 
-  // Peer info
+  // Peer info - supports up to 8 players
   localPeerId: string | null;
-  remotePeerId: string | null;
+  remotePeerId: string | null;  // Legacy: first peer for backwards compatibility
+  remotePeerIds: string[];      // All remote peer IDs
 
-  // WebRTC objects
-  dataChannel: RTCDataChannel | null;
+  // WebRTC objects - supports multiple peers
+  dataChannel: RTCDataChannel | null;  // Legacy: first channel for backwards compatibility
+  peerChannels: Map<string, PeerConnection>;  // All peer connections by ID
 
   // Reconnection callback (set by lobby hook)
   reconnectCallback: (() => Promise<boolean>) | null;
@@ -86,7 +97,7 @@ export interface MultiplayerState {
   // Message handlers
   messageHandlers: ((data: unknown) => void)[];
 
-  // Latency measurement
+  // Latency measurement (aggregate across all peers)
   latencyStats: LatencyStats;
   connectionQuality: ConnectionQuality;
   pendingPings: Map<number, number>; // pingId -> timestamp
@@ -103,6 +114,13 @@ export interface MultiplayerState {
   setDataChannel: (channel: RTCDataChannel | null) => void;
   setReconnectCallback: (callback: (() => Promise<boolean>) | null) => void;
 
+  // Multi-peer actions
+  addPeer: (peerId: string, dataChannel: RTCDataChannel) => void;
+  removePeer: (peerId: string) => void;
+  getPeerChannel: (peerId: string) => RTCDataChannel | null;
+  getAllPeerIds: () => string[];
+  getConnectedPeerCount: () => number;
+
   // Network pause
   setNetworkPaused: (paused: boolean, reason?: string) => void;
 
@@ -114,8 +132,10 @@ export interface MultiplayerState {
   flushCommandBuffer: () => BufferedCommand[];
   clearCommandBuffer: () => void;
 
-  // Message handling
+  // Message handling - now supports broadcast
   sendMessage: (data: unknown) => boolean;
+  broadcastMessage: (data: unknown, excludePeerId?: string) => number;
+  sendToPeer: (peerId: string, data: unknown) => boolean;
   addMessageHandler: (handler: (data: unknown) => void) => void;
   removeMessageHandler: (handler: (data: unknown) => void) => void;
 
@@ -164,7 +184,9 @@ const initialState = {
   desyncTick: null,
   localPeerId: null,
   remotePeerId: null,
+  remotePeerIds: [] as string[],
   dataChannel: null,
+  peerChannels: new Map<string, PeerConnection>(),
   reconnectCallback: null,
   messageHandlers: [] as ((data: unknown) => void)[],
   // Latency measurement
@@ -193,8 +215,173 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   setHost: (isHost) => set({ isHost }),
   setConnectionStatus: (status) => set({ connectionStatus: status }),
   setLocalPeerId: (id) => set({ localPeerId: id }),
-  setRemotePeerId: (id) => set({ remotePeerId: id }),
+  setRemotePeerId: (id) => {
+    set({ remotePeerId: id });
+    // Also add to remotePeerIds if not already there
+    if (id) {
+      const current = get().remotePeerIds;
+      if (!current.includes(id)) {
+        set({ remotePeerIds: [...current, id] });
+      }
+    }
+  },
   setReconnectCallback: (callback) => set({ reconnectCallback: callback }),
+
+  // Multi-peer management for 8-player support
+  addPeer: (peerId: string, dataChannel: RTCDataChannel) => {
+    const state = get();
+    const newPeerChannels = new Map(state.peerChannels);
+
+    // Create peer connection info
+    const peerConnection: PeerConnection = {
+      peerId,
+      dataChannel,
+      latencyStats: { ...defaultLatencyStats },
+      connectionQuality: 'excellent',
+      pendingPings: new Map(),
+    };
+
+    // Set up message handler for this peer's channel
+    const messageHandler = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+
+        // Handle ping/pong internally
+        if (data.type === 'ping') {
+          try {
+            dataChannel.send(JSON.stringify({
+              type: 'pong',
+              pingId: data.pingId,
+              timestamp: data.timestamp,
+            }));
+          } catch (e) {
+            debugNetworking.warn(`[Multiplayer] Failed to send pong to ${peerId}:`, e);
+          }
+          return;
+        }
+
+        if (data.type === 'pong') {
+          get().handlePong(data.pingId, data.timestamp);
+          return;
+        }
+
+        // For host: relay game commands to other peers
+        if (get().isHost && data.type === 'command') {
+          // Add source peer info for relay tracking
+          const relayData = { ...data, _sourcePeer: peerId };
+          // Broadcast to all OTHER peers (not back to sender)
+          get().broadcastMessage(relayData, peerId);
+        }
+
+        // Pass to registered handlers
+        const handlers = get().messageHandlers;
+        for (const handler of handlers) {
+          handler(data);
+        }
+      } catch (e) {
+        debugNetworking.error(`[Multiplayer] Failed to parse message from ${peerId}:`, e);
+      }
+    };
+
+    const closeHandler = () => {
+      debugNetworking.log(`[Multiplayer] Peer ${peerId} disconnected`);
+      get().removePeer(peerId);
+    };
+
+    const errorHandler = (e: Event) => {
+      debugNetworking.error(`[Multiplayer] Error with peer ${peerId}:`, e);
+    };
+
+    dataChannel.addEventListener('message', messageHandler);
+    dataChannel.addEventListener('close', closeHandler);
+    dataChannel.addEventListener('error', errorHandler);
+
+    newPeerChannels.set(peerId, peerConnection);
+
+    // Update state
+    const newPeerIds = state.remotePeerIds.includes(peerId)
+      ? state.remotePeerIds
+      : [...state.remotePeerIds, peerId];
+
+    set({
+      peerChannels: newPeerChannels,
+      remotePeerIds: newPeerIds,
+      // Set legacy fields to first peer for backwards compatibility
+      remotePeerId: state.remotePeerId || peerId,
+      dataChannel: state.dataChannel || dataChannel,
+      isConnected: true,
+      connectionStatus: 'connected',
+    });
+
+    debugNetworking.log(`[Multiplayer] Added peer ${peerId}. Total peers: ${newPeerChannels.size}`);
+
+    // Start ping interval if not running
+    if (!get().pingInterval) {
+      get().startPingInterval();
+    }
+  },
+
+  removePeer: (peerId: string) => {
+    const state = get();
+    const newPeerChannels = new Map(state.peerChannels);
+    const peer = newPeerChannels.get(peerId);
+
+    if (peer) {
+      try {
+        peer.dataChannel.close();
+      } catch { /* ignore */ }
+      newPeerChannels.delete(peerId);
+    }
+
+    const newPeerIds = state.remotePeerIds.filter(id => id !== peerId);
+
+    // Update legacy fields
+    const firstPeer = newPeerChannels.values().next().value;
+    const newRemotePeerId = firstPeer?.peerId || null;
+    const newDataChannel = firstPeer?.dataChannel || null;
+
+    const isStillConnected = newPeerChannels.size > 0;
+
+    set({
+      peerChannels: newPeerChannels,
+      remotePeerIds: newPeerIds,
+      remotePeerId: newRemotePeerId,
+      dataChannel: newDataChannel,
+      isConnected: isStillConnected,
+      connectionStatus: isStillConnected ? 'connected' : 'disconnected',
+    });
+
+    debugNetworking.log(`[Multiplayer] Removed peer ${peerId}. Remaining peers: ${newPeerChannels.size}`);
+
+    // If no peers left and we were connected, attempt reconnection (for guests)
+    if (!isStillConnected && state.isConnected && state.isMultiplayer && !state.isHost) {
+      set({
+        isNetworkPaused: true,
+        networkPauseReason: 'Connection lost. Attempting to reconnect...',
+        networkPauseStartTime: Date.now(),
+      });
+      get().attemptReconnect();
+    }
+  },
+
+  getPeerChannel: (peerId: string) => {
+    return get().peerChannels.get(peerId)?.dataChannel || null;
+  },
+
+  getAllPeerIds: () => {
+    return get().remotePeerIds;
+  },
+
+  getConnectedPeerCount: () => {
+    const channels = get().peerChannels;
+    let count = 0;
+    for (const peer of channels.values()) {
+      if (peer.dataChannel.readyState === 'open') {
+        count++;
+      }
+    }
+    return count;
+  },
 
   setDataChannel: (channel) => {
     // Set up message handler on the channel
@@ -371,8 +558,10 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     set({ commandBuffer: [] });
   },
 
+  // Send message to all connected peers (broadcast for hosts, single peer for guests)
   sendMessage: (data) => {
-    const { dataChannel, isNetworkPaused, connectionStatus } = get();
+    const state = get();
+    const { connectionStatus, isHost, peerChannels } = state;
 
     // If disconnected/reconnecting, buffer the command
     if (connectionStatus === 'reconnecting' || connectionStatus === 'waiting') {
@@ -381,20 +570,80 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       return false;
     }
 
+    // For multi-peer mode, broadcast to all peers
+    if (peerChannels.size > 0) {
+      const sent = get().broadcastMessage(data);
+      return sent > 0;
+    }
+
+    // Legacy single-channel fallback
+    const { dataChannel } = state;
     if (dataChannel && dataChannel.readyState === 'open') {
       try {
         dataChannel.send(JSON.stringify(data));
         return true;
       } catch (e) {
         debugNetworking.error('[Multiplayer] Failed to send message:', e);
-        // Buffer on send failure
         get().bufferCommand(data);
         return false;
       }
     } else {
-      debugNetworking.warn('[Multiplayer] Cannot send message: channel not open');
-      // Buffer the command
+      debugNetworking.warn('[Multiplayer] Cannot send message: no open channels');
       get().bufferCommand(data);
+      return false;
+    }
+  },
+
+  // Broadcast message to all peers, optionally excluding one (for relay)
+  broadcastMessage: (data, excludePeerId) => {
+    const state = get();
+    const { peerChannels, connectionStatus } = state;
+
+    if (connectionStatus === 'reconnecting' || connectionStatus === 'waiting') {
+      get().bufferCommand(data);
+      return 0;
+    }
+
+    let sentCount = 0;
+    const jsonData = JSON.stringify(data);
+
+    for (const [peerId, peer] of peerChannels) {
+      if (excludePeerId && peerId === excludePeerId) {
+        continue; // Skip excluded peer (for relay)
+      }
+
+      if (peer.dataChannel.readyState === 'open') {
+        try {
+          peer.dataChannel.send(jsonData);
+          sentCount++;
+        } catch (e) {
+          debugNetworking.error(`[Multiplayer] Failed to send to peer ${peerId}:`, e);
+        }
+      }
+    }
+
+    if (sentCount === 0 && peerChannels.size > 0) {
+      debugNetworking.warn('[Multiplayer] Failed to send to any peer, buffering');
+      get().bufferCommand(data);
+    }
+
+    return sentCount;
+  },
+
+  // Send message to a specific peer
+  sendToPeer: (peerId, data) => {
+    const peer = get().peerChannels.get(peerId);
+
+    if (!peer || peer.dataChannel.readyState !== 'open') {
+      debugNetworking.warn(`[Multiplayer] Cannot send to peer ${peerId}: not connected`);
+      return false;
+    }
+
+    try {
+      peer.dataChannel.send(JSON.stringify(data));
+      return true;
+    } catch (e) {
+      debugNetworking.error(`[Multiplayer] Failed to send to peer ${peerId}:`, e);
       return false;
     }
   },
@@ -639,18 +888,33 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   },
 
   reset: () => {
-    const { dataChannel, pingInterval } = get();
-    if (dataChannel) {
-      dataChannel.close();
+    const { dataChannel, pingInterval, peerChannels } = get();
+
+    // Close all peer channels
+    for (const peer of peerChannels.values()) {
+      try {
+        peer.dataChannel.close();
+      } catch { /* ignore */ }
     }
+
+    // Close legacy data channel
+    if (dataChannel) {
+      try {
+        dataChannel.close();
+      } catch { /* ignore */ }
+    }
+
     if (pingInterval) {
       clearInterval(pingInterval);
     }
+
     set({
       ...initialState,
       messageHandlers: [],
       latencyStats: { ...defaultLatencyStats },
       pendingPings: new Map(),
+      peerChannels: new Map(),
+      remotePeerIds: [],
     });
   },
 }));
@@ -722,4 +986,29 @@ export function startLatencyMeasurement(): void {
 // Stop latency measurement
 export function stopLatencyMeasurement(): void {
   useMultiplayerStore.getState().stopPingInterval();
+}
+
+// Multi-peer utilities for 8-player support
+export function getAllPeerIds(): string[] {
+  return useMultiplayerStore.getState().getAllPeerIds();
+}
+
+export function getConnectedPeerCount(): number {
+  return useMultiplayerStore.getState().getConnectedPeerCount();
+}
+
+export function addPeer(peerId: string, dataChannel: RTCDataChannel): void {
+  useMultiplayerStore.getState().addPeer(peerId, dataChannel);
+}
+
+export function removePeer(peerId: string): void {
+  useMultiplayerStore.getState().removePeer(peerId);
+}
+
+export function broadcastMessage(data: unknown, excludePeerId?: string): number {
+  return useMultiplayerStore.getState().broadcastMessage(data, excludePeerId);
+}
+
+export function sendToPeer(peerId: string, data: unknown): boolean {
+  return useMultiplayerStore.getState().sendToPeer(peerId, data);
 }

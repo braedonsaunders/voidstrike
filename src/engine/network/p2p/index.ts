@@ -3,20 +3,7 @@
  * Serverless peer-to-peer networking for VOIDSTRIKE
  */
 
-// Connection Codes (Phase 1)
-export {
-  generateOfferCode,
-  generateAnswerCode,
-  parseConnectionCode,
-  completeConnection,
-  createPeerConnection,
-  waitForConnection,
-  waitForDataChannel,
-  ConnectionCodeError,
-  type ConnectionCodeData,
-} from './ConnectionCode';
-
-// Nostr Relays
+// Nostr Relays - used for lobby signaling
 export {
   getRelays,
   checkRelayHealth,
@@ -24,7 +11,7 @@ export {
   NostrRelayError,
 } from './NostrRelays';
 
-// Nostr Matchmaking (Phase 3)
+// Nostr Matchmaking (Phase 3) - for future "Find Match" feature
 export {
   NostrMatchmaking,
   NostrMatchmakingError,
@@ -32,7 +19,7 @@ export {
   type ReceivedSignal,
 } from './NostrMatchmaking';
 
-// Peer Relay (Phase 4)
+// Peer Relay (Phase 4) - for NAT fallback when direct connections fail
 export {
   PeerRelayNetwork,
 } from './PeerRelay';
