@@ -97,8 +97,8 @@ export class EnvironmentManager {
     this.directionalLight = new THREE.DirectionalLight(this.biome.colors.sun, 1.8);
     this.directionalLight.position.set(50, 80, 50);
     // IMPORTANT: Always set castShadow = true to initialize shadow map depth texture
-    // Control shadow rendering via renderer.shadowMap.enabled instead
-    // This prevents WebGPU "depthTexture is null" errors when toggling shadows
+    // NEVER toggle renderer.shadowMap.enabled - it must stay true to keep textures valid
+    // Shadow visibility is controlled via receiveShadow on meshes + internal shadowsEnabled flag
     this.directionalLight.castShadow = true;
     // Pre-configure shadow properties - use 512 for balance of quality/performance
     this.directionalLight.shadow.mapSize.width = 512;
@@ -446,13 +446,13 @@ export class EnvironmentManager {
 
   /**
    * Enable or disable shadows
-   * Note: directionalLight.castShadow is always true to keep shadow map initialized.
-   * We control shadow visibility via renderer.shadowMap.enabled in the game canvas.
+   * Note: Both directionalLight.castShadow and renderer.shadowMap.enabled stay true.
+   * We control shadow visibility via receiveShadow on meshes + skipping shadow updates.
    */
   public setShadowsEnabled(enabled: boolean): void {
     this.shadowsEnabled = enabled;
-    // Don't toggle castShadow - it must stay true to keep shadow map depth texture valid
-    // The renderer.shadowMap.enabled flag controls whether shadows are actually rendered
+    // Don't toggle castShadow or renderer.shadowMap.enabled - they must stay true
+    // to keep shadow map depth texture valid and prevent TSL texture errors
 
     // Toggle shadow receiving on terrain chunks (mesh is a Group containing chunk meshes)
     this.terrain.mesh.traverse((child) => {
