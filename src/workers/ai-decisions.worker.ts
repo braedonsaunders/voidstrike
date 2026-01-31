@@ -127,7 +127,7 @@ interface ThreatInfo {
 }
 
 // State
-const _config: AIWorkerConfig = {};
+let config: AIWorkerConfig = {};
 let unitPriorities: Record<string, number> = DEFAULT_UNIT_PRIORITY;
 let threatWeights = THREAT_WEIGHTS;
 let focusFireThreshold = 0.3;
