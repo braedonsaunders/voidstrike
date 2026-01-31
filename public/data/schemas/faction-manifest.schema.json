@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voidstrike.dev/schemas/faction-manifest.schema.json",
+  "title": "Faction Manifest",
+  "description": "Schema for VOIDSTRIKE faction manifest files",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "description",
+    "color",
+    "unitsFile",
+    "buildingsFile",
+    "researchFile",
+    "abilitiesFile"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique faction identifier"
+    },
+    "name": {
+      "type": "string",
+      "description": "Display name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Faction description"
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#[0-9A-Fa-f]{6}$",
+      "description": "Faction color in hex format"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Faction icon path"
+    },
+    "unitsFile": {
+      "type": "string",
+      "description": "Path to units JSON file"
+    },
+    "buildingsFile": {
+      "type": "string",
+      "description": "Path to buildings JSON file"
+    },
+    "researchFile": {
+      "type": "string",
+      "description": "Path to research JSON file"
+    },
+    "abilitiesFile": {
+      "type": "string",
+      "description": "Path to abilities JSON file"
+    },
+    "wallsFile": {
+      "type": "string",
+      "description": "Path to walls JSON file (optional)"
+    },
+    "wallUpgradesFile": {
+      "type": "string",
+      "description": "Path to wall upgrades JSON file (optional)"
+    },
+    "unitTypes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["infantry", "vehicle", "ship", "naval"]
+      },
+      "description": "Unit ID to category mapping"
+    },
+    "addonUnits": {
+      "type": "object",
+      "properties": {
+        "researchModule": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "description": "Units unlocked by research module per building"
+        },
+        "productionModule": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "description": "Units with reactor bonus per building"
+        }
+      },
+      "description": "Addon to unit mappings"
+    }
+  }
+}

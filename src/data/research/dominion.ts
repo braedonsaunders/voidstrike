@@ -1,3 +1,17 @@
+/**
+ * Dominion Research Definitions
+ *
+ * This file re-exports research definitions from the DefinitionRegistry.
+ * The source of truth is: public/data/factions/dominion/research.json
+ *
+ * For backwards compatibility, this module provides the same exports
+ * that were previously defined here as inline TypeScript data.
+ */
+
+import { DefinitionRegistry } from '@/engine/definitions/DefinitionRegistry';
+import type { ResearchDefinition as RegistryResearchDefinition, UnitCategory } from '@/engine/definitions/types';
+
+// Re-export types
 export type UpgradeEffect = {
   type: 'damage_bonus' | 'armor_bonus' | 'attack_speed' | 'ability_unlock' | 'range_bonus' | 'health_bonus' | 'speed_bonus';
   value: number;
@@ -20,648 +34,168 @@ export interface ResearchDefinition {
   icon?: string;
 }
 
-// Unit type mappings
-export const UNIT_TYPES: Record<string, 'infantry' | 'vehicle' | 'ship'> = {
-  fabricator: 'infantry',
-  trooper: 'infantry',
-  breacher: 'infantry',
-  vanguard: 'infantry',
-  operative: 'infantry',
-  scorcher: 'vehicle',
-  devastator: 'vehicle',
-  colossus: 'vehicle',
-  lifter: 'ship',
-  valkyrie: 'ship',
-  specter: 'ship',
-  dreadnought: 'ship',
-};
+/**
+ * Unit type mappings.
+ * Proxies to DefinitionRegistry.getUnitTypes()
+ */
+export const UNIT_TYPES: Record<string, 'infantry' | 'vehicle' | 'ship' | 'naval'> = new Proxy(
+  {} as Record<string, 'infantry' | 'vehicle' | 'ship' | 'naval'>,
+  {
+    get(_target, prop: string) {
+      if (prop === 'then' || prop === 'toJSON' || typeof prop === 'symbol') {
+        return undefined;
+      }
+      if (!DefinitionRegistry.isInitialized()) {
+        console.warn(`[UNIT_TYPES] Accessing '${prop}' before definitions initialized`);
+        return undefined;
+      }
+      return DefinitionRegistry.getUnitType(prop);
+    },
+    has(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return false;
+      return DefinitionRegistry.getUnitType(prop) !== undefined;
+    },
+    ownKeys() {
+      if (!DefinitionRegistry.isInitialized()) return [];
+      return Object.keys(DefinitionRegistry.getUnitTypes());
+    },
+    getOwnPropertyDescriptor(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const unitType = DefinitionRegistry.getUnitType(prop);
+      if (!unitType) return undefined;
+      return {
+        value: unitType,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      };
+    },
+  }
+);
 
-export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = {
-  // Infantry Weapons (Engineering Bay)
-  infantry_weapons_1: {
-    id: 'infantry_weapons_1',
-    name: 'Infantry Weapons Level 1',
-    description: 'Increases the attack damage of infantry units.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 114,
-    level: 1,
-    nextLevel: 'infantry_weapons_2',
-    effects: [
-      {
-        type: 'damage_bonus',
-        value: 1,
-        unitTypes: ['infantry'],
-      },
-    ],
+/**
+ * Proxy object that delegates to the DefinitionRegistry.
+ * Provides backwards-compatible access to research definitions.
+ */
+export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = new Proxy(
+  {} as Record<string, ResearchDefinition>,
+  {
+    get(_target, prop: string) {
+      if (prop === 'then' || prop === 'toJSON' || typeof prop === 'symbol') {
+        return undefined;
+      }
+      if (!DefinitionRegistry.isInitialized()) {
+        console.warn(`[RESEARCH_DEFINITIONS] Accessing '${prop}' before definitions initialized`);
+        return undefined;
+      }
+      return DefinitionRegistry.getResearch(prop) as ResearchDefinition | undefined;
+    },
+    has(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return false;
+      return DefinitionRegistry.getResearch(prop) !== undefined;
+    },
+    ownKeys() {
+      if (!DefinitionRegistry.isInitialized()) return [];
+      return Object.keys(DefinitionRegistry.getAllResearch());
+    },
+    getOwnPropertyDescriptor(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const research = DefinitionRegistry.getResearch(prop);
+      if (!research) return undefined;
+      return {
+        value: research,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      };
+    },
+  }
+);
+
+/**
+ * Array of all Dominion research definitions.
+ * @deprecated Use DefinitionRegistry.getAllResearch() instead
+ */
+export const DOMINION_RESEARCH: ResearchDefinition[] = new Proxy([] as ResearchDefinition[], {
+  get(target, prop) {
+    if (prop === 'length') {
+      if (!DefinitionRegistry.isInitialized()) return 0;
+      return Object.keys(DefinitionRegistry.getAllResearch()).length;
+    }
+    if (typeof prop === 'string' && !isNaN(Number(prop))) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const research = Object.values(DefinitionRegistry.getAllResearch());
+      return research[Number(prop)] as ResearchDefinition | undefined;
+    }
+    if (prop === Symbol.iterator) {
+      return function* () {
+        if (!DefinitionRegistry.isInitialized()) return;
+        yield* Object.values(DefinitionRegistry.getAllResearch()) as ResearchDefinition[];
+      };
+    }
+    // Delegate array methods
+    if (typeof prop === 'string' && typeof Array.prototype[prop as keyof typeof Array.prototype] === 'function') {
+      const research = DefinitionRegistry.isInitialized()
+        ? Object.values(DefinitionRegistry.getAllResearch())
+        : [];
+      return (research as unknown as Record<string, unknown>)[prop];
+    }
+    return (target as unknown as Record<string | symbol, unknown>)[prop];
   },
+});
 
-  infantry_weapons_2: {
-    id: 'infantry_weapons_2',
-    name: 'Infantry Weapons Level 2',
-    description: 'Further increases the attack damage of infantry units.',
-    faction: 'dominion',
-    mineralCost: 175,
-    vespeneCost: 175,
-    researchTime: 136,
-    level: 2,
-    nextLevel: 'infantry_weapons_3',
-    requirements: ['infantry_weapons_1', 'arsenal'],
-    effects: [
-      {
-        type: 'damage_bonus',
-        value: 1,
-        unitTypes: ['infantry'],
-      },
-    ],
-  },
+/**
+ * Building -> research mapping.
+ * This is derived from the building canResearch arrays.
+ */
+export const BUILDING_RESEARCH_MAP: Record<string, string[]> = new Proxy(
+  {} as Record<string, string[]>,
+  {
+    get(_target, prop: string) {
+      if (prop === 'then' || prop === 'toJSON' || typeof prop === 'symbol') {
+        return undefined;
+      }
+      if (!DefinitionRegistry.isInitialized()) {
+        console.warn(`[BUILDING_RESEARCH_MAP] Accessing '${prop}' before definitions initialized`);
+        return [];
+      }
+      const building = DefinitionRegistry.getBuilding(prop);
+      return building?.canResearch ?? [];
+    },
+    has(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return false;
+      const building = DefinitionRegistry.getBuilding(prop);
+      return building !== undefined && (building.canResearch?.length ?? 0) > 0;
+    },
+    ownKeys() {
+      if (!DefinitionRegistry.isInitialized()) return [];
+      const buildings = DefinitionRegistry.getAllBuildings();
+      return Object.keys(buildings).filter((id) => {
+        const building = buildings[id];
+        return building.canResearch && building.canResearch.length > 0;
+      });
+    },
+    getOwnPropertyDescriptor(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const building = DefinitionRegistry.getBuilding(prop);
+      if (!building || !building.canResearch?.length) return undefined;
+      return {
+        value: building.canResearch,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      };
+    },
+  }
+);
 
-  infantry_weapons_3: {
-    id: 'infantry_weapons_3',
-    name: 'Infantry Weapons Level 3',
-    description: 'Maximizes the attack damage of infantry units.',
-    faction: 'dominion',
-    mineralCost: 250,
-    vespeneCost: 250,
-    researchTime: 157,
-    level: 3,
-    requirements: ['infantry_weapons_2', 'arsenal'],
-    effects: [
-      {
-        type: 'damage_bonus',
-        value: 1,
-        unitTypes: ['infantry'],
-      },
-    ],
-  },
-
-  // Infantry Armor (Engineering Bay)
-  infantry_armor_1: {
-    id: 'infantry_armor_1',
-    name: 'Infantry Armor Level 1',
-    description: 'Increases the armor of infantry units.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 114,
-    level: 1,
-    nextLevel: 'infantry_armor_2',
-    effects: [
-      {
-        type: 'armor_bonus',
-        value: 1,
-        unitTypes: ['infantry'],
-      },
-    ],
-  },
-
-  infantry_armor_2: {
-    id: 'infantry_armor_2',
-    name: 'Infantry Armor Level 2',
-    description: 'Further increases the armor of infantry units.',
-    faction: 'dominion',
-    mineralCost: 175,
-    vespeneCost: 175,
-    researchTime: 136,
-    level: 2,
-    nextLevel: 'infantry_armor_3',
-    requirements: ['infantry_armor_1', 'arsenal'],
-    effects: [
-      {
-        type: 'armor_bonus',
-        value: 1,
-        unitTypes: ['infantry'],
-      },
-    ],
-  },
-
-  infantry_armor_3: {
-    id: 'infantry_armor_3',
-    name: 'Infantry Armor Level 3',
-    description: 'Maximizes the armor of infantry units.',
-    faction: 'dominion',
-    mineralCost: 250,
-    vespeneCost: 250,
-    researchTime: 157,
-    level: 3,
-    requirements: ['infantry_armor_2', 'arsenal'],
-    effects: [
-      {
-        type: 'armor_bonus',
-        value: 1,
-        unitTypes: ['infantry'],
-      },
-    ],
-  },
-
-  // Vehicle Weapons (Armory)
-  vehicle_weapons_1: {
-    id: 'vehicle_weapons_1',
-    name: 'Vehicle Weapons Level 1',
-    description: 'Increases the attack damage of vehicle units.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 114,
-    level: 1,
-    nextLevel: 'vehicle_weapons_2',
-    effects: [
-      {
-        type: 'damage_bonus',
-        value: 1,
-        unitTypes: ['vehicle'],
-      },
-    ],
-  },
-
-  vehicle_weapons_2: {
-    id: 'vehicle_weapons_2',
-    name: 'Vehicle Weapons Level 2',
-    description: 'Further increases the attack damage of vehicle units.',
-    faction: 'dominion',
-    mineralCost: 175,
-    vespeneCost: 175,
-    researchTime: 136,
-    level: 2,
-    nextLevel: 'vehicle_weapons_3',
-    requirements: ['vehicle_weapons_1'],
-    effects: [
-      {
-        type: 'damage_bonus',
-        value: 1,
-        unitTypes: ['vehicle'],
-      },
-    ],
-  },
-
-  vehicle_weapons_3: {
-    id: 'vehicle_weapons_3',
-    name: 'Vehicle Weapons Level 3',
-    description: 'Maximizes the attack damage of vehicle units.',
-    faction: 'dominion',
-    mineralCost: 250,
-    vespeneCost: 250,
-    researchTime: 157,
-    level: 3,
-    requirements: ['vehicle_weapons_2'],
-    effects: [
-      {
-        type: 'damage_bonus',
-        value: 1,
-        unitTypes: ['vehicle'],
-      },
-    ],
-  },
-
-  // Vehicle Armor (Armory)
-  vehicle_armor_1: {
-    id: 'vehicle_armor_1',
-    name: 'Vehicle Armor Level 1',
-    description: 'Increases the armor of vehicle units.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 114,
-    level: 1,
-    nextLevel: 'vehicle_armor_2',
-    effects: [
-      {
-        type: 'armor_bonus',
-        value: 1,
-        unitTypes: ['vehicle'],
-      },
-    ],
-  },
-
-  vehicle_armor_2: {
-    id: 'vehicle_armor_2',
-    name: 'Vehicle Armor Level 2',
-    description: 'Further increases the armor of vehicle units.',
-    faction: 'dominion',
-    mineralCost: 175,
-    vespeneCost: 175,
-    researchTime: 136,
-    level: 2,
-    nextLevel: 'vehicle_armor_3',
-    requirements: ['vehicle_armor_1'],
-    effects: [
-      {
-        type: 'armor_bonus',
-        value: 1,
-        unitTypes: ['vehicle'],
-      },
-    ],
-  },
-
-  vehicle_armor_3: {
-    id: 'vehicle_armor_3',
-    name: 'Vehicle Armor Level 3',
-    description: 'Maximizes the armor of vehicle units.',
-    faction: 'dominion',
-    mineralCost: 250,
-    vespeneCost: 250,
-    researchTime: 157,
-    level: 3,
-    requirements: ['vehicle_armor_2'],
-    effects: [
-      {
-        type: 'armor_bonus',
-        value: 1,
-        unitTypes: ['vehicle'],
-      },
-    ],
-  },
-
-  // Ship Weapons (Armory)
-  ship_weapons_1: {
-    id: 'ship_weapons_1',
-    name: 'Ship Weapons Level 1',
-    description: 'Increases the attack damage of air units.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 114,
-    level: 1,
-    nextLevel: 'ship_weapons_2',
-    effects: [
-      {
-        type: 'damage_bonus',
-        value: 1,
-        unitTypes: ['ship'],
-      },
-    ],
-  },
-
-  ship_weapons_2: {
-    id: 'ship_weapons_2',
-    name: 'Ship Weapons Level 2',
-    description: 'Further increases the attack damage of air units.',
-    faction: 'dominion',
-    mineralCost: 175,
-    vespeneCost: 175,
-    researchTime: 136,
-    level: 2,
-    nextLevel: 'ship_weapons_3',
-    requirements: ['ship_weapons_1'],
-    effects: [
-      {
-        type: 'damage_bonus',
-        value: 1,
-        unitTypes: ['ship'],
-      },
-    ],
-  },
-
-  ship_weapons_3: {
-    id: 'ship_weapons_3',
-    name: 'Ship Weapons Level 3',
-    description: 'Maximizes the attack damage of air units.',
-    faction: 'dominion',
-    mineralCost: 250,
-    vespeneCost: 250,
-    researchTime: 157,
-    level: 3,
-    requirements: ['ship_weapons_2'],
-    effects: [
-      {
-        type: 'damage_bonus',
-        value: 1,
-        unitTypes: ['ship'],
-      },
-    ],
-  },
-
-  // Ship Armor (Armory)
-  ship_armor_1: {
-    id: 'ship_armor_1',
-    name: 'Ship Armor Level 1',
-    description: 'Increases the armor of air units.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 114,
-    level: 1,
-    nextLevel: 'ship_armor_2',
-    effects: [
-      {
-        type: 'armor_bonus',
-        value: 1,
-        unitTypes: ['ship'],
-      },
-    ],
-  },
-
-  ship_armor_2: {
-    id: 'ship_armor_2',
-    name: 'Ship Armor Level 2',
-    description: 'Further increases the armor of air units.',
-    faction: 'dominion',
-    mineralCost: 175,
-    vespeneCost: 175,
-    researchTime: 136,
-    level: 2,
-    nextLevel: 'ship_armor_3',
-    requirements: ['ship_armor_1'],
-    effects: [
-      {
-        type: 'armor_bonus',
-        value: 1,
-        unitTypes: ['ship'],
-      },
-    ],
-  },
-
-  ship_armor_3: {
-    id: 'ship_armor_3',
-    name: 'Ship Armor Level 3',
-    description: 'Maximizes the armor of air units.',
-    faction: 'dominion',
-    mineralCost: 250,
-    vespeneCost: 250,
-    researchTime: 157,
-    level: 3,
-    requirements: ['ship_armor_2'],
-    effects: [
-      {
-        type: 'armor_bonus',
-        value: 1,
-        unitTypes: ['ship'],
-      },
-    ],
-  },
-
-  // Special Upgrades (Power Core)
-  nova_cannon: {
-    id: 'nova_cannon',
-    name: 'Nova Cannon',
-    description: 'Unlocks the devastating Nova Cannon ability for Dreadnoughts.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 150,
-    researchTime: 100,
-    effects: [
-      {
-        type: 'ability_unlock',
-        value: 1,
-        targets: ['dreadnought'],
-      },
-    ],
-  },
-
-  dreadnought_weapon_refit: {
-    id: 'dreadnought_weapon_refit',
-    name: 'Weapon Refit',
-    description: 'Increases Dreadnought attack speed by 25%.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 150,
-    researchTime: 100,
-    effects: [
-      {
-        type: 'attack_speed',
-        value: 0.25,
-        targets: ['dreadnought'],
-      },
-    ],
-  },
-
-  // Combat Stim (Research Module)
-  combat_stim: {
-    id: 'combat_stim',
-    name: 'Combat Stim',
-    description: 'Unlocks the Combat Stim ability for Troopers and Breachers.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 100,
-    effects: [
-      {
-        type: 'ability_unlock',
-        value: 1,
-        targets: ['trooper', 'breacher'],
-      },
-    ],
-  },
-
-  // Combat Shield (Research Module)
-  combat_shield: {
-    id: 'combat_shield',
-    name: 'Combat Shield',
-    description: 'Increases Trooper health by 10.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 79,
-    effects: [
-      {
-        type: 'health_bonus',
-        value: 10,
-        targets: ['trooper'],
-      },
-    ],
-  },
-
-  // Concussive Shells (Research Module)
-  concussive_shells: {
-    id: 'concussive_shells',
-    name: 'Concussive Shells',
-    description: 'Breacher attacks slow enemy movement speed.',
-    faction: 'dominion',
-    mineralCost: 50,
-    vespeneCost: 50,
-    researchTime: 43,
-    effects: [
-      {
-        type: 'ability_unlock',
-        value: 1,
-        targets: ['breacher'],
-      },
-    ],
-  },
-
-  // Bombardment Systems (Research Module - Forge)
-  bombardment_systems: {
-    id: 'bombardment_systems',
-    name: 'Bombardment Systems',
-    description: 'Enables Devastators to transform into Bombardment Mode.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 79,
-    effects: [
-      {
-        type: 'ability_unlock',
-        value: 1,
-        targets: ['devastator'],
-      },
-    ],
-  },
-
-  // Drilling Claws (Research Module - Forge)
-  drilling_claws: {
-    id: 'drilling_claws',
-    name: 'Drilling Claws',
-    description: 'Scorchers transform into Inferno mode faster.',
-    faction: 'dominion',
-    mineralCost: 75,
-    vespeneCost: 75,
-    researchTime: 79,
-    effects: [
-      {
-        type: 'ability_unlock',
-        value: 1,
-        targets: ['scorcher'],
-      },
-    ],
-  },
-
-  // Cloaking Field (Research Module - Hangar)
-  cloaking_field: {
-    id: 'cloaking_field',
-    name: 'Cloaking Field',
-    description: 'Enables Specters to cloak.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 79,
-    effects: [
-      {
-        type: 'ability_unlock',
-        value: 1,
-        targets: ['specter'],
-      },
-    ],
-  },
-
-  // Medical Reactor (Research Module - Hangar)
-  medical_reactor: {
-    id: 'medical_reactor',
-    name: 'Medical Reactor',
-    description: 'Increases Lifter energy regeneration by 100%.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 57,
-    effects: [
-      {
-        type: 'ability_unlock',
-        value: 1,
-        targets: ['lifter'],
-      },
-    ],
-  },
-
-  // Auto Tracking (Tech Center)
-  auto_tracking: {
-    id: 'auto_tracking',
-    name: 'Auto Tracking',
-    description: 'Increases the attack range of structures by 1.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 57,
-    effects: [
-      {
-        type: 'range_bonus',
-        value: 1,
-        targets: ['defense_turret', 'garrison'],
-      },
-    ],
-  },
-
-  // Building Armor (Tech Center)
-  building_armor: {
-    id: 'building_armor',
-    name: 'Reinforced Plating',
-    description: 'Increases the armor of all structures by 2.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 150,
-    researchTime: 100,
-    effects: [
-      {
-        type: 'armor_bonus',
-        value: 2,
-        targets: [], // all buildings
-      },
-    ],
-  },
-
-  // Thermal Igniter (Research Module - Forge)
-  thermal_igniter: {
-    id: 'thermal_igniter',
-    name: 'Thermal Igniter',
-    description: 'Increases Scorcher attack damage by 5.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 79,
-    effects: [
-      {
-        type: 'damage_bonus',
-        value: 5,
-        targets: ['scorcher'],
-      },
-    ],
-  },
-
-  // Stealth Systems (Ops Center)
-  stealth_systems: {
-    id: 'stealth_systems',
-    name: 'Stealth Systems',
-    description: 'Enables Operatives to cloak.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 150,
-    researchTime: 100,
-    effects: [
-      {
-        type: 'ability_unlock',
-        value: 1,
-        targets: ['operative'],
-      },
-    ],
-  },
-
-  // Enhanced Reactor (Ops Center)
-  enhanced_reactor: {
-    id: 'enhanced_reactor',
-    name: 'Enhanced Reactor',
-    description: 'Increases Operative starting energy by 25.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 100,
-    researchTime: 79,
-    effects: [
-      {
-        type: 'ability_unlock',
-        value: 1,
-        targets: ['operative'],
-      },
-    ],
-  },
-};
-
-export const DOMINION_RESEARCH = Object.values(RESEARCH_DEFINITIONS);
-
-// Building -> research mapping (single source of truth)
-export const BUILDING_RESEARCH_MAP: Record<string, string[]> = {
-  tech_center: ['infantry_weapons_1', 'infantry_armor_1', 'auto_tracking', 'building_armor'],
-  arsenal: ['vehicle_weapons_1', 'vehicle_armor_1', 'ship_weapons_1', 'ship_armor_1'],
-  power_core: ['nova_cannon', 'dreadnought_weapon_refit'],
-  infantry_bay_research_module: ['combat_stim', 'combat_shield', 'concussive_shells'],
-  forge_research_module: ['bombardment_systems', 'drilling_claws', 'thermal_igniter'],
-  hangar_research_module: ['cloaking_field', 'medical_reactor'],
-  ops_center: ['stealth_systems', 'enhanced_reactor'],
-};
-
-// Helper function to get all available research for a building
+/**
+ * Helper function to get all available research for a building.
+ */
 export function getAvailableResearch(buildingId: string): ResearchDefinition[] {
-  const researchIds = BUILDING_RESEARCH_MAP[buildingId];
-  if (!researchIds) return [];
-
-  return researchIds
-    .map(id => RESEARCH_DEFINITIONS[id])
-    .filter((r): r is ResearchDefinition => r !== undefined);
+  if (!DefinitionRegistry.isInitialized()) {
+    console.warn('[getAvailableResearch] Definitions not initialized');
+    return [];
+  }
+  return DefinitionRegistry.getAvailableResearch(buildingId) as ResearchDefinition[];
 }

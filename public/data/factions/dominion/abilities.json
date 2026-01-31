@@ -102,14 +102,15 @@
   "power_cannon": {
     "id": "power_cannon",
     "name": "Power Cannon",
-    "description": "Fire a devastating charged shot dealing massive damage to a single target",
-    "cooldown": 15,
-    "energyCost": 50,
+    "description": "Channel a devastating charged blast dealing 300 damage to a single target. 2 second charge time.",
+    "cooldown": 71,
+    "energyCost": 100,
     "range": 10,
     "targetType": "unit",
     "hotkey": "E",
-    "damage": 200,
-    "aoeRadius": 2
+    "damage": 300,
+    "duration": 2,
+    "aoeRadius": 0
   },
   "warp_jump": {
     "id": "warp_jump",
@@ -278,5 +279,93 @@
     "hotkey": "A",
     "damage": 30,
     "duration": 15
+  },
+  "boost": {
+    "id": "boost",
+    "name": "Boost",
+    "description": "Temporarily increase movement speed",
+    "cooldown": 15,
+    "energyCost": 0,
+    "range": 0,
+    "targetType": "self",
+    "hotkey": "B",
+    "duration": 4
+  },
+  "flak_barrage": {
+    "id": "flak_barrage",
+    "name": "Flak Barrage",
+    "description": "Fire a barrage of anti-air flak rounds in an area",
+    "cooldown": 30,
+    "energyCost": 50,
+    "range": 8,
+    "targetType": "point",
+    "hotkey": "F",
+    "damage": 40,
+    "aoeRadius": 3
+  },
+  "shore_bombardment": {
+    "id": "shore_bombardment",
+    "name": "Shore Bombardment",
+    "description": "Devastating long-range artillery strike on ground targets",
+    "cooldown": 45,
+    "energyCost": 75,
+    "range": 15,
+    "targetType": "point",
+    "hotkey": "B",
+    "damage": 100,
+    "aoeRadius": 2.5
+  },
+  "yamato_cannon": {
+    "id": "yamato_cannon",
+    "name": "Yamato Cannon",
+    "description": "Fire a devastating energy blast dealing massive damage",
+    "cooldown": 60,
+    "energyCost": 100,
+    "range": 10,
+    "targetType": "unit",
+    "hotkey": "Y",
+    "damage": 300
+  },
+  "submerge": {
+    "id": "submerge",
+    "name": "Submerge",
+    "description": "Dive below the surface to become invisible to non-detector units",
+    "cooldown": 5,
+    "energyCost": 0,
+    "range": 0,
+    "targetType": "self",
+    "hotkey": "D"
+  },
+  "depth_charge_defense": {
+    "id": "depth_charge_defense",
+    "name": "Depth Charge Defense",
+    "description": "Deploy depth charges that damage nearby submarines",
+    "cooldown": 20,
+    "energyCost": 0,
+    "range": 0,
+    "targetType": "self",
+    "hotkey": "C",
+    "damage": 50,
+    "aoeRadius": 4
+  },
+  "beach_assault": {
+    "id": "beach_assault",
+    "name": "Beach Assault",
+    "description": "Deploy all loaded units onto the shore",
+    "cooldown": 5,
+    "energyCost": 0,
+    "range": 3,
+    "targetType": "point",
+    "hotkey": "A"
+  },
+  "amphibious_mode": {
+    "id": "amphibious_mode",
+    "name": "Amphibious Mode",
+    "description": "Transition between water and land movement",
+    "cooldown": 0,
+    "energyCost": 0,
+    "range": 0,
+    "targetType": "self",
+    "hotkey": "M"
   }
 }

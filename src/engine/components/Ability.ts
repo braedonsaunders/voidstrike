@@ -1,4 +1,5 @@
 import { Component } from '../ecs/Component';
+import { DefinitionRegistry } from '../definitions/DefinitionRegistry';
 
 export type AbilityTargetType = 'none' | 'point' | 'unit' | 'ally' | 'self';
 
@@ -116,129 +117,43 @@ export class Ability extends Component {
   }
 }
 
-// Predefined abilities for Dominion faction
-export const DOMINION_ABILITIES: Record<string, AbilityDefinition> = {
-  stim_pack: {
-    id: 'stim_pack',
-    name: 'Stim Pack',
-    description: 'Temporarily increases attack and movement speed at the cost of HP',
-    cooldown: 10,
-    energyCost: 0,
-    range: 0,
-    targetType: 'self',
-    hotkey: 'T',
-    duration: 10,
-    damage: 10, // HP cost
-  },
-  combat_shield: {
-    id: 'combat_shield',
-    name: 'Combat Shield',
-    description: 'Increases max HP by 10',
-    cooldown: 0, // Passive upgrade
-    energyCost: 0,
-    range: 0,
-    targetType: 'none',
-    hotkey: 'C',
-    healing: 10,
-  },
-  siege_mode: {
-    id: 'siege_mode',
-    name: 'Siege Mode',
-    description: 'Transform into siege mode for increased range and damage',
-    cooldown: 3,
-    energyCost: 0,
-    range: 0,
-    targetType: 'self',
-    hotkey: 'E',
-  },
-  emp_round: {
-    id: 'emp_round',
-    name: 'EMP Round',
-    description: 'Drains energy and shields from enemy units in area',
-    cooldown: 60,
-    energyCost: 75,
-    range: 10,
-    targetType: 'point',
-    hotkey: 'E',
-    aoeRadius: 2.5,
-  },
-  snipe: {
-    id: 'snipe',
-    name: 'Snipe',
-    description: 'Deal 150 damage to a biological unit',
-    cooldown: 0,
-    energyCost: 25,
-    range: 10,
-    targetType: 'unit',
-    hotkey: 'R',
-    damage: 150,
-  },
-  nuke: {
-    id: 'nuke',
-    name: 'Nuclear Strike',
-    description: 'Call down a nuclear strike on target location',
-    cooldown: 180,
-    energyCost: 0,
-    range: 8,
-    targetType: 'point',
-    hotkey: 'N',
-    damage: 300,
-    aoeRadius: 8,
-  },
-  scanner_sweep: {
-    id: 'scanner_sweep',
-    name: 'Scanner Sweep',
-    description: 'Reveal an area and detect cloaked units',
-    cooldown: 50,
-    energyCost: 50,
-    range: 0,
-    targetType: 'point',
-    hotkey: 'V',
-    aoeRadius: 8,
-    duration: 15,
-  },
-  mule: {
-    id: 'mule',
-    name: 'Calldown: MULE',
-    description: 'Drop a MULE to accelerate mineral gathering',
-    cooldown: 50,
-    energyCost: 50,
-    range: 0,
-    targetType: 'point',
-    hotkey: 'E',
-    duration: 64,
-  },
-  supply_drop: {
-    id: 'supply_drop',
-    name: 'Calldown: Extra Supplies',
-    description: 'Instantly complete a Supply Depot under construction',
-    cooldown: 50,
-    energyCost: 50,
-    range: 0,
-    targetType: 'unit',
-    hotkey: 'D',
-  },
-  power_cannon: {
-    id: 'power_cannon',
-    name: 'Power Cannon',
-    description: 'Channel a devastating charged blast dealing 300 damage to a single target. 2 second charge time.',
-    cooldown: 71, // Long cooldown for big ability
-    energyCost: 100,
-    range: 10,
-    targetType: 'unit',
-    hotkey: 'E',
-    damage: 300,
-    duration: 2, // 2 second charge-up time
-    aoeRadius: 0, // Single target - no splash
-  },
-  warp_jump: {
-    id: 'warp_jump',
-    name: 'Warp Jump',
-    description: 'Instantly teleport to a target location',
-    cooldown: 60,
-    energyCost: 100,
-    range: 20,
-    targetType: 'point',
-    hotkey: 'J',
-  },
-};
+/**
+ * Dominion Abilities
+ *
+ * This is a proxy object that delegates to the DefinitionRegistry.
+ * The source of truth is: public/data/factions/dominion/abilities.json
+ */
+export const DOMINION_ABILITIES: Record<string, AbilityDefinition> = new Proxy(
+  {} as Record<string, AbilityDefinition>,
+  {
+    get(_target, prop: string) {
+      if (prop === 'then' || prop === 'toJSON' || typeof prop === 'symbol') {
+        return undefined;
+      }
+      if (!DefinitionRegistry.isInitialized()) {
+        console.warn(`[DOMINION_ABILITIES] Accessing '${prop}' before definitions initialized`);
+        return undefined;
+      }
+      return DefinitionRegistry.getAbility(prop) as AbilityDefinition | undefined;
+    },
+    has(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return false;
+      return DefinitionRegistry.getAbility(prop) !== undefined;
+    },
+    ownKeys() {
+      if (!DefinitionRegistry.isInitialized()) return [];
+      return Object.keys(DefinitionRegistry.getAllAbilities());
+    },
+    getOwnPropertyDescriptor(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const ability = DefinitionRegistry.getAbility(prop);
+      if (!ability) return undefined;
+      return {
+        value: ability as AbilityDefinition,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      };
+    },
+  }
+);

@@ -1,426 +1,166 @@
-import { BuildingDefinition } from '@/engine/components/Building';
-import { WALL_DEFINITIONS } from './walls';
+/**
+ * Dominion Building Definitions
+ *
+ * This file re-exports building definitions from the DefinitionRegistry.
+ * The source of truth is: public/data/factions/dominion/buildings.json
+ *
+ * For backwards compatibility, this module provides the same exports
+ * that were previously defined here as inline TypeScript data.
+ */
 
-export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = {
-  // Include wall buildings
-  ...WALL_DEFINITIONS,
+import { DefinitionRegistry } from '@/engine/definitions/DefinitionRegistry';
+import type { BuildingDefinition } from '@/engine/components/Building';
 
-  headquarters: {
-    id: 'headquarters',
-    name: 'Headquarters',
-    description: 'Main base structure. Produces workers and provides supply.',
-    faction: 'dominion',
-    mineralCost: 400,
-    vespeneCost: 0,
-    buildTime: 71,
-    width: 5,
-    height: 5,
-    maxHealth: 1500,
-    armor: 1,
-    sightRange: 33, // Large vision radius for main base
-    supplyProvided: 11,
-    canProduce: ['fabricator'],
-    canResearch: [],
-    canLiftOff: true,
-    canUpgradeTo: ['orbital_station', 'bastion'],
+// Re-export types
+export type { BuildingDefinition };
+
+/**
+ * Proxy object that delegates to the DefinitionRegistry.
+ * Provides backwards-compatible access to building definitions.
+ */
+export const BUILDING_DEFINITIONS: Record<string, BuildingDefinition> = new Proxy(
+  {} as Record<string, BuildingDefinition>,
+  {
+    get(_target, prop: string) {
+      if (prop === 'then' || prop === 'toJSON' || typeof prop === 'symbol') {
+        return undefined;
+      }
+      if (!DefinitionRegistry.isInitialized()) {
+        console.warn(`[BUILDING_DEFINITIONS] Accessing '${prop}' before definitions initialized`);
+        return undefined;
+      }
+      return DefinitionRegistry.getBuilding(prop);
+    },
+    has(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return false;
+      return DefinitionRegistry.getBuilding(prop) !== undefined;
+    },
+    ownKeys() {
+      if (!DefinitionRegistry.isInitialized()) return [];
+      return Object.keys(DefinitionRegistry.getAllBuildings());
+    },
+    getOwnPropertyDescriptor(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const building = DefinitionRegistry.getBuilding(prop);
+      if (!building) return undefined;
+      return {
+        value: building,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      };
+    },
+  }
+);
+
+/**
+ * Units that require Research Module addon.
+ * Proxies to DefinitionRegistry.getAllResearchModuleUnits()
+ */
+export const RESEARCH_MODULE_UNITS: Record<string, string[]> = new Proxy(
+  {} as Record<string, string[]>,
+  {
+    get(_target, prop: string) {
+      if (prop === 'then' || prop === 'toJSON' || typeof prop === 'symbol') {
+        return undefined;
+      }
+      if (!DefinitionRegistry.isInitialized()) {
+        console.warn(`[RESEARCH_MODULE_UNITS] Accessing '${prop}' before definitions initialized`);
+        return [];
+      }
+      return DefinitionRegistry.getResearchModuleUnits(prop);
+    },
+    has(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return false;
+      const units = DefinitionRegistry.getResearchModuleUnits(prop);
+      return units.length > 0;
+    },
+    ownKeys() {
+      if (!DefinitionRegistry.isInitialized()) return [];
+      return Object.keys(DefinitionRegistry.getAllResearchModuleUnits());
+    },
+    getOwnPropertyDescriptor(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const units = DefinitionRegistry.getResearchModuleUnits(prop);
+      if (units.length === 0) return undefined;
+      return {
+        value: units,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      };
+    },
+  }
+);
+
+/**
+ * Units that can be double-produced with Production Module addon.
+ * Proxies to DefinitionRegistry.getAllProductionModuleUnits()
+ */
+export const PRODUCTION_MODULE_UNITS: Record<string, string[]> = new Proxy(
+  {} as Record<string, string[]>,
+  {
+    get(_target, prop: string) {
+      if (prop === 'then' || prop === 'toJSON' || typeof prop === 'symbol') {
+        return undefined;
+      }
+      if (!DefinitionRegistry.isInitialized()) {
+        console.warn(`[PRODUCTION_MODULE_UNITS] Accessing '${prop}' before definitions initialized`);
+        return [];
+      }
+      return DefinitionRegistry.getProductionModuleUnits(prop);
+    },
+    has(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return false;
+      const units = DefinitionRegistry.getProductionModuleUnits(prop);
+      return units.length > 0;
+    },
+    ownKeys() {
+      if (!DefinitionRegistry.isInitialized()) return [];
+      return Object.keys(DefinitionRegistry.getAllProductionModuleUnits());
+    },
+    getOwnPropertyDescriptor(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const units = DefinitionRegistry.getProductionModuleUnits(prop);
+      if (units.length === 0) return undefined;
+      return {
+        value: units,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      };
+    },
+  }
+);
+
+/**
+ * Array of all Dominion building definitions.
+ * @deprecated Use DefinitionRegistry.getAllBuildings() instead
+ */
+export const DOMINION_BUILDINGS: BuildingDefinition[] = new Proxy([] as BuildingDefinition[], {
+  get(target, prop) {
+    if (prop === 'length') {
+      if (!DefinitionRegistry.isInitialized()) return 0;
+      return Object.keys(DefinitionRegistry.getAllBuildings()).length;
+    }
+    if (typeof prop === 'string' && !isNaN(Number(prop))) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const buildings = Object.values(DefinitionRegistry.getAllBuildings());
+      return buildings[Number(prop)];
+    }
+    if (prop === Symbol.iterator) {
+      return function* () {
+        if (!DefinitionRegistry.isInitialized()) return;
+        yield* Object.values(DefinitionRegistry.getAllBuildings());
+      };
+    }
+    // Delegate array methods
+    if (typeof prop === 'string' && typeof Array.prototype[prop as keyof typeof Array.prototype] === 'function') {
+      const buildings = DefinitionRegistry.isInitialized()
+        ? Object.values(DefinitionRegistry.getAllBuildings())
+        : [];
+      return (buildings as unknown as Record<string, unknown>)[prop];
+    }
+    return (target as unknown as Record<string | symbol, unknown>)[prop];
   },
-
-  // Orbital Station - upgraded from Headquarters
-  orbital_station: {
-    id: 'orbital_station',
-    name: 'Orbital Station',
-    description: 'Upgraded HQ with orbital abilities. Sensor sweep and supply drops.',
-    faction: 'dominion',
-    mineralCost: 150, // Upgrade cost from HQ
-    vespeneCost: 0,
-    buildTime: 25,
-    width: 5,
-    height: 5,
-    maxHealth: 1500,
-    armor: 1,
-    sightRange: 33, // Large vision radius for main base
-    supplyProvided: 11,
-    canProduce: ['fabricator'],
-    canResearch: ['sensor_sweep', 'supply_drop'],
-    canLiftOff: true,
-  },
-
-  // Bastion - upgraded from Headquarters
-  bastion: {
-    id: 'bastion',
-    name: 'Bastion',
-    description: 'Fortified HQ with defensive weapons. Cannot lift off.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 150,
-    buildTime: 36,
-    width: 5,
-    height: 5,
-    maxHealth: 1500,
-    armor: 3,
-    sightRange: 33, // Large vision radius for main base
-    supplyProvided: 11,
-    canProduce: ['fabricator'],
-    canResearch: [],
-    canLiftOff: false, // Can't lift off once upgraded
-    attackRange: 6,
-    attackDamage: 40,
-    attackSpeed: 0.71,
-  },
-
-  supply_cache: {
-    id: 'supply_cache',
-    name: 'Supply Cache',
-    description: 'Provides supply for units. Can lower to allow units to pass.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 0,
-    buildTime: 21,
-    width: 2,
-    height: 2,
-    maxHealth: 400,
-    armor: 1,
-    sightRange: 9,
-    supplyProvided: 8,
-    canProduce: [],
-    canResearch: [],
-    canLower: true, // Can lower to let units pass
-  },
-
-  extractor: {
-    id: 'extractor',
-    name: 'Extractor',
-    description: 'Built on vespene geysers to harvest vespene gas.',
-    faction: 'dominion',
-    mineralCost: 75,
-    vespeneCost: 0,
-    buildTime: 21,
-    width: 2,
-    height: 2,
-    maxHealth: 500,
-    armor: 1,
-    sightRange: 9,
-    canProduce: [],
-    canResearch: [],
-  },
-
-  infantry_bay: {
-    id: 'infantry_bay',
-    name: 'Infantry Bay',
-    description: 'Produces infantry units. Add Research Module for advanced units.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 0,
-    buildTime: 46,
-    width: 3,
-    height: 3,
-    maxHealth: 1000,
-    armor: 1,
-    sightRange: 9,
-    canProduce: ['trooper', 'vanguard'], // Basic units without tech lab
-    canResearch: [],
-    requirements: ['supply_cache'],
-    canLiftOff: true,
-    canHaveAddon: true,
-  },
-
-  tech_center: {
-    id: 'tech_center',
-    name: 'Tech Center',
-    description: 'Researches infantry weapon and armor upgrades.',
-    faction: 'dominion',
-    mineralCost: 125,
-    vespeneCost: 0,
-    buildTime: 25,
-    width: 3,
-    height: 3,
-    maxHealth: 850,
-    armor: 1,
-    sightRange: 9,
-    canProduce: [],
-    canResearch: ['infantry_weapons_1', 'infantry_armor_1', 'infantry_weapons_2', 'infantry_armor_2', 'infantry_weapons_3', 'infantry_armor_3'],
-    requirements: ['supply_cache'],
-  },
-
-  garrison: {
-    id: 'garrison',
-    name: 'Garrison',
-    description: 'Defensive bunker that protects garrisoned infantry.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 0,
-    buildTime: 29,
-    width: 3,
-    height: 3,
-    maxHealth: 400,
-    armor: 1,
-    sightRange: 11,
-    canProduce: [],
-    canResearch: [],
-    requirements: ['infantry_bay'],
-    isBunker: true,
-    bunkerCapacity: 4,
-  },
-
-  forge: {
-    id: 'forge',
-    name: 'Forge',
-    description: 'Produces vehicles. Add Research Module for siege tanks.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 100,
-    buildTime: 43,
-    width: 3,
-    height: 3,
-    maxHealth: 1250,
-    armor: 1,
-    sightRange: 9,
-    canProduce: ['scorcher'], // Basic units without tech lab
-    canResearch: [],
-    requirements: ['infantry_bay'],
-    canLiftOff: true,
-    canHaveAddon: true,
-  },
-
-  arsenal: {
-    id: 'arsenal',
-    name: 'Arsenal',
-    description: 'Researches vehicle and ship upgrades.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 100,
-    buildTime: 46,
-    width: 3,
-    height: 3,
-    maxHealth: 750,
-    armor: 1,
-    sightRange: 9,
-    canProduce: [],
-    canResearch: ['vehicle_weapons_1', 'vehicle_armor_1', 'ship_weapons_1', 'ship_armor_1', 'vehicle_weapons_2', 'vehicle_armor_2', 'ship_weapons_2', 'ship_armor_2', 'vehicle_weapons_3', 'vehicle_armor_3', 'ship_weapons_3', 'ship_armor_3'],
-    requirements: ['forge'],
-  },
-
-  hangar: {
-    id: 'hangar',
-    name: 'Hangar',
-    description: 'Produces air units. Add Research Module for advanced ships.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 100,
-    buildTime: 36,
-    width: 3,
-    height: 3,
-    maxHealth: 1300,
-    armor: 1,
-    sightRange: 9,
-    canProduce: ['lifter', 'valkyrie'], // Basic units without tech lab
-    canResearch: [],
-    requirements: ['forge'],
-    canLiftOff: true,
-    canHaveAddon: true,
-  },
-
-  power_core: {
-    id: 'power_core',
-    name: 'Power Core',
-    description: 'Unlocks capital ship upgrades. Required for Dreadnought.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 150,
-    buildTime: 46,
-    width: 3,
-    height: 3,
-    maxHealth: 750,
-    armor: 1,
-    sightRange: 9,
-    canProduce: [],
-    canResearch: ['nova_cannon', 'dreadnought_weapon_refit'],
-    requirements: ['hangar'],
-  },
-
-  ops_center: {
-    id: 'ops_center',
-    name: 'Ops Center',
-    description: 'Researches cloaking and energy upgrades.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 50,
-    buildTime: 29,
-    width: 3,
-    height: 3,
-    maxHealth: 1250,
-    armor: 1,
-    sightRange: 9,
-    canProduce: [],
-    canResearch: ['stealth_systems', 'enhanced_reactor'],
-    requirements: ['infantry_bay'],
-  },
-
-  radar_array: {
-    id: 'radar_array',
-    name: 'Radar Array',
-    description: 'Long-range detector. Reveals cloaked and burrowed units.',
-    faction: 'dominion',
-    mineralCost: 125,
-    vespeneCost: 100,
-    buildTime: 18,
-    width: 2,
-    height: 2,
-    maxHealth: 200,
-    armor: 0,
-    sightRange: 30,
-    canProduce: [],
-    canResearch: [],
-    requirements: ['tech_center'],
-    isDetector: true,
-    detectionRange: 30,
-  },
-
-  defense_turret: {
-    id: 'defense_turret',
-    name: 'Defense Turret',
-    description: 'Defensive structure with detection. Attacks ground and air.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 0,
-    buildTime: 18,
-    width: 2,
-    height: 2,
-    maxHealth: 250,
-    armor: 0,
-    sightRange: 11,
-    canProduce: [],
-    canResearch: [],
-    requirements: ['tech_center'],
-    isDetector: true,
-    detectionRange: 11,
-    attackRange: 7,
-    attackDamage: 12,
-    attackSpeed: 0.61,
-  },
-
-  // Research Module addon
-  research_module: {
-    id: 'research_module',
-    name: 'Research Module',
-    description: 'Addon that unlocks advanced units and research.',
-    faction: 'dominion',
-    mineralCost: 50,
-    vespeneCost: 25,
-    buildTime: 18,
-    width: 2,
-    height: 2,
-    maxHealth: 400,
-    armor: 1,
-    sightRange: 9,
-    canProduce: [],
-    canResearch: ['combat_stim', 'combat_shield', 'concussive_shells', 'thermal_igniter', 'bombardment_systems', 'drilling_claws', 'cloaking_field', 'medical_reactor'],
-    isAddon: true,
-    addonFor: ['infantry_bay', 'forge', 'hangar'],
-  },
-
-  // Production Module addon
-  production_module: {
-    id: 'production_module',
-    name: 'Production Module',
-    description: 'Addon that enables double production of basic units.',
-    faction: 'dominion',
-    mineralCost: 50,
-    vespeneCost: 50,
-    buildTime: 36,
-    width: 2,
-    height: 2,
-    maxHealth: 400,
-    armor: 1,
-    sightRange: 9,
-    canProduce: [],
-    canResearch: [],
-    isAddon: true,
-    addonFor: ['infantry_bay', 'forge', 'hangar'],
-  },
-
-  // ==================== NAVAL BUILDINGS ====================
-
-  drydock: {
-    id: 'drydock',
-    name: 'Drydock',
-    description: 'Naval production facility. Must be placed on coastline. Produces naval units.',
-    faction: 'dominion',
-    mineralCost: 200,
-    vespeneCost: 100,
-    buildTime: 50,
-    width: 4,
-    height: 4,
-    maxHealth: 1500,
-    armor: 1,
-    sightRange: 11,
-    canProduce: ['mariner', 'stingray'],
-    canResearch: ['naval_weapons_1', 'naval_armor_1', 'naval_weapons_2', 'naval_armor_2', 'naval_weapons_3', 'naval_armor_3', 'advanced_sonar', 'reinforced_hull'],
-    requirements: ['forge'],
-    canHaveAddon: true,
-    requiresWaterAdjacent: true, // Must be placed on coastline
-  },
-
-  offshore_platform: {
-    id: 'offshore_platform',
-    name: 'Offshore Platform',
-    description: 'Naval expansion point. Must be placed in deep water. Provides supply and acts as a resource transfer point.',
-    faction: 'dominion',
-    mineralCost: 150,
-    vespeneCost: 0,
-    buildTime: 40,
-    width: 3,
-    height: 3,
-    maxHealth: 800,
-    armor: 0,
-    sightRange: 10,
-    supplyProvided: 6,
-    canProduce: [],
-    canResearch: [],
-    requirements: ['drydock'],
-    canUpgradeTo: ['offshore_platform_armed'],
-    requiresDeepWater: true, // Must be placed in deep water
-  },
-
-  offshore_platform_armed: {
-    id: 'offshore_platform_armed',
-    name: 'Armed Platform',
-    description: 'Upgraded offshore platform with defensive weapons.',
-    faction: 'dominion',
-    mineralCost: 100,
-    vespeneCost: 50,
-    buildTime: 25,
-    width: 3,
-    height: 3,
-    maxHealth: 1000,
-    armor: 1,
-    sightRange: 12,
-    supplyProvided: 6,
-    canProduce: [],
-    canResearch: [],
-    attackRange: 8,
-    attackDamage: 15,
-    attackSpeed: 0.7,
-    isDetector: true,
-    detectionRange: 10,
-    requiresDeepWater: true,
-  },
-};
-
-// Units that require Research Module
-export const RESEARCH_MODULE_UNITS: Record<string, string[]> = {
-  infantry_bay: ['breacher', 'operative'],
-  forge: ['devastator', 'colossus'],
-  hangar: ['overseer', 'specter', 'dreadnought'],
-  drydock: ['corsair', 'leviathan', 'hunter', 'kraken'],
-};
-
-// Units that can be double-produced with Production Module
-export const PRODUCTION_MODULE_UNITS: Record<string, string[]> = {
-  infantry_bay: ['trooper', 'vanguard'],
-  forge: ['scorcher'],
-  hangar: ['lifter', 'valkyrie'],
-  drydock: ['mariner', 'stingray'],
-};
-
-export const DOMINION_BUILDINGS = Object.values(BUILDING_DEFINITIONS);
+});

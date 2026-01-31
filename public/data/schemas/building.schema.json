@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voidstrike.dev/schemas/building.schema.json",
+  "title": "Building Definition",
+  "description": "Schema for VOIDSTRIKE building definitions",
+  "type": "object",
+  "additionalProperties": {
+    "$ref": "#/$defs/BuildingDefinition"
+  },
+  "$defs": {
+    "BuildingDefinition": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "faction",
+        "mineralCost",
+        "vespeneCost",
+        "buildTime",
+        "width",
+        "height",
+        "maxHealth",
+        "armor",
+        "sightRange"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Building description"
+        },
+        "faction": {
+          "type": "string",
+          "description": "Faction this building belongs to"
+        },
+        "mineralCost": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Mineral cost"
+        },
+        "vespeneCost": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Vespene cost"
+        },
+        "buildTime": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Build time in seconds"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Width in grid cells"
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Height in grid cells"
+        },
+        "maxHealth": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum health"
+        },
+        "armor": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Armor value"
+        },
+        "sightRange": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Vision range"
+        },
+        "supplyProvided": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Supply provided"
+        },
+        "canProduce": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Unit IDs this building can produce"
+        },
+        "canResearch": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Research IDs this building can research"
+        },
+        "requirements": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Building IDs required before this can be built"
+        },
+        "canLiftOff": {
+          "type": "boolean",
+          "description": "Can lift off and fly"
+        },
+        "canHaveAddon": {
+          "type": "boolean",
+          "description": "Can attach addons"
+        },
+        "isAddon": {
+          "type": "boolean",
+          "description": "Is an addon building"
+        },
+        "addonFor": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Building types this addon can attach to"
+        },
+        "isBunker": {
+          "type": "boolean",
+          "description": "Can garrison units"
+        },
+        "bunkerCapacity": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of units that can be garrisoned"
+        },
+        "canLower": {
+          "type": "boolean",
+          "description": "Can lower to allow units to pass"
+        },
+        "isDetector": {
+          "type": "boolean",
+          "description": "Can detect cloaked units"
+        },
+        "detectionRange": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Detection range"
+        },
+        "attackRange": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Attack range (for turrets)"
+        },
+        "attackDamage": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Damage per attack"
+        },
+        "attackSpeed": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Attacks per second"
+        },
+        "canUpgradeTo": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Building types this can upgrade to"
+        },
+        "requiresWaterAdjacent": {
+          "type": "boolean",
+          "description": "Must be placed on coastline"
+        },
+        "requiresDeepWater": {
+          "type": "boolean",
+          "description": "Must be placed in deep water"
+        },
+        "isWall": {
+          "type": "boolean",
+          "description": "Is a wall segment"
+        },
+        "isGate": {
+          "type": "boolean",
+          "description": "Is a gate"
+        },
+        "canMountTurret": {
+          "type": "boolean",
+          "description": "Can mount a turret"
+        },
+        "wallUpgrades": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Available wall upgrade types"
+        }
+      }
+    }
+  }
+}

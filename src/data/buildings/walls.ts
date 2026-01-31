@@ -1,12 +1,17 @@
-import { BuildingDefinition } from '@/engine/components/Building';
-
 /**
  * Wall Building Definitions for the Fortification System
+ *
+ * This file re-exports wall definitions from the DefinitionRegistry.
+ * The source of truth is: public/data/factions/dominion/buildings.json (wall entries)
  *
  * Walls are 1x1 buildings that can be placed in lines and automatically connect.
  * Gates are special wall segments that can open/close for unit passage.
  */
 
+import { DefinitionRegistry } from '@/engine/definitions/DefinitionRegistry';
+import type { BuildingDefinition } from '@/engine/components/Building';
+
+// Export types
 export type WallConnectionType = 'none' | 'horizontal' | 'vertical' | 'corner_ne' | 'corner_nw' | 'corner_se' | 'corner_sw' | 't_north' | 't_south' | 't_east' | 't_west' | 'cross';
 export type GateState = 'closed' | 'open' | 'auto' | 'locked';
 export type WallUpgradeType = 'reinforced' | 'shielded' | 'weapon' | 'repair_drone';
@@ -18,114 +23,6 @@ export interface WallDefinition extends BuildingDefinition {
   wallUpgrades?: WallUpgradeType[];
 }
 
-export const WALL_DEFINITIONS: Record<string, WallDefinition> = {
-  wall_segment: {
-    id: 'wall_segment',
-    name: 'Wall Segment',
-    description: 'Basic defensive wall. Connects to adjacent walls. Can mount turrets.',
-    faction: 'dominion',
-    mineralCost: 25,
-    vespeneCost: 0,
-    buildTime: 5,
-    width: 1,
-    height: 1,
-    maxHealth: 400,
-    armor: 1,
-    sightRange: 3,
-    canProduce: [],
-    canResearch: [],
-    requirements: [],
-    isWall: true,
-    canMountTurret: true,
-    wallUpgrades: ['reinforced', 'shielded', 'weapon', 'repair_drone'],
-  },
-
-  wall_gate: {
-    id: 'wall_gate',
-    name: 'Wall Gate',
-    description: 'Entrance gate that opens for friendly units. Can be locked.',
-    faction: 'dominion',
-    mineralCost: 75,
-    vespeneCost: 0,
-    buildTime: 10,
-    width: 2,
-    height: 1,
-    maxHealth: 500,
-    armor: 2,
-    sightRange: 5,
-    canProduce: [],
-    canResearch: [],
-    requirements: [],
-    isWall: true,
-    isGate: true,
-    canMountTurret: false,
-  },
-
-  // Upgraded wall variants (created via upgrade, not built directly)
-  wall_reinforced: {
-    id: 'wall_reinforced',
-    name: 'Reinforced Wall',
-    description: 'Heavily armored wall segment with increased durability.',
-    faction: 'dominion',
-    mineralCost: 0, // Created via upgrade
-    vespeneCost: 0,
-    buildTime: 0,
-    width: 1,
-    height: 1,
-    maxHealth: 800,
-    armor: 3,
-    sightRange: 3,
-    canProduce: [],
-    canResearch: [],
-    isWall: true,
-    canMountTurret: true,
-  },
-
-  wall_shielded: {
-    id: 'wall_shielded',
-    name: 'Shielded Wall',
-    description: 'Wall with regenerating energy shield.',
-    faction: 'dominion',
-    mineralCost: 0,
-    vespeneCost: 0,
-    buildTime: 0,
-    width: 1,
-    height: 1,
-    maxHealth: 400,
-    armor: 2,
-    sightRange: 3,
-    canProduce: [],
-    canResearch: [],
-    isWall: true,
-    canMountTurret: true,
-  },
-
-  wall_weapon: {
-    id: 'wall_weapon',
-    name: 'Weapon Wall',
-    description: 'Wall segment with integrated auto-turret.',
-    faction: 'dominion',
-    mineralCost: 0,
-    vespeneCost: 0,
-    buildTime: 0,
-    width: 1,
-    height: 1,
-    maxHealth: 500,
-    armor: 2,
-    sightRange: 7,
-    canProduce: [],
-    canResearch: [],
-    isWall: true,
-    canMountTurret: false, // Already has weapon
-    attackRange: 6,
-    attackDamage: 5,
-    attackSpeed: 1.0,
-  },
-};
-
-/**
- * Wall upgrade definitions - researched at Arsenal/Tech Center
- */
 export interface WallUpgradeDefinition {
   id: WallUpgradeType;
   name: string;
@@ -137,48 +34,123 @@ export interface WallUpgradeDefinition {
   researchBuilding: string;
 }
 
-export const WALL_UPGRADE_DEFINITIONS: Record<WallUpgradeType, WallUpgradeDefinition> = {
-  reinforced: {
-    id: 'reinforced',
-    name: 'Reinforced Plating',
-    description: 'Upgrade walls with reinforced plating. +400 HP, +2 armor.',
-    researchCost: { minerals: 100, vespene: 100 },
-    researchTime: 60,
-    applyCost: { minerals: 25, vespene: 0 },
-    applyTime: 5,
-    researchBuilding: 'arsenal',
+/**
+ * Proxy object that delegates to the DefinitionRegistry.
+ * Provides backwards-compatible access to wall definitions.
+ */
+export const WALL_DEFINITIONS: Record<string, WallDefinition> = new Proxy(
+  {} as Record<string, WallDefinition>,
+  {
+    get(_target, prop: string) {
+      if (prop === 'then' || prop === 'toJSON' || typeof prop === 'symbol') {
+        return undefined;
+      }
+      if (!DefinitionRegistry.isInitialized()) {
+        console.warn(`[WALL_DEFINITIONS] Accessing '${prop}' before definitions initialized`);
+        return undefined;
+      }
+      // Get building and check if it's a wall
+      const building = DefinitionRegistry.getBuilding(prop);
+      if (building && (building as WallDefinition).isWall) {
+        return building as WallDefinition;
+      }
+      return undefined;
+    },
+    has(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return false;
+      const building = DefinitionRegistry.getBuilding(prop);
+      return building !== undefined && (building as WallDefinition).isWall === true;
+    },
+    ownKeys() {
+      if (!DefinitionRegistry.isInitialized()) return [];
+      const allBuildings = DefinitionRegistry.getAllBuildings();
+      return Object.keys(allBuildings).filter((id) => {
+        const building = allBuildings[id];
+        return (building as WallDefinition).isWall === true;
+      });
+    },
+    getOwnPropertyDescriptor(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const building = DefinitionRegistry.getBuilding(prop);
+      if (!building || !(building as WallDefinition).isWall) return undefined;
+      return {
+        value: building as WallDefinition,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      };
+    },
+  }
+);
+
+/**
+ * Proxy object for wall upgrades.
+ * Provides backwards-compatible access to wall upgrade definitions.
+ */
+export const WALL_UPGRADE_DEFINITIONS: Record<WallUpgradeType, WallUpgradeDefinition> = new Proxy(
+  {} as Record<WallUpgradeType, WallUpgradeDefinition>,
+  {
+    get(_target, prop: string) {
+      if (prop === 'then' || prop === 'toJSON' || typeof prop === 'symbol') {
+        return undefined;
+      }
+      if (!DefinitionRegistry.isInitialized()) {
+        console.warn(`[WALL_UPGRADE_DEFINITIONS] Accessing '${prop}' before definitions initialized`);
+        return undefined;
+      }
+      return DefinitionRegistry.getWallUpgrade(prop) as WallUpgradeDefinition | undefined;
+    },
+    has(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return false;
+      return DefinitionRegistry.getWallUpgrade(prop) !== undefined;
+    },
+    ownKeys() {
+      if (!DefinitionRegistry.isInitialized()) return [];
+      return Object.keys(DefinitionRegistry.getAllWallUpgrades());
+    },
+    getOwnPropertyDescriptor(_target, prop: string) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const upgrade = DefinitionRegistry.getWallUpgrade(prop);
+      if (!upgrade) return undefined;
+      return {
+        value: upgrade as WallUpgradeDefinition,
+        writable: false,
+        enumerable: true,
+        configurable: true,
+      };
+    },
+  }
+);
+
+/**
+ * Array of all wall building definitions.
+ * @deprecated Use DefinitionRegistry.getAllWalls() instead
+ */
+export const WALL_BUILDINGS: WallDefinition[] = new Proxy([] as WallDefinition[], {
+  get(target, prop) {
+    if (prop === 'length') {
+      if (!DefinitionRegistry.isInitialized()) return 0;
+      const allBuildings = DefinitionRegistry.getAllBuildings();
+      return Object.values(allBuildings).filter((b) => (b as WallDefinition).isWall).length;
+    }
+    if (typeof prop === 'string' && !isNaN(Number(prop))) {
+      if (!DefinitionRegistry.isInitialized()) return undefined;
+      const allBuildings = DefinitionRegistry.getAllBuildings();
+      const walls = Object.values(allBuildings).filter((b) => (b as WallDefinition).isWall);
+      return walls[Number(prop)] as WallDefinition | undefined;
+    }
+    if (prop === Symbol.iterator) {
+      return function* () {
+        if (!DefinitionRegistry.isInitialized()) return;
+        const allBuildings = DefinitionRegistry.getAllBuildings();
+        yield* Object.values(allBuildings).filter((b) => (b as WallDefinition).isWall) as WallDefinition[];
+      };
+    }
+    return (target as unknown as Record<string | symbol, unknown>)[prop];
   },
-  shielded: {
-    id: 'shielded',
-    name: 'Shield Generator',
-    description: 'Upgrade walls with energy shields. +200 regenerating shield.',
-    researchCost: { minerals: 150, vespene: 150 },
-    researchTime: 90,
-    applyCost: { minerals: 50, vespene: 25 },
-    applyTime: 8,
-    researchBuilding: 'tech_center',
-  },
-  weapon: {
-    id: 'weapon',
-    name: 'Integrated Weapons',
-    description: 'Upgrade walls with auto-turrets. 5 damage, 6 range.',
-    researchCost: { minerals: 100, vespene: 100 },
-    researchTime: 60,
-    applyCost: { minerals: 40, vespene: 25 },
-    applyTime: 10,
-    researchBuilding: 'arsenal',
-  },
-  repair_drone: {
-    id: 'repair_drone',
-    name: 'Repair Drone',
-    description: 'Deploy repair drones that auto-heal adjacent walls.',
-    researchCost: { minerals: 75, vespene: 75 },
-    researchTime: 45,
-    applyCost: { minerals: 30, vespene: 15 },
-    applyTime: 5,
-    researchBuilding: 'tech_center',
-  },
-};
+});
+
+// ==================== UTILITY FUNCTIONS ====================
 
 /**
  * Calculate wall line from start to end point
@@ -241,7 +213,12 @@ export function calculateWallLineCost(
   positions: Array<{ x: number; y: number }>,
   buildingType: string = 'wall_segment'
 ): { minerals: number; vespene: number } {
-  const def = WALL_DEFINITIONS[buildingType];
+  if (!DefinitionRegistry.isInitialized()) {
+    console.warn('[calculateWallLineCost] Definitions not initialized');
+    return { minerals: 0, vespene: 0 };
+  }
+
+  const def = DefinitionRegistry.getBuilding(buildingType);
   if (!def) return { minerals: 0, vespene: 0 };
 
   return {
@@ -287,5 +264,3 @@ export function getWallConnectionType(
 
   return 'none';
 }
-
-export const WALL_BUILDINGS = Object.values(WALL_DEFINITIONS);

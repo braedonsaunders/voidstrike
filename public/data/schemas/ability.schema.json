@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://voidstrike.dev/schemas/ability.schema.json",
+  "title": "Ability Definition",
+  "description": "Schema for VOIDSTRIKE ability definitions",
+  "type": "object",
+  "additionalProperties": {
+    "$ref": "#/$defs/AbilityDefinition"
+  },
+  "$defs": {
+    "AbilityDefinition": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "description",
+        "cooldown",
+        "energyCost",
+        "range",
+        "targetType",
+        "hotkey"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Ability description"
+        },
+        "cooldown": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Cooldown in seconds"
+        },
+        "energyCost": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Energy cost to use"
+        },
+        "range": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Cast range (0 for self-cast)"
+        },
+        "targetType": {
+          "type": "string",
+          "enum": ["none", "point", "unit", "ally", "self"],
+          "description": "Targeting type"
+        },
+        "hotkey": {
+          "type": "string",
+          "maxLength": 1,
+          "description": "Keyboard hotkey"
+        },
+        "iconId": {
+          "type": "string",
+          "description": "Icon identifier"
+        },
+        "damage": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Damage dealt"
+        },
+        "healing": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Health restored"
+        },
+        "duration": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Effect duration in seconds"
+        },
+        "aoeRadius": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Area of effect radius"
+        },
+        "buffId": {
+          "type": "string",
+          "description": "Buff to apply"
+        }
+      }
+    }
+  }
+}
