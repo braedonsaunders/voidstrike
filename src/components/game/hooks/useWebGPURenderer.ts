@@ -531,14 +531,12 @@ export function useWebGPURenderer({
         }
       }
 
-      // Configure shadows
-      if (graphicsSettings.shadowsEnabled) {
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        environmentRef.current?.setShadowsEnabled(true);
-        environmentRef.current?.setShadowQuality(graphicsSettings.shadowQuality);
-        environmentRef.current?.setShadowDistance(graphicsSettings.shadowDistance);
-      }
+      // Configure shadows - always call setShadowsEnabled to ensure correct state
+      // The renderer.shadowMap.enabled is always true (set in WebGPURenderer) to keep
+      // shadow depth texture initialized, but EnvironmentManager controls actual updates
+      environmentRef.current?.setShadowsEnabled(graphicsSettings.shadowsEnabled);
+      environmentRef.current?.setShadowQuality(graphicsSettings.shadowQuality);
+      environmentRef.current?.setShadowDistance(graphicsSettings.shadowDistance);
 
       // Configure environment settings
       environmentRef.current?.setFogEnabled(graphicsSettings.fogEnabled);

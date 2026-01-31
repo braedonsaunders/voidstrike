@@ -179,12 +179,12 @@ export function usePostProcessing({
       }
 
       // Update shadow settings
+      // Note: renderer.shadowMap.enabled is ALWAYS true to keep shadow map depth texture valid
+      // Shadow visibility is controlled via EnvironmentManager.setShadowsEnabled() which toggles
+      // receiveShadow on meshes and skips shadow updates when disabled
       if (environmentRef.current) {
         if (settings.shadowsEnabled !== prevSettings.shadowsEnabled) {
           environmentRef.current.setShadowsEnabled(settings.shadowsEnabled);
-          if (renderContextRef.current) {
-            renderContextRef.current.renderer.shadowMap.enabled = settings.shadowsEnabled;
-          }
         }
         if (settings.shadowQuality !== prevSettings.shadowQuality) {
           environmentRef.current.setShadowQuality(settings.shadowQuality);

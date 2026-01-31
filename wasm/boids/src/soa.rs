@@ -22,15 +22,17 @@ use std::alloc::{alloc_zeroed, dealloc, Layout};
 const SIMD_ALIGNMENT: usize = 16;
 
 /// Unit state flags for filtering during boids computation
-#[allow(dead_code)]
+/// Values are set from JavaScript, so not all variants are constructed in Rust
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum UnitState {
     /// Unit should be processed for boids
+    #[allow(dead_code)]
     Active = 0,
     /// Unit is dead/inactive - skip during computation
     Dead = 1,
     /// Unit is flying - separate collision layer
+    #[allow(dead_code)]
     Flying = 2,
     /// Unit is gathering - no separation forces
     Gathering = 3,
@@ -78,6 +80,7 @@ pub struct BoidsBuffer {
     capacity: usize,
 }
 
+// Methods are called from JavaScript via FFI, so they appear unused in Rust
 #[allow(dead_code)]
 impl BoidsBuffer {
     /// Create a new buffer with the specified capacity.
@@ -320,6 +323,7 @@ pub struct NeighborList {
     capacity: usize,
 }
 
+// Methods are called from JavaScript via FFI and tests
 #[allow(dead_code)]
 impl NeighborList {
     /// Create a new neighbor list with capacity for max_units

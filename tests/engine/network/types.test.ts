@@ -5,7 +5,7 @@ import {
 } from '@/engine/network/types';
 
 describe('Network Types - Utility Functions', () => {
-  describe('commandIdGenerator', () => {
+  describe('commandIdGenerator.generate()', () => {
     beforeEach(() => {
       commandIdGenerator.reset();
     });
@@ -54,7 +54,8 @@ describe('Network Types - Utility Functions', () => {
       expect(id3).toBe('p1-1-2');
     });
 
-    it('reset() clears the counter and tick to 0', () => {
+  describe('commandIdGenerator.reset()', () => {
+    it('resets the counter and tick to 0', () => {
       commandIdGenerator.generate('p1');
       commandIdGenerator.generate('p1');
       commandIdGenerator.setTick(5);
