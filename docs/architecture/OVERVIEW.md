@@ -183,6 +183,15 @@ voidstrike/
 │   │   ├── configs/
 │   │   │   └── voidstrike.ts
 │   │   ├── core/
+│   │   │   ├── panels/
+│   │   │   │   ├── EditorPanels.tsx
+│   │   │   │   ├── index.ts
+│   │   │   │   ├── ObjectsPanel.tsx
+│   │   │   │   ├── PaintPanel.tsx
+│   │   │   │   ├── SelectedPanel.tsx
+│   │   │   │   ├── SettingsPanel.tsx
+│   │   │   │   ├── shared.tsx
+│   │   │   │   └── ValidatePanel.tsx
 │   │   │   ├── Editor3DCanvas.tsx
 │   │   │   ├── EditorCanvas.tsx
 │   │   │   ├── EditorContextMenu.tsx
@@ -191,7 +200,6 @@ voidstrike/
 │   │   │   ├── EditorFloatingToolbar.tsx
 │   │   │   ├── EditorHeader.tsx
 │   │   │   ├── EditorMiniMap.tsx
-│   │   │   ├── EditorPanels.tsx
 │   │   │   ├── EditorStatusBar.tsx
 │   │   │   └── EditorToolbar.tsx
 │   │   ├── hooks/ # React hooks
