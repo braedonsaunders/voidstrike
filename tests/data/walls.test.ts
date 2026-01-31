@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   WALL_DEFINITIONS,
   WALL_UPGRADE_DEFINITIONS,
-  WALL_BUILDINGS,
   calculateWallLine,
   calculateWallLineCost,
   getWallConnectionType,
@@ -115,9 +114,12 @@ describe('Wall Definitions', () => {
     });
   });
 
-  describe('WALL_BUILDINGS', () => {
-    it('contains all wall definitions', () => {
-      expect(WALL_BUILDINGS.length).toBe(Object.keys(WALL_DEFINITIONS).length);
+  describe('WALL_DEFINITIONS coverage', () => {
+    it('contains expected wall definitions', () => {
+      const wallIds = Object.keys(WALL_DEFINITIONS);
+      expect(wallIds.length).toBeGreaterThan(0);
+      expect(wallIds).toContain('wall_segment');
+      expect(wallIds).toContain('wall_gate');
     });
   });
 });

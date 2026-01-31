@@ -113,52 +113,6 @@ export const RESEARCH_DEFINITIONS: Record<string, ResearchDefinition> = new Prox
 );
 
 /**
- * Array of all Dominion research definitions.
- * @deprecated Use DefinitionRegistry.getAllResearch() instead
- */
-export const DOMINION_RESEARCH: ResearchDefinition[] = new Proxy([] as ResearchDefinition[], {
-  get(target, prop) {
-    if (prop === 'length') {
-      if (!DefinitionRegistry.isInitialized()) return 0;
-      return Object.keys(DefinitionRegistry.getAllResearch()).length;
-    }
-    if (typeof prop === 'string' && !isNaN(Number(prop))) {
-      if (!DefinitionRegistry.isInitialized()) return undefined;
-      const research = Object.values(DefinitionRegistry.getAllResearch());
-      return research[Number(prop)] as ResearchDefinition | undefined;
-    }
-    if (prop === Symbol.iterator) {
-      return function* () {
-        if (!DefinitionRegistry.isInitialized()) return;
-        yield* Object.values(DefinitionRegistry.getAllResearch()) as ResearchDefinition[];
-      };
-    }
-    // Delegate array methods - bind to the real array so 'this' works correctly
-    if (typeof prop === 'string' && typeof Array.prototype[prop as keyof typeof Array.prototype] === 'function') {
-      const research = DefinitionRegistry.isInitialized()
-        ? Object.values(DefinitionRegistry.getAllResearch())
-        : [];
-      const method = (research as unknown as Record<string, unknown>)[prop];
-      if (typeof method === 'function') {
-        return method.bind(research);
-      }
-      return method;
-    }
-    return (target as unknown as Record<string | symbol, unknown>)[prop];
-  },
-  has(_target, prop) {
-    // Support 'in' operator for numeric indices so array algorithms work
-    if (typeof prop === 'string' && !isNaN(Number(prop))) {
-      if (!DefinitionRegistry.isInitialized()) return false;
-      const index = Number(prop);
-      const length = Object.keys(DefinitionRegistry.getAllResearch()).length;
-      return index >= 0 && index < length;
-    }
-    return prop in Array.prototype;
-  },
-});
-
-/**
  * Building -> research mapping.
  * This is derived from the building canResearch arrays.
  */
