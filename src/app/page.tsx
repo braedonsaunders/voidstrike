@@ -76,9 +76,10 @@ export default function Home() {
   const isFullscreen = hasMounted ? isFullscreenStore : false;
   const preferWebGPU = hasMounted ? preferWebGPUStore : true;
 
-  // Mark as mounted after hydration
+  // Hydration mount pattern: intentionally triggers re-render after client hydration
+  // to avoid SSR/client mismatch when accessing browser-only store values
   useEffect(() => {
-    setHasMounted(true);
+    setHasMounted(true); // eslint-disable-line react-hooks/set-state-in-effect -- intentional hydration pattern
   }, []);
 
   const handleMusicToggle = useCallback(() => {

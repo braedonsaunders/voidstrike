@@ -6,7 +6,7 @@
  * and adaptive threshold management.
  */
 
-import { BenchmarkRunner, BenchmarkResult, getBenchmarkRunner } from './BenchmarkRunner';
+import { BenchmarkResult, getBenchmarkRunner } from './BenchmarkRunner';
 
 // =============================================================================
 // ALGORITHMIC COMPLEXITY VERIFICATION
@@ -45,7 +45,8 @@ export function assertComplexity(
     throw new Error('Need at least 3 input sizes for complexity analysis');
   }
 
-  const runner = getBenchmarkRunner();
+  // Note: getBenchmarkRunner() calibrates the environment; we use it for measurements indirectly through warmup
+  getBenchmarkRunner();
   const measurements: ComplexityMeasurement[] = [];
 
   // Collect measurements with warmup
@@ -69,7 +70,6 @@ export function assertComplexity(
   // Calculate scaling ratios between consecutive measurements
   const scalingRatios: number[] = [];
   for (let i = 1; i < measurements.length; i++) {
-    const sizeRatio = measurements[i].inputSize / measurements[i - 1].inputSize;
     const timeRatio = measurements[i].time / measurements[i - 1].time;
 
     // Avoid division by zero for very fast operations
@@ -148,7 +148,7 @@ function getExpectedRatios(complexity: ComplexityClass, inputSizes: number[]): n
 /**
  * Estimate complexity class from observed scaling ratios.
  */
-function estimateComplexity(ratios: number[], inputSizes: number[]): ComplexityClass {
+function estimateComplexity(ratios: number[], _inputSizes: number[]): ComplexityClass {
   // Calculate average ratio when doubling input size
   const avgRatio = ratios.reduce((a, b) => a + b, 0) / ratios.length;
 

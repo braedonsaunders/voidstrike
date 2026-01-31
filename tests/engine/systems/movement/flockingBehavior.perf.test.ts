@@ -10,16 +10,11 @@ import { Unit, UnitState } from '@/engine/components/Unit';
 import { Velocity } from '@/engine/components/Velocity';
 import { SpatialEntityData, SpatialUnitState } from '@/engine/core/SpatialGrid';
 import { PooledVector2 } from '@/utils/VectorPool';
-import {
-  getBenchmarkRunner,
-  BenchmarkRunner,
-  BenchmarkResult,
-} from '@tests/utils/BenchmarkRunner';
+import { getBenchmarkRunner, BenchmarkRunner } from '@tests/utils/BenchmarkRunner';
 import {
   assertComplexity,
   assertCacheEffectiveness,
   assertBenchmarkPasses,
-  formatBenchmarkResult,
 } from '@tests/utils/performanceTestHelpers';
 
 /**

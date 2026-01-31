@@ -20,6 +20,7 @@ export function IdleWorkerButton() {
   useEffect(() => {
     // Skip for spectators and reset count
     if (isSpectator) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional reset for spectators
       setIdleWorkerCount(0);
       return;
     }
@@ -120,6 +121,7 @@ export function IdleWorkerButton() {
 
   // Reset index when idle count changes significantly
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional reset when idle count changes
     setLastSelectedIndex(0);
   }, [idleWorkerCount]);
 

@@ -12,7 +12,7 @@
 
 import { EventBus } from '@/engine/core/EventBus';
 import { TSLGameOverlayManager } from '@/rendering/tsl/GameOverlay';
-import { useUIStore, GameOverlayType, OverlaySettings } from '@/store/uiStore';
+import { useUIStore, GameOverlayType } from '@/store/uiStore';
 import { debugPathfinding } from '@/utils/debugLogger';
 
 // Typed overlay events for cross-system communication

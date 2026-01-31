@@ -24,7 +24,8 @@ export interface UsePostProcessingProps {
   cameraRef: MutableRefObject<RTSCamera | null>;
   environmentRef: MutableRefObject<EnvironmentManager | null>;
   lightPoolRef: MutableRefObject<LightPool | null>;
-  fogOfWarRef: MutableRefObject<TSLFogOfWar | null>;
+  /** @deprecated Fog of war is now handled via RenderPipeline */
+  fogOfWarRef?: MutableRefObject<TSLFogOfWar | null>;
   containerRef: RefObject<HTMLDivElement | null>;
   map: MapData;
 }
@@ -36,13 +37,15 @@ export function usePostProcessing({
   cameraRef,
   environmentRef,
   lightPoolRef,
-  fogOfWarRef,
+  fogOfWarRef: _fogOfWarRef,
   containerRef,
   map,
 }: UsePostProcessingProps): void {
   // Store map in a ref so effects always get the latest value
   const mapRef = useRef<MapData>(map);
-  mapRef.current = map;
+  useEffect(() => {
+    mapRef.current = map;
+  }, [map]);
 
   // Subscribe to overlay settings changes
   useEffect(() => {

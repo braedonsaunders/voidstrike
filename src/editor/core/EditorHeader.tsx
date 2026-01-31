@@ -38,7 +38,7 @@ export interface EditorHeaderProps {
 }
 
 export function EditorHeader({
-  config,
+  config: _config,
   mapName,
   isDirty,
   canUndo,

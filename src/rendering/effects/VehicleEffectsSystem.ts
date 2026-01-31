@@ -25,7 +25,6 @@ import {
   VehicleEffectCondition,
   VehicleEffectType,
   VehicleEffectDefinition,
-  UnitEffectsConfig,
 } from '@/assets/AssetManager';
 
 // ============================================
@@ -267,7 +266,7 @@ export class VehicleEffectsSystem {
   /**
    * Main update loop - called from render loop
    */
-  public update(deltaTime: number): void {
+  public update(_deltaTime: number): void {
     const now = performance.now();
 
     // Throttle updates for performance
@@ -425,7 +424,7 @@ export class VehicleEffectsSystem {
     unitType: string,
     transform: Transform,
     worldPos: THREE.Vector3,
-    unit: Unit
+    _unit: Unit
   ): void {
     const preset = EFFECT_PRESETS[effect.type];
     if (!preset) return;

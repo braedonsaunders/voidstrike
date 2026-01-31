@@ -353,7 +353,7 @@ export class DecorationLightManager {
         const pulse = 1.0 + (eased * 2 - 1) * config.pulseAmplitude;
 
         // Get distance factor for this light
-        const distance = config.position.distanceTo(this._tempVec3.copy(light.position));
+        const _distance = config.position.distanceTo(this._tempVec3.copy(light.position));
         const distanceFactor = this.calculateDistanceFalloff(
           config.position.distanceTo(this._tempVec3.set(
             light.parent?.position.x ?? 0,

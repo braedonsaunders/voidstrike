@@ -160,7 +160,7 @@ describe('Projectile Type Definitions', () => {
     });
 
     it('all projectiles have valid scale', () => {
-      for (const [id, def] of Object.entries(PROJECTILE_TYPES)) {
+      for (const [, def] of Object.entries(PROJECTILE_TYPES)) {
         expect(def.scale).toBeGreaterThanOrEqual(0);
       }
     });

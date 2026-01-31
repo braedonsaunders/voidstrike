@@ -1,7 +1,7 @@
 import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
-import { Unit, DamageType } from '../components/Unit';
-import { Health, ArmorType } from '../components/Health';
+import { Unit } from '../components/Unit';
+import { Health } from '../components/Health';
 import type { Game } from '../core/Game';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
@@ -14,7 +14,7 @@ import { getDefaultTargetPriority } from '@/data/units/categories';
 import AssetManager from '@/assets/AssetManager';
 import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/data/projectiles';
 import { SpatialEntityData, SpatialUnitState } from '../core/SpatialGrid';
-import { findBestTarget as findBestTargetShared, DEFAULT_SCORING_CONFIG, isEnemy } from '../combat/TargetAcquisition';
+import { findBestTarget as findBestTargetShared, isEnemy } from '../combat/TargetAcquisition';
 import { distance, clamp } from '@/utils/math';
 import { ThrottledCache } from '@/utils/ThrottledCache';
 
@@ -65,7 +65,7 @@ const underAttackPayload = {
  * Get target priority for a unit, checking unit component first, then category defaults.
  * Higher values = more likely to be targeted first.
  */
-function getTargetPriority(unitId: string, unit?: Unit): number {
+function _getTargetPriority(unitId: string, _unit?: Unit): number {
   // First check if unit has explicit priority set (from unit definition)
   // The Unit component doesn't store targetPriority directly, so we use category defaults
   // Fall back to category-based default priority from data config
@@ -322,7 +322,7 @@ export class CombatSystem extends System {
   /**
    * PERF OPTIMIZATION: Rebuild attack ready queue from all combat units
    */
-  private rebuildAttackQueue(gameTime: number): void {
+  private rebuildAttackQueue(_gameTime: number): void {
     this.attackReadyQueue.length = 0;
 
     for (const entityId of this.combatActiveUnits) {

@@ -138,7 +138,7 @@ export class AIEconomySystem extends System {
     // Get current AI state (use public method if available, otherwise estimate)
     const currentTick = this.game.getCurrentTick();
     const ticksSinceReset = currentTick - tracker.lastResetTick;
-    const minutesSinceReset = ticksSinceReset / (20 * 60); // 20 ticks/sec, 60 sec/min
+    const _minutesSinceReset = ticksSinceReset / (20 * 60); // 20 ticks/sec, 60 sec/min
 
     // Calculate per-minute rates from recent window
     const recentMineralsSum = tracker.recentMinerals.reduce((a, b) => a + b, 0);

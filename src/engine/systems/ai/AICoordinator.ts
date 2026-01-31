@@ -25,7 +25,6 @@ import { Unit } from '../../components/Unit';
 import { Building } from '../../components/Building';
 import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
-import { Resource } from '../../components/Resource';
 import type { Game } from '../../core/Game';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { debugAI } from '@/utils/debugLogger';
@@ -155,7 +154,7 @@ export const PERSONALITY_WEIGHTS: Record<AIPersonality, PersonalityWeights> = {
 };
 
 /** Half-life for grudge decay in ticks (~60 seconds at 20 ticks/second) */
-const GRUDGE_HALF_LIFE_TICKS = 1200;
+const _GRUDGE_HALF_LIFE_TICKS = 1200;
 
 export interface AIPlayer {
   playerId: string;
@@ -975,7 +974,7 @@ export class AICoordinator extends System {
     }
   }
 
-  private runEconomicLayer(ai: AIPlayer, currentTick: number): void {
+  private runEconomicLayer(ai: AIPlayer, _currentTick: number): void {
     // Resume incomplete buildings
     this.economyManager.tryResumeIncompleteBuildings(ai);
 

@@ -6,13 +6,13 @@ import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { Velocity } from '@/engine/components/Velocity';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
-import { AssetManager, LODLevel, DEFAULT_LOD_DISTANCES, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
+import { AssetManager, LODLevel } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
-import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { getPlayerColor, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { debugAnimation, debugAssets, debugMesh, debugPerformance } from '@/utils/debugLogger';
 import { setupInstancedVelocity, swapInstanceMatrices, commitInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
-import { createSelectionRingMaterial, updateSelectionRingTime, TEAM_COLORS } from './tsl/SelectionMaterial';
+import { updateSelectionRingTime, TEAM_COLORS } from './tsl/SelectionMaterial';
 import {
   UNIT_RENDERER,
   UNIT_SELECTION_RING,

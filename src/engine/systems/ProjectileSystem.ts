@@ -6,7 +6,7 @@ import { Health } from '../components/Health';
 import { Unit, DamageType } from '../components/Unit';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
-import { Projectile, ProjectileDefinition, ProjectileBehavior } from '../components/Projectile';
+import { Projectile, ProjectileDefinition } from '../components/Projectile';
 import { snapValue } from '@/utils/FixedPoint';
 import { distance } from '@/utils/math';
 import { getDamageMultiplier } from '@/data/combat/combat';

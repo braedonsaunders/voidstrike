@@ -8,17 +8,7 @@
 import { debugInitialization } from '@/utils/debugLogger';
 import type {
   MapBlueprint,
-  MapMeta,
-  MapCanvas,
-  PaintCommand,
-  BaseLocation,
-  WatchTowerDef,
-  DestructibleDef,
-  DecorationRules,
-  ExplicitDecoration,
   BiomeType,
-  BaseType,
-  ResourceDirection,
   DecorationStyle,
 } from '@/data/maps/core/ElevationMap';
 import { generateMap } from '@/data/maps/core/ElevationMapGenerator';

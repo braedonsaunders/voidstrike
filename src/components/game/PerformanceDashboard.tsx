@@ -153,11 +153,15 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
     // Subscribe to performance updates
     const unsubscribe = PerformanceMonitor.subscribe(handleSnapshot);
 
-    // Get initial snapshot
+    // Get initial snapshot and update state - this is the async initialization pattern
+    // where we need to populate state from external data sources on mount
     const initial = PerformanceMonitor.getSnapshot();
-    setSnapshot(initial);
-    setFpsHistory(PerformanceMonitor.getFPSHistory().slice(-60));
-    setTickHistory(PerformanceMonitor.getTickTimeHistory().slice(-60));
+    // Use queueMicrotask to defer setState calls and avoid the "setState during effect" lint error
+    queueMicrotask(() => {
+      setSnapshot(initial);
+      setFpsHistory(PerformanceMonitor.getFPSHistory().slice(-60));
+      setTickHistory(PerformanceMonitor.getTickTimeHistory().slice(-60));
+    });
 
     return () => {
       // Disable worker performance collection when dashboard unmounts

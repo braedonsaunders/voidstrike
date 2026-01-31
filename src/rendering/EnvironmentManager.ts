@@ -12,7 +12,6 @@ import { LightPool } from './LightPool';
 import {
   SHADOW_QUALITY_PRESETS,
   ENVIRONMENT,
-  FOG_PRESETS,
   type ShadowQuality,
 } from '@/data/rendering.config';
 
@@ -705,9 +704,9 @@ export class EnvironmentManager {
       // At baseline (5.0), size is normal. Higher density = slightly smaller particles
       const material = this.particles.points.material as THREE.PointsMaterial;
       if (material.size !== undefined) {
-        const baseSize = material.size;
+        const _baseSize = material.size;
         // Subtle size reduction at high density (max 30% smaller at 3x density)
-        const sizeMultiplier = Math.max(0.7, 1.0 - (density - 5.0) * 0.03);
+        const _sizeMultiplier = Math.max(0.7, 1.0 - (density - 5.0) * 0.03);
         // Note: We can't easily change particle COUNT without recreating the geometry
         // For now, adjust opacity to simulate density perception
         const opacityMultiplier = Math.min(1.0, 0.6 + density * 0.08);

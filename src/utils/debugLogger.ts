@@ -62,7 +62,7 @@ function getDebugSettings(): DebugSettings | null {
   if (!cachedUIStore) {
     try {
       // Dynamic require to break the circular import chain
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
+       
       const store = require('@/store/uiStore');
       cachedUIStore = store.useUIStore;
     } catch {
@@ -99,6 +99,7 @@ export const debugLog = {
    */
   log(category: DebugCategory, ...args: unknown[]): void {
     if (isEnabled(category)) {
+      // eslint-disable-next-line no-console -- Debug logger intentionally uses console.log
       console.log(...args);
     }
   },

@@ -1,3 +1,4 @@
+/* eslint-disable react/no-direct-mutation-state -- ECS component, not React */
 import { Component } from '../ecs/Component';
 import { AssetManager } from '@/assets/AssetManager';
 import { collisionConfig } from '@/data/collisionConfig';

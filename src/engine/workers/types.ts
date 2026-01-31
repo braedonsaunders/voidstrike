@@ -6,10 +6,9 @@
  * where performance is critical.
  */
 
-import type { UnitState, DamageType, MovementDomain } from '../components/Unit';
-import type { BuildingState, AddonType, ProductionQueueItem } from '../components/Building';
+import type { UnitState, DamageType } from '../components/Unit';
+import type { BuildingState, AddonType } from '../components/Building';
 import type { ResourceType } from '../components/Resource';
-import type { ArmorType } from '../components/Health';
 import type { GameState, TerrainCell, GameConfig } from '../core/Game';
 import type { GameCommand } from '../core/GameCommand';
 import type { DebugSettings } from '@/store/uiStore';

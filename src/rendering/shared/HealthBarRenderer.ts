@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { Health } from '@/engine/components/Health';
-import { UNIT_HEALTH_BAR, RENDER_ORDER } from '@/data/rendering.config';
+import { UNIT_HEALTH_BAR } from '@/data/rendering.config';
 
 /**
  * Configuration for health bar appearance

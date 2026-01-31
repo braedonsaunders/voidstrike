@@ -10,7 +10,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type { MapData } from '@/data/maps/MapTypes';
-import type { MapBlueprint, BiomeType } from '@/data/maps/core/ElevationMap';
+import type { MapBlueprint } from '@/data/maps/core/ElevationMap';
 import {
   type LLMProvider,
   type LLMConfig,
@@ -115,7 +115,10 @@ export function useLLMGeneration(): [LLMGenerationState, LLMGenerationActions] {
   useEffect(() => {
     const storedKey = getStoredApiKey(state.provider);
     if (storedKey) {
-      setState((prev: LLMGenerationState) => ({ ...prev, apiKey: storedKey }));
+      // Use requestAnimationFrame to avoid cascading renders
+      requestAnimationFrame(() => {
+        setState((prev: LLMGenerationState) => ({ ...prev, apiKey: storedKey }));
+      });
     }
   }, [state.provider]);
 
@@ -156,7 +159,7 @@ export function useLLMGeneration(): [LLMGenerationState, LLMGenerationActions] {
       }));
 
       return isValid;
-    } catch (err) {
+    } catch {
       setState((prev: LLMGenerationState) => ({
         ...prev,
         isKeyValid: false,

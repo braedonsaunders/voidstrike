@@ -151,7 +151,7 @@ export class SpawnSystem extends System {
           debugSpawning.log(`SpawnSystem: Auto-gather for ${definition.name} to resource ${rallyTargetId}`);
         }
       }
-    } else if (rallyX != null && rallyY != null) {
+    } else if (rallyX !== null && rallyX !== undefined && rallyY !== null && rallyY !== undefined) {
       // Send unit to rally point
       this.game.eventBus.emit('command:move', {
         entityIds: [entity.id],

@@ -26,14 +26,20 @@ export function EditorExportModal({ map, isOpen, onClose }: EditorExportModalPro
   // Calculate size on open
   useEffect(() => {
     if (isOpen && map) {
-      setSizeInfo(estimateJsonSize(map));
+      // Use requestAnimationFrame to avoid cascading renders
+      requestAnimationFrame(() => {
+        setSizeInfo(estimateJsonSize(map));
+      });
     }
   }, [isOpen, map]);
 
   // Reset copied state when modal opens
   useEffect(() => {
     if (isOpen) {
-      setCopied(false);
+      // Use requestAnimationFrame to avoid cascading renders
+      requestAnimationFrame(() => {
+        setCopied(false);
+      });
     }
   }, [isOpen]);
 

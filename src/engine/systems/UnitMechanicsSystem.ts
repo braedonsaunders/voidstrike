@@ -645,7 +645,7 @@ export class UnitMechanicsSystem extends System {
     entity: { id: number },
     unit: Unit,
     dt: number,
-    gameTime: number
+    _gameTime: number
   ): void {
     if (!unit.canHeal || unit.healTargetId === null) return;
 
@@ -797,7 +797,7 @@ export class UnitMechanicsSystem extends System {
     // Repair costs resources (simplified: 0.27 minerals per HP for most units)
     const repairRate = 5; // HP per second
     const repairAmount = repairRate * dt;
-    const resourceCost = repairAmount * 0.27;
+    const _resourceCost = repairAmount * 0.27;
 
     // For now, skip resource check and just repair
     // In full implementation, would deduct from player resources

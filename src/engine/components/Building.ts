@@ -1,3 +1,4 @@
+/* eslint-disable react/no-direct-mutation-state -- ECS component, not React */
 import { Component } from '../ecs/Component';
 
 export type BuildingState = 'waiting_for_worker' | 'constructing' | 'paused' | 'complete' | 'destroyed' | 'lifting' | 'flying' | 'landing';

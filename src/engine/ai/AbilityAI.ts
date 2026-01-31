@@ -259,7 +259,7 @@ export class AbilityAI {
     this.evaluators.set('power_cannon', this.createPowerCannonEvaluator());
 
     // Scanner Sweep - Reveal cloaked enemies
-    this.evaluators.set('scanner_sweep', (world, caster, ability, ctx) => {
+    this.evaluators.set('scanner_sweep', (_world, _caster, _ability, _ctx) => {
       // Only use if there are suspected cloaked enemies nearby
       // (for now, use if enemies were recently attacking but are now invisible)
       // This is a simplified version - real implementation would track cloaked units

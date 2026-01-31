@@ -42,7 +42,8 @@ export interface UseGameInputProps {
   /** Event bus for emitting commands - if provided, uses this instead of game.eventBus */
   eventBusRef?: MutableRefObject<EventBus | null>;
   placementPreviewRef: MutableRefObject<BuildingPlacementPreview | null>;
-  wallPlacementPreviewRef: MutableRefObject<WallPlacementPreview | null>;
+  /** @deprecated No longer used - wall placement handled by BuildingInputHandler */
+  wallPlacementPreviewRef?: MutableRefObject<WallPlacementPreview | null>;
   overlayManagerRef: MutableRefObject<TSLGameOverlayManager | null>;
   lastControlGroupTap: MutableRefObject<{ group: number; time: number } | null>;
 }
@@ -69,9 +70,9 @@ export function useGameInput({
   worldProviderRef,
   eventBusRef,
   placementPreviewRef,
-  wallPlacementPreviewRef,
-  overlayManagerRef,
-  lastControlGroupTap,
+  wallPlacementPreviewRef: _wallPlacementPreviewRef,
+  overlayManagerRef: _overlayManagerRef,
+  lastControlGroupTap: _lastControlGroupTap,
 }: UseGameInputProps): UseGameInputReturn {
   // Track if we've initialized
   const initializedRef = useRef(false);
@@ -129,7 +130,8 @@ export function useGameInput({
       initializedRef.current = false;
       handlersRef.current = null;
     };
-  }, [containerRef]); // Only depends on container - other refs are updated separately
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only depends on container; other refs are updated via updateDependencies
+  }, [containerRef]);
 
   // =============================================================================
   // UPDATE DEPENDENCIES WHEN REFS CHANGE

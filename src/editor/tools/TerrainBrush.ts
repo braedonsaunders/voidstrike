@@ -7,12 +7,10 @@
 import type { EditorCell, EditorMapData, EditorConfig, PlatformEdges } from '../config/EditorConfig';
 import { distance, clamp } from '@/utils/math';
 import {
-  validateRampConstraints,
   calculateExtendedRampEndpoint,
-  MAX_RAMP_ELEVATION_PER_CELL,
   type RampConstraintResult,
 } from '@/data/pathfinding.config';
-import { ELEVATION, quantizeElevation } from '@/data/maps/core/ElevationMap';
+import { quantizeElevation } from '@/data/maps/core/ElevationMap';
 
 export interface BrushStroke {
   x: number;

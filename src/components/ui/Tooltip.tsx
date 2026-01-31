@@ -18,6 +18,7 @@ export function Tooltip({ children, content, delay = 200, className = '' }: Tool
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional mount state tracking
     setMounted(true);
     return () => setMounted(false);
   }, []);

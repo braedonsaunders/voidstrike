@@ -16,7 +16,7 @@
 
 import { GameCore, GameConfig } from '../core/GameCore';
 import { PerformanceMonitor } from '../core/PerformanceMonitor';
-import { debugInitialization, debugPerformance } from '@/utils/debugLogger';
+import { debugInitialization } from '@/utils/debugLogger';
 import { initializeDefinitions } from '../definitions/bootstrap';
 
 // Components

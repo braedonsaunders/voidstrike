@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * FSR 1.0 - FidelityFX Super Resolution
  *
@@ -233,7 +234,7 @@ export function createEASUPass(
 
     // Full 12-tap Lanczos filtering (for edges)
     const sumWeights = wB.add(wC).add(wE).add(wF).add(wG).add(wH).add(wI).add(wJ).add(wK).add(wL).add(wN).add(wO);
-    const lanczosResult = sB.mul(wB)
+    const _lanczosResult = sB.mul(wB)
       .add(sC.mul(wC))
       .add(sE.mul(wE))
       .add(sF.mul(wF))

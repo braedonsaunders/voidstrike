@@ -17,8 +17,6 @@ import type {
   FactionManifest,
   GameManifest,
   FactionData,
-  ValidationResult,
-  UnitCategory,
 } from './types';
 
 export interface LoadResult<T> {

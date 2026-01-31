@@ -14,7 +14,6 @@
 import {
   type FactionAIConfig,
   type MacroRule,
-  type AIDifficulty,
   registerFactionAIConfig,
 } from '../aiConfig';
 

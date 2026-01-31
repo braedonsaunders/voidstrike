@@ -9,7 +9,6 @@ import type { MutableRefObject, RefObject } from 'react';
 import { useRef, useEffect, useCallback, useState } from 'react';
 import * as Phaser from 'phaser';
 
-import type { EventBus } from '@/engine/core/EventBus';
 import type { WorkerBridge } from '@/engine/workers';
 import type { EnvironmentManager } from '@/rendering/EnvironmentManager';
 import { OverlayScene } from '@/phaser/scenes/OverlayScene';

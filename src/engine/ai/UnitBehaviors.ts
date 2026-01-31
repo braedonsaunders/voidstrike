@@ -12,7 +12,6 @@
 import {
   BehaviorNode,
   BehaviorContext,
-  BehaviorStatus,
   selector,
   sequence,
   memorySelector,
@@ -26,7 +25,6 @@ import {
   action,
   asyncAction,
   wait,
-  inverter,
 } from './BehaviorTree';
 import { clamp } from '@/utils/math';
 
@@ -35,7 +33,7 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
-import { findBestTarget as findBestTargetShared, TargetQueryOptions } from '../combat/TargetAcquisition';
+import { findBestTarget as findBestTargetShared } from '../combat/TargetAcquisition';
 import AssetManager from '@/assets/AssetManager';
 import { distance } from '@/utils/math';
 

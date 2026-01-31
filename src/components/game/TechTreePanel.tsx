@@ -20,8 +20,6 @@ interface UpgradeStatusInfo {
 function useUpgradeStatus(upgradeId: string): UpgradeStatusInfo {
   const playerId = useGameStore((state) => state.playerId);
   const hasResearch = useGameStore((state) => state.hasResearch);
-  const minerals = useGameStore((state) => state.minerals);
-  const vespene = useGameStore((state) => state.vespene);
 
   return useMemo(() => {
     const upgrade = TECH_CATEGORIES
@@ -54,7 +52,7 @@ function useUpgradeStatus(upgradeId: string): UpgradeStatusInfo {
     }
 
     return { status: 'available' as const, missingRequirements: [] };
-  }, [playerId, hasResearch, upgradeId, minerals, vespene]);
+  }, [playerId, hasResearch, upgradeId]);
 }
 
 /**
@@ -336,7 +334,7 @@ function Legend() {
       </div>
       <div className="flex items-center gap-1.5">
         <div className="w-3 h-3 rounded border-2 border-yellow-600 bg-yellow-900/10" />
-        <span>Can't Afford</span>
+        <span>Can&apos;t Afford</span>
       </div>
       <div className="flex items-center gap-1.5">
         <div className="w-3 h-3 rounded border-2 border-void-700 bg-void-900/50 opacity-60" />

@@ -37,8 +37,8 @@ const EVENT_KINDS = {
   PUBLIC_LOBBY: 30436,  // Public lobby listing for browser
 };
 
-// Tag for public lobby discovery
-const PUBLIC_LOBBY_TAG = 'VOIDSTRIKE_PUBLIC';
+// Tag for public lobby discovery (reserved for future public lobby browser feature)
+const _PUBLIC_LOBBY_TAG = 'VOIDSTRIKE_PUBLIC';
 
 // Data channel message types
 export type LobbyMessageType = 'lobby_state' | 'game_start' | 'chat' | 'ping';
@@ -226,6 +226,12 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
   const pcRef = useRef<RTCPeerConnection | null>(null); // For guest mode
   const gameStartCallbackRef = useRef<(() => void) | null>(null);
   const joinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Refs for stable access in callbacks without causing effect re-runs
+  const guestsRef = useRef<GuestConnection[]>(guests);
+  guestsRef.current = guests;
+  const onGuestLeaveRef = useRef(onGuestLeave);
+  onGuestLeaveRef.current = onGuestLeave;
 
   // Handle incoming messages on the host connection (guest mode)
   useEffect(() => {
@@ -430,7 +436,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
               pc.onconnectionstatechange = () => {
                 if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
                   debugNetworking.log('[Lobby] Guest disconnected:', guestName);
-                  onGuestLeave?.(slotId);
+                  onGuestLeaveRef.current?.(slotId);
                   setGuests(prev => prev.filter(g => g.pubkey !== guestPubkey));
                   answerSub.close();
                 }
@@ -476,7 +482,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       pubkeyRef.current = null;
       relaysRef.current = [];
       // Close peer connections
-      guests.forEach(g => {
+      guestsRef.current.forEach(g => {
         try {
           g.pc.close();
         } catch { /* ignore */ }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   BUILDING_DISPLAY_NAMES,
   BUILDING_RESEARCH_MAP,
@@ -7,7 +7,6 @@ import {
   getEffectIcon,
   checkRequirements,
   TECH_CATEGORIES,
-  TechCategory,
 } from '@/data/tech-tree';
 import { RESEARCH_DEFINITIONS, UpgradeEffect } from '@/data/research/dominion';
 
@@ -21,7 +20,7 @@ describe('Tech Tree', () => {
     });
 
     it('all names are strings', () => {
-      for (const [key, name] of Object.entries(BUILDING_DISPLAY_NAMES)) {
+      for (const [, name] of Object.entries(BUILDING_DISPLAY_NAMES)) {
         expect(typeof name).toBe('string');
         expect(name.length).toBeGreaterThan(0);
       }

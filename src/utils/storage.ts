@@ -236,7 +236,7 @@ export async function getLargeData<T>(key: string): Promise<StorageResult<T>> {
           const jsonString = decompressData(entry.value);
           const parsed = JSON.parse(jsonString) as T;
           resolve({ success: true, data: parsed });
-        } catch (parseError) {
+        } catch {
           resolve({
             success: false,
             error: 'parse_error',

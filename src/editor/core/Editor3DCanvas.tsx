@@ -22,7 +22,7 @@ import { EditorTerrain } from '../rendering3d/EditorTerrain';
 import { EditorObjects } from '../rendering3d/EditorObjects';
 import { EditorGrid } from '../rendering3d/EditorGrid';
 import { EditorBrushPreview } from '../rendering3d/EditorBrushPreview';
-import { TerrainBrush, type RampResult } from '../tools/TerrainBrush';
+import { TerrainBrush } from '../tools/TerrainBrush';
 import { ObjectPlacer } from '../tools/ObjectPlacer';
 import { RTSCamera } from '@/rendering/Camera';
 import { debugInitialization } from '@/utils/debugLogger';
@@ -42,7 +42,7 @@ export interface Editor3DCanvasProps {
   onFillArea: (startX: number, startY: number, targetElevation: number, newElevation: number) => void;
   onObjectSelect: (ids: string[]) => void;
   onObjectUpdate: (id: string, updates: { x?: number; y?: number }) => void;
-  onObjectAdd: (obj: { type: string; x: number; y: number; radius?: number; properties?: Record<string, unknown> }) => string;
+  _onObjectAdd: (obj: { type: string; x: number; y: number; radius?: number; properties?: Record<string, unknown> }) => string;
   // Enhanced UI callbacks
   onCursorMove?: (gridPos: { x: number; y: number } | null, worldPos: { x: number; y: number; z: number } | null) => void;
   onObjectHover?: (obj: EditorObject | null) => void;
@@ -62,7 +62,7 @@ export function Editor3DCanvas({
   onFillArea,
   onObjectSelect,
   onObjectUpdate,
-  onObjectAdd,
+  _onObjectAdd,
   onCursorMove,
   onObjectHover,
   onContextMenu,
@@ -114,8 +114,8 @@ export function Editor3DCanvas({
     polygonVertices: [] as Array<{ x: number; y: number }>,
   });
 
-  // Performance: track last frame time
-  const lastFrameTimeRef = useRef(0);
+  // Performance: track last frame time (kept for potential future profiling)
+  const _lastFrameTimeRef = useRef(0);
 
   const { mapData, activeTool, selectedElevation, selectedFeature, selectedMaterial, brushSize, selectedObjects } = state;
 
@@ -254,6 +254,7 @@ export function Editor3DCanvas({
       cancelAnimationFrame(animationId);
       rtsCamera.dispose();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only re-init camera when map dimensions change, not on every mapData/zoom change
   }, [isInitialized, mapData?.width, mapData?.height]);
 
   // Load map data
@@ -310,6 +311,7 @@ export function Editor3DCanvas({
         clearTimeout(terrainUpdateTimeoutRef.current);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only update terrain mesh when terrain data changes
   }, [isInitialized, mapData?.terrain]);
 
   // Update objects when selection changes
@@ -331,12 +333,14 @@ export function Editor3DCanvas({
         objectsRef.current?.updateObjectRotation(obj.id, obj.properties.rotation as number);
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only update object properties when objects array changes
   }, [isInitialized, mapData?.objects]);
 
   // Update biome
   useEffect(() => {
     if (!isInitialized || !mapData) return;
     terrainRef.current?.setBiome(mapData.biomeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only update biome when biomeId changes
   }, [isInitialized, mapData?.biomeId]);
 
   // Update visibility
@@ -425,6 +429,7 @@ export function Editor3DCanvas({
     updateViewport(); // Initial update
 
     return () => clearInterval(intervalId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only update when dimensions change, not on every mapData mutation
   }, [onViewportChange, mapData?.width, mapData?.height, isInitialized]);
 
   // Raycast to terrain - optimized to reuse objects
@@ -976,6 +981,7 @@ export function Editor3DCanvas({
     paintingState.current.isDraggingObject = false;
     paintingState.current.draggedObjectId = null;
     paintingState.current.lastPaintPos = null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedFeature and snapMode accessed through refs
   }, [onCommitBatch, raycastToTerrain, worldToGrid, mapData, brushSize, selectedElevation, onCellsUpdateBatched]);
 
   const handleMouseLeave = useCallback(() => {
@@ -1022,12 +1028,12 @@ export function Editor3DCanvas({
 
   // Double click handler - currently disabled to prevent accidental object creation
   // Objects should be added from the panel instead
-  const handleDoubleClick = useCallback((e: React.MouseEvent) => {
+  const handleDoubleClick = useCallback((_e: React.MouseEvent) => {
     // Intentionally empty - double-click was causing accidental object creation
     // when trying to select objects quickly
   }, []);
 
-  // Get cursor style
+  // Get cursor style - reads from ref for immediate cursor feedback during drag
   const getCursor = () => {
     if (paintingState.current.isDraggingObject) return 'move';
     if (activeTool === 'select') return 'default';

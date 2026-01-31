@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MapData } from '@/data/maps';
-import { WALL_DEFINITIONS, calculateWallLine, calculateWallLineCost } from '@/data/buildings/walls';
+import { calculateWallLine, calculateWallLineCost } from '@/data/buildings/walls';
 
 /**
  * WallPlacementPreview - Specialized preview for wall line placement

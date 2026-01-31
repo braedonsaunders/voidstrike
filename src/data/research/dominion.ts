@@ -9,7 +9,6 @@
  */
 
 import { DefinitionRegistry } from '@/engine/definitions/DefinitionRegistry';
-import type { ResearchDefinition as RegistryResearchDefinition, UnitCategory } from '@/engine/definitions/types';
 
 // Re-export types
 export type UpgradeEffect = {

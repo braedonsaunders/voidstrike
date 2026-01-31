@@ -7,7 +7,6 @@ import { DefinitionRegistry } from '@/engine/definitions/DefinitionRegistry';
 import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
 import { useGameStore } from '@/store/gameStore';
 import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
-import { getWorkerBridge } from '@/engine/workers/WorkerBridge';
 
 type SpawnTeam = 'player1' | 'player2';
 type SpawnQuantity = 1 | 5 | 10 | 20;
@@ -178,7 +177,6 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   const handleFight = useCallback(() => {
     const game = Game.getInstance();
     const worldAdapter = RenderStateWorldAdapter.getInstance();
-    const bridge = getWorkerBridge();
 
     if (!worldAdapter) {
       console.warn('[BattleSimulator] No world adapter available');
@@ -267,9 +265,8 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   }, []);
 
   const handleSelectTeam = useCallback((team: 'player1' | 'player2') => {
-    const game = Game.getInstance();
+    const _game = Game.getInstance();
     const worldAdapter = RenderStateWorldAdapter.getInstance();
-    const bridge = getWorkerBridge();
 
     if (!worldAdapter) return;
 

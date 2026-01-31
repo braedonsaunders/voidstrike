@@ -17,12 +17,15 @@ export const ResourcePanel = memo(function ResourcePanel() {
   const isSpectator = useGameSetupStore((state: GameSetupState) => state.isSpectator());
   const [fps, setFps] = useState(0);
   const frameCountRef = useRef(0);
-  const lastTimeRef = useRef(performance.now());
+  // Initialize in effect to avoid impure function during render
+  const lastTimeRef = useRef(0);
 
   // FPS counter
   useEffect(() => {
     if (!showFPS) return;
 
+    // Initialize timing ref on effect start
+    lastTimeRef.current = performance.now();
     let animationId: number;
     const updateFPS = () => {
       frameCountRef.current++;
@@ -49,9 +52,8 @@ export const ResourcePanel = memo(function ResourcePanel() {
     return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
   }, [gameTime]);
 
-  const { isSupplyBlocked, supplyPercent } = useMemo(() => ({
+  const { isSupplyBlocked } = useMemo(() => ({
     isSupplyBlocked: supply >= maxSupply && maxSupply > 0,
-    supplyPercent: maxSupply > 0 ? (supply / maxSupply) * 100 : 0,
   }), [supply, maxSupply]);
 
   return (

@@ -83,7 +83,7 @@ export class PeerRelayNetwork {
       try {
         const message = JSON.parse(event.data) as RelayMessage;
         this.handleMessage(peerId, message);
-      } catch (e) {
+      } catch {
         // Not a relay message, pass through as direct message
         this.emit('message', {
           from: peerId,

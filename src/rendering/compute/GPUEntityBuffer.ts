@@ -25,13 +25,13 @@ import { debugShaders } from '@/utils/debugLogger';
 const MAX_ENTITIES = 8192;
 
 // Bytes per entity transform (mat4 = 16 floats × 4 bytes)
-const TRANSFORM_STRIDE = 64;
+const _TRANSFORM_STRIDE = 64;
 
 // Bytes per entity metadata (vec4 = 4 floats × 4 bytes)
-const METADATA_STRIDE = 16;
+const _METADATA_STRIDE = 16;
 
 // DrawIndexedIndirect struct size (5 uint32 = 20 bytes)
-const INDIRECT_ARGS_STRIDE = 20;
+const _INDIRECT_ARGS_STRIDE = 20;
 
 // Number of frames to quarantine freed slots before reclamation.
 // WebGPU typically has 2-3 frames in flight; 3 frames provides safety margin.

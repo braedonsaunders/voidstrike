@@ -900,7 +900,7 @@ export function validateMapConnectivity(mapData: MapData): ConnectivityValidatio
   }
 
   // Check which locations are reachable
-  let connectedCount = 0;
+  let _connectedCount = 0;
   for (const loc of locations) {
     const lx = clamp(Math.floor(loc.x), 0, width - 1);
     const ly = clamp(Math.floor(loc.y), 0, height - 1);
@@ -928,7 +928,7 @@ export function validateMapConnectivity(mapData: MapData): ConnectivityValidatio
     }
 
     if (isReachable) {
-      connectedCount++;
+      _connectedCount++;
     } else {
       unreachableLocations.push(loc);
     }

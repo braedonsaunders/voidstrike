@@ -79,7 +79,7 @@ export class SaveLoadSystem extends System {
     });
   }
 
-  public update(deltaTime: number): void {
+  public update(_deltaTime: number): void {
     if (!this.autoSaveEnabled) return;
 
     const currentTime = Date.now();

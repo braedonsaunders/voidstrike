@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MapData, MapCell, TerrainType, Elevation, TerrainFeature, TERRAIN_FEATURE_CONFIG } from '@/data/maps';
-import { BiomeConfig, BIOMES, blendBiomeColors, BiomeType } from './Biomes';
+import { BiomeConfig, BIOMES, blendBiomeColors } from './Biomes';
 import { TSLTerrainMaterial } from './tsl/TerrainMaterial';
 import AssetManager from '@/assets/AssetManager';
 import { debugTerrain } from '@/utils/debugLogger';
@@ -10,10 +10,7 @@ import { clamp } from '@/utils/math';
 import {
   elevationToHeight,
   ELEVATION_TO_HEIGHT_FACTOR,
-  CLIFF_WALL_THRESHOLD_ELEVATION,
   RAMP_BOUNDARY_ELEVATION_THRESHOLD,
-  WALKABLE_CLIMB_ELEVATION,
-  RAMP_SMOOTHING_MAX_CARDINAL,
   RAMP_SMOOTHING_MAX_DIAGONAL,
   RAMP_SMOOTHING_PASSES,
 } from '@/data/pathfinding.config';

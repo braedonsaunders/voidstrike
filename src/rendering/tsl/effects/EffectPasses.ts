@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * Effect Passes - Individual post-processing effect creation functions
  *
@@ -26,7 +27,6 @@
 
 import * as THREE from 'three';
 import {
-  pass,
   uniform,
   uv,
   vec2,
@@ -391,7 +391,7 @@ export function createColorGradingPass(
   vignetteEnabled: boolean
 ): any {
   return Fn(() => {
-    let color = vec3(inputNode).toVar();
+    const color = vec3(inputNode).toVar();
 
     // Apply exposure in linear HDR space (before tone mapping)
     color.mulAssign(uniforms.exposure);
@@ -892,7 +892,7 @@ export function createFogOfWarPass(
     // COMPOSITE FINAL COLOR
     // ============================================
     // Start with scene color for visible areas
-    let finalColor = sceneColor.toVar();
+    const finalColor = sceneColor.toVar();
 
     // Apply explored effect (desaturation + darkening)
     const exploredAmount = isExplored.mul(float(1.0).sub(isVisible));

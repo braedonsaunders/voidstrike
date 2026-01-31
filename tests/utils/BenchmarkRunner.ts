@@ -226,11 +226,10 @@ export class BenchmarkRunner {
 
     const t = (meanA - meanB) / se;
 
-    // Welch-Satterthwaite degrees of freedom
-    const numerator = Math.pow(varA / nA + varB / nB, 2);
-    const denominator =
-      Math.pow(varA / nA, 2) / (nA - 1) + Math.pow(varB / nB, 2) / (nB - 1);
-    const df = numerator / denominator;
+    // Welch-Satterthwaite degrees of freedom (computed for reference, using normal approximation for large df)
+    // const numerator = Math.pow(varA / nA + varB / nB, 2);
+    // const denominator = Math.pow(varA / nA, 2) / (nA - 1) + Math.pow(varB / nB, 2) / (nB - 1);
+    // const df = numerator / denominator;
 
     // Approximate p-value using t-distribution
     // For simplicity, use a normal approximation for large df

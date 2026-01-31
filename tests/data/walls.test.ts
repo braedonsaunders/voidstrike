@@ -6,7 +6,6 @@ import {
   calculateWallLine,
   calculateWallLineCost,
   getWallConnectionType,
-  WallConnectionType,
 } from '@/data/buildings/walls';
 
 describe('Wall Definitions', () => {

@@ -205,8 +205,8 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
 
   const maxUndoHistory = config.features?.maxUndoHistory ?? 50;
 
-  // Save current state to undo stack
-  const pushToUndoStack = useCallback(() => {
+  // Save current state to undo stack (unused but kept for potential future use)
+  const _pushToUndoStack = useCallback(() => {
     if (!state.mapData) return;
 
     setState((prev) => ({

@@ -4,7 +4,7 @@ import { useGameStore } from '@/store/gameStore';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { Game } from '@/engine/core/Game';
 import { getRenderStateAdapter, getWorkerBridge } from '@/engine/workers';
-import { useEffect, useState, memo, useCallback, useMemo } from 'react';
+import { useEffect, useState, memo, useCallback } from 'react';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
 import { WALL_DEFINITIONS } from '@/data/buildings/walls';
@@ -192,6 +192,7 @@ function CommandCardInner() {
 
   useEffect(() => {
     // Reset to main menu when selection changes
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional reset on selection change
     setMenuMode('main');
   }, [selectedUnits]);
 
@@ -202,6 +203,7 @@ function CommandCardInner() {
     const game = Game.getInstance();
 
     if (!bridge || selectedUnits.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional reset when no selection
       setCommands([]);
       return;
     }
@@ -309,7 +311,7 @@ function CommandCardInner() {
 
         // Transform commands for units that can transform (e.g., Valkyrie)
         if (unit.canTransform && unit.transformModes && unit.transformModes.length > 0) {
-          const currentMode = unit.getCurrentMode?.();
+          const _currentMode = unit.getCurrentMode?.();
           const isTransforming = unit.state === 'transforming';
 
           // Add a button for each available transform mode (except current mode)
@@ -318,7 +320,7 @@ function CommandCardInner() {
 
             // Determine icon and shortcut based on mode
             const isAirMode = mode.isFlying === true;
-            const icon = isAirMode ? '✈' : '⬇';
+            const _icon = isAirMode ? '✈' : '⬇';
             const shortcut = isAirMode ? 'F' : 'E';
 
             // Build tooltip with mode stats

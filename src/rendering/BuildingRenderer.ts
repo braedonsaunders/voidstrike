@@ -5,9 +5,9 @@ import { Building } from '@/engine/components/Building';
 import { Health } from '@/engine/components/Health';
 import { Selectable } from '@/engine/components/Selectable';
 import { VisionSystem } from '@/engine/systems/VisionSystem';
-import { AssetManager, REFERENCE_FRAME, LODLevel } from '@/assets/AssetManager';
+import { AssetManager, LODLevel } from '@/assets/AssetManager';
 import { Terrain } from './Terrain';
-import { getPlayerColor, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { getPlayerColor, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { debugMesh } from '@/utils/debugLogger';
 import { CullingService, EntityCategory } from './services/CullingService';
@@ -38,7 +38,6 @@ import {
   createScaffoldBeamGeometry,
   createScaffoldDiagonalGeometry,
 } from './tsl/BuildingMaterials';
-import { MeshBasicNodeMaterial } from 'three/webgpu';
 
 // Shared rendering utilities
 import {
@@ -312,7 +311,7 @@ export class BuildingRenderer {
    */
   public refreshAllMeshes(): void {
     debugMesh.log('[BuildingRenderer] Refreshing all building meshes...');
-    for (const [entityId, meshData] of this.buildingMeshes) {
+    for (const [_entityId, meshData] of this.buildingMeshes) {
       this.scene.remove(meshData.group);
       this.scene.remove(meshData.selectionRing);
       this.scene.remove(meshData.healthBar);

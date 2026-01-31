@@ -1,4 +1,4 @@
-import { GameCore, GameConfig, GameState, TerrainCell } from './GameCore';
+import { GameCore, GameConfig, TerrainCell } from './GameCore';
 import type { SystemDefinition } from './SystemRegistry';
 import { GameLoop } from './GameLoop';
 import { getSystemDefinitions } from '../systems/systemDependencies';
@@ -8,7 +8,7 @@ import { SelectionSystem } from '../systems/SelectionSystem';
 import { AudioSystem } from '../systems/AudioSystem';
 
 import { debugInitialization, debugPerformance, debugNetworking } from '@/utils/debugLogger';
-import { dispatchCommand, type GameCommand } from './GameCommand';
+import type { GameCommand } from './GameCommand';
 import { Selectable } from '../components/Selectable';
 import { RecastNavigation } from '../pathfinding/RecastNavigation';
 import { PerformanceMonitor } from './PerformanceMonitor';
@@ -22,8 +22,6 @@ import {
   getDesyncState,
   useMultiplayerStore,
   getAdaptiveCommandDelay,
-  getLatencyStats,
-  getAllPeerIds,
   getSlotIdForPeer,
   getAllRemoteSlotIds,
 } from '@/store/multiplayerStore';

@@ -8,7 +8,6 @@
  * - Army grouping and cohesion
  */
 
-import { Entity } from '../ecs/Entity';
 import { World } from '../ecs/World';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';

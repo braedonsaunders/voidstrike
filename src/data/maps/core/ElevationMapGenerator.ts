@@ -19,8 +19,6 @@ import {
   CLIFF_THRESHOLD,
   BIOME_THEMES,
   toXY,
-  DecorationRules,
-  ExplicitDecoration,
 } from './ElevationMap';
 
 import {
@@ -32,7 +30,6 @@ import {
   WatchTower,
   Ramp,
   DestructibleRock,
-  ResourceNode,
   TerrainType,
   TerrainFeature,
   DIR,
@@ -49,8 +46,8 @@ import {
 
 // Connectivity system imports
 import { analyzeConnectivity, getConnectivitySummary } from './ConnectivityAnalyzer';
-import { validateConnectivity, formatValidationResult } from './ConnectivityValidator';
-import { autoFixConnectivity as fixConnectivity, formatFixResult } from './ConnectivityFixer';
+import { validateConnectivity } from './ConnectivityValidator';
+import { autoFixConnectivity as fixConnectivity } from './ConnectivityFixer';
 import type { ConnectivityResult } from './ConnectivityGraph';
 
 // ============================================================================

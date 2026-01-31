@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import {
   useMultiplayerStore,
   ConnectionStatus,
-  DesyncState,
   ConnectionQuality,
   LatencyStats,
 } from '@/store/multiplayerStore';
@@ -37,6 +36,7 @@ export function MultiplayerOverlay() {
   // Update elapsed time during network pause
   useEffect(() => {
     if (!isNetworkPaused || !networkPauseStartTime) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional reset when not paused
       setElapsedTime(0);
       return;
     }
@@ -79,7 +79,7 @@ export function MultiplayerOverlay() {
                 <div>Connection Status: {connectionStatus}</div>
                 <div className="mt-2 text-void-500">
                   In a deterministic RTS, both clients must have identical game state.
-                  When checksums don't match, the games have diverged and cannot recover.
+                  When checksums don&apos;t match, the games have diverged and cannot recover.
                 </div>
               </div>
             )}
@@ -193,8 +193,8 @@ export function ConnectionStatusIndicator() {
   const {
     isMultiplayer,
     connectionStatus,
-    connectionQuality,
-    latencyStats,
+    connectionQuality: _connectionQuality,
+    latencyStats: _latencyStats,
   } = useMultiplayerStore();
 
   if (!isMultiplayer) return null;
@@ -252,7 +252,6 @@ export function ConnectionQualityIndicator({ showDetails = false }: { showDetail
     isMultiplayer,
     connectionStatus,
     connectionQuality,
-    latencyStats,
   } = useMultiplayerStore();
 
   // Update latency display periodically
@@ -260,6 +259,7 @@ export function ConnectionQualityIndicator({ showDetails = false }: { showDetail
 
   useEffect(() => {
     if (!isMultiplayer || connectionStatus !== 'connected') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional reset when disconnected
       setDisplayStats(null);
       return;
     }
@@ -352,14 +352,14 @@ export function LatencyDisplay() {
   const {
     isMultiplayer,
     connectionStatus,
-    connectionQuality,
-    latencyStats,
+    connectionQuality: _connectionQuality,
   } = useMultiplayerStore();
 
   const [stats, setStats] = useState<LatencyStats | null>(null);
 
   useEffect(() => {
     if (!isMultiplayer || connectionStatus !== 'connected') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional reset when disconnected
       setStats(null);
       return;
     }

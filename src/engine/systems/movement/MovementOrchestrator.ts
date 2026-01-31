@@ -27,7 +27,7 @@ import { debugPerformance, debugPathfinding, debugResources } from '@/utils/debu
 import { snapValue, QUANT_POSITION } from '@/utils/FixedPoint';
 import { WasmBoids, getWasmBoids } from '../../wasm/WasmBoids';
 import { CROWD_MAX_AGENTS } from '@/data/pathfinding.config';
-import { SpatialEntityData, SpatialUnitState, stateToEnum } from '../../core/SpatialGrid';
+import { stateToEnum } from '../../core/SpatialGrid';
 import { collisionConfig } from '@/data/collisionConfig';
 import AssetManager from '@/assets/AssetManager';
 import {
@@ -738,7 +738,7 @@ export class MovementOrchestrator {
     unit: Unit,
     velocity: Velocity,
     dt: number,
-    useWasmThisFrame: boolean
+    _useWasmThisFrame: boolean
   ): { handled: boolean; skipMovement: boolean; targetX: number | null; targetY: number | null } {
     const targetEntity = this.world.getEntity(unit.targetEntityId!);
     if (!targetEntity) {
@@ -874,7 +874,7 @@ export class MovementOrchestrator {
     transform: Transform,
     unit: Unit,
     velocity: Velocity,
-    dt: number
+    _dt: number
   ): boolean {
     if (unit.path.length > 0 && unit.pathIndex < unit.path.length - 1) {
       unit.pathIndex++;

@@ -31,8 +31,6 @@ import { debugAI } from '@/utils/debugLogger';
 import type { AICoordinator, AIPlayer } from './AICoordinator';
 import { AIEconomyManager } from './AIEconomyManager';
 import {
-  type MacroRule,
-  type RuleCondition,
   type MacroAction,
   type AIStateSnapshot,
   evaluateRule,
@@ -42,7 +40,7 @@ import { getCounterRecommendation, analyzeThreatGaps } from '../AIMicroSystem';
 import { distance } from '@/utils/math';
 
 // Build order index for when we've finished the build order
-const BUILD_ORDER_COMPLETE = 999;
+const _BUILD_ORDER_COMPLETE = 999;
 
 export class AIBuildOrderExecutor {
   private game: Game;
@@ -167,7 +165,7 @@ export class AIBuildOrderExecutor {
     }
 
     // Execute the step
-    let success = this.executeBuildOrderStep(ai, step);
+    const success = this.executeBuildOrderStep(ai, step);
 
     if (success) {
       ai.buildOrderIndex++;
@@ -1092,7 +1090,7 @@ export class AIBuildOrderExecutor {
   private determineUnitTarget(
     ai: AIPlayer,
     abilityId: string,
-    targetType: string
+    _targetType: string
   ): { entityId: number } | null {
     switch (abilityId) {
       case 'supply_drop': {

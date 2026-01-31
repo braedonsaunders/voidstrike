@@ -16,6 +16,8 @@
  *   npm install -D @gltf-transform/cli
  */
 
+/* eslint-disable no-console */
+
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');

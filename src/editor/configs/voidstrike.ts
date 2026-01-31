@@ -15,7 +15,6 @@ import {
   PanelConfig,
   UIThemeConfig,
   DEFAULT_TOOLS,
-  DEFAULT_PANELS,
   DEFAULT_CANVAS,
   DEFAULT_FEATURES,
 } from '../config/EditorConfig';

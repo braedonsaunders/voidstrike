@@ -15,7 +15,6 @@ import type {
   MapMeta,
   BaseLocation,
   BaseType,
-  Point,
   PaintCommand,
   BiomeType,
   DecorationRules,
@@ -164,7 +163,7 @@ function findClosestOfType(
 }
 
 /** Find all bases of a specific type belonging to a player */
-function findPlayerBases(
+function _findPlayerBases(
   bases: BaseLocation[],
   playerSlot: number,
   type?: BaseType
@@ -176,7 +175,7 @@ function findPlayerBases(
 }
 
 /** Group bases by player */
-function groupByPlayer(bases: BaseLocation[]): Map<number, BaseLocation[]> {
+function _groupByPlayer(bases: BaseLocation[]): Map<number, BaseLocation[]> {
   const groups = new Map<number, BaseLocation[]>();
 
   for (const base of bases) {
@@ -241,7 +240,7 @@ function detectConnections(
   // Get mains
   const mains = bases.filter(b => b.type === 'main');
   const naturals = bases.filter(b => b.type === 'natural');
-  const thirds = bases.filter(b => b.type === 'third');
+  const _thirds = bases.filter(b => b.type === 'third');
 
   // Auto-connect mains to their closest natural
   if (config.autoConnectMainNatural) {

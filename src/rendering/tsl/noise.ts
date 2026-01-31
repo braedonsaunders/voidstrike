@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * TSL Noise Functions
  *
@@ -14,7 +15,6 @@ import {
   vec3,
   vec4,
   float,
-  int,
   floor,
   fract,
   abs,
@@ -22,10 +22,7 @@ import {
   max,
   dot,
   normalize,
-  mix,
   step,
-  smoothstep,
-  pow,
   sin,
   cos,
   sqrt,

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { deterministicDamage, quantize, QUANT_DAMAGE } from '@/utils/FixedPoint';
 import { getDamageMultiplier, COMBAT_CONFIG, DAMAGE_MULTIPLIERS } from '@/data/combat/combat';
 

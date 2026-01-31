@@ -1,10 +1,5 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import {
-  RESOURCE_TYPES,
-  RESOURCE_SYSTEM_CONFIG,
-  getEffectiveGatherRate,
-  requiresBuilding,
-} from '@/data/resources/resources';
+import { describe, it, expect } from 'vitest';
+import { RESOURCE_TYPES, RESOURCE_SYSTEM_CONFIG } from '@/data/resources/resources';
 import { distance } from '@/utils/math';
 
 // Extract saturation constants from config

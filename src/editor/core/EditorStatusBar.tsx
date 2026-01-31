@@ -20,7 +20,7 @@ export function EditorStatusBar({
   config,
   state,
   cursorPosition,
-  cursorWorldPosition,
+  cursorWorldPosition: _cursorWorldPosition,
   hoveredObject,
 }: EditorStatusBarProps) {
   const activeTool = config.tools.find((t) => t.id === state.activeTool);

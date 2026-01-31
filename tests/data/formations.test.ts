@@ -7,7 +7,6 @@ import {
   getDefaultFormation,
   generateFormationPositions,
   sortUnitsForFormation,
-  FormationDefinition,
 } from '@/data/formations/formations';
 
 describe('Formation System', () => {

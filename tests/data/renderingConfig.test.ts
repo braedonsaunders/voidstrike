@@ -281,7 +281,7 @@ describe('Rendering Configuration', () => {
     });
 
     it('each faction has primary, secondary, glow colors', () => {
-      for (const [faction, colors] of Object.entries(FACTION_COLORS)) {
+      for (const [, colors] of Object.entries(FACTION_COLORS)) {
         expect(typeof colors.primary).toBe('number');
         expect(typeof colors.secondary).toBe('number');
         expect(typeof colors.glow).toBe('number');
@@ -345,7 +345,7 @@ describe('Rendering Configuration', () => {
     });
 
     it('each preset has required properties', () => {
-      for (const [quality, preset] of Object.entries(SHADOW_QUALITY_PRESETS)) {
+      for (const [, preset] of Object.entries(SHADOW_QUALITY_PRESETS)) {
         expect(preset.mapSize).toBeGreaterThan(0);
         expect(preset.radius).toBeGreaterThan(0);
         expect(typeof preset.bias).toBe('number');
@@ -392,7 +392,7 @@ describe('Rendering Configuration', () => {
     });
 
     it('each preset has near and far values', () => {
-      for (const [biome, fog] of Object.entries(FOG_PRESETS)) {
+      for (const [, fog] of Object.entries(FOG_PRESETS)) {
         expect(fog.near).toBeGreaterThan(0);
         expect(fog.far).toBeGreaterThan(fog.near);
       }

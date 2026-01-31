@@ -66,7 +66,7 @@ export function updateAnimationParameters(
 /**
  * Unit states that should play walk animation when moving
  */
-const WALKING_STATES = new Set([
+const _WALKING_STATES = new Set([
   'moving',
   'attackmoving',
   'patrolling',

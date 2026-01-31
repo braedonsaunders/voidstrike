@@ -16,7 +16,6 @@ import { Building } from '../components/Building';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
-import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { distance } from '@/utils/math';
 
@@ -156,7 +155,7 @@ const TECH_TREE: Record<string, { requires: string[]; enables: string[] }> = {
 /**
  * Strategy indicators
  */
-const STRATEGY_INDICATORS = {
+const _STRATEGY_INDICATORS = {
   rush: {
     signs: ['early_aggression', 'low_workers', 'few_buildings', 'no_expansion'],
     antiSigns: ['expansion', 'high_tech'],
@@ -444,7 +443,7 @@ export class ScoutingMemory {
   private updateEstimates(intel: EnemyIntel): void {
     // Estimate workers from bases and buildings
     let estimatedWorkers = 0;
-    let productionBuildings = 0;
+    let _productionBuildings = 0;
 
     for (const building of intel.buildings.values()) {
       if (!building.confirmed) continue;
@@ -456,7 +455,7 @@ export class ScoutingMemory {
 
       // Count production buildings
       if (['infantry_bay', 'forge', 'hangar'].includes(building.buildingId)) {
-        productionBuildings++;
+        _productionBuildings++;
       }
     }
 

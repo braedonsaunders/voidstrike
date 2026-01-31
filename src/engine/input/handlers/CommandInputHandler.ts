@@ -28,8 +28,8 @@ export class CommandInputHandler implements InputHandler {
 
   onKeyDown(
     event: KeyboardInputEvent,
-    state: InputState,
-    deps: InputHandlerDependencies
+    _state: InputState,
+    _deps: InputHandlerDependencies
   ): boolean {
     if (event.key === 'escape') {
       useGameStore.getState().setCommandTargetMode(null);

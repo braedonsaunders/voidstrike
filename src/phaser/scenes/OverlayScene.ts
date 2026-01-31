@@ -1,7 +1,7 @@
 import * as Phaser from 'phaser';
 import { debugAudio, debugPathfinding } from '@/utils/debugLogger';
 import { EventBus } from '@/engine/core/EventBus';
-import { Game } from '@/engine/core/Game';
+import type { Game } from '@/engine/core/Game';
 import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, isLocalPlayer, getLocalPlayerId, enableSpectatorMode, isBattleSimulatorMode } from '@/store/gameSetupStore';
@@ -26,7 +26,7 @@ import type {
  * Hybrid 2D/3D approach where Phaser handles the UI polish layer.
  */
 
-interface TacticalUnit {
+interface _TacticalUnit {
   id: number;
   x: number;
   y: number;
@@ -295,7 +295,7 @@ export class OverlayScene extends Phaser.Scene {
     });
 
     // Nuclear launch detected!
-    this.registerEvent('alert:nuclear', (data: { targetPosition?: { x: number; y: number } }) => {
+    this.registerEvent('alert:nuclear', (_data: { targetPosition?: { x: number; y: number } }) => {
       this.showAlert('NUCLEAR LAUNCH DETECTED', 0xff0000, 5000);
       this.addScreenEffect({
         type: 'nuke_warning',
@@ -624,7 +624,7 @@ export class OverlayScene extends Phaser.Scene {
     if (state === this.currentCountdownState) return;
     if (state === 'done') return; // Handled by complete message
 
-    const previousState = this.currentCountdownState;
+    const _previousState = this.currentCountdownState;
     this.currentCountdownState = state;
 
     if (!this.countdownText || !this.countdownGlow || !this.countdownContainer) return;
@@ -778,7 +778,7 @@ export class OverlayScene extends Phaser.Scene {
    */
   private startFallbackCountdown(centerX: number, centerY: number): void {
     const startTime = this.countdownStartTime;
-    const duration = 4000;
+    const _duration = 4000;
 
     const getState = (elapsed: number): 'waiting' | 3 | 2 | 1 | 'GO' | 'done' => {
       if (elapsed < 0) return 'waiting';
@@ -1177,7 +1177,7 @@ export class OverlayScene extends Phaser.Scene {
     container.add(durationValue);
 
     // Spectate button or menu hint
-    let actionElements: Phaser.GameObjects.GameObject[] = [];
+    const actionElements: Phaser.GameObjects.GameObject[] = [];
 
     if (canSpectate) {
       const spectateButton = this.add.text(0, 150, '[ CONTINUE SPECTATING ]', {
@@ -1269,7 +1269,7 @@ export class OverlayScene extends Phaser.Scene {
     this.time.delayedCall(500, () => {
       // Animate lines from center outward
       let lineProgress = 0;
-      const lineTimer = this.time.addEvent({
+      const _lineTimer = this.time.addEvent({
         delay: 16,
         repeat: 30,
         callback: () => {
@@ -1717,7 +1717,7 @@ export class OverlayScene extends Phaser.Scene {
 
   private drawTacticalOverlay(): void {
     const store = useGameStore.getState();
-    const selectedUnits = store.selectedUnits;
+    const _selectedUnits = store.selectedUnits;
 
     // Draw grid overlay with tactical styling
     this.tacticalGraphics.lineStyle(1, 0x00ffff, 0.1);
