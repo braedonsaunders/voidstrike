@@ -1,4 +1,6 @@
-import { useUIStore, DebugSettings } from '@/store/uiStore';
+// Note: We use type-only import and lazy access to avoid circular dependency issues
+// when this module is loaded in a Worker context (where uiStore cannot be imported)
+import type { DebugSettings } from '@/store/uiStore';
 
 export type DebugCategory =
   | 'animation'
@@ -42,16 +44,33 @@ const categoryToSettingKey: Record<DebugCategory, keyof DebugSettings> = {
 
 let workerDebugSettings: DebugSettings | null = null;
 
+// Cached reference to uiStore (lazily loaded to avoid circular dep issues in workers)
+let cachedUIStore: { getState: () => { debugSettings: DebugSettings } } | null = null;
+
 export function setWorkerDebugSettings(settings: DebugSettings): void {
   workerDebugSettings = settings;
 }
 
 function getDebugSettings(): DebugSettings | null {
+  // In Worker context, use settings synced from main thread
   if (typeof window === 'undefined') {
     return workerDebugSettings;
   }
 
-  return useUIStore.getState().debugSettings;
+  // Lazily load uiStore to avoid circular dependency issues
+  // This prevents the worker from trying to import uiStore at module load time
+  if (!cachedUIStore) {
+    try {
+      // Dynamic require to break the circular import chain
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const store = require('@/store/uiStore');
+      cachedUIStore = store.useUIStore;
+    } catch {
+      return null;
+    }
+  }
+
+  return cachedUIStore?.getState().debugSettings ?? null;
 }
 
 /**
