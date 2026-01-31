@@ -158,11 +158,18 @@ export class PeerRelayNetwork {
   private async sendToInternal(targetId: string, data: unknown): Promise<void> {
     const payload = JSON.stringify(data);
 
-    // Try direct connection first
+    // Try direct connection first, but only if channel is open
     const directChannel = this.directPeers.get(targetId);
     if (directChannel) {
-      this.sendViaChannel(directChannel, payload, targetId);
-      return;
+      if (directChannel.readyState === 'open') {
+        this.sendViaChannel(directChannel, payload, targetId);
+        return;
+      }
+      // Channel exists but is closed/closing - remove stale entry and try relay
+      this.directPeers.delete(targetId);
+      debugNetworking.log(
+        `[PeerRelay] Direct channel to ${targetId.slice(0, 8)}... is ${directChannel.readyState}, falling back to relay`
+      );
     }
 
     // Find or validate relay route
