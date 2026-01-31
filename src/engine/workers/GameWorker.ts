@@ -1108,28 +1108,21 @@ export class WorkerGame extends GameCore {
 
 let game: WorkerGame | null = null;
 
-// Log at module load time to verify worker script is executing
-console.log('[GameWorker] Module loaded, setting up message handler');
 
 if (typeof self !== 'undefined') {
   self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
     const message = event.data;
-    console.log('[GameWorker] Received message:', message.type);
 
     try {
       switch (message.type) {
         case 'init': {
           // Load definitions in worker context before creating game
           // Workers have their own JS context, so definitions must be loaded here too
-          console.log('[GameWorker] Step 1: Starting init...');
           debugInitialization.log('[GameWorker] Loading definitions in worker...');
-          console.log('[GameWorker] Step 2: Calling initializeDefinitions...');
           await initializeDefinitions();
-          console.log('[GameWorker] Step 3: Definitions loaded, creating WorkerGame...');
           debugInitialization.log('[GameWorker] Definitions loaded, creating WorkerGame');
 
           game = new WorkerGame(message.config);
-          console.log('[GameWorker] Step 4: WorkerGame created, sending initialized message');
           postMessage({ type: 'initialized', success: true } satisfies WorkerToMainMessage);
           break;
         }

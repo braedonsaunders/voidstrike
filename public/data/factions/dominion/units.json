@@ -671,7 +671,7 @@
     "attackRange": 7,
     "attackDamage": 35,
     "attackSpeed": 0.4,
-    "damageType": "torpedo",
+    "damageType": "explosive",
     "projectileType": "torpedo",
     "maxHealth": 175,
     "armor": 1,

@@ -128,30 +128,24 @@ export function useWorkerBridge({
 
   // Initialize worker bridge
   const initializeWorkerBridge = useCallback(async (): Promise<boolean> => {
-    console.log('[useWorkerBridge] initializeWorkerBridge called');
     if (isInitialized) return true;
 
     try {
-      console.log('[useWorkerBridge] Starting initialization...');
       const currentMap = mapRef.current;
       const mapWidth = currentMap.width;
       const mapHeight = currentMap.height;
       const localPlayerId = getLocalPlayerId();
       const isMultiplayer = isMultiplayerMode();
 
-      console.log('[useWorkerBridge] Step 1: Checking definitions...');
       debugInitialization.log('[useWorkerBridge] Initializing game (worker mode)');
 
       // Ensure definitions are loaded before creating Game instance
       if (!definitionsReady()) {
-        console.log('[useWorkerBridge] Step 2: Loading definitions...');
         debugInitialization.log('[useWorkerBridge] Waiting for definitions to load...');
         await initializeDefinitions();
-        console.log('[useWorkerBridge] Step 2b: Definitions loaded');
         debugInitialization.log('[useWorkerBridge] Definitions loaded');
       }
 
-      console.log('[useWorkerBridge] Step 3: Creating WorkerBridge...');
       // Create worker bridge for game logic communication
       const bridge = WorkerBridge.getInstance({
         config: {
@@ -169,22 +163,18 @@ export function useWorkerBridge({
         onGameOver: handleGameOver,
         onError: handleWorkerError,
       });
-      console.log('[useWorkerBridge] Step 4: WorkerBridge created');
       workerBridgeRef.current = bridge;
 
       // Set up refs for hook consumption
       worldProviderRef.current = RenderStateWorldAdapter.getInstance();
       eventBusRef.current = bridge.eventBus;
 
-      console.log('[useWorkerBridge] Step 5: Creating MainThreadEventHandler...');
       // Create main thread event handler for audio/effects
       const eventHandler = new MainThreadEventHandler(bridge);
       eventHandlerRef.current = eventHandler;
 
-      console.log('[useWorkerBridge] Step 6: Calling bridge.initialize()...');
       // Initialize the worker
       await bridge.initialize();
-      console.log('[useWorkerBridge] Step 7: bridge.initialize() completed');
 
       // Sync debug settings to worker for category filtering
       bridge.setDebugSettings(useUIStore.getState().debugSettings);
@@ -230,8 +220,16 @@ export function useWorkerBridge({
       setIsInitialized(true);
       return true;
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
       console.error('[useWorkerBridge] Initialization failed:', error);
       debugInitialization.error('[useWorkerBridge] Initialization failed:', error);
+
+      // Show user-visible notification for initialization failures (e.g., validation errors)
+      useUIStore.getState().addNotification(
+        'error',
+        `Game initialization failed: ${errorMessage}`,
+        30000 // Show for 30 seconds so user can read the full error
+      );
       return false;
     }
   }, [isInitialized, handleRenderState, handleGameEvent, handleGameOver, handleWorkerError]);
