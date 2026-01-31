@@ -1,3 +1,7 @@
+/**
+ * Network Types - Utility Functions Tests
+ * Tests for lobby code generation and command ID utilities
+ */
 import { describe, it, beforeEach, expect } from 'vitest';
 
 import { generateLobbyCode, commandIdGenerator } from '@/engine/network/types';
