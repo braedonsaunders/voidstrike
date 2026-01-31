@@ -657,7 +657,7 @@ export class Game extends GameCore {
    * since AI logic is deterministic and runs identically on all clients.
    * Commands are recorded for desync detection but not broadcast (both clients compute same AI).
    */
-  public issueAICommand(command: GameCommand): void {
+  public override issueAICommand(command: GameCommand): void {
     // Ensure command tick is set to current tick for deterministic execution
     command.tick = this.currentTick;
 

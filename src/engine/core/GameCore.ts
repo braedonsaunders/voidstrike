@@ -511,6 +511,21 @@ export abstract class GameCore {
   // ============================================================================
 
   /**
+   * Issue an AI command for immediate execution at current tick.
+   * AI commands bypass multiplayer validation since AI logic is deterministic
+   * and runs identically on all clients.
+   *
+   * Subclasses (Game) may override to add multiplayer-specific behavior
+   * like command recording for desync detection.
+   */
+  public issueAICommand(command: GameCommand): void {
+    // Set command tick to current tick for deterministic execution
+    command.tick = this.currentTick;
+    // Execute command directly
+    this.processCommand(command);
+  }
+
+  /**
    * Queue a command for execution at a specific tick (lockstep multiplayer)
    */
   protected queueCommand(command: GameCommand): void {
