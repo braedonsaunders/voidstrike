@@ -17,3 +17,11 @@ export {
   SmoothRotation,
   EntityIdTracker,
 } from './InstancedMeshPool';
+
+export {
+  GeometryQuarantine,
+  scheduleGeometryDisposal,
+  scheduleMultipleGeometryDisposal,
+  disposeObject3DDelayed,
+  GEOMETRY_QUARANTINE_FRAMES,
+} from './GeometryQuarantine';
