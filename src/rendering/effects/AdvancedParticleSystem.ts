@@ -12,6 +12,7 @@
  */
 
 import * as THREE from 'three';
+import { MeshBasicNodeMaterial } from 'three/webgpu';
 import {
   Fn,
   vec2,
@@ -40,6 +41,10 @@ import {
   positionLocal,
   modelWorldMatrix,
   cameraPosition,
+  modelViewProjection,
+  cameraNear,
+  cameraFar,
+  viewportCoordinate,
 } from 'three/tsl';
 
 // ============================================
@@ -285,16 +290,20 @@ export class AdvancedParticleSystem {
 
   // Geometry and materials
   private geometry: THREE.PlaneGeometry;
-  private material: THREE.MeshBasicMaterial; // Will be enhanced with custom shader
+  private material: MeshBasicNodeMaterial;
 
   // Textures
   private fireTexture: THREE.Texture;
   private smokeTexture: THREE.Texture;
   private glowTexture: THREE.Texture;
 
-  // Uniforms
+  // Uniforms for TSL soft particles
   private timeUniform: { value: number };
   private lightDirUniform: { value: THREE.Vector3 };
+  private depthTextureUniform: ReturnType<typeof uniform>;
+  private softnessUniform: ReturnType<typeof uniform>;
+  private cameraNearUniform: ReturnType<typeof uniform>;
+  private cameraFarUniform: ReturnType<typeof uniform>;
 
   // Terrain height function
   private getTerrainHeight: ((x: number, z: number) => number) | null = null;
@@ -352,14 +361,24 @@ export class AdvancedParticleSystem {
     // Create billboard geometry
     this.geometry = new THREE.PlaneGeometry(1, 1);
 
-    // Create material with additive blending for glowing particles
-    this.material = new THREE.MeshBasicMaterial({
-      map: this.glowTexture,
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side: THREE.DoubleSide,
-    });
+    // Initialize TSL uniforms for soft particles
+    // Create a placeholder 1x1 depth texture (will be set properly via setDepthTexture)
+    const placeholderDepth = new THREE.DataTexture(
+      new Float32Array([1.0]),
+      1,
+      1,
+      THREE.RedFormat,
+      THREE.FloatType
+    );
+    placeholderDepth.needsUpdate = true;
+
+    this.depthTextureUniform = uniform(placeholderDepth);
+    this.softnessUniform = uniform(0.5); // Default softness
+    this.cameraNearUniform = uniform(0.1);
+    this.cameraFarUniform = uniform(1000.0);
+
+    // Create TSL soft particle material with depth-aware alpha fade
+    this.material = this.createSoftParticleMaterial();
 
     // Create instanced mesh
     this.instancedMesh = new THREE.InstancedMesh(
@@ -503,6 +522,86 @@ export class AdvancedParticleSystem {
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
     return texture;
+  }
+
+  /**
+   * Create TSL soft particle material with depth-aware alpha fade
+   * Particles fade when approaching scene geometry to avoid hard clipping
+   */
+  private createSoftParticleMaterial(): MeshBasicNodeMaterial {
+    const glowTex = this.glowTexture;
+    const depthTex = this.depthTextureUniform;
+    const softness = this.softnessUniform;
+    const near = this.cameraNearUniform;
+    const far = this.cameraFarUniform;
+
+    // TSL fragment shader for soft particles
+    const softParticleFragment = Fn(() => {
+      // Sample the glow texture
+      const texCoord = uv();
+      const texColor = texture(glowTex, texCoord);
+
+      // Get screen-space coordinates for depth sampling
+      const screenUV = viewportCoordinate.xy;
+
+      // Sample scene depth and convert to linear
+      const sceneDepthSample = texture(depthTex, screenUV).r;
+      const sceneNDC = sceneDepthSample.mul(2.0).sub(1.0);
+      const sceneLinearDepth = near.mul(far).div(
+        far.sub(sceneNDC.mul(far.sub(near)))
+      );
+
+      // Get particle's linear depth from gl_FragCoord.z
+      const particleNDC = viewportCoordinate.z.mul(2.0).sub(1.0);
+      const particleLinearDepth = near.mul(far).div(
+        far.sub(particleNDC.mul(far.sub(near)))
+      );
+
+      // Soft particle fade: alpha decreases as particle approaches scene geometry
+      // depthDiff is positive when particle is in front of scene geometry
+      const depthDiff = sceneLinearDepth.sub(particleLinearDepth);
+      const softFade = clamp(depthDiff.div(softness), 0.0, 1.0);
+
+      // Apply soft fade to texture alpha
+      const finalAlpha = texColor.a.mul(softFade);
+
+      return vec4(texColor.rgb, finalAlpha);
+    });
+
+    // Create MeshBasicNodeMaterial with custom fragment
+    const material = new MeshBasicNodeMaterial();
+    material.transparent = true;
+    material.depthWrite = false;
+    material.blending = THREE.AdditiveBlending;
+    material.side = THREE.DoubleSide;
+
+    // Set the color/alpha output using the soft particle node
+    material.colorNode = softParticleFragment();
+
+    return material;
+  }
+
+  /**
+   * Set the depth texture for soft particle rendering
+   * Should be called with the scene's depth buffer texture
+   */
+  public setDepthTexture(depthTexture: THREE.Texture): void {
+    this.depthTextureUniform.value = depthTexture;
+  }
+
+  /**
+   * Update camera parameters for soft particle depth calculations
+   */
+  public updateCamera(camera: THREE.PerspectiveCamera): void {
+    this.cameraNearUniform.value = camera.near;
+    this.cameraFarUniform.value = camera.far;
+  }
+
+  /**
+   * Set the softness value for depth fade (higher = softer transition)
+   */
+  public setSoftness(softness: number): void {
+    this.softnessUniform.value = softness;
   }
 
   /**
