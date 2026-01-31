@@ -545,7 +545,8 @@ voidstrike/
     │   └── walls.test.ts
     ├── engine/ # Game engine core
     │   ├── ai/ # AI subsystems
-    │   │   └── behaviorTree.test.ts
+    │   │   ├── behaviorTree.test.ts
+    │   │   └── unitBehaviors.test.ts
     │   ├── components/ # React components
     │   │   ├── ability.test.ts
     │   │   ├── building.test.ts
@@ -581,10 +582,12 @@ voidstrike/
     │   │   ├── abilitySystem.test.ts
     │   │   ├── buildingPlacementSystem.test.ts
     │   │   ├── combatSystem.test.ts
+    │   │   ├── MovementSystem.test.ts
     │   │   ├── pathfindingSystem.test.ts
     │   │   ├── productionSystem.test.ts
     │   │   ├── projectileSystem.test.ts
     │   │   ├── resourceSystem.test.ts
+    │   │   ├── SpawnSystem.test.ts
     │   │   └── visionSystem.test.ts
     │   └── workers/ # Web Workers
     │       └── gameWorker.test.ts
