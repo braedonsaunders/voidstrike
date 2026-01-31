@@ -26,7 +26,7 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 | **Vignette** | ✅ Implemented | Cinematic edge darkening |
 | **Color Grading** | ✅ Implemented | Exposure, saturation, contrast with ACES Filmic tone mapping |
 | **Volumetric Fog** | ✅ Implemented | Raymarched atmospheric scattering with quality presets |
-| **Fog of War** | ✅ Implemented | StarCraft 2-style vision with soft edges, desaturation, animated clouds |
+| **Fog of War** | ✅ Implemented | Classic RTS-style vision with soft edges, desaturation, animated clouds |
 
 ### Post-Processing Architecture (Modular Design)
 
@@ -224,7 +224,7 @@ This solves:
 2. **SSGI** - Global illumination + AO (if enabled)
 3. **GTAO** - Ambient occlusion (if SSGI disabled)
 4. **SSR** - Screen space reflections
-5. **Fog of War** - StarCraft 2-style vision post-process (if enabled)
+5. **Fog of War** - Classic RTS-style vision post-process (if enabled)
 6. **Bloom** - HDR glow
 7. **Volumetric Fog** - Raymarched atmospheric scattering (if enabled)
 8. **Color Grading** - Exposure, saturation, contrast, vignette
@@ -813,17 +813,17 @@ These exist in `uiStore.ts` but have no effect:
 - `src/rendering/tsl/effects/TemporalManager.ts` - Quarter-res temporal pipeline management
 - `src/components/game/WebGPUGameCanvas.tsx` - Reactive settings
 
-### 2. Fog of War System ✅ IMPLEMENTED (StarCraft 2-Style)
+### 2. Fog of War System ✅ IMPLEMENTED (Classic RTS-Style)
 
 **Status:** Fully implemented and integrated into the PostProcessing pipeline (January 2026).
 
 **Implementation Details:**
 
-The fog of war system has been completely redesigned from a simple overlay mesh to a sophisticated post-processing effect inspired by StarCraft 2. Key features:
+The fog of war system has been completely redesigned from a simple overlay mesh to a sophisticated post-processing effect inspired by classic RTS games. Key features:
 
 1. **Soft Edge Transitions** - Multi-sample Gaussian blur kernel (3x3, 9 samples) on the vision texture eliminates blocky cell edges. Configurable blur radius (0-4 cells).
 
-2. **Desaturation for Explored Areas** - Previously seen areas are not just darkened but desaturated (up to 70%) and given a cool blue color shift, creating the distinctive "memory" effect from SC2.
+2. **Desaturation for Explored Areas** - Previously seen areas are not just darkened but desaturated (up to 70%) and given a cool blue color shift, creating the distinctive "memory" effect common in RTS games.
 
 3. **Animated Procedural Clouds** - Unexplored regions feature multi-octave animated FBM noise creating slowly drifting clouds with subtle color variation (dark blues/purples).
 
@@ -1505,7 +1505,7 @@ CombatSystem.processAttack()
 
 ### Overview
 
-VOIDSTRIKE features a comprehensive overlay system for strategic information display, inspired by StarCraft 2 and other top-tier RTS games. The system provides:
+VOIDSTRIKE features a comprehensive overlay system for strategic information display, inspired by top-tier RTS games. The system provides:
 
 - **3D Strategic Overlays**: Terrain, elevation, threat zones, navmesh connectivity, buildable grid
 - **2D Tactical Overlays**: Attack range, vision range, resource markers
@@ -1560,7 +1560,7 @@ VOIDSTRIKE features a comprehensive overlay system for strategic information dis
 | **Navmesh** | Static | Progressive | Pathfinding connectivity (green=connected, magenta=disconnected ramps) |
 | **Buildable** | Dynamic | On request | Building placement grid (green=buildable, red=blocked, gray=occupied) |
 
-#### Tactical Overlays (2D - SC2 Style)
+#### Tactical Overlays (2D - RTS Style)
 
 | Overlay | Activation | Description |
 |---------|------------|-------------|

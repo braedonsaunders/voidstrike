@@ -138,7 +138,7 @@ export class CommandQueueRenderer {
         continue;
       }
 
-      // Calculate flying height offset for air units (like SC2 behavior)
+      // Calculate flying height offset for air units
       const unitFlyingHeight = unit.isFlying ? AssetManager.getAirborneHeight(unit.unitId) : 0;
 
       const existing = this.waypointVisuals.get(unitId);

@@ -610,7 +610,7 @@ export function createTemporalBlendNode(
 }
 
 // ============================================
-// FOG OF WAR (StarCraft 2-Inspired Post-Process)
+// FOG OF WAR (Classic RTS-Inspired Post-Process)
 // ============================================
 
 export type FogOfWarQuality = 'low' | 'medium' | 'high' | 'ultra';
@@ -664,7 +664,7 @@ export interface FogOfWarPassResult {
 }
 
 /**
- * Create StarCraft 2-inspired Fog of War post-processing pass
+ * Create classic RTS-inspired Fog of War post-processing pass
  *
  * Features:
  * - Soft edge transitions via multi-sample blur kernel

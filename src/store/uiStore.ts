@@ -174,7 +174,7 @@ export interface GraphicsSettings {
   volumetricFogDensity: number;
   volumetricFogScattering: number;
 
-  // Fog of War (StarCraft 2-style post-processing)
+  // Fog of War (classic RTS-style post-processing)
   fogOfWarQuality: 'low' | 'medium' | 'high' | 'ultra';
   fogOfWarEdgeBlur: number; // 0-4 cells
   fogOfWarDesaturation: number; // 0-1
@@ -355,7 +355,7 @@ const savedDebugSettings = loadDebugSettings();
 // 'resource' highlights mineral fields and gas geysers
 export type GameOverlayType = 'none' | 'elevation' | 'threat' | 'navmesh' | 'resource' | 'buildable';
 
-// Extended overlay types including SC2-style tactical features (attack/vision are dynamic, not cycleable)
+// Extended overlay types including RTS-style tactical features (attack/vision are dynamic, not cycleable)
 export type ExtendedOverlayType = GameOverlayType | 'attackRange' | 'visionRange';
 
 // Overlay settings
@@ -514,7 +514,7 @@ export interface UIState {
   setActiveOverlay: (overlay: GameOverlayType) => void;
   toggleOverlay: (overlay: GameOverlayType) => void;
   setOverlayOpacity: (overlay: GameOverlayType, opacity: number) => void;
-  // Real-time overlay actions (SC2-style hold-to-show)
+  // Real-time overlay actions (RTS-style hold-to-show)
   setShowAttackRange: (show: boolean) => void;
   setShowVisionRange: (show: boolean) => void;
   // Navmesh computation progress
@@ -625,9 +625,9 @@ export const useUIStore = create<UIState>((set, get) => ({
     volumetricFogDensity: 1.0,
     volumetricFogScattering: 1.0,
 
-    // Fog of War (StarCraft 2-style) - High quality defaults for polished look
+    // Fog of War (classic RTS-style) - High quality defaults for polished look
     fogOfWarQuality: 'high' as const,
-    fogOfWarEdgeBlur: 2.5, // Soft edges like SC2
+    fogOfWarEdgeBlur: 2.5, // Soft edges for polished look
     fogOfWarDesaturation: 0.7, // Strong desaturation for explored
     fogOfWarExploredDarkness: 0.5, // Half brightness for explored
     fogOfWarUnexploredDarkness: 0.12, // Very dark unexplored
@@ -1230,7 +1230,7 @@ export const useUIStore = create<UIState>((set, get) => ({
       return state;
     }),
 
-  // Real-time overlay actions (SC2-style hold-to-show)
+  // Real-time overlay actions (RTS-style hold-to-show)
   setShowAttackRange: (show) =>
     set((state) => ({
       overlaySettings: { ...state.overlaySettings, showAttackRange: show },

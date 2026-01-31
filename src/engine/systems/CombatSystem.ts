@@ -108,7 +108,7 @@ export class CombatSystem extends System {
   // Units NOT in this set can skip target acquisition entirely when idle
   private combatAwareUnits: Set<number> = new Set();
   private combatZoneCheckTick: Map<number, number> = new Map();
-  // SC2-STYLE: Reduced from 15 to 5 ticks for more responsive combat detection
+  // RTS-STYLE: Reduced from 15 to 5 ticks for more responsive combat detection
   private readonly COMBAT_ZONE_CHECK_INTERVAL = 5; // Re-check zone every 5 ticks (~250ms)
 
   // PERF: Track player unit counts per grid cell for fast enemy detection
@@ -124,7 +124,7 @@ export class CombatSystem extends System {
   // Cells containing units from multiple players are "hot"
   private hotCells: Set<number> = new Set();
   private hotCellsLastUpdate: number = 0;
-  // SC2-STYLE: Reduced from 10 to 5 ticks for faster combat zone detection
+  // RTS-STYLE: Reduced from 10 to 5 ticks for faster combat zone detection
   private readonly HOT_CELLS_UPDATE_INTERVAL = 5; // Rebuild every 5 ticks
 
   // PERF OPTIMIZATION: Attack cooldown priority queue (min-heap by next attack time)
@@ -187,7 +187,7 @@ export class CombatSystem extends System {
    * PERF OPTIMIZATION: Rebuild the combat-active unit list
    * Only units in hot cells or with active targets are tracked
    *
-   * SC2-STYLE: Units in assault mode are ALWAYS combat-active and never throttled.
+   * RTS-STYLE: Units in assault mode are ALWAYS combat-active and never throttled.
    * They continue scanning for enemies even when idle at their destination.
    */
   private updateCombatActiveUnits(currentTick: number): void {
@@ -210,7 +210,7 @@ export class CombatSystem extends System {
         continue;
       }
 
-      // SC2-STYLE: Always include assault mode units - they never stop scanning
+      // RTS-STYLE: Always include assault mode units - they never stop scanning
       // This is the key fix for idle units in enemy bases
       if (unit.isInAssaultMode) {
         this.combatActiveUnits.add(entity.id);
@@ -241,7 +241,7 @@ export class CombatSystem extends System {
         continue;
       }
 
-      // SC2-STYLE INSTANT ATTACK: Include idle units that have an enemy in attack range
+      // RTS-STYLE INSTANT ATTACK: Include idle units that have an enemy in attack range
       // This ensures units immediately respond when an enemy walks into their attack range
       // Uses fast hasEnemyInRadius check (O(cells) not O(entities))
       if (unit.state === 'idle' && unit.attackRange > 0) {
@@ -509,20 +509,20 @@ export class CombatSystem extends System {
 
       // Auto-acquire targets for units that need them
       // canAttackWhileMoving units also acquire targets while moving
-      // SC2-STYLE: Assault mode units ALWAYS need to acquire targets when idle
+      // RTS-STYLE: Assault mode units ALWAYS need to acquire targets when idle
       const needsTarget = unit.targetEntityId === null && (
         unit.state === 'idle' ||
         unit.state === 'patrolling' ||
         unit.state === 'attackmoving' ||
         unit.state === 'attacking' ||
         unit.isHoldingPosition ||
-        unit.isInAssaultMode || // SC2-STYLE: Assault mode units always scan
+        unit.isInAssaultMode || // RTS-STYLE: Assault mode units always scan
         (unit.canAttackWhileMoving && unit.state === 'moving')
       );
 
       if (needsTarget) {
         // PERF: Use hot cell check instead of expensive spatial query for idle units
-        // SC2-STYLE: Skip this optimization for assault mode units - they always search
+        // RTS-STYLE: Skip this optimization for assault mode units - they always search
         if (unit.state === 'idle' && !unit.isHoldingPosition && !unit.isInAssaultMode) {
           // Fast check: is this unit in a hot cell?
           const inHotCell = this.world.unitGrid.isInHotCell(transform.x, transform.y, this.hotCells);
@@ -538,7 +538,7 @@ export class CombatSystem extends System {
 
         let target: number | null = null;
 
-        // SC2-STYLE: Assault mode units always search at sight range, no throttling
+        // RTS-STYLE: Assault mode units always search at sight range, no throttling
         if (unit.isInAssaultMode && unit.state === 'idle') {
           // Aggressive sight-range search for assault mode units
           target = this.findBestTargetSpatial(attacker.id, transform, unit);
@@ -564,7 +564,7 @@ export class CombatSystem extends System {
             const savedTargetX = unit.targetX;
             const savedTargetY = unit.targetY;
             const wasAttackMoving = unit.state === 'attackmoving';
-            // SC2-STYLE: Remember assault destination
+            // RTS-STYLE: Remember assault destination
             const savedAssaultDest = unit.assaultDestination;
             const wasInAssaultMode = unit.isInAssaultMode;
 
@@ -576,7 +576,7 @@ export class CombatSystem extends System {
               unit.targetY = savedTargetY;
             }
 
-            // SC2-STYLE: Preserve assault mode through target acquisition
+            // RTS-STYLE: Preserve assault mode through target acquisition
             if (wasInAssaultMode && savedAssaultDest) {
               unit.assaultDestination = savedAssaultDest;
               unit.isInAssaultMode = true;
@@ -610,7 +610,7 @@ export class CombatSystem extends System {
             unit.state = 'attackmoving';
             unit.targetEntityId = null;
           } else if (unit.isInAssaultMode) {
-            // SC2-STYLE: Assault mode units stay in assault mode, ready to scan for new targets
+            // RTS-STYLE: Assault mode units stay in assault mode, ready to scan for new targets
             // They go "idle" but with assault mode flag still set, so they keep scanning
             unit.targetEntityId = null;
             unit.state = 'idle';
@@ -636,7 +636,7 @@ export class CombatSystem extends System {
             unit.state = 'attackmoving';
             unit.targetEntityId = null;
           } else if (unit.isInAssaultMode) {
-            // SC2-STYLE: Assault mode units stay aggressive and keep scanning
+            // RTS-STYLE: Assault mode units stay aggressive and keep scanning
             unit.targetEntityId = null;
             unit.state = 'idle';
             // Assault mode preserved - unit will scan for new targets
@@ -662,7 +662,7 @@ export class CombatSystem extends System {
             unit.state = 'attackmoving';
             unit.targetEntityId = null;
           } else if (unit.isInAssaultMode) {
-            // SC2-STYLE: Stay aggressive, find a target we CAN attack
+            // RTS-STYLE: Stay aggressive, find a target we CAN attack
             unit.targetEntityId = null;
             unit.state = 'idle';
           } else if (!unit.executeNextCommand()) {

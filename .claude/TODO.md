@@ -8,10 +8,10 @@
 
 ## Fog of War Post-Processing Overhaul (January 2026) ✓
 
-### StarCraft 2-Inspired Visual Upgrade
+### Classic RTS-Inspired Visual Upgrade
 - [x] **Post-processing integration** - Moved fog of war from mesh overlay to post-processing pass
 - [x] **Soft edge transitions** - Multi-sample Gaussian blur kernel eliminates blocky cell edges
-- [x] **Desaturation for explored areas** - SC2-style grayscale + cool color shift for "memory" effect
+- [x] **Desaturation for explored areas** - RTS-style grayscale + cool color shift for "memory" effect
 - [x] **Animated procedural clouds** - Multi-octave FBM noise for unexplored regions
 - [x] **Temporal smoothing** - ~0.3 second dissolve for visibility transitions
 - [x] **Edge glow (rim light)** - Screen-space derivative detection for vision boundary highlight

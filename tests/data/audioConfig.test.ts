@@ -94,7 +94,7 @@ describe('Audio Configuration', () => {
     });
   });
 
-  describe('SC2-style rate limiting', () => {
+  describe('RTS-style rate limiting', () => {
     it('selection cooldown prevents spam', () => {
       // 2 seconds is reasonable for selection spam prevention
       expect(VOICE_COOLDOWN_SELECT).toBeGreaterThanOrEqual(1000);

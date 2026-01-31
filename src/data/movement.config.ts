@@ -21,7 +21,7 @@ export const SEPARATION_RADIUS = 2.5;
 
 /**
  * Separation strength while units are moving.
- * Very weak to allow SC2-style clumping during group movement.
+ * Very weak to allow RTS-style clumping during group movement.
  * Units stack together while traveling, then spread at destination.
  */
 export const SEPARATION_STRENGTH_MOVING = 0.5;

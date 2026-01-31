@@ -154,7 +154,7 @@ export class OverlayScene extends Phaser.Scene {
   private damageNumberSystem: DamageNumberSystem | null = null;
   private screenEffectsSystem: ScreenEffectsSystem | null = null;
 
-  // Note: SC2-style range overlays and resource overlays are now handled
+  // Note: RTS-style range overlays and resource overlays are now handled
   // exclusively by TSLGameOverlayManager in the WebGPU renderer.
 
   constructor() {
@@ -526,7 +526,7 @@ export class OverlayScene extends Phaser.Scene {
       );
     });
 
-    // Note: SC2-style range overlays (attack/vision) are now handled by
+    // Note: RTS-style range overlays (attack/vision) are now handled by
     // TSLGameOverlayManager in the WebGPU renderer via Alt+A and Alt+V
   }
 

@@ -201,7 +201,7 @@ export class Unit extends Component {
   public isBiological: boolean;
   public isMechanical: boolean;
 
-  // SC2-style Assault Mode: Persistent attack-move that doesn't go idle
+  // RTS-style Assault Mode: Persistent attack-move that doesn't go idle
   // When set, unit stays aggressive even after reaching destination
   public assaultDestination: { x: number; y: number } | null;
   public isInAssaultMode: boolean; // True when unit is executing attack-move command
@@ -325,7 +325,7 @@ export class Unit extends Component {
     this.isBiological = definition.isBiological ?? !definition.isMechanical;
     this.isMechanical = definition.isMechanical ?? false;
 
-    // SC2-style assault mode - persistent attack-move
+    // RTS-style assault mode - persistent attack-move
     this.assaultDestination = null;
     this.isInAssaultMode = false;
     this.assaultIdleTicks = 0;
@@ -411,7 +411,7 @@ export class Unit extends Component {
       this.state = 'moving';
     }
     this.targetEntityId = null;
-    // SC2-style: Regular move clears assault mode (explicit move command overrides attack-move)
+    // RTS-style: Regular move clears assault mode (explicit move command overrides attack-move)
     this.assaultDestination = null;
     this.isInAssaultMode = false;
     this.assaultIdleTicks = 0;
@@ -442,13 +442,13 @@ export class Unit extends Component {
   }
 
   // Attack-move: move toward a position while engaging enemies along the way
-  // SC2-style: Sets assault mode so unit stays aggressive even after arriving
+  // RTS-style: Sets assault mode so unit stays aggressive even after arriving
   public setAttackMoveTarget(x: number, y: number): void {
     this.targetX = x;
     this.targetY = y;
     this.state = 'attackmoving';
     this.targetEntityId = null;
-    // SC2-style: Enable assault mode - unit will keep scanning for targets
+    // RTS-style: Enable assault mode - unit will keep scanning for targets
     this.assaultDestination = { x, y };
     this.isInAssaultMode = true;
     this.assaultIdleTicks = 0;
@@ -475,7 +475,7 @@ export class Unit extends Component {
     this.patrolPoints = [];
     this.isHoldingPosition = false;
     this.currentSpeed = 0;
-    // SC2-style: Explicit stop clears assault mode
+    // RTS-style: Explicit stop clears assault mode
     this.assaultDestination = null;
     this.isInAssaultMode = false;
     this.assaultIdleTicks = 0;
@@ -487,7 +487,7 @@ export class Unit extends Component {
     this.patrolPoints = [];
     this.isHoldingPosition = true;
     this.currentSpeed = 0;
-    // SC2-style: Hold position clears assault mode
+    // RTS-style: Hold position clears assault mode
     this.assaultDestination = null;
     this.isInAssaultMode = false;
     this.assaultIdleTicks = 0;

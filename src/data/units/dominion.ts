@@ -490,7 +490,7 @@ export const UNIT_DEFINITIONS: Record<string, UnitDefinition> = {
     armor: 3,
     abilities: ['power_cannon', 'warp_jump'],
     maxEnergy: 200,
-    energyRegen: 0.5625, // SC2 standard energy regen rate
+    energyRegen: 0.5625, // Standard RTS energy regen rate
     isFlying: true,
     isMechanical: true,
     canAttackGround: true,

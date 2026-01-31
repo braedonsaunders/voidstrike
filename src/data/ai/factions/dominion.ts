@@ -664,7 +664,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
   economy: {
     optimalWorkersPerMineral: 2,
     optimalWorkersPerGas: 3,
-    optimalWorkersPerBase: 16, // 16 is optimal (2 per patch * 8 patches) - like StarCraft
+    optimalWorkersPerBase: 16, // 16 is optimal (2 per patch * 8 patches)
     supplyPerMainBase: 11,
     supplyPerSupplyBuilding: 8,
     supplyBuildBuffer: 4, // FIX: Build supply when within 4 of max (was 2)
