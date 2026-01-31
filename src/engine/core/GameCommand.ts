@@ -265,10 +265,6 @@ export function dispatchCommand(eventBus: EventBus, command: GameCommand): void 
       });
       break;
 
-    case 'PATROL':
-      eventBus.emit(COMMAND_EVENTS.PATROL, command);
-      break;
-
     case 'DEMOLISH':
       eventBus.emit(COMMAND_EVENTS.DEMOLISH, {
         entityIds: command.entityIds,
