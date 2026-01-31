@@ -5,7 +5,8 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
-import { Game, GameCommand } from '../core/Game';
+import type { Game } from '../core/Game';
+import type { GameCommand } from '../core/GameCommand';
 import { distance, clamp } from '@/utils/math';
 import { BehaviorTreeRunner, Blackboard, globalBlackboard } from '../ai/BehaviorTree';
 import {

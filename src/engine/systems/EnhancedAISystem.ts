@@ -15,7 +15,7 @@
 
 import { System } from '../ecs/System';
 import { World } from '../ecs/World';
-import { Game } from '../core/Game';
+import type { Game } from '../core/Game';
 import { AICoordinator, type AIPlayer, type AIState, type AIDifficulty } from './ai/AICoordinator';
 import type { AIPersonality } from '@/data/ai/aiConfig';
 

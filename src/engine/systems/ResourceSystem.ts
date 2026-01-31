@@ -5,7 +5,7 @@ import { Unit } from '../components/Unit';
 import { Resource } from '../components/Resource';
 import { Building } from '../components/Building';
 import { Selectable } from '../components/Selectable';
-import { Game } from '../core/Game';
+import type { Game } from '../core/Game';
 import { World } from '../ecs/World';
 import { debugResources } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';

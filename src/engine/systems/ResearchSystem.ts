@@ -1,7 +1,7 @@
 import { System } from '../ecs/System';
 import { Building } from '../components/Building';
 import { Selectable } from '../components/Selectable';
-import { Game } from '../core/Game';
+import type { Game } from '../core/Game';
 import { RESEARCH_DEFINITIONS, ResearchDefinition } from '@/data/research/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { debugProduction } from '@/utils/debugLogger';

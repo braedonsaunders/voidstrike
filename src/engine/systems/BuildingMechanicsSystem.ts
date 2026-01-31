@@ -1,6 +1,6 @@
 import { System } from '../ecs/System';
 import { Entity } from '../ecs/Entity';
-import { Game } from '../core/Game';
+import type { Game } from '../core/Game';
 import { Transform } from '../components/Transform';
 import { Building, AddonType } from '../components/Building';
 import { Health } from '../components/Health';
