@@ -25,8 +25,7 @@ voidstrike/
 │   │   ├── schema.md # Data schemas
 │   │   └── textures.md # Texture specs
 │   ├── security/ # Security documentation
-│   │   ├── CODE_AUDIT_REPORT.md
-│   │   └── SECURITY_AUDIT.md
+│   │   └── CODE_AUDIT_REPORT.md
 │   ├── tools/ # Development tools
 │   │   ├── blender/
 │   │   │   └── README.md
