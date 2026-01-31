@@ -352,7 +352,7 @@ export function LatencyDisplay() {
   const {
     isMultiplayer,
     connectionStatus,
-    connectionQuality: _connectionQuality,
+    connectionQuality,
   } = useMultiplayerStore();
 
   const [stats, setStats] = useState<LatencyStats | null>(null);
