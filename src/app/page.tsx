@@ -151,10 +151,14 @@ export default function Home() {
     };
   }, [musicEnabledStore, musicVolume]);
 
-  // Sync volume changes - use store value directly since MusicPlayer only runs client-side
+  // Sync volume/muted state - use store value directly since MusicPlayer only runs client-side
   useEffect(() => {
     MusicPlayer.setVolume(musicVolume);
     MusicPlayer.setMuted(!musicEnabledStore);
+    // If muted, ensure music is paused (not just volume 0) - fixes reload state sync
+    if (!musicEnabledStore) {
+      MusicPlayer.pause();
+    }
   }, [musicVolume, musicEnabledStore]);
 
   // Sync fullscreen state with browser
