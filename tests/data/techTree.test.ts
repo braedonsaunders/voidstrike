@@ -269,6 +269,7 @@ describe('Tech Tree', () => {
         'range_bonus',
         'health_bonus',
         'speed_bonus',
+        'sight_bonus',
       ];
 
       for (const category of TECH_CATEGORIES) {
