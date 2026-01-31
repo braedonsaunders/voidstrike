@@ -45,6 +45,7 @@ interface SyncResponsePayload {
 }
 
 import { DesyncDetectionManager } from '../network/DesyncDetection';
+import { commandIdGenerator } from '../network/types';
 import type { GameStatePort } from './GameStatePort';
 import { ZustandStateAdapter } from '@/adapters/ZustandStateAdapter';
 
@@ -309,6 +310,9 @@ export class Game extends GameCore {
   public override start(gameStartTime?: number): void {
     if (this.state === 'running') return;
 
+    // Reset command ID generator for deterministic IDs from tick 0
+    commandIdGenerator.reset();
+
     this.state = 'initializing';
     const countdownDuration = 4000;
     const scheduledStartTime = gameStartTime ?? (Date.now() + countdownDuration);
@@ -434,6 +438,9 @@ export class Game extends GameCore {
 
     this.currentTick++;
     this.world.setCurrentTick(this.currentTick);
+
+    // Sync command ID generator with current tick for deterministic command IDs
+    commandIdGenerator.setTick(this.currentTick);
 
     if (this.config.isMultiplayer) {
       this.processQueuedCommandsWithCleanup();
@@ -616,6 +623,33 @@ export class Game extends GameCore {
     } else {
       this.processCommand(command);
     }
+  }
+
+  /**
+   * Issue an AI command. In multiplayer, AI commands execute at current tick
+   * since AI logic is deterministic and runs identically on all clients.
+   * Commands are recorded for desync detection but not broadcast (both clients compute same AI).
+   */
+  public issueAICommand(command: GameCommand): void {
+    // Ensure command tick is set to current tick for deterministic execution
+    command.tick = this.currentTick;
+
+    if (this.config.isMultiplayer) {
+      // In multiplayer, record the command for desync detection
+      // Both clients compute identical AI decisions, so no network broadcast needed
+      this.recordExecutedCommand(command);
+    }
+
+    // Execute command via parent class (bypasses multiplayer validation since AI is local)
+    super.processCommand(command);
+  }
+
+  /**
+   * Check if this client is in multiplayer mode.
+   * Used by AI systems to disable non-deterministic features.
+   */
+  public isInMultiplayerMode(): boolean {
+    return this.config.isMultiplayer;
   }
 
   private queueCommandWithReceipt(command: GameCommand): void {

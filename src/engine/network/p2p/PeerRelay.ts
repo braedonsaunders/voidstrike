@@ -128,29 +128,45 @@ export class PeerRelayNetwork {
   }
 
   /**
-   * Send data to a peer (direct or relayed)
+   * Send data to a peer (direct or relayed) with retry logic
    */
   async sendTo(targetId: string, data: unknown): Promise<void> {
-    const payload = JSON.stringify(data);
+    const MAX_RETRIES = 3;
+    let lastError: Error | null = null;
 
-    // Direct connection?
-    const directChannel = this.directPeers.get(targetId);
-    if (directChannel && directChannel.readyState === 'open') {
-      directChannel.send(payload);
-      return;
-    }
-
-    // Relayed connection - validate cached route is still usable
-    let route = this.relayRoutes.get(targetId);
-    if (route && route.length > 0) {
-      const firstHopChannel = this.directPeers.get(route[0]);
-      if (!firstHopChannel || firstHopChannel.readyState !== 'open') {
-        // Cached route is stale, clear it
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      try {
+        await this.sendToInternal(targetId, data);
+        return;
+      } catch (e) {
+        lastError = e instanceof Error ? e : new Error(String(e));
+        // Invalidate route on failure to force fresh lookup
         this.relayRoutes.delete(targetId);
-        route = undefined;
+        debugNetworking.warn(
+          `[PeerRelay] Send attempt ${attempt + 1}/${MAX_RETRIES} failed:`,
+          lastError.message
+        );
       }
     }
 
+    throw lastError ?? new Error(`Failed to send to peer ${targetId.slice(0, 8)}...`);
+  }
+
+  /**
+   * Internal send implementation - throws on failure
+   */
+  private async sendToInternal(targetId: string, data: unknown): Promise<void> {
+    const payload = JSON.stringify(data);
+
+    // Try direct connection first
+    const directChannel = this.directPeers.get(targetId);
+    if (directChannel) {
+      this.sendViaChannel(directChannel, payload, targetId);
+      return;
+    }
+
+    // Find or validate relay route
+    let route = this.relayRoutes.get(targetId);
     if (!route || route.length === 0) {
       route = await this.findRelayRoute(targetId);
       if (route.length === 0) {
@@ -159,7 +175,7 @@ export class PeerRelayNetwork {
       this.relayRoutes.set(targetId, route);
     }
 
-    // Encrypt payload for target
+    // Encrypt payload for target (end-to-end encryption through relay)
     const encrypted = await this.encryptForPeer(targetId, payload);
 
     const message: RelayMessage = {
@@ -170,16 +186,29 @@ export class PeerRelayNetwork {
       payload: encrypted,
     };
 
-    // Send to first hop (already validated above)
+    // Send to first hop
     const firstHop = route[0];
     const channel = this.directPeers.get(firstHop);
-    if (channel && channel.readyState === 'open') {
-      channel.send(JSON.stringify(message));
-    } else {
-      // Route became invalid between validation and send
-      this.relayRoutes.delete(targetId);
-      throw new Error(`Route to peer ${targetId.slice(0, 8)}... became invalid`);
+    if (!channel) {
+      throw new Error(`First hop ${firstHop.slice(0, 8)}... not connected`);
     }
+
+    this.sendViaChannel(channel, JSON.stringify(message), firstHop);
+  }
+
+  /**
+   * Atomically check state and send via channel
+   * Throws InvalidStateError if channel is not open
+   */
+  private sendViaChannel(channel: RTCDataChannel, payload: string, peerId: string): void {
+    // Atomic check-and-send: if readyState changes between check and send,
+    // the send() call will throw InvalidStateError which we propagate
+    if (channel.readyState !== 'open') {
+      throw new Error(`Channel to ${peerId.slice(0, 8)}... is ${channel.readyState}, not open`);
+    }
+    // Note: There's still a theoretical TOCTOU window here, but send() will throw
+    // InvalidStateError if the channel closes, which we catch in sendTo's retry loop
+    channel.send(payload);
   }
 
   /**
