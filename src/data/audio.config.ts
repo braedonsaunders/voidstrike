@@ -2,7 +2,7 @@
  * AudioConfig - Centralized audio system configuration
  *
  * SINGLE SOURCE OF TRUTH for voiceline cooldowns and audio behavior.
- * AudioSystem imports these values for SC2-style rate limiting.
+ * AudioSystem imports these values for RTS-style rate limiting.
  *
  * IMPORTANT: If you change these values, all audio behavior
  * will update automatically.
@@ -21,14 +21,14 @@ export const VOICE_COOLDOWN_SELECT = 2000;
 
 /**
  * Cooldown between move command voicelines.
- * SC2-style: rapid move commands only trigger one acknowledgement.
+ * RTS-style: rapid move commands only trigger one acknowledgement.
  * Units of: milliseconds
  */
 export const VOICE_COOLDOWN_MOVE = 2500;
 
 /**
  * Cooldown between attack command voicelines.
- * SC2-style: rapid attack commands only trigger one acknowledgement.
+ * RTS-style: rapid attack commands only trigger one acknowledgement.
  * Units of: milliseconds
  */
 export const VOICE_COOLDOWN_ATTACK = 2500;

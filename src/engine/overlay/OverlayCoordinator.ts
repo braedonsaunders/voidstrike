@@ -210,7 +210,7 @@ export class OverlayCoordinator {
 
   /**
    * Show/hide attack range rings for selected units.
-   * SC2-style hold-to-show behavior.
+   * RTS-style hold-to-show behavior.
    */
   public setShowAttackRange(show: boolean): void {
     if (this.showAttackRange === show) return;
@@ -236,7 +236,7 @@ export class OverlayCoordinator {
 
   /**
    * Show/hide vision range rings for selected units.
-   * SC2-style hold-to-show behavior.
+   * RTS-style hold-to-show behavior.
    */
   public setShowVisionRange(show: boolean): void {
     if (this.showVisionRange === show) return;

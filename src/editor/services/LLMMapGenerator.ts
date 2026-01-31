@@ -534,7 +534,7 @@ const GEMINI_SCHEMA = {
 // SYSTEM PROMPT
 // ============================================================================
 
-const SYSTEM_PROMPT = `You are an expert RTS map designer creating professional competitive maps for VOIDSTRIKE, a StarCraft-inspired real-time strategy game.
+const SYSTEM_PROMPT = `You are an expert RTS map designer creating professional competitive maps for VOIDSTRIKE, a classic RTS-style real-time strategy game.
 
 ## Map Design Principles
 

@@ -34,7 +34,7 @@ export {
   type VolumetricFogConfig,
   type VolumetricFogPassResult,
 
-  // Fog of War (StarCraft 2-style)
+  // Fog of War (classic RTS-style)
   createFogOfWarPass,
   FOG_OF_WAR_QUALITY_PRESETS,
   type FogOfWarConfig,

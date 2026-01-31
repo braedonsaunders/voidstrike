@@ -3,7 +3,7 @@
  *
  * Handles:
  * - Tactical state determination (attacking, defending, harassing, etc.)
- * - Attack phase execution with SC2-style engagement persistence
+ * - Attack phase execution with RTS-style engagement persistence
  * - Defense phase execution
  * - Harass phase execution
  * - Expand phase execution
@@ -12,7 +12,7 @@
  *
  * Works with AIMicroSystem for unit-level micro (kiting, focus fire).
  *
- * SC2-STYLE IMPROVEMENTS:
+ * RTS-STYLE IMPROVEMENTS:
  * - Army stays in attacking state while engaged
  * - Idle assault units get re-commanded to continue fighting
  * - Hunt mode activates when enemy has few buildings left
@@ -32,7 +32,7 @@ import { isEnemy } from '../../combat/TargetAcquisition';
 // Threat assessment constants
 const THREAT_WINDOW_TICKS = 200; // ~10 seconds at 20 ticks/sec
 
-// SC2-style engagement tracking constants
+// RTS-style engagement tracking constants
 const ENGAGEMENT_CHECK_INTERVAL = 10; // Check engagement every 10 ticks (~500ms)
 const RE_COMMAND_IDLE_INTERVAL = 40; // Re-command idle units every 40 ticks (~2 sec)
 const DEFENSE_COMMAND_INTERVAL = 20; // Re-command defending units every 20 ticks (~1 sec)
@@ -43,7 +43,7 @@ export class AITacticsManager {
   private game: Game;
   private coordinator: AICoordinator;
 
-  // SC2-style engagement tracking per AI player
+  // RTS-style engagement tracking per AI player
   private lastEngagementCheck: Map<string, number> = new Map();
   private lastReCommandTick: Map<string, number> = new Map();
   private lastDefenseCommandTick: Map<string, number> = new Map();
@@ -58,7 +58,7 @@ export class AITacticsManager {
     return this.game.world;
   }
 
-  // === SC2-Style Enemy Relations & Targeting ===
+  // === RTS-Style Enemy Relations & Targeting ===
 
   /** Half-life for grudge decay in ticks (~60 seconds at 20 ticks/second) */
   private static readonly GRUDGE_HALF_LIFE_TICKS = 1200;
@@ -408,7 +408,7 @@ export class AITacticsManager {
 
   /**
    * Find the enemy base location.
-   * Uses SC2-style primary enemy selection - each AI targets their own primary enemy
+   * Uses RTS-style primary enemy selection - each AI targets their own primary enemy
    * based on proximity, threat, and personality-weighted scores.
    *
    * @param targetPlayerId - Optional specific enemy to target. If not provided, uses primary enemy.
@@ -557,7 +557,7 @@ export class AITacticsManager {
   /**
    * Execute the attacking phase.
    *
-   * SC2-STYLE: This is a persistent engagement system, not fire-and-forget.
+   * RTS-STYLE: This is a persistent engagement system, not fire-and-forget.
    * - Tracks whether army is currently engaged in combat
    * - Re-commands idle assault units to continue fighting
    * - Enters hunt mode when enemy has few buildings left
@@ -574,7 +574,7 @@ export class AITacticsManager {
     // Count enemy buildings to determine if we should enter hunt mode
     const enemyBuildingCount = this.countEnemyBuildings(ai);
 
-    // SC2-STYLE: Check if we should enter hunt mode
+    // RTS-STYLE: Check if we should enter hunt mode
     const inHuntMode = enemyBuildingCount > 0 && enemyBuildingCount <= HUNT_MODE_BUILDING_THRESHOLD;
 
     // Check engagement status periodically
@@ -591,7 +591,7 @@ export class AITacticsManager {
     let attackTarget: { x: number; y: number } | null = null;
 
     if (inHuntMode) {
-      // SC2-STYLE HUNT MODE: Find ANY enemy building, spread units to hunt
+      // RTS-STYLE HUNT MODE: Find ANY enemy building, spread units to hunt
       attackTarget = this.findAnyEnemyBuilding(ai);
       if (!attackTarget) {
         // No buildings found - enemy defeated or buildings are hidden
@@ -615,7 +615,7 @@ export class AITacticsManager {
       }
     }
 
-    // SC2-STYLE: Re-command idle assault units periodically
+    // RTS-STYLE: Re-command idle assault units periodically
     const lastReCommand = this.lastReCommandTick.get(ai.playerId) || 0;
     const shouldReCommand = currentTick - lastReCommand >= RE_COMMAND_IDLE_INTERVAL;
 
@@ -656,7 +656,7 @@ export class AITacticsManager {
       debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units${inHuntMode ? ' (HUNT MODE)' : ''}`);
     }
 
-    // SC2-STYLE: Stay in attacking state while engaged or in hunt mode
+    // RTS-STYLE: Stay in attacking state while engaged or in hunt mode
     // Only return to building when:
     // 1. No enemy buildings exist (victory imminent)
     // 2. Not engaged and no enemy buildings nearby
@@ -675,7 +675,7 @@ export class AITacticsManager {
         debugAI.log(`[AITactics] ${ai.playerId}: Disengaged for ${disengagedDuration} ticks, returning to build`);
       }
     }
-    // Otherwise stay in attacking state - SC2-style persistence
+    // Otherwise stay in attacking state - RTS-style persistence
   }
 
   /**
@@ -861,7 +861,7 @@ export class AITacticsManager {
     ai.state = 'building';
   }
 
-  // ==================== SC2-STYLE ENGAGEMENT TRACKING ====================
+  // ==================== RTS-STYLE ENGAGEMENT TRACKING ====================
 
   /**
    * Check if the AI's army is currently engaged in combat.

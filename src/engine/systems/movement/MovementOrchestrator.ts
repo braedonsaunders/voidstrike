@@ -865,7 +865,7 @@ export class MovementOrchestrator {
   /**
    * Handle unit arrival at destination
    *
-   * SC2-STYLE: Attack-move units that arrive at their destination don't go fully idle.
+   * RTS-STYLE: Attack-move units that arrive at their destination don't go fully idle.
    * Instead they stay in "assault mode" - idle but aggressively scanning for enemies.
    * This prevents units from standing around in enemy bases doing nothing.
    */
@@ -888,7 +888,7 @@ export class MovementOrchestrator {
       }
       return false;
     } else if (unit.state === 'attackmoving') {
-      // SC2-STYLE: Attack-move arrived at destination
+      // RTS-STYLE: Attack-move arrived at destination
       // Don't go fully idle - stay in assault mode, keep scanning for enemies
       unit.targetX = null;
       unit.targetY = null;

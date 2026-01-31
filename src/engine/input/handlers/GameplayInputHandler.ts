@@ -586,7 +586,7 @@ export class GameplayInputHandler implements InputHandler {
   }
 
   /**
-   * Show attack range overlay (hold-to-show, SC2-style).
+   * Show attack range overlay (hold-to-show, RTS-style).
    * Called on Alt+A keydown.
    */
   private handleAttackRangeOverlay(): boolean {
@@ -596,7 +596,7 @@ export class GameplayInputHandler implements InputHandler {
   }
 
   /**
-   * Show vision range overlay (hold-to-show, SC2-style).
+   * Show vision range overlay (hold-to-show, RTS-style).
    * Called on Alt+V keydown.
    */
   private handleVisionRangeOverlay(): boolean {

@@ -46,7 +46,7 @@ export type { AIDifficulty };
 
 /**
  * Tracks relationship with a specific enemy player.
- * Used for SC2-style threat assessment and grudge system.
+ * Used for RTS-style threat assessment and grudge system.
  */
 export interface EnemyRelation {
   /** Last tick when this enemy attacked us */
@@ -68,7 +68,7 @@ export interface EnemyRelation {
 }
 
 /**
- * Personality weight profiles for SC2-style AI differentiation.
+ * Personality weight profiles for RTS-style AI differentiation.
  * Each personality prioritizes different factors when selecting enemies.
  */
 export interface PersonalityWeights {
@@ -86,7 +86,7 @@ export interface PersonalityWeights {
   expandFrequency: number;
 }
 
-/** SC2-style personality weight configurations */
+/** RTS-style personality weight configurations */
 export const PERSONALITY_WEIGHTS: Record<AIPersonality, PersonalityWeights> = {
   aggressive: {
     proximity: 0.5,
@@ -155,7 +155,7 @@ export interface AIPlayer {
   /** Per-AI seeded random for independent decision making */
   random: SeededRandom;
 
-  /** SC2-style enemy relationship tracking */
+  /** RTS-style enemy relationship tracking */
   enemyRelations: Map<string, EnemyRelation>;
   /** Currently selected primary enemy to attack */
   primaryEnemyId: string | null;
@@ -414,7 +414,7 @@ export class AICoordinator extends System {
       // Per-AI random for independent decisions
       random: aiRandom,
 
-      // SC2-style enemy tracking
+      // RTS-style enemy tracking
       enemyRelations: new Map(),
       primaryEnemyId: null,
       personalityWeights: PERSONALITY_WEIGHTS[actualPersonality],
@@ -842,7 +842,7 @@ export class AICoordinator extends System {
       // Economic layer runs EVERY tick
       this.runEconomicLayer(ai, currentTick);
 
-      // SC2-style enemy relations update (determines which enemy to target)
+      // RTS-style enemy relations update (determines which enemy to target)
       this.tacticsManager.updateEnemyRelations(ai, currentTick);
 
       // Tactical state determination

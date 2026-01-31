@@ -177,7 +177,7 @@ export interface PostProcessingConfig {
   volumetricFogQuality: 'low' | 'medium' | 'high' | 'ultra';
   volumetricFogDensity: number;
   volumetricFogScattering: number;
-  // Fog of War (StarCraft 2-style)
+  // Fog of War (classic RTS-style)
   fogOfWarEnabled: boolean;
   fogOfWarQuality: FogOfWarQuality;
   fogOfWarEdgeBlur: number; // 0-4 cells
@@ -228,7 +228,7 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   volumetricFogQuality: 'medium',
   volumetricFogDensity: 1.0,
   volumetricFogScattering: 1.0,
-  // Fog of War defaults (StarCraft 2-style)
+  // Fog of War defaults (classic RTS-style)
   fogOfWarEnabled: false,
   fogOfWarQuality: 'high',
   fogOfWarEdgeBlur: 2.5,
@@ -518,7 +518,7 @@ export class RenderPipeline {
       }
     }
 
-    // 4. Fog of War (StarCraft 2-style post-process)
+    // 4. Fog of War (classic RTS-style post-process)
     if (this.config.fogOfWarEnabled && scenePassDepth && this.camera instanceof THREE.PerspectiveCamera) {
       this.fogOfWarPass = createFogOfWarPass(outputNode, scenePassDepth, this.camera);
       if (this.fogOfWarPass) {

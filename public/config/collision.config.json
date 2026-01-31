@@ -1,18 +1,18 @@
 {
   "$schema": "./collision.config.schema.json",
-  "_description": "Unit collision and separation configuration - SC2-style: allow overlap while moving, gentle spreading when stopped",
+  "_description": "Unit collision and separation configuration - RTS-style: allow overlap while moving, gentle spreading when stopped",
 
   "separation": {
-    "_description": "Separation force parameters - SC2 style: weak forces, allow significant overlap",
+    "_description": "Separation force parameters - RTS style: weak forces, allow significant overlap",
 
     "multiplier": 1.0,
-    "_multiplier_description": "Separation distance = (radius1 + radius2) * multiplier. 1.0 = units touch edges. SC2 allows overlap.",
+    "_multiplier_description": "Separation distance = (radius1 + radius2) * multiplier. 1.0 = units touch edges. RTS games typically allow overlap.",
 
     "queryRadiusMultiplier": 2.0,
     "_queryRadiusMultiplier_description": "Spatial query radius = unit's collision radius * this value.",
 
     "strengthMoving": 0.15,
-    "_strengthMoving_description": "Separation while moving. Very weak - SC2 allows extreme clumping during movement.",
+    "_strengthMoving_description": "Separation while moving. Very weak - allows extreme clumping during movement.",
 
     "strengthIdle": 0.8,
     "_strengthIdle_description": "Separation when idle. Gentle spreading - not jerky adjustments.",
@@ -47,7 +47,7 @@
   },
 
   "idle": {
-    "_description": "Idle behavior - SC2 style: only spread when really overlapping, very slowly",
+    "_description": "Idle behavior - RTS style: only spread when really overlapping, very slowly",
 
     "separationThreshold": 0.5,
     "_separationThreshold_description": "Minimum force to move idle unit. High = ignore small overlaps, feel settled.",

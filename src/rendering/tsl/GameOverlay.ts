@@ -3,7 +3,7 @@
  *
  * WebGPU-compatible strategic overlays using Three.js Shading Language.
  * Provides elevation, threat, navmesh, resource, and buildable visualization.
- * Also provides SC2-style unit range indicators (attack/vision).
+ * Also provides RTS-style unit range indicators (attack/vision).
  * Works with both WebGPU and WebGL renderers.
  *
  * Key features:
@@ -176,7 +176,7 @@ export class TSLGameOverlayManager {
   private resourceTextureData: Uint8Array | null = null;
   private buildableTexture: THREE.DataTexture | null = null;
 
-  // Range ring groups (SC2-style unit range indicators)
+  // Range ring groups (RTS-style unit range indicators)
   private attackRangeGroup: THREE.Group;
   private visionRangeGroup: THREE.Group;
   private attackRangeMaterial: THREE.MeshBasicMaterial;
