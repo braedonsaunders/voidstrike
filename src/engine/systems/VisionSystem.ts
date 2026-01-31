@@ -7,8 +7,10 @@ import { Building } from '../components/Building';
 import { Selectable } from '../components/Selectable';
 import { Game } from '../core/Game';
 import { WatchTower } from '@/data/maps/MapTypes';
-import { VisionCompute, VisionCaster } from '@/rendering/compute/VisionCompute';
-import { WebGPURenderer } from 'three/webgpu';
+// GPU vision imports are lazy-loaded to avoid breaking worker context
+// (WebGPU APIs are not available in Web Workers)
+import type { VisionCompute, VisionCaster } from '@/rendering/compute/VisionCompute';
+import type { WebGPURenderer } from 'three/webgpu';
 import { debugPathfinding } from '@/utils/debugLogger';
 
 // Vision states for fog of war
@@ -354,9 +356,13 @@ export class VisionSystem extends System {
   /**
    * Initialize GPU compute for vision (WebGPU only)
    * Call after WebGPU renderer is initialized
+   * Uses dynamic import to avoid loading WebGPU code in worker context
    */
-  public initGPUVision(renderer: WebGPURenderer): void {
+  public async initGPUVision(renderer: WebGPURenderer): Promise<void> {
     try {
+      // Dynamic import to avoid loading WebGPU code in worker context
+      const { VisionCompute } = await import('@/rendering/compute/VisionCompute');
+
       this.gpuVisionCompute = new VisionCompute(renderer, {
         mapWidth: this.mapWidth,
         mapHeight: this.mapHeight,
