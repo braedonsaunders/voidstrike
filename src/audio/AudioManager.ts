@@ -388,6 +388,12 @@ class AudioManagerClass {
   public play(soundId: string, volumeMultiplier = 1): void {
     if (this.muted) return;
 
+    // Proactively try to resume suspended AudioContext
+    // This ensures audio works even if visibility/interaction events haven't fired
+    if (this.audioContext?.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
+
     const config = this.soundConfigs.get(soundId);
     if (!config) {
       debugAudio.warn(`Unknown sound: ${soundId}`);
@@ -489,6 +495,11 @@ class AudioManagerClass {
 
   public playAt(soundId: string, position: THREE.Vector3, volumeMultiplier = 1): void {
     if (this.muted) return;
+
+    // Proactively try to resume suspended AudioContext
+    if (this.audioContext?.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
 
     // Fall back to 2D audio if no listener (e.g., spectator mode or initialization issue)
     if (!this.listener) {
