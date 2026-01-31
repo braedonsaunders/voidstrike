@@ -498,6 +498,14 @@ export abstract class GameCore {
     return this.currentTick / this.config.tickRate;
   }
 
+  /**
+   * Check if the game is running in multiplayer mode.
+   * Used by systems like AIMicroSystem to disable certain behaviors.
+   */
+  public isInMultiplayerMode(): boolean {
+    return this.config.isMultiplayer;
+  }
+
   // ============================================================================
   // COMMAND PROCESSING (shared implementation)
   // ============================================================================
