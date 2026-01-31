@@ -12,6 +12,7 @@ import { useRef, useEffect, useCallback, useState } from 'react';
 import { Game } from '@/engine/core/Game';
 import type { EventBus } from '@/engine/core/EventBus';
 import type { IWorldProvider } from '@/engine/ecs/IWorldProvider';
+import { initializeDefinitions, definitionsReady } from '@/engine/definitions/bootstrap';
 import {
   WorkerBridge,
   MainThreadEventHandler,
@@ -137,6 +138,13 @@ export function useWorkerBridge({
       const isMultiplayer = isMultiplayerMode();
 
       debugInitialization.log('[useWorkerBridge] Initializing game (worker mode)');
+
+      // Ensure definitions are loaded before creating Game instance
+      if (!definitionsReady()) {
+        debugInitialization.log('[useWorkerBridge] Waiting for definitions to load...');
+        await initializeDefinitions();
+        debugInitialization.log('[useWorkerBridge] Definitions loaded');
+      }
 
       // Create worker bridge for game logic communication
       const bridge = WorkerBridge.getInstance({

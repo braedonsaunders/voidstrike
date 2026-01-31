@@ -154,13 +154,27 @@ export const DOMINION_BUILDINGS: BuildingDefinition[] = new Proxy([] as Building
         yield* Object.values(DefinitionRegistry.getAllBuildings());
       };
     }
-    // Delegate array methods
+    // Delegate array methods - bind to the real array so 'this' works correctly
     if (typeof prop === 'string' && typeof Array.prototype[prop as keyof typeof Array.prototype] === 'function') {
       const buildings = DefinitionRegistry.isInitialized()
         ? Object.values(DefinitionRegistry.getAllBuildings())
         : [];
-      return (buildings as unknown as Record<string, unknown>)[prop];
+      const method = (buildings as unknown as Record<string, unknown>)[prop];
+      if (typeof method === 'function') {
+        return method.bind(buildings);
+      }
+      return method;
     }
     return (target as unknown as Record<string | symbol, unknown>)[prop];
+  },
+  has(_target, prop) {
+    // Support 'in' operator for numeric indices so array algorithms work
+    if (typeof prop === 'string' && !isNaN(Number(prop))) {
+      if (!DefinitionRegistry.isInitialized()) return false;
+      const index = Number(prop);
+      const length = Object.keys(DefinitionRegistry.getAllBuildings()).length;
+      return index >= 0 && index < length;
+    }
+    return prop in Array.prototype;
   },
 });
