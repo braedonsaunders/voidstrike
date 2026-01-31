@@ -702,6 +702,10 @@ describe('FlockingBehavior Performance', () => {
     it('execution time scales sub-quadratically with unit count', () => {
       const out: PooledVector2 = { x: 0, y: 0 } as PooledVector2;
 
+      // Run multiple iterations per measurement to reduce timing noise
+      // Sub-millisecond measurements are extremely noisy; aggregating increases reliability
+      const ITERATIONS_PER_MEASUREMENT = 20;
+
       // Use algorithmic complexity verification instead of fragile ratio tests
       const measureTime = (inputSize: number): number => {
         const flocking = new FlockingBehavior();
@@ -709,17 +713,20 @@ describe('FlockingBehavior Performance', () => {
         const scenario = createDenseClusterScenario(inputSize);
 
         const start = performance.now();
-        for (const entity of scenario.entities) {
-          flocking.calculateSeparationForce(
-            entity.id,
-            entity.transform,
-            entity.unit,
-            out,
-            100,
-            scenario.grid
-          );
+        for (let iter = 0; iter < ITERATIONS_PER_MEASUREMENT; iter++) {
+          for (const entity of scenario.entities) {
+            flocking.calculateSeparationForce(
+              entity.id,
+              entity.transform,
+              entity.unit,
+              out,
+              100,
+              scenario.grid
+            );
+          }
         }
-        return performance.now() - start;
+        // Return average time per iteration
+        return (performance.now() - start) / ITERATIONS_PER_MEASUREMENT;
       };
 
       // Test complexity: should be O(n) or O(n log n) due to spatial partitioning
