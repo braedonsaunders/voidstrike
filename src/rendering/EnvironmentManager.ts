@@ -454,8 +454,12 @@ export class EnvironmentManager {
     // Don't toggle castShadow - it must stay true to keep shadow map depth texture valid
     // The renderer.shadowMap.enabled flag controls whether shadows are actually rendered
 
-    // Toggle shadow receiving on terrain
-    this.terrain.mesh.receiveShadow = enabled;
+    // Toggle shadow receiving on terrain chunks (mesh is a Group containing chunk meshes)
+    this.terrain.mesh.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        child.receiveShadow = enabled;
+      }
+    });
 
     // Mark shadow map for immediate update when enabling
     if (enabled) {
