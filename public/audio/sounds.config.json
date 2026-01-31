@@ -197,7 +197,7 @@
         "clusterRadius": 15
       },
       "attack_power_cannon": {
-        "url": "/audio/combat/power_cannon.mp3",
+        "url": "/audio/combat/yamato.mp3",
         "volume": 0.8,
         "spatial": true,
         "maxInstances": 3,

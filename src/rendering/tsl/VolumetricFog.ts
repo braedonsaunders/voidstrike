@@ -15,7 +15,6 @@ import {
   int,
   uniform,
   uv,
-  texture,
   clamp,
   smoothstep,
   mix,
@@ -104,7 +103,9 @@ export function createVolumetricFogNode(
     const enabled = uEnabled.greaterThan(0.5);
 
     // Sample depth and convert to linear
-    const depthSample = texture(depthTexture, fragUV).r;
+    // depthTexture is already a texture node from scenePass.getTextureNode('depth'),
+    // so use .sample() instead of texture() which expects a raw THREE.Texture
+    const depthSample = depthTexture.sample(fragUV).r;
 
     // Convert depth to linear distance
     const z = depthSample.mul(2.0).sub(1.0);
