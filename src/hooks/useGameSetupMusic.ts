@@ -41,14 +41,15 @@ export function useGameSetupMusic() {
 
   // Continue menu music (or start if navigated directly here)
   // Also start preloading 3D assets in background while player is in lobby
+  // Use musicEnabledStore directly (not SSR-safe wrapper) since this only runs client-side
   useEffect(() => {
     const continueMenuMusic = async () => {
       await MusicPlayer.initialize();
       MusicPlayer.setVolume(musicVolume);
-      MusicPlayer.setMuted(!musicEnabled);
+      MusicPlayer.setMuted(!musicEnabledStore);
       await MusicPlayer.discoverTracks();
       // Only start if not already playing menu music
-      if (musicEnabled && MusicPlayer.getCurrentCategory() !== 'menu') {
+      if (musicEnabledStore && MusicPlayer.getCurrentCategory() !== 'menu') {
         MusicPlayer.play('menu');
       }
     };
@@ -61,12 +62,16 @@ export function useGameSetupMusic() {
       AssetManager.startPreloading();
     }
     // Don't stop on unmount - music stops when game starts
-  }, []);
+  }, [musicEnabledStore, musicVolume]);
 
-  // Sync volume changes - use store value directly since MusicPlayer only runs client-side
+  // Sync volume/muted state - use store value directly since MusicPlayer only runs client-side
   useEffect(() => {
     MusicPlayer.setVolume(musicVolume);
     MusicPlayer.setMuted(!musicEnabledStore);
+    // If muted, ensure music is paused (not just volume 0) - fixes reload state sync
+    if (!musicEnabledStore) {
+      MusicPlayer.pause();
+    }
   }, [musicVolume, musicEnabledStore]);
 
   // Sync fullscreen state with browser
