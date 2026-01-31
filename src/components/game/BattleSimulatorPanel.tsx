@@ -7,6 +7,7 @@ import { DefinitionRegistry } from '@/engine/definitions/DefinitionRegistry';
 import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
 import { useGameStore } from '@/store/gameStore';
 import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
+import { getWorkerBridge } from '@/engine/workers';
 
 type SpawnTeam = 'player1' | 'player2';
 type SpawnQuantity = 1 | 5 | 10 | 20;
@@ -20,7 +21,13 @@ const SPAWN_QUANTITIES: SpawnQuantity[] = [1, 5, 10, 20];
 function findValidTarget(
   worldAdapter: RenderStateWorldAdapter,
   entityId: number,
-  unitData: { sightRange: number; isNaval: boolean; isFlying: boolean; canAttackAir: boolean; canAttackGround: boolean },
+  unitData: {
+    sightRange: number;
+    isNaval: boolean;
+    isFlying: boolean;
+    canAttackAir: boolean;
+    canAttackGround: boolean;
+  },
   transformData: { x: number; y: number },
   myPlayerId: string
 ): number | null {
@@ -37,7 +44,9 @@ function findValidTarget(
     const targetUnit = entity.get<{ isFlying: boolean; isNaval: boolean }>('Unit');
     const targetTransform = entity.get<{ x: number; y: number }>('Transform');
     const targetSelectable = entity.get<{ playerId: string }>('Selectable');
-    const targetHealth = entity.get<{ current: number; max: number; isDead: () => boolean }>('Health');
+    const targetHealth = entity.get<{ current: number; max: number; isDead: () => boolean }>(
+      'Health'
+    );
 
     if (!targetUnit || !targetTransform || !targetSelectable || !targetHealth) continue;
     if (targetSelectable.playerId === myPlayerId) continue;
@@ -47,7 +56,8 @@ function findValidTarget(
     const targetIsNaval = targetUnit.isNaval;
 
     // Check if this unit can attack the target type
-    const canAttack = (targetIsFlying && unitData.canAttackAir) || (!targetIsFlying && unitData.canAttackGround);
+    const canAttack =
+      (targetIsFlying && unitData.canAttackAir) || (!targetIsFlying && unitData.canAttackGround);
     if (!canAttack) continue;
 
     // Naval units should prefer naval targets
@@ -79,7 +89,12 @@ function findValidTarget(
  */
 function findEnemyCenter(
   worldAdapter: RenderStateWorldAdapter,
-  unitData: { isNaval: boolean; isFlying: boolean; canAttackAir: boolean; canAttackGround: boolean },
+  unitData: {
+    isNaval: boolean;
+    isFlying: boolean;
+    canAttackAir: boolean;
+    canAttackGround: boolean;
+  },
   myPlayerId: string
 ): { x: number; y: number } | null {
   const entities = worldAdapter.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
@@ -104,7 +119,8 @@ function findEnemyCenter(
     const targetIsFlying = targetUnit.isFlying;
     const targetIsNaval = targetUnit.isNaval;
 
-    const canAttack = (targetIsFlying && unitData.canAttackAir) || (!targetIsFlying && unitData.canAttackGround);
+    const canAttack =
+      (targetIsFlying && unitData.canAttackAir) || (!targetIsFlying && unitData.canAttackGround);
     if (!canAttack) continue;
 
     if (isNavalUnit && !isAirUnit) {
@@ -129,8 +145,8 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   const [isPaused, setIsPaused] = useState(true);
   const playerSlots = useGameSetupStore((state) => state.playerSlots);
 
-  const team1Color = PLAYER_COLORS.find(c => c.id === playerSlots[0]?.colorId);
-  const team2Color = PLAYER_COLORS.find(c => c.id === playerSlots[1]?.colorId);
+  const team1Color = PLAYER_COLORS.find((c) => c.id === playerSlots[0]?.colorId);
+  const team2Color = PLAYER_COLORS.find((c) => c.id === playerSlots[1]?.colorId);
 
   // Pause game on mount so user can place units
   useEffect(() => {
@@ -255,7 +271,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     // Get all unit entity IDs and request worker to destroy them
     if (worldAdapter) {
       const entities = worldAdapter.getEntitiesWith('Unit', 'Selectable');
-      const entityIds = entities.map(e => e.id);
+      const entityIds = entities.map((e) => e.id);
 
       // Emit destroy command for each entity - worker will handle actual destruction
       for (const entityId of entityIds) {
@@ -283,6 +299,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     useGameStore.getState().selectUnits(teamUnits);
 
     // Sync selection to worker
+    const bridge = getWorkerBridge();
     if (bridge) {
       bridge.setSelection(teamUnits, team);
     }
@@ -290,7 +307,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     setSelectedUnit(null);
   }, []);
 
-  const combatUnits = Object.values(DefinitionRegistry.getAllUnits()).filter(u => !u.isWorker);
+  const combatUnits = Object.values(DefinitionRegistry.getAllUnits()).filter((u) => !u.isWorker);
 
   return (
     <div className="absolute top-12 left-2 w-64 bg-void-950/95 border border-void-700 rounded-lg shadow-xl pointer-events-auto">
@@ -359,9 +376,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
           <button
             onClick={() => setSelectedTeam('player1')}
             className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all ${
-              selectedTeam === 'player1'
-                ? 'ring-2 ring-white'
-                : 'opacity-60 hover:opacity-80'
+              selectedTeam === 'player1' ? 'ring-2 ring-white' : 'opacity-60 hover:opacity-80'
             }`}
             style={{
               backgroundColor: `#${(team1Color?.hex ?? 0x4080ff).toString(16).padStart(6, '0')}`,
@@ -372,9 +387,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
           <button
             onClick={() => setSelectedTeam('player2')}
             className={`flex-1 px-2 py-1.5 rounded text-xs font-medium transition-all ${
-              selectedTeam === 'player2'
-                ? 'ring-2 ring-white'
-                : 'opacity-60 hover:opacity-80'
+              selectedTeam === 'player2' ? 'ring-2 ring-white' : 'opacity-60 hover:opacity-80'
             }`}
             style={{
               backgroundColor: `#${(team2Color?.hex ?? 0xff4040).toString(16).padStart(6, '0')}`,
