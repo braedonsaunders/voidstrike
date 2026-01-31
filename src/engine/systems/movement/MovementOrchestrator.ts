@@ -119,7 +119,7 @@ export class MovementOrchestrator {
       return this.pathfinding.requestPathWithCooldown(entityId, targetX, targetY, force);
     };
 
-    this.formation = new FormationMovement(world, game.eventBus, pathRequestCallback);
+    this.formation = new FormationMovement(world, game.eventBus, pathRequestCallback, game);
 
     // Initialize typed arrays for grid position tracking
     const maxEntities = 4096;

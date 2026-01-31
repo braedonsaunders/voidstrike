@@ -58,16 +58,19 @@ export class FormationMovement {
   private eventBus: EventBus;
   private requestPathWithCooldown: PathRequestCallback;
   private recast: RecastNavigation;
+  private game: Game;
 
   constructor(
     world: World,
     eventBus: EventBus,
-    requestPathWithCooldown: PathRequestCallback
+    requestPathWithCooldown: PathRequestCallback,
+    game: Game
   ) {
     this.world = world;
     this.eventBus = eventBus;
     this.requestPathWithCooldown = requestPathWithCooldown;
     this.recast = getRecastNavigation();
+    this.game = game;
   }
 
   /**
@@ -78,8 +81,7 @@ export class FormationMovement {
    * and shallow water where ground units can wade, but boats cannot navigate.
    */
   private isNavalWaterTerrain(x: number, y: number): boolean {
-    const game = Game.getInstance();
-    const cell = game.getTerrainAt(x, y);
+    const cell = this.game.getTerrainAt(x, y);
     if (!cell) return false;
     const feature = cell.feature || 'none';
     // Only deep water is valid for naval units - shallow water is for wading ground units
