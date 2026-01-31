@@ -98,6 +98,9 @@ export interface MultiplayerState {
   // Reconnection callback (set by lobby hook)
   reconnectCallback: (() => Promise<boolean>) | null;
 
+  // Called after successful reconnection to trigger game-level sync
+  onReconnectedCallback: (() => void) | null;
+
   // Message handlers
   messageHandlers: ((data: unknown) => void)[];
 
@@ -117,6 +120,7 @@ export interface MultiplayerState {
   setRemotePeerId: (id: string | null) => void;
   setDataChannel: (channel: RTCDataChannel | null) => void;
   setReconnectCallback: (callback: (() => Promise<boolean>) | null) => void;
+  setOnReconnectedCallback: (callback: (() => void) | null) => void;
 
   // Multi-peer actions
   addPeer: (peerId: string, dataChannel: RTCDataChannel) => void;
@@ -200,6 +204,7 @@ const initialState = {
   dataChannel: null,
   peerChannels: new Map<string, PeerConnection>(),
   reconnectCallback: null,
+  onReconnectedCallback: null,
   messageHandlers: [] as ((data: unknown) => void)[],
   // Latency measurement
   latencyStats: { ...defaultLatencyStats },
@@ -238,6 +243,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     }
   },
   setReconnectCallback: (callback) => set({ reconnectCallback: callback }),
+  setOnReconnectedCallback: (callback) => set({ onReconnectedCallback: callback }),
 
   // Multi-peer management for 8-player support
   addPeer: (peerId: string, dataChannel: RTCDataChannel) => {
@@ -738,6 +744,12 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         const success = await callback();
         if (success) {
           debugNetworking.log('[Multiplayer] Reconnection successful');
+          // Trigger game-level sync after successful reconnection
+          const onReconnected = get().onReconnectedCallback;
+          if (onReconnected) {
+            debugNetworking.log('[Multiplayer] Triggering game-level sync');
+            onReconnected();
+          }
           return true;
         }
       } catch (e) {
@@ -961,6 +973,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       peerChannels: new Map(),
       peerToSlotId: new Map(),
       remotePeerIds: [],
+      onReconnectedCallback: null,
     });
   },
 }));
@@ -1032,6 +1045,11 @@ export function startLatencyMeasurement(): void {
 // Stop latency measurement
 export function stopLatencyMeasurement(): void {
   useMultiplayerStore.getState().stopPingInterval();
+}
+
+// Set callback for when reconnection succeeds (to trigger game-level sync)
+export function setOnReconnectedCallback(callback: (() => void) | null): void {
+  useMultiplayerStore.getState().setOnReconnectedCallback(callback);
 }
 
 // Multi-peer utilities for 8-player support

@@ -44,6 +44,7 @@ import {
   SelectionRingRenderer,
   TransformUtils,
   EntityIdTracker,
+  scheduleGeometryDisposal,
 } from './shared';
 // NOTE: Buildings don't move, so we don't use velocity tracking (AAA optimization)
 // Velocity node returns zero for meshes without velocity attributes
@@ -2493,15 +2494,14 @@ export class BuildingRenderer {
   }
 
   public dispose(): void {
-    // Flush any pending quarantined geometries first
+    // Schedule delayed disposal for pending quarantined geometries.
+    // WebGPU may still have in-flight commands even during teardown.
     for (const entry of this.geometryQuarantine) {
-      entry.geometry.dispose();
-      for (const material of entry.materials) {
-        material.dispose();
-      }
+      scheduleGeometryDisposal(entry.geometry, entry.materials);
     }
     this.geometryQuarantine.length = 0;
 
+    // Dispose shared materials (CPU-side, safe to dispose immediately)
     this.constructingMaterial.dispose();
     this.selectionRingRenderer.dispose();
     this.fireMaterial.dispose();
@@ -2526,53 +2526,56 @@ export class BuildingRenderer {
       this.scene.remove(meshData.selectionRing);
       this.scene.remove(meshData.healthBar);
       this.scene.remove(meshData.progressBar);
-      // Effects have their own geometry, can dispose fully
+      // Effects have their own geometry - use delayed disposal to prevent WebGPU crashes
       if (meshData.fireEffect) {
         this.scene.remove(meshData.fireEffect);
-        this.disposeGroup(meshData.fireEffect);
+        this.disposeGroupDelayed(meshData.fireEffect);
       }
       if (meshData.constructionEffect) {
         this.scene.remove(meshData.constructionEffect);
-        this.disposeGroup(meshData.constructionEffect);
+        this.disposeGroupDelayed(meshData.constructionEffect);
       }
       if (meshData.thrusterEffect) {
         this.scene.remove(meshData.thrusterEffect);
-        this.disposeGroup(meshData.thrusterEffect);
+        this.disposeGroupDelayed(meshData.thrusterEffect);
       }
       if (meshData.blueprintEffect) {
         this.scene.remove(meshData.blueprintEffect);
-        this.disposeGroup(meshData.blueprintEffect);
+        this.disposeGroupDelayed(meshData.blueprintEffect);
       }
       if (meshData.groundDustEffect) {
         this.scene.remove(meshData.groundDustEffect);
-        this.disposeGroup(meshData.groundDustEffect);
+        this.disposeGroupDelayed(meshData.groundDustEffect);
       }
       if (meshData.scaffoldEffect) {
         this.scene.remove(meshData.scaffoldEffect);
-        this.disposeGroup(meshData.scaffoldEffect);
+        this.disposeGroupDelayed(meshData.scaffoldEffect);
       }
     }
     this.buildingMeshes.clear();
 
-    // Dispose instanced groups - immediate disposal safe during full teardown
+    // Dispose instanced groups - use delayed disposal to prevent WebGPU crashes.
+    // Even after scene.remove(), WebGPU may have in-flight commands using these buffers.
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      group.mesh.geometry.dispose();
-      if (group.mesh.material instanceof THREE.Material) {
-        group.mesh.material.dispose();
-      } else if (Array.isArray(group.mesh.material)) {
-        group.mesh.material.forEach(m => m.dispose());
-      }
+      scheduleGeometryDisposal(group.mesh.geometry, group.mesh.material);
     }
     this.instancedGroups.clear();
+  }
 
-    // Flush any geometries queued during dispose
-    for (const entry of this.geometryQuarantine) {
-      entry.geometry.dispose();
-      for (const material of entry.materials) {
-        material.dispose();
+  /**
+   * Dispose a group with delayed geometry disposal.
+   * Schedules geometry/material disposal after GPU finishes.
+   */
+  private disposeGroupDelayed(group: THREE.Group): void {
+    group.traverse((obj) => {
+      if (obj instanceof THREE.Mesh || obj instanceof THREE.InstancedMesh) {
+        scheduleGeometryDisposal(obj.geometry, obj.material);
+      } else if (obj instanceof THREE.Points) {
+        scheduleGeometryDisposal(obj.geometry, obj.material as THREE.Material);
+      } else if (obj instanceof THREE.Line) {
+        scheduleGeometryDisposal(obj.geometry, obj.material as THREE.Material);
       }
-    }
-    this.geometryQuarantine.length = 0;
+    });
   }
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { ActiveWatchTower, VisionSystem } from '@/engine/systems/VisionSystem';
+import { scheduleGeometryDisposal } from './shared';
 
 /**
  * Renders Xel'naga watch towers with activation particle effects
@@ -180,20 +181,16 @@ export class WatchTowerRenderer {
   }
 
   public dispose(): void {
+    // Dispose tower meshes - use delayed disposal to prevent WebGPU crashes.
+    // Even after scene.remove(), WebGPU may have in-flight commands using these buffers.
     for (const [, group] of this.towerMeshes) {
       this.scene.remove(group);
       group.traverse((obj) => {
         if (obj instanceof THREE.Mesh) {
-          obj.geometry.dispose();
-          if (Array.isArray(obj.material)) {
-            obj.material.forEach(m => m.dispose());
-          } else {
-            obj.material.dispose();
-          }
+          scheduleGeometryDisposal(obj.geometry, obj.material);
         }
         if (obj instanceof THREE.Points) {
-          obj.geometry.dispose();
-          (obj.material as THREE.Material).dispose();
+          scheduleGeometryDisposal(obj.geometry, obj.material as THREE.Material);
         }
       });
     }

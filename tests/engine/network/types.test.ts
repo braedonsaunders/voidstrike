@@ -1,8 +1,6 @@
 import { describe, it, beforeEach, expect } from 'vitest';
-import {
-  generateLobbyCode,
-  commandIdGenerator,
-} from '@/engine/network/types';
+
+import { generateLobbyCode, commandIdGenerator } from '@/engine/network/types';
 
 describe('Network Types - Utility Functions', () => {
   describe('commandIdGenerator.generate()', () => {
@@ -53,7 +51,6 @@ describe('Network Types - Utility Functions', () => {
       const id3 = commandIdGenerator.generate('p1');
       expect(id3).toBe('p1-1-2');
     });
-  });
 
   describe('commandIdGenerator.reset()', () => {
     it('resets the counter and tick to 0', () => {

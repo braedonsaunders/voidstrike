@@ -96,8 +96,8 @@ export class EnvironmentManager {
     this.directionalLight = new THREE.DirectionalLight(this.biome.colors.sun, 1.8);
     this.directionalLight.position.set(50, 80, 50);
     // IMPORTANT: Always set castShadow = true to initialize shadow map depth texture
-    // Control shadow rendering via renderer.shadowMap.enabled instead
-    // This prevents WebGPU "depthTexture is null" errors when toggling shadows
+    // NEVER toggle renderer.shadowMap.enabled - it must stay true to keep textures valid
+    // Shadow visibility is controlled via receiveShadow on meshes + internal shadowsEnabled flag
     this.directionalLight.castShadow = true;
     // Pre-configure shadow properties - use 512 for balance of quality/performance
     this.directionalLight.shadow.mapSize.width = 512;
@@ -445,13 +445,13 @@ export class EnvironmentManager {
 
   /**
    * Enable or disable shadows
-   * Note: directionalLight.castShadow is always true to keep shadow map initialized.
-   * We control shadow visibility via renderer.shadowMap.enabled in the game canvas.
+   * Note: Both directionalLight.castShadow and renderer.shadowMap.enabled stay true.
+   * We control shadow visibility via receiveShadow on meshes + skipping shadow updates.
    */
   public setShadowsEnabled(enabled: boolean): void {
     this.shadowsEnabled = enabled;
-    // Don't toggle castShadow - it must stay true to keep shadow map depth texture valid
-    // The renderer.shadowMap.enabled flag controls whether shadows are actually rendered
+    // Don't toggle castShadow or renderer.shadowMap.enabled - they must stay true
+    // to keep shadow map depth texture valid and prevent TSL texture errors
 
     // Toggle shadow receiving on terrain chunks (mesh is a Group containing chunk meshes)
     this.terrain.mesh.traverse((child) => {
@@ -762,11 +762,12 @@ export class EnvironmentManager {
 
   /**
    * Dispose all resources
-   * CRITICAL: Remove from scene FIRST, then dispose to prevent WebGPU crashes.
-   * If geometry is disposed while mesh is still in scene, WebGPU setIndexBuffer fails.
+   * CRITICAL: Remove from scene FIRST, then delay disposal to prevent WebGPU crashes.
+   * Even after scene.remove(), WebGPU may still have in-flight commands using these buffers.
+   * We delay disposal by ~100ms to ensure the GPU has finished all pending operations.
    */
   public dispose(): void {
-    // STEP 1: Remove all objects from scene FIRST (prevents WebGPU render crashes)
+    // STEP 1: Remove all objects from scene FIRST (stops new render commands)
     this.scene.remove(this.terrain.mesh);
     this.scene.remove(this.ambientLight);
     this.scene.remove(this.directionalLight);
@@ -784,26 +785,55 @@ export class EnvironmentManager {
     if (this.particles) this.scene.remove(this.particles.points);
     if (this.mapDecorations) this.scene.remove(this.mapDecorations.group);
 
-    // STEP 2: Now safe to dispose resources (no longer being rendered)
-    this.trees?.dispose();
-    this.rocks?.dispose();
-    this.crystals?.dispose();
-    this.grass?.dispose();
-    this.pebbles?.dispose();
-
-    this.terrain.dispose();
-    this.waterMesh?.dispose();
-    this.mapBorderFog?.dispose();
-    this.particles?.dispose();
-    this.mapDecorations?.dispose();
+    // STEP 2: Dispose non-geometry resources immediately (CPU-side only)
     this.decorationLightManager?.dispose();
     this.emissiveDecorationManager?.dispose();
     this.emissiveLightPool?.dispose();
 
-    // Dispose environment map
+    // Clear environment map reference
     if (this.envMap) {
-      this.envMap.dispose();
       this.scene.environment = null;
     }
+
+    // STEP 3: Delay geometry disposal to prevent WebGPU crashes.
+    // WebGPU may still have 2-3 frames of commands in flight after scene.remove().
+    // Waiting ~100ms (~6 frames at 60fps) ensures GPU has finished.
+    const trees = this.trees;
+    const rocks = this.rocks;
+    const crystals = this.crystals;
+    const grass = this.grass;
+    const pebbles = this.pebbles;
+    const terrain = this.terrain;
+    const waterMesh = this.waterMesh;
+    const mapBorderFog = this.mapBorderFog;
+    const particles = this.particles;
+    const mapDecorations = this.mapDecorations;
+    const envMap = this.envMap;
+
+    setTimeout(() => {
+      trees?.dispose();
+      rocks?.dispose();
+      crystals?.dispose();
+      grass?.dispose();
+      pebbles?.dispose();
+      terrain.dispose();
+      waterMesh?.dispose();
+      mapBorderFog?.dispose();
+      particles?.dispose();
+      mapDecorations?.dispose();
+      envMap?.dispose();
+    }, 100);
+
+    // Clear references
+    this.trees = null;
+    this.rocks = null;
+    this.crystals = null;
+    this.grass = null;
+    this.pebbles = null;
+    this.waterMesh = null;
+    this.mapBorderFog = null;
+    this.particles = null;
+    this.mapDecorations = null;
+    this.envMap = null;
   }
 }

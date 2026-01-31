@@ -9,6 +9,7 @@ import AssetManager, { LODLevel } from '@/assets/AssetManager';
 import { useUIStore } from '@/store/uiStore';
 import { debugMesh } from '@/utils/debugLogger';
 import { distance } from '@/utils/math';
+import { scheduleGeometryDisposal } from './shared';
 // NOTE: Resources don't move, so we don't use velocity tracking (AAA optimization)
 // Velocity node returns zero for meshes without velocity attributes
 
@@ -912,39 +913,39 @@ export class ResourceRenderer {
   }
 
   public dispose(): void {
+    // Dispose instanced groups - use delayed disposal to prevent WebGPU crashes.
+    // Even after scene.remove(), WebGPU may have in-flight commands using these buffers.
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      group.mesh.geometry.dispose();
-      if (group.mesh.material instanceof THREE.Material) {
-        group.mesh.material.dispose();
-      }
+      scheduleGeometryDisposal(group.mesh.geometry, group.mesh.material);
     }
     this.instancedGroups.clear();
 
-    // Clean up instanced selection ring mesh
+    // Clean up instanced selection ring mesh - use delayed disposal for geometry
     if (this.selectionRingMesh) {
       this.scene.remove(this.selectionRingMesh);
       // Note: geometry and material are shared (selectionGeometry, selectionMaterial)
+      // They're disposed below, so just null the reference here
       this.selectionRingMesh = null;
     }
     this.selectedResources.clear();
     this.resourceData.clear();
 
-    // Clean up mineral line labels
+    // Clean up mineral line labels (CPU-side sprites, safe to dispose immediately)
     for (const label of this.mineralLineLabels) {
       this.scene.remove(label.sprite);
       this.disposeWorkerLabel(label.sprite);
     }
     this.mineralLineLabels = [];
 
-    // Clean up vespene labels
+    // Clean up vespene labels (CPU-side sprites, safe to dispose immediately)
     for (const label of this.vespeneLabels.values()) {
       this.scene.remove(label.sprite);
       this.disposeWorkerLabel(label.sprite);
     }
     this.vespeneLabels.clear();
 
-    this.selectionGeometry.dispose();
-    this.selectionMaterial.dispose();
+    // Schedule shared selection geometry for delayed disposal
+    scheduleGeometryDisposal(this.selectionGeometry, this.selectionMaterial);
   }
 }

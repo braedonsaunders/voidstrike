@@ -33,6 +33,7 @@ import {
   TransformUtils,
   SmoothRotation,
   EntityIdTracker,
+  scheduleGeometryDisposal,
 } from './shared';
 
 // GPU-driven rendering infrastructure
@@ -1337,33 +1338,26 @@ export class UnitRenderer {
   }
 
   public dispose(): void {
-    // Flush any pending quarantined geometries first
+    // Schedule delayed disposal for pending quarantined geometries.
+    // WebGPU may still have in-flight commands even during teardown.
     for (const entry of this.geometryQuarantine) {
-      entry.geometry.dispose();
-      for (const material of entry.materials) {
-        material.dispose();
-      }
+      scheduleGeometryDisposal(entry.geometry, entry.materials);
     }
     this.geometryQuarantine.length = 0;
 
-    // Dispose shared utilities
+    // Dispose shared utilities (these are CPU-side only, safe to dispose immediately)
     this.healthBarRenderer.dispose();
     this.selectionRingRenderer.dispose();
     this.teamMarkerGeometry.dispose();
 
-    // Dispose instanced groups - immediate disposal is safe during full teardown
+    // Dispose instanced groups - use delayed disposal to prevent WebGPU crashes.
+    // Even after scene.remove(), WebGPU may have in-flight commands using these buffers.
     for (const group of this.instancedGroups.values()) {
       this.scene.remove(group.mesh);
-      // Dispose velocity buffer attributes to prevent memory leak
+      // Dispose velocity buffer attributes to prevent memory leak (CPU-side)
       disposeInstancedVelocity(group.mesh);
-      // Dispose geometry (safe since we clone it during creation)
-      group.mesh.geometry.dispose();
-      // Dispose materials
-      if (group.mesh.material instanceof THREE.Material) {
-        group.mesh.material.dispose();
-      } else if (Array.isArray(group.mesh.material)) {
-        group.mesh.material.forEach(m => m.dispose());
-      }
+      // Schedule geometry and materials for delayed disposal
+      scheduleGeometryDisposal(group.mesh.geometry, group.mesh.material);
     }
     this.instancedGroups.clear();
 
@@ -1392,9 +1386,11 @@ export class UnitRenderer {
     }
     this.unitOverlays.clear();
 
-    // Dispose team marker groups
+    // Dispose team marker groups - use delayed disposal for geometry
     for (const group of this.teamMarkerGroups.values()) {
       this.scene.remove(group.mesh);
+      // Team markers share geometry (teamMarkerGeometry) which is disposed above,
+      // but material is unique per group and can be disposed immediately
       if (group.mesh.material instanceof THREE.Material) {
         group.mesh.material.dispose();
       }

@@ -109,8 +109,6 @@ export interface GameCommand {
   // Input modifiers
   /** Whether shift was held (for command queuing) */
   queue?: boolean;
-  /** @deprecated Use `queue` instead */
-  shiftHeld?: boolean;
 }
 
 /**
@@ -263,10 +261,6 @@ export function dispatchCommand(eventBus: EventBus, command: GameCommand): void 
         repairerId: command.entityIds[0],
         targetId: command.targetEntityId,
       });
-      break;
-
-    case 'PATROL':
-      eventBus.emit(COMMAND_EVENTS.PATROL, command);
       break;
 
     case 'DEMOLISH':
