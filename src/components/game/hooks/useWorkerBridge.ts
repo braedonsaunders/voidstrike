@@ -227,6 +227,7 @@ export function useWorkerBridge({
         type: (slot.type === 'open' || slot.type === 'closed') ? 'empty' as const : slot.type,
         faction: slot.faction,
         aiDifficulty: slot.aiDifficulty,
+        team: slot.team,
       }));
       workerBridgeRef.current.spawnInitialEntities(mapRef.current, playerSlots);
 

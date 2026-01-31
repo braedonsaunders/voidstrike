@@ -336,7 +336,7 @@ export class AIBuildOrderExecutor {
             return false;
           }
           const totalWeight = affordableOptions.reduce((sum: number, opt: { id: string; weight: number }) => sum + opt.weight, 0);
-          let random = this.coordinator.getRandom().next() * totalWeight;
+          let random = this.coordinator.getRandom(ai.playerId).next() * totalWeight;
           for (const option of affordableOptions) {
             random -= option.weight;
             if (random <= 0) {
@@ -486,7 +486,7 @@ export class AIBuildOrderExecutor {
       // More angles at larger radii for better coverage
       const angleCount = radius <= 12 ? 8 : radius <= 24 ? 12 : 16;
       for (let angle = 0; angle < angleCount; angle++) {
-        const theta = (angle * Math.PI * 2) / angleCount + this.coordinator.getRandom().next() * 0.3;
+        const theta = (angle * Math.PI * 2) / angleCount + this.coordinator.getRandom(playerId).next() * 0.3;
         const x = Math.round(Math.cos(theta) * radius);
         const y = Math.round(Math.sin(theta) * radius);
         offsets.push({ x, y });
@@ -496,10 +496,11 @@ export class AIBuildOrderExecutor {
     // Shuffle offsets for variety (but keep closer positions biased toward front)
     // Shuffle in chunks to prefer closer positions while still adding variety
     const chunkSize = 24;
+    const random = this.coordinator.getRandom(playerId);
     for (let chunkStart = 0; chunkStart < offsets.length; chunkStart += chunkSize) {
       const chunkEnd = Math.min(chunkStart + chunkSize, offsets.length);
       for (let i = chunkEnd - 1; i > chunkStart; i--) {
-        const j = chunkStart + Math.floor(this.coordinator.getRandom().next() * (i - chunkStart + 1));
+        const j = chunkStart + Math.floor(random.next() * (i - chunkStart + 1));
         [offsets[i], offsets[j]] = [offsets[j], offsets[i]];
       }
     }
@@ -1004,8 +1005,9 @@ export class AIBuildOrderExecutor {
         // Target enemy base if known, otherwise scout unexplored areas
         if (ai.enemyBaseLocation) {
           // Add some randomness to avoid always scanning the exact same spot
-          const offsetX = (this.coordinator.getRandom().next() - 0.5) * 10;
-          const offsetY = (this.coordinator.getRandom().next() - 0.5) * 10;
+          const random = this.coordinator.getRandom(ai.playerId);
+          const offsetX = (random.next() - 0.5) * 10;
+          const offsetY = (random.next() - 0.5) * 10;
           return {
             position: {
               x: ai.enemyBaseLocation.x + offsetX,

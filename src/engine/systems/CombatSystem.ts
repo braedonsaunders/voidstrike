@@ -14,7 +14,7 @@ import { getDefaultTargetPriority } from '@/data/units/categories';
 import AssetManager from '@/assets/AssetManager';
 import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/data/projectiles';
 import { SpatialEntityData, SpatialUnitState } from '../core/SpatialGrid';
-import { findBestTarget as findBestTargetShared, DEFAULT_SCORING_CONFIG } from '../combat/TargetAcquisition';
+import { findBestTarget as findBestTargetShared, DEFAULT_SCORING_CONFIG, isEnemy } from '../combat/TargetAcquisition';
 import { distance, clamp } from '@/utils/math';
 import { ThrottledCache } from '@/utils/ThrottledCache';
 
@@ -108,7 +108,8 @@ export class CombatSystem extends System {
   // Units NOT in this set can skip target acquisition entirely when idle
   private combatAwareUnits: Set<number> = new Set();
   private combatZoneCheckTick: Map<number, number> = new Map();
-  private readonly COMBAT_ZONE_CHECK_INTERVAL = 15; // Re-check zone every 15 ticks (~750ms)
+  // SC2-STYLE: Reduced from 15 to 5 ticks for more responsive combat detection
+  private readonly COMBAT_ZONE_CHECK_INTERVAL = 5; // Re-check zone every 5 ticks (~250ms)
 
   // PERF: Track player unit counts per grid cell for fast enemy detection
   private lastEnemyCheckResult: Map<number, boolean> = new Map();
@@ -123,7 +124,8 @@ export class CombatSystem extends System {
   // Cells containing units from multiple players are "hot"
   private hotCells: Set<number> = new Set();
   private hotCellsLastUpdate: number = 0;
-  private readonly HOT_CELLS_UPDATE_INTERVAL = 10; // Rebuild every 10 ticks
+  // SC2-STYLE: Reduced from 10 to 5 ticks for faster combat zone detection
+  private readonly HOT_CELLS_UPDATE_INTERVAL = 5; // Rebuild every 5 ticks
 
   // PERF OPTIMIZATION: Attack cooldown priority queue (min-heap by next attack time)
   // Only units in this queue are checked for attacks
@@ -237,6 +239,26 @@ export class CombatSystem extends System {
       if (unit.isHoldingPosition) {
         this.combatActiveUnits.add(entity.id);
         continue;
+      }
+
+      // SC2-STYLE INSTANT ATTACK: Include idle units that have an enemy in attack range
+      // This ensures units immediately respond when an enemy walks into their attack range
+      // Uses fast hasEnemyInRadius check (O(cells) not O(entities))
+      if (unit.state === 'idle' && unit.attackRange > 0) {
+        const selectable = entity.get<Selectable>('Selectable');
+        if (selectable) {
+          const myPlayerId = this.getPlayerIndex(selectable.playerId);
+          const hasEnemyInAttackRange = this.world.unitGrid.hasEnemyInRadius(
+            transform.x,
+            transform.y,
+            unit.attackRange + 1, // +1 for edge tolerance
+            myPlayerId
+          );
+          if (hasEnemyInAttackRange) {
+            this.combatActiveUnits.add(entity.id);
+            continue;
+          }
+        }
       }
     }
 
@@ -845,6 +867,7 @@ export class CombatSystem extends System {
       y: selfTransform.y,
       range: selfUnit.attackRange,
       attackerPlayerId: selfSelectable.playerId,
+      attackerTeamId: selfSelectable.teamId,
       attackRange: selfUnit.attackRange,
       canAttackAir: selfUnit.canAttackAir,
       canAttackGround: selfUnit.canAttackGround,
@@ -920,6 +943,7 @@ export class CombatSystem extends System {
       y: selfTransform.y,
       range: selfUnit.sightRange,
       attackerPlayerId: selfSelectable.playerId,
+      attackerTeamId: selfSelectable.teamId,
       attackRange: selfUnit.attackRange,
       canAttackAir: selfUnit.canAttackAir,
       canAttackGround: selfUnit.canAttackGround,
@@ -1141,7 +1165,8 @@ export class CombatSystem extends System {
 
       // Skip allies and dead units
       if (!transform || !health || !selectable) continue;
-      if (selectable.playerId === attackerSelectable.playerId) continue;
+      // Use isEnemy to check team alliance
+      if (!isEnemy(attackerSelectable.playerId, attackerSelectable.teamId, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
 
       // Calculate distance from impact point
@@ -1187,7 +1212,8 @@ export class CombatSystem extends System {
       const building = entity.get<Building>('Building');
 
       if (!transform || !health || !selectable || !building) continue;
-      if (selectable.playerId === attackerSelectable.playerId) continue;
+      // Use isEnemy to check team alliance
+      if (!isEnemy(attackerSelectable.playerId, attackerSelectable.teamId, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
 
       // Distance to building edge

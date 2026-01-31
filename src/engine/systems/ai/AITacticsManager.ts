@@ -26,7 +26,8 @@ import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
 import { Game, GameCommand } from '../../core/Game';
 import { debugAI } from '@/utils/debugLogger';
-import type { AICoordinator, AIPlayer, AIState } from './AICoordinator';
+import type { AICoordinator, AIPlayer, AIState, EnemyRelation } from './AICoordinator';
+import { isEnemy } from '../../combat/TargetAcquisition';
 
 // Threat assessment constants
 const THREAT_WINDOW_TICKS = 200; // ~10 seconds at 20 ticks/sec
@@ -55,6 +56,218 @@ export class AITacticsManager {
 
   private get world() {
     return this.game.world;
+  }
+
+  // === SC2-Style Enemy Relations & Targeting ===
+
+  /** Half-life for grudge decay in ticks (~60 seconds at 20 ticks/second) */
+  private static readonly GRUDGE_HALF_LIFE_TICKS = 1200;
+  /** How often to update enemy relations (every 100 ticks = 5 seconds) */
+  private static readonly ENEMY_RELATIONS_UPDATE_INTERVAL = 100;
+  private lastEnemyRelationsUpdate: Map<string, number> = new Map();
+
+  /**
+   * Update enemy relations for an AI player.
+   * Calculates base distances, threat scores, and selects primary enemy.
+   */
+  public updateEnemyRelations(ai: AIPlayer, currentTick: number): void {
+    const lastUpdate = this.lastEnemyRelationsUpdate.get(ai.playerId) ?? 0;
+    if (currentTick - lastUpdate < AITacticsManager.ENEMY_RELATIONS_UPDATE_INTERVAL) {
+      return;
+    }
+    this.lastEnemyRelationsUpdate.set(ai.playerId, currentTick);
+
+    // Get our base position
+    const myBase = this.coordinator.findAIBase(ai);
+    if (!myBase) return;
+
+    // Find all enemy players
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+    const enemyPlayerIds = new Set<string>();
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      if (selectable.playerId === ai.playerId) continue;
+      // Check if this is actually an enemy (not an ally on the same team)
+      // In FFA (team 0), everyone is an enemy. In team games, only different teams are enemies.
+      const myBuildings = buildings.filter(b => b.get<Selectable>('Selectable')?.playerId === ai.playerId);
+      const myTeam = myBuildings[0]?.get<Selectable>('Selectable')?.teamId ?? 0;
+      if (!isEnemy(ai.playerId, myTeam, selectable.playerId, selectable.teamId)) continue;
+      enemyPlayerIds.add(selectable.playerId);
+    }
+
+    // Update relations for each enemy
+    for (const enemyPlayerId of enemyPlayerIds) {
+      let relation = ai.enemyRelations.get(enemyPlayerId);
+      if (!relation) {
+        relation = {
+          lastAttackedUsTick: 0,
+          lastWeAttackedTick: 0,
+          damageDealtToUs: 0,
+          damageWeDealt: 0,
+          baseDistance: Infinity,
+          threatScore: 0,
+          basePosition: null,
+          armyNearUs: 0,
+        };
+        ai.enemyRelations.set(enemyPlayerId, relation);
+      }
+
+      // Find enemy base position and calculate distance
+      let enemyBase: { x: number; y: number } | null = null;
+      for (const entity of buildings) {
+        const selectable = entity.get<Selectable>('Selectable')!;
+        const building = entity.get<Building>('Building')!;
+        const transform = entity.get<Transform>('Transform')!;
+        if (selectable.playerId !== enemyPlayerId) continue;
+        if (ai.config?.roles.baseTypes.includes(building.buildingId)) {
+          enemyBase = { x: transform.x, y: transform.y };
+          break;
+        }
+      }
+      // Fallback to any enemy building
+      if (!enemyBase) {
+        for (const entity of buildings) {
+          const selectable = entity.get<Selectable>('Selectable')!;
+          const transform = entity.get<Transform>('Transform')!;
+          if (selectable.playerId !== enemyPlayerId) continue;
+          enemyBase = { x: transform.x, y: transform.y };
+          break;
+        }
+      }
+
+      if (enemyBase) {
+        relation.basePosition = enemyBase;
+        const dx = enemyBase.x - myBase.x;
+        const dy = enemyBase.y - myBase.y;
+        relation.baseDistance = Math.sqrt(dx * dx + dy * dy);
+      }
+
+      // Decay grudge damage over time
+      const decayFactor = Math.pow(0.5, (currentTick - relation.lastAttackedUsTick) / AITacticsManager.GRUDGE_HALF_LIFE_TICKS);
+      relation.damageDealtToUs *= decayFactor;
+
+      // Calculate enemy army near our base (within 40 units)
+      const THREAT_RADIUS = 40;
+      let armyNearUs = 0;
+      const units = this.coordinator.getCachedUnitsWithTransform();
+      for (const entity of units) {
+        const selectable = entity.get<Selectable>('Selectable')!;
+        const unit = entity.get<Unit>('Unit')!;
+        const transform = entity.get<Transform>('Transform')!;
+        const health = entity.get<Health>('Health')!;
+        if (selectable.playerId !== enemyPlayerId) continue;
+        if (health.isDead() || unit.isWorker) continue;
+        const dx = transform.x - myBase.x;
+        const dy = transform.y - myBase.y;
+        if (Math.sqrt(dx * dx + dy * dy) < THREAT_RADIUS) {
+          // Unit component doesn't store supplyCost, use 1 as default
+          armyNearUs += 1;
+        }
+      }
+      relation.armyNearUs = armyNearUs;
+
+      // Calculate threat score
+      relation.threatScore = this.calculateThreatScore(ai, relation, currentTick);
+    }
+
+    // Clean up relations for dead players
+    for (const [enemyId, _relation] of ai.enemyRelations) {
+      if (!enemyPlayerIds.has(enemyId)) {
+        ai.enemyRelations.delete(enemyId);
+      }
+    }
+
+    // Select primary enemy based on personality-weighted scores
+    ai.primaryEnemyId = this.selectPrimaryEnemy(ai);
+
+    // Update legacy enemyBaseLocation for backward compatibility
+    if (ai.primaryEnemyId) {
+      const primaryRelation = ai.enemyRelations.get(ai.primaryEnemyId);
+      if (primaryRelation?.basePosition) {
+        ai.enemyBaseLocation = primaryRelation.basePosition;
+      }
+    }
+  }
+
+  /**
+   * Calculate threat score for an enemy based on various factors.
+   */
+  private calculateThreatScore(ai: AIPlayer, relation: EnemyRelation, currentTick: number): number {
+    const weights = ai.personalityWeights;
+
+    // Normalize base distance (closer = higher score, max at 200 units)
+    const maxDistance = 200;
+    const proximityScore = Math.max(0, 1 - relation.baseDistance / maxDistance);
+
+    // Threat from army near our base (normalized by our army supply)
+    const myArmy = Math.max(1, ai.armySupply);
+    const threatScore = Math.min(1, relation.armyNearUs / myArmy);
+
+    // Retaliation score based on recent damage and recency
+    const ticksSinceAttack = currentTick - relation.lastAttackedUsTick;
+    const recency = Math.max(0, 1 - ticksSinceAttack / 2400); // 2 minute falloff
+    const retaliationScore = Math.min(1, relation.damageDealtToUs / 500) * recency;
+
+    // Opportunity score - inversely proportional to their strength
+    // (we don't track enemy army supply directly, so use proximity as proxy)
+    const opportunityScore = proximityScore * 0.5; // Closer enemies are easier to attack
+
+    // Weighted sum using personality weights
+    return (
+      proximityScore * weights.proximity +
+      threatScore * weights.threat +
+      retaliationScore * weights.retaliation +
+      opportunityScore * weights.opportunity
+    );
+  }
+
+  /**
+   * Select the primary enemy to attack based on personality-weighted threat scores.
+   */
+  private selectPrimaryEnemy(ai: AIPlayer): string | null {
+    let bestEnemyId: string | null = null;
+    let bestScore = -Infinity;
+
+    for (const [enemyId, relation] of ai.enemyRelations) {
+      if (relation.threatScore > bestScore) {
+        bestScore = relation.threatScore;
+        bestEnemyId = enemyId;
+      }
+    }
+
+    if (bestEnemyId) {
+      const relation = ai.enemyRelations.get(bestEnemyId)!;
+      debugAI.log(`[AITacticsManager] ${ai.playerId} selected primary enemy: ${bestEnemyId} ` +
+        `(score: ${relation.threatScore.toFixed(2)}, distance: ${relation.baseDistance.toFixed(0)}, ` +
+        `armyNearUs: ${relation.armyNearUs})`);
+    }
+
+    return bestEnemyId;
+  }
+
+  /**
+   * Record damage dealt to this AI by an attacker.
+   * Called from event handler when units take damage.
+   */
+  public recordDamageReceived(ai: AIPlayer, attackerPlayerId: string, damage: number, currentTick: number): void {
+    let relation = ai.enemyRelations.get(attackerPlayerId);
+    if (!relation) {
+      relation = {
+        lastAttackedUsTick: currentTick,
+        lastWeAttackedTick: 0,
+        damageDealtToUs: damage,
+        damageWeDealt: 0,
+        baseDistance: Infinity,
+        threatScore: 0,
+        basePosition: null,
+        armyNearUs: 0,
+      };
+      ai.enemyRelations.set(attackerPlayerId, relation);
+    } else {
+      relation.damageDealtToUs += damage;
+      relation.lastAttackedUsTick = currentTick;
+    }
   }
 
   // === Tactical State Determination ===
@@ -195,12 +408,53 @@ export class AITacticsManager {
 
   /**
    * Find the enemy base location.
+   * Uses SC2-style primary enemy selection - each AI targets their own primary enemy
+   * based on proximity, threat, and personality-weighted scores.
+   *
+   * @param targetPlayerId - Optional specific enemy to target. If not provided, uses primary enemy.
    */
-  public findEnemyBase(ai: AIPlayer): { x: number; y: number } | null {
+  public findEnemyBase(ai: AIPlayer, targetPlayerId?: string): { x: number; y: number } | null {
     const config = ai.config!;
     const baseTypes = config.roles.baseTypes;
 
+    // Use primary enemy if no specific target provided
+    const enemyToTarget = targetPlayerId ?? ai.primaryEnemyId;
+
+    // If we have a primary enemy with a known base position, use it directly
+    if (enemyToTarget) {
+      const relation = ai.enemyRelations.get(enemyToTarget);
+      if (relation?.basePosition) {
+        return relation.basePosition;
+      }
+    }
+
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+
+    // If we have a specific enemy to target, find their base
+    if (enemyToTarget) {
+      for (const entity of buildings) {
+        const selectable = entity.get<Selectable>('Selectable')!;
+        const building = entity.get<Building>('Building')!;
+        const transform = entity.get<Transform>('Transform')!;
+
+        if (selectable.playerId !== enemyToTarget) continue;
+        if (baseTypes.includes(building.buildingId)) {
+          return { x: transform.x, y: transform.y };
+        }
+      }
+
+      // Fallback: any building from this enemy
+      for (const entity of buildings) {
+        const selectable = entity.get<Selectable>('Selectable')!;
+        const transform = entity.get<Transform>('Transform')!;
+
+        if (selectable.playerId !== enemyToTarget) continue;
+        return { x: transform.x, y: transform.y };
+      }
+    }
+
+    // No primary enemy selected - fallback to legacy behavior (first enemy found)
+    // This should rarely happen as updateEnemyRelations should set primaryEnemyId
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const building = entity.get<Building>('Building')!;

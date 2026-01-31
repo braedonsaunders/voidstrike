@@ -97,6 +97,9 @@ export class WorkerGame extends GameCore {
   // Player resources cache
   private playerResources: Map<string, { minerals: number; vespene: number; supply: number; maxSupply: number }> = new Map();
 
+  // Player team assignments (0 = FFA, 1-4 = team alliance)
+  private playerTeams: Map<string, number> = new Map();
+
   // Selection state (for UI feedback)
   private selectedEntityIds: number[] = [];
 
@@ -962,7 +965,11 @@ export class WorkerGame extends GameCore {
         maxSupply: 11,
       });
 
-      this.spawnBase(slot.id, spawn.x, spawn.y);
+      // Store team assignment (0 = FFA/no team)
+      const team = slot.team ?? 0;
+      this.playerTeams.set(slot.id, team);
+
+      this.spawnBase(slot.id, spawn.x, spawn.y, team);
 
       // Register AI players
       if (slot.type === 'ai' && this.config.aiEnabled) {
@@ -983,7 +990,8 @@ export class WorkerGame extends GameCore {
         supply: 0,
         maxSupply: 11,
       });
-      this.spawnBase(this.config.playerId, spawns[0].x, spawns[0].y);
+      this.playerTeams.set(this.config.playerId, 0); // FFA
+      this.spawnBase(this.config.playerId, spawns[0].x, spawns[0].y, 0);
     }
 
     // Set watch towers
@@ -999,7 +1007,7 @@ export class WorkerGame extends GameCore {
     debugInitialization.log('[GameWorker] Sent initial render state after spawning entities');
   }
 
-  private spawnBase(playerId: string, x: number, y: number): void {
+  private spawnBase(playerId: string, x: number, y: number, teamId: number): void {
     const ccDef = {
       id: 'headquarters',
       name: 'Headquarters',
@@ -1021,7 +1029,7 @@ export class WorkerGame extends GameCore {
       .add(new Transform(x, y, 0))
       .add(new Building(ccDef))
       .add(new Health(ccDef.maxHealth, ccDef.armor, 'structure'))
-      .add(new Selectable(Math.max(ccDef.width, ccDef.height) * 0.6, 10, playerId));
+      .add(new Selectable(Math.max(ccDef.width, ccDef.height) * 0.6, 10, playerId, 1, 0, teamId));
 
     const building = headquarters.get<Building>('Building')!;
     building.buildProgress = 1;
@@ -1049,11 +1057,11 @@ export class WorkerGame extends GameCore {
     ];
 
     for (const pos of workerPositions) {
-      this.spawnUnit('fabricator', playerId, x + pos.dx, y + pos.dy);
+      this.spawnUnit('fabricator', playerId, x + pos.dx, y + pos.dy, teamId);
     }
   }
 
-  private spawnUnit(unitType: string, playerId: string, x: number, y: number): void {
+  private spawnUnit(unitType: string, playerId: string, x: number, y: number, teamId: number): void {
     const unitDef = {
       id: unitType,
       name: 'Fabricator',
@@ -1078,13 +1086,18 @@ export class WorkerGame extends GameCore {
       .add(new Transform(x, y, 0))
       .add(new Unit(unitDef))
       .add(new Health(unitDef.maxHealth, unitDef.armor, 'light'))
-      .add(new Selectable(0.5, 1, playerId))
+      .add(new Selectable(0.5, 1, playerId, 1, 0, teamId))
       .add(new Velocity());
 
     const resources = this.playerResources.get(playerId);
     if (resources) {
       resources.supply += 1;
     }
+  }
+
+  /** Get team ID for a player. Used by SpawnSystem to set team on spawned units/buildings. */
+  public getPlayerTeam(playerId: string): number {
+    return this.playerTeams.get(playerId) ?? 0;
   }
 }
 

@@ -8,6 +8,8 @@ export class Selectable extends Component {
   public selectionPriority: number; // Higher = selected first when overlapping
   public controlGroup: number | null;
   public playerId: string;
+  /** Team number: 0 = FFA (no alliance), 1-4 = team alliance. Same team = allied. */
+  public teamId: number;
 
   // Visual properties for accurate selection
   public visualScale: number; // Scale factor for screen-space hitbox (larger units = bigger hitbox)
@@ -18,7 +20,8 @@ export class Selectable extends Component {
     selectionPriority = 0,
     playerId = 'player1',
     visualScale = 1,
-    visualHeight = 0
+    visualHeight = 0,
+    teamId = 0
   ) {
     super();
     this.isSelected = false;
@@ -26,6 +29,7 @@ export class Selectable extends Component {
     this.selectionPriority = selectionPriority;
     this.controlGroup = null;
     this.playerId = playerId;
+    this.teamId = teamId;
     this.visualScale = visualScale;
     this.visualHeight = visualHeight;
   }

@@ -48,6 +48,21 @@ export class BuildingPlacementSystem extends System {
   // Cache reference to AI system for AI resource checks
   private aiSystem: EnhancedAISystem | null = null;
 
+  /**
+   * Get the team ID for a player by finding an existing entity with the same playerId.
+   * Returns 0 (FFA) if no existing entity is found.
+   */
+  private getPlayerTeam(playerId: string): number {
+    const entities = this.world.getEntitiesWith('Selectable');
+    for (const entity of entities) {
+      const selectable = entity.get<Selectable>('Selectable');
+      if (selectable && selectable.playerId === playerId) {
+        return selectable.teamId;
+      }
+    }
+    return 0;
+  }
+
   constructor(game: Game) {
     super(game);
     this.setupEventListeners();
@@ -180,12 +195,13 @@ export class BuildingPlacementSystem extends System {
       const canMount = 'canMountTurret' in definition ? definition.canMountTurret : true;
       const wall = new Wall(isGate as boolean, canMount as boolean);
 
+      const teamId = this.getPlayerTeam(playerId);
       wallEntity
         .add(new Transform(pos.x, pos.y, 0))
         .add(building)
         .add(health)
         .add(wall)
-        .add(new Selectable(0.8, 10, playerId));
+        .add(new Selectable(0.8, 10, playerId, 1, 0, teamId));
 
       placedWalls.push({ entityId: wallEntity.id, x: pos.x, y: pos.y });
 
@@ -453,11 +469,12 @@ export class BuildingPlacementSystem extends System {
     const buildingEntity = this.world.createEntity();
     const health = new Health(definition.maxHealth, definition.armor, 'structure');
     health.current = definition.maxHealth * 0.1; // Start at 10% health (under construction)
+    const teamId = this.getPlayerTeam(playerId);
     buildingEntity
       .add(new Transform(snappedX, snappedY, 0))
       .add(new Building(definition))
       .add(health)
-      .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId));
+      .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId, 1, 0, teamId));
 
     // Building starts in 'waiting_for_worker' state (from constructor)
     // Construction will start when worker arrives at site
@@ -563,12 +580,13 @@ export class BuildingPlacementSystem extends System {
 
     const addonHealth = new Health(definition.maxHealth, definition.armor, 'structure');
     addonHealth.current = definition.maxHealth * 0.1; // Start at 10% health like buildings
+    const addonTeamId = this.getPlayerTeam(playerId);
 
     addonEntity
       .add(new Transform(x, y, 0))
       .add(addonBuilding)
       .add(addonHealth)
-      .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId));
+      .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId, 1, 0, addonTeamId));
 
     // Store pending addon attachment info (will be attached when construction completes)
     this.pendingAddonAttachments.set(addonEntity.id, {
@@ -850,12 +868,13 @@ export class BuildingPlacementSystem extends System {
 
     const addonHealth = new Health(addonDef.maxHealth, addonDef.armor, 'structure');
     addonHealth.current = addonDef.maxHealth * 0.1; // Start at 10% health like buildings
+    const addonTeamId2 = this.getPlayerTeam(playerId);
 
     addonEntity
       .add(new Transform(addonX, addonY, 0))
       .add(addonBuilding)
       .add(addonHealth)
-      .add(new Selectable(Math.max(addonDef.width, addonDef.height) * 0.6, 10, playerId));
+      .add(new Selectable(Math.max(addonDef.width, addonDef.height) * 0.6, 10, playerId, 1, 0, addonTeamId2));
 
     // Store pending addon attachment info (will be attached when construction completes)
     this.pendingAddonAttachments.set(addonEntity.id, {
