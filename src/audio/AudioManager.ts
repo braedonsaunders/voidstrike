@@ -83,6 +83,10 @@ class AudioManagerClass {
   // Current sound count for global budget
   private activeSoundCount = 0;
 
+  // Event listeners for cleanup
+  private resumeAudioHandler: (() => void) | null = null;
+  private visibilityChangeHandler: (() => void) | null = null;
+
   // Volume controls per category
   private categoryVolumes: Record<SoundCategory, number> = {
     ui: 1,
@@ -257,26 +261,54 @@ class AudioManagerClass {
       this.audioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
     }
 
-    // Resume audio context - try immediately first, then add listeners as fallback
-    if (this.audioContext && this.audioContext.state === 'suspended') {
-      // Try to resume immediately - this works if we're still within a user gesture context
-      // (e.g., the click that started the game might still be active)
-      this.audioContext.resume().catch(() => {
-        // Silent catch - immediate resume failed, will rely on event listeners below
-      });
-
-      // Add event listeners as fallback for when immediate resume fails
-      // This handles cases where spectators don't interact with the game at all
-      const resumeAudio = () => {
-        this.audioContext?.resume();
-        document.removeEventListener('click', resumeAudio);
-        document.removeEventListener('keydown', resumeAudio);
-      };
-      document.addEventListener('click', resumeAudio);
-      document.addEventListener('keydown', resumeAudio);
-    }
+    // Resume audio context - handle both initial autoplay policy and subsequent suspensions
+    // Browsers can suspend AudioContext when tabs go to background for power saving
+    this.setupAudioContextResume();
 
     debugAudio.log(`AudioManager initialized with pool size: ${POOL_SIZE}, max concurrent: ${MAX_CONCURRENT_SOUNDS}`);
+  }
+
+  /**
+   * Set up robust AudioContext resume handling.
+   * Browsers suspend AudioContext for autoplay policy and can re-suspend when tabs go to background.
+   * This ensures audio resumes when:
+   * 1. Tab becomes visible again
+   * 2. User interacts with the page (click/keydown)
+   */
+  private setupAudioContextResume(): void {
+    if (!this.audioContext) return;
+
+    // Try immediate resume (works if still within user gesture context)
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {
+        // Silent catch - will rely on event listeners below
+      });
+    }
+
+    // Visibility change handler - resume when tab becomes visible
+    // This handles the case where browser suspends audio when tab goes to background
+    this.visibilityChangeHandler = () => {
+      if (!document.hidden && this.audioContext?.state === 'suspended') {
+        this.audioContext.resume().catch(() => {
+          // Silent catch - will try again on user interaction
+        });
+        debugAudio.log('Resumed AudioContext on visibility change');
+      }
+    };
+    document.addEventListener('visibilitychange', this.visibilityChangeHandler);
+
+    // User interaction handler - resume on click/keydown
+    // Keep persistent (don't remove) to handle repeated suspensions
+    this.resumeAudioHandler = () => {
+      if (this.audioContext?.state === 'suspended') {
+        this.audioContext.resume().catch(() => {
+          // Silent catch
+        });
+        debugAudio.log('Resumed AudioContext on user interaction');
+      }
+    };
+    document.addEventListener('click', this.resumeAudioHandler);
+    document.addEventListener('keydown', this.resumeAudioHandler);
   }
 
   /**
@@ -831,6 +863,17 @@ class AudioManagerClass {
     if (this.listener) {
       this.listener.parent?.remove(this.listener);
       this.listener = null;
+    }
+
+    // Clean up event listeners
+    if (this.visibilityChangeHandler) {
+      document.removeEventListener('visibilitychange', this.visibilityChangeHandler);
+      this.visibilityChangeHandler = null;
+    }
+    if (this.resumeAudioHandler) {
+      document.removeEventListener('click', this.resumeAudioHandler);
+      document.removeEventListener('keydown', this.resumeAudioHandler);
+      this.resumeAudioHandler = null;
     }
   }
 }
