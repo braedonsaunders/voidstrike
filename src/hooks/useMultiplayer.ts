@@ -845,25 +845,45 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     };
   }, [status, reconnect]);
 
-  // Sync data channel to multiplayerStore for game integration
+  // Sync data channel to multiplayerStore for game integration (guest mode)
   useEffect(() => {
     if (hostConnection && hostConnection.readyState === 'open') {
+      const store = useMultiplayerStore.getState();
+      const hostPubkey = pubkeyRef.current ? `host-${pubkeyRef.current.slice(0, 8)}` : 'host';
+
       debugNetworking.log('[Lobby] Syncing host connection to multiplayerStore');
-      useMultiplayerStore.getState().setDataChannel(hostConnection);
-      useMultiplayerStore.getState().setMultiplayer(true);
-      useMultiplayerStore.getState().setHost(false);
+
+      // Use addPeer for consistency with multi-peer architecture
+      store.addPeer(hostPubkey, hostConnection);
+      store.setMultiplayer(true);
+      store.setHost(false);
     }
   }, [hostConnection]);
 
-  // Sync guest data channels to multiplayerStore (for host mode)
+  // Sync ALL guest data channels to multiplayerStore (for host mode - 8 player support)
   useEffect(() => {
-    const connectedGuest = guests.find(g => g.dataChannel?.readyState === 'open');
-    if (connectedGuest?.dataChannel) {
-      debugNetworking.log('[Lobby] Syncing guest connection to multiplayerStore');
-      useMultiplayerStore.getState().setDataChannel(connectedGuest.dataChannel);
-      useMultiplayerStore.getState().setMultiplayer(true);
-      useMultiplayerStore.getState().setHost(true);
-      useMultiplayerStore.getState().setRemotePeerId(connectedGuest.pubkey);
+    const connectedGuests = guests.filter(g => g.dataChannel?.readyState === 'open');
+
+    if (connectedGuests.length > 0) {
+      const store = useMultiplayerStore.getState();
+
+      // Enable multiplayer mode
+      store.setMultiplayer(true);
+      store.setHost(true);
+
+      // Add all connected guests to the peer channels
+      for (const guest of connectedGuests) {
+        if (guest.dataChannel) {
+          // Check if this peer is already added
+          const existingChannel = store.getPeerChannel(guest.pubkey);
+          if (!existingChannel) {
+            debugNetworking.log(`[Lobby] Adding guest ${guest.name} (${guest.pubkey.slice(0, 8)}...) to multiplayerStore`);
+            store.addPeer(guest.pubkey, guest.dataChannel);
+          }
+        }
+      }
+
+      debugNetworking.log(`[Lobby] Total connected guests in store: ${store.getConnectedPeerCount()}`);
     }
   }, [guests]);
 
