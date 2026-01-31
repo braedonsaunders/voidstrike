@@ -111,9 +111,6 @@ export class CombatSystem extends System {
   // RTS-STYLE: Reduced from 15 to 5 ticks for more responsive combat detection
   private readonly COMBAT_ZONE_CHECK_INTERVAL = 5; // Re-check zone every 5 ticks (~250ms)
 
-  // PERF: Track player unit counts per grid cell for fast enemy detection
-  private lastEnemyCheckResult: Map<number, boolean> = new Map();
-
   // PERF OPTIMIZATION: Combat-active entity list
   // Only units in this set are processed for target acquisition
   private combatActiveUnits: Set<number> = new Set();
@@ -364,7 +361,6 @@ export class CombatSystem extends System {
     // PERF: Clean up combat zone tracking
     this.combatAwareUnits.delete(data.entityId);
     this.combatZoneCheckTick.delete(data.entityId);
-    this.lastEnemyCheckResult.delete(data.entityId);
   }
 
   private handleAttackCommand(command: {
