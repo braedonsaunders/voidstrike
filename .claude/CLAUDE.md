@@ -268,11 +268,10 @@ docs/
 │   └── textures.md     # Texture specs
 ├── security/           # Security docs
 │   └── SECURITY_AUDIT.md
-├── tools/              # Development tools
-│   ├── blender/        # Blender scripts
-│   ├── asset-pipeline/ # Asset processing
-│   └── debug/          # Debug utilities
-└── AI_ANALYSIS.md      # AI codebase analysis
+└── tools/              # Development tools
+    ├── blender/        # Blender scripts
+    ├── asset-pipeline/ # Asset processing
+    └── debug/          # Debug utilities
 ```
 
 ---
