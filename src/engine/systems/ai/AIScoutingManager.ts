@@ -143,7 +143,7 @@ export class AIScoutingManager {
       targetPosition: scoutTarget,
     };
 
-    this.game.processCommand(command);
+    this.game.issueAICommand(command);
 
     // Mark target area as scouted (will be updated more accurately when unit arrives)
     this.markScouted(ai, scoutTarget.x, scoutTarget.y);

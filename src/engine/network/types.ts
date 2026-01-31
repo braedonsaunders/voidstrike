@@ -130,8 +130,9 @@ export interface SyncRequestData {
 }
 
 // Sync response data
+// Uses array of tuples instead of Map for proper JSON serialization over WebRTC
 export interface SyncResponseData {
-  commands: Map<number, GameCommand[]>;  // Commands since lastKnownTick
+  commands: Array<{ tick: number; commands: GameCommand[] }>;
   currentTick: number;
 }
 
@@ -313,15 +314,58 @@ export interface NetworkEvents {
 // Utility Types
 // -----------------------------------------------------------------------------
 
-// For creating unique command IDs (deterministic counter-based)
-let commandIdCounter = 0;
-export function generateCommandId(playerId: string = 'local'): string {
-  return `${playerId}-${++commandIdCounter}`;
+// Command ID generation
+// Uses per-player counters managed by CommandIdGenerator for deterministic IDs across clients
+export class CommandIdGenerator {
+  private counters: Map<string, number> = new Map();
+  private currentTick: number = 0;
+
+  /**
+   * Update the current tick (call at start of each game tick)
+   */
+  setTick(tick: number): void {
+    // Reset per-tick sequence when tick advances
+    if (tick !== this.currentTick) {
+      this.currentTick = tick;
+      this.counters.clear();
+    }
+  }
+
+  /**
+   * Generate a deterministic command ID
+   * Format: playerId-tick-sequence (e.g., "player1-100-3")
+   */
+  generate(playerId: string): string {
+    const count = (this.counters.get(playerId) ?? 0) + 1;
+    this.counters.set(playerId, count);
+    return `${playerId}-${this.currentTick}-${count}`;
+  }
+
+  /**
+   * Reset all counters (call at game start)
+   */
+  reset(): void {
+    this.counters.clear();
+    this.currentTick = 0;
+  }
 }
 
-// Reset command ID counter (call at game start for determinism)
+// Global instance for backward compatibility
+// Game should call commandIdGenerator.setTick() at the start of each tick
+export const commandIdGenerator = new CommandIdGenerator();
+
+/**
+ * @deprecated Use commandIdGenerator.generate() instead for deterministic IDs
+ */
+export function generateCommandId(playerId: string = 'local'): string {
+  return commandIdGenerator.generate(playerId);
+}
+
+/**
+ * @deprecated Use commandIdGenerator.reset() instead
+ */
 export function resetCommandIdCounter(): void {
-  commandIdCounter = 0;
+  commandIdGenerator.reset();
 }
 
 // For creating unique lobby codes

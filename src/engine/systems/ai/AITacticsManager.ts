@@ -540,7 +540,7 @@ export class AITacticsManager {
           entityIds: [entity.id],
           targetPosition: rallyPoint,
         };
-        this.game.processCommand(command);
+        this.game.issueAICommand(command);
       }
     }
   }
@@ -632,7 +632,7 @@ export class AITacticsManager {
           entityIds: idleAssaultUnits,
           targetPosition: attackTarget,
         };
-        this.game.processCommand(command);
+        this.game.issueAICommand(command);
         debugAI.log(`[AITactics] ${ai.playerId}: Re-commanding ${idleAssaultUnits.length} idle assault units`);
       }
 
@@ -651,7 +651,7 @@ export class AITacticsManager {
         entityIds: armyUnits,
         targetPosition: attackTarget,
       };
-      this.game.processCommand(command);
+      this.game.issueAICommand(command);
 
       debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units${inHuntMode ? ' (HUNT MODE)' : ''}`);
     }
@@ -732,7 +732,7 @@ export class AITacticsManager {
           targetPosition: threatPos,
         };
 
-        this.game.processCommand(command);
+        this.game.issueAICommand(command);
 
         debugAI.log(
           `[AITactics] ${ai.playerId}: Commanding ${idleDefenders.length}/${armyUnits.length} ` +
@@ -854,7 +854,7 @@ export class AITacticsManager {
       targetPosition: harassTarget,
     };
 
-    this.game.processCommand(command);
+    this.game.issueAICommand(command);
 
     debugAI.log(`[AITactics] ${ai.playerId}: Harassing with ${harassUnits.length} units`);
 

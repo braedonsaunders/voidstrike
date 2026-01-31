@@ -73,7 +73,7 @@ export class AIMicroSystem extends System {
 
   // Web Worker for off-thread micro decisions
   private workerManager: AIWorkerManager;
-  private useWorker: boolean = true; // Can be disabled for debugging
+  private useWorker: boolean = true; // Can be disabled for debugging or multiplayer
 
   constructor(game: Game) {
     super(game);
@@ -82,6 +82,12 @@ export class AIMicroSystem extends System {
     setAnalysisCacheGameInstance(game);
     // Initialize worker manager
     this.workerManager = AIWorkerManager.getInstance(game);
+
+    // MULTIPLAYER: Disable worker in multiplayer for deterministic AI execution
+    // Worker execution timing varies between clients, causing desync
+    if (game.isInMultiplayerMode()) {
+      this.useWorker = false;
+    }
   }
 
   public init(world: World): void {
@@ -246,7 +252,7 @@ export class AIMicroSystem extends System {
               entityIds: [decision.unitId],
               targetEntityId: decision.targetId,
             };
-            this.game.processCommand(command);
+            this.game.issueAICommand(command);
           }
           break;
 
@@ -262,7 +268,7 @@ export class AIMicroSystem extends System {
               entityIds: [decision.unitId],
               targetPosition: decision.targetPosition,
             };
-            this.game.processCommand(moveCommand);
+            this.game.issueAICommand(moveCommand);
             state.lastKiteTick = currentTick;
 
             // Re-target after kiting (5 ticks delay)
@@ -291,7 +297,7 @@ export class AIMicroSystem extends System {
               entityIds: [decision.unitId],
               targetPosition: decision.targetPosition,
             };
-            this.game.processCommand(command);
+            this.game.issueAICommand(command);
             state.retreating = true;
             state.retreatEndTick = currentTick + 40; // 2 seconds
           }
@@ -307,7 +313,7 @@ export class AIMicroSystem extends System {
               entityIds: [decision.unitId],
               targetMode: decision.targetMode,
             };
-            this.game.processCommand(command);
+            this.game.issueAICommand(command);
           }
           break;
       }
@@ -492,7 +498,7 @@ export class AIMicroSystem extends System {
       targetPosition: { x: targetX, y: targetY },
     };
 
-    this.game.processCommand(command);
+    this.game.issueAICommand(command);
     state.lastKiteTick = currentTick;
 
     // Re-target after kiting using the saved target ID
@@ -551,7 +557,7 @@ export class AIMicroSystem extends System {
       targetPosition: { x: targetX, y: targetY },
     };
 
-    this.game.processCommand(command);
+    this.game.issueAICommand(command);
     state.retreating = true;
 
     // Set tick when retreat should end (40 ticks = 2000ms at 20 TPS)
@@ -572,7 +578,7 @@ export class AIMicroSystem extends System {
         const entityId = pending.command.entityIds[0];
         const entity = this.world.getEntity(entityId);
         if (entity && !entity.isDestroyed()) {
-          this.game.processCommand(pending.command);
+          this.game.issueAICommand(pending.command);
         }
         // Remove from queue (swap with last for O(1) removal)
         this.pendingCommands[i] = this.pendingCommands[this.pendingCommands.length - 1];
@@ -754,7 +760,7 @@ export class AIMicroSystem extends System {
       entityIds: [entityId],
       targetEntityId: targetId,
     };
-    this.game.processCommand(command);
+    this.game.issueAICommand(command);
   }
 
   /**
@@ -886,7 +892,7 @@ export class AIMicroSystem extends System {
         entityIds: [entityId],
         targetMode,
       };
-      this.game.processCommand(command);
+      this.game.issueAICommand(command);
     }
   }
 }
