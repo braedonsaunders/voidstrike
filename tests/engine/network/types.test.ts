@@ -3,6 +3,7 @@ import {
   generateCommandId,
   resetCommandIdCounter,
   generateLobbyCode,
+  commandIdGenerator,
 } from '@/engine/network/types';
 
 describe('Network Types - Utility Functions', () => {
@@ -23,14 +24,15 @@ describe('Network Types - Utility Functions', () => {
       expect(id.startsWith('player1-')).toBe(true);
     });
 
-    it('increments counter for each call', () => {
+    it('increments counter for each call within same tick', () => {
+      // New format: playerId-tick-sequence
       const id1 = generateCommandId('p1');
       const id2 = generateCommandId('p1');
       const id3 = generateCommandId('p1');
 
-      expect(id1).toBe('p1-1');
-      expect(id2).toBe('p1-2');
-      expect(id3).toBe('p1-3');
+      expect(id1).toBe('p1-0-1');
+      expect(id2).toBe('p1-0-2');
+      expect(id3).toBe('p1-0-3');
     });
 
     it('uses default player id when not provided', () => {
@@ -38,25 +40,39 @@ describe('Network Types - Utility Functions', () => {
       expect(id.startsWith('local-')).toBe(true);
     });
 
-    it('counter is shared across different player ids', () => {
+    it('counter is per-player within same tick', () => {
+      // New behavior: each player has their own sequence counter
       const id1 = generateCommandId('player1');
       const id2 = generateCommandId('player2');
 
-      expect(id1).toBe('player1-1');
-      expect(id2).toBe('player2-2');
+      expect(id1).toBe('player1-0-1');
+      expect(id2).toBe('player2-0-1');
+    });
+
+    it('resets sequence when tick changes', () => {
+      const id1 = generateCommandId('p1');
+      expect(id1).toBe('p1-0-1');
+
+      commandIdGenerator.setTick(1);
+      const id2 = generateCommandId('p1');
+      expect(id2).toBe('p1-1-1');
+
+      const id3 = generateCommandId('p1');
+      expect(id3).toBe('p1-1-2');
     });
   });
 
   describe('resetCommandIdCounter()', () => {
-    it('resets the counter to 0', () => {
+    it('resets the counter and tick to 0', () => {
       generateCommandId('p1');
       generateCommandId('p1');
+      commandIdGenerator.setTick(5);
       generateCommandId('p1');
 
       resetCommandIdCounter();
 
       const id = generateCommandId('p1');
-      expect(id).toBe('p1-1');
+      expect(id).toBe('p1-0-1');
     });
   });
 
