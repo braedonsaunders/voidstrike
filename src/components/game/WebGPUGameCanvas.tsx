@@ -114,6 +114,7 @@ export function WebGPUGameCanvas() {
     canvasRef: threeCanvasRef,
     containerRef,
     gameRef,
+    workerBridgeRef,
     worldProviderRef,
     eventBusRef,
     getGameTime,
@@ -174,18 +175,29 @@ export function WebGPUGameCanvas() {
         const customMap = useGameSetupStore.getState().customMapData;
         if (customMap) {
           CURRENT_MAP = customMap;
-          debugInitialization.log(`[WebGPUGameCanvas] Loading custom/preview map: ${CURRENT_MAP.name}`);
+          debugInitialization.log(
+            `[WebGPUGameCanvas] Loading custom/preview map: ${CURRENT_MAP.name}`
+          );
         } else {
           const selectedMapId = useGameSetupStore.getState().selectedMapId;
           const requestedMap = getMapById(selectedMapId);
           if (requestedMap) {
             CURRENT_MAP = requestedMap;
-            debugInitialization.log(`[WebGPUGameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.width}x${CURRENT_MAP.height})`);
+            debugInitialization.log(
+              `[WebGPUGameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.width}x${CURRENT_MAP.height})`
+            );
           } else {
-            debugInitialization.warn(`[WebGPUGameCanvas] Map '${selectedMapId}' not found in registry, falling back to default`);
-            debugInitialization.log(`[WebGPUGameCanvas] Available maps:`, Object.keys(ALL_MAPS).join(', '));
+            debugInitialization.warn(
+              `[WebGPUGameCanvas] Map '${selectedMapId}' not found in registry, falling back to default`
+            );
+            debugInitialization.log(
+              `[WebGPUGameCanvas] Available maps:`,
+              Object.keys(ALL_MAPS).join(', ')
+            );
             CURRENT_MAP = DEFAULT_MAP;
-            debugInitialization.log(`[WebGPUGameCanvas] Fallback to map: ${CURRENT_MAP.name} (${CURRENT_MAP.width}x${CURRENT_MAP.height})`);
+            debugInitialization.log(
+              `[WebGPUGameCanvas] Fallback to map: ${CURRENT_MAP.name} (${CURRENT_MAP.width}x${CURRENT_MAP.height})`
+            );
           }
         }
 
@@ -270,7 +282,20 @@ export function WebGPUGameCanvas() {
       // Reset overlay coordinator
       resetOverlayCoordinator();
     };
-  }, [initializeRenderer, initializeWorkerBridge, spawnEntities, initializePhaserOverlay, setProgress, refs.camera, refs.environment, refs.fogOfWar, refs.overlayManager, eventBusRef, eventHandlerRef, gameRef]);
+  }, [
+    initializeRenderer,
+    initializeWorkerBridge,
+    spawnEntities,
+    initializePhaserOverlay,
+    setProgress,
+    refs.camera,
+    refs.environment,
+    refs.fogOfWar,
+    refs.overlayManager,
+    eventBusRef,
+    eventHandlerRef,
+    gameRef,
+  ]);
 
   // Building placement preview
   useEffect(() => {
@@ -361,13 +386,14 @@ export function WebGPUGameCanvas() {
   }, []);
 
   return (
-    <div
-      ref={containerRef}
-      className="absolute inset-0"
-    >
+    <div ref={containerRef} className="absolute inset-0">
       {/* Loading screen */}
       {isLoading && (
-        <LoadingScreen progress={loadingProgress} status={loadingStatus} onComplete={handleLoadingComplete} />
+        <LoadingScreen
+          progress={loadingProgress}
+          status={loadingStatus}
+          onComplete={handleLoadingComplete}
+        />
       )}
 
       {/* Fade-in from black overlay */}
@@ -379,7 +405,11 @@ export function WebGPUGameCanvas() {
       )}
 
       {/* Three.js canvas */}
-      <canvas ref={threeCanvasRef} className="absolute inset-0 w-full h-full" style={{ zIndex: 0 }} />
+      <canvas
+        ref={threeCanvasRef}
+        className="absolute inset-0 w-full h-full"
+        style={{ zIndex: 0 }}
+      />
 
       {/* Phaser overlay container */}
       <div
@@ -401,7 +431,9 @@ export function WebGPUGameCanvas() {
       {/* Mode indicators */}
       {isBuilding && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-void-600 z-20">
-          <span className="text-void-300">Placing {buildingType} - Click to place, ESC to cancel</span>
+          <span className="text-void-300">
+            Placing {buildingType} - Click to place, ESC to cancel
+          </span>
         </div>
       )}
 
@@ -419,19 +451,25 @@ export function WebGPUGameCanvas() {
 
       {isSettingRallyPoint && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-green-600 z-20">
-          <span className="text-green-400">Set Rally Point - Right-click to set, ESC to cancel</span>
+          <span className="text-green-400">
+            Set Rally Point - Right-click to set, ESC to cancel
+          </span>
         </div>
       )}
 
       {commandTargetMode === 'patrol' && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-yellow-600 z-20">
-          <span className="text-yellow-400">Patrol Mode - Click canvas or minimap, ESC to cancel</span>
+          <span className="text-yellow-400">
+            Patrol Mode - Click canvas or minimap, ESC to cancel
+          </span>
         </div>
       )}
 
       {isRepairMode && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-cyan-600 z-20">
-          <span className="text-cyan-400">Repair Mode - Right-click on building or mech unit, ESC to cancel</span>
+          <span className="text-cyan-400">
+            Repair Mode - Right-click on building or mech unit, ESC to cancel
+          </span>
         </div>
       )}
 
@@ -443,7 +481,9 @@ export function WebGPUGameCanvas() {
 
       {isLandingMode && (
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/80 px-4 py-2 rounded border border-blue-600 z-20">
-          <span className="text-blue-400">Landing Mode - Right-click to select landing location, ESC to cancel</span>
+          <span className="text-blue-400">
+            Landing Mode - Right-click to select landing location, ESC to cancel
+          </span>
         </div>
       )}
 

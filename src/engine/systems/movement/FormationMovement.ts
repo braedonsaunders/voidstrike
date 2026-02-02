@@ -19,7 +19,11 @@ import {
   getFormation,
 } from '@/data/formations/formations';
 import { MAGIC_BOX_MARGIN, FORMATION_BUFFER_SIZE } from '@/data/movement.config';
-import { RecastNavigation, getRecastNavigation, MovementDomain } from '../../pathfinding/RecastNavigation';
+import {
+  RecastNavigation,
+  getRecastNavigation,
+  MovementDomain,
+} from '../../pathfinding/RecastNavigation';
 
 // PERF: Pooled formation position buffer to avoid allocation per move command
 const formationBuffer: Array<{ x: number; y: number }> = [];
@@ -181,11 +185,7 @@ export class FormationMovement {
    * Check if a target point is inside the bounding box of selected units.
    * RTS behavior: target outside box = clump (converge), target inside = preserve spacing
    */
-  public isTargetInsideMagicBox(
-    targetX: number,
-    targetY: number,
-    box: BoundingBox
-  ): boolean {
+  public isTargetInsideMagicBox(targetX: number, targetY: number, box: BoundingBox): boolean {
     // Add a small margin to prevent edge-case toggling
     const margin = MAGIC_BOX_MARGIN;
     return (
@@ -231,22 +231,15 @@ export class FormationMovement {
     targetPosition: { x: number; y: number };
     queue?: boolean;
   }): void {
-    console.log('[FormationMovement] handleMoveCommand received:', {
-      entityIds: data.entityIds,
-      targetPosition: data.targetPosition,
-      queue: data.queue,
-    });
     const { entityIds, targetPosition, queue } = data;
 
     // Single unit always goes directly to target
     if (entityIds.length === 1) {
       const entityId = entityIds[0];
       const entity = this.world.getEntity(entityId);
-      console.log('[FormationMovement] Single unit move - entity lookup:', { entityId, found: !!entity });
       if (!entity) return;
 
       const unit = entity.get<Unit>('Unit');
-      console.log('[FormationMovement] Unit component lookup:', { found: !!unit });
       if (!unit) return;
 
       // Validate target for unit's movement domain (prevents boats on land, etc.)
@@ -255,15 +248,9 @@ export class FormationMovement {
         targetPosition.y,
         unit.movementDomain
       );
-      console.log('[FormationMovement] Target validation:', {
-        original: targetPosition,
-        validated: validatedTarget,
-        movementDomain: unit.movementDomain
-      });
 
       // If no valid target can be found, abort the move command
       if (!validatedTarget) {
-        console.warn('[FormationMovement] No valid target found, aborting move');
         return;
       }
 
@@ -277,7 +264,6 @@ export class FormationMovement {
         if (unit.state === 'building' && unit.constructingBuildingId !== null) {
           unit.cancelBuilding();
         }
-        console.log('[FormationMovement] Setting move target:', validatedTarget);
         unit.setMoveTarget(validatedTarget.x, validatedTarget.y);
         unit.path = [];
         unit.pathIndex = 0;
@@ -297,16 +283,12 @@ export class FormationMovement {
     }
 
     // Multi-unit move: apply magic box logic
-    console.log('[FormationMovement] Multi-unit move for', entityIds.length, 'units');
     const box = this.calculateBoundingBox(entityIds);
-    console.log('[FormationMovement] Bounding box:', box);
     if (!box) {
-      console.warn('[FormationMovement] No bounding box, aborting multi-unit move');
       return;
     }
 
     const isInsideBox = this.isTargetInsideMagicBox(targetPosition.x, targetPosition.y, box);
-    console.log('[FormationMovement] Target inside magic box:', isInsideBox);
 
     if (isInsideBox) {
       // PRESERVE SPACING MODE: Target is within the group - maintain relative offsets
@@ -315,7 +297,6 @@ export class FormationMovement {
     } else {
       // CLUMP MODE: Target is outside the group - all units converge to same point
       // Separation forces will spread them naturally on arrival (RTS style)
-      console.log('[FormationMovement] Using CLUMP mode - moveUnitsToSamePoint');
       this.moveUnitsToSamePoint(entityIds, targetPosition.x, targetPosition.y, queue);
     }
   }
@@ -330,27 +311,16 @@ export class FormationMovement {
     targetY: number,
     queue?: boolean
   ): void {
-    console.log('[FormationMovement] moveUnitsToSamePoint called for', entityIds.length, 'units, target:', { targetX, targetY });
-    let processedCount = 0;
     for (const entityId of entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!entity) {
-        console.log('[FormationMovement] Entity not found:', entityId);
-        continue;
-      }
+      if (!entity) continue;
 
       const unit = entity.get<Unit>('Unit');
-      if (!unit) {
-        console.log('[FormationMovement] Unit component not found for entity:', entityId);
-        continue;
-      }
+      if (!unit) continue;
 
       // Validate target for unit's movement domain (prevents boats on land, etc.)
       const validatedTarget = this.validateTargetForDomain(targetX, targetY, unit.movementDomain);
-      if (!validatedTarget) {
-        console.log('[FormationMovement] Target validation failed for entity:', entityId, 'domain:', unit.movementDomain);
-        continue;
-      }
+      if (!validatedTarget) continue;
 
       if (queue) {
         unit.queueCommand({
@@ -366,7 +336,6 @@ export class FormationMovement {
         unit.path = [];
         unit.pathIndex = 0;
         this.requestPathWithCooldown(entityId, validatedTarget.x, validatedTarget.y, true);
-        processedCount++;
 
         // Set initial rotation to face target direction
         // Note: Y is negated for Three.js coordinate system
@@ -379,7 +348,6 @@ export class FormationMovement {
         }
       }
     }
-    console.log('[FormationMovement] moveUnitsToSamePoint processed', processedCount, 'of', entityIds.length, 'units');
   }
 
   /**
@@ -410,7 +378,11 @@ export class FormationMovement {
       const unitTargetY = targetY + offsetY;
 
       // Validate target for unit's movement domain (prevents boats on land, etc.)
-      const validatedTarget = this.validateTargetForDomain(unitTargetX, unitTargetY, unit.movementDomain);
+      const validatedTarget = this.validateTargetForDomain(
+        unitTargetX,
+        unitTargetY,
+        unit.movementDomain
+      );
       if (!validatedTarget) continue;
 
       if (queue) {
