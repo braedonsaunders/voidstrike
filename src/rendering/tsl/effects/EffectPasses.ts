@@ -139,12 +139,7 @@ export function createSSGIPass(
   try {
     // Pass the raw encoded normal texture - DO NOT use colorToDirection()
     // SSR/SSGI need texture nodes with .sample() method
-    const ssgiPass = ssgi(
-      scenePassColor,
-      scenePassDepth,
-      scenePassNormal,
-      camera
-    );
+    const ssgiPass = ssgi(scenePassColor, scenePassDepth, scenePassNormal, camera);
 
     if (ssgiPass) {
       // Medium quality preset (sliceCount 2, stepCount 8)
@@ -184,16 +179,22 @@ export interface GTAOPassResult {
 /**
  * Create GTAO (Ground Truth Ambient Occlusion) effect
  *
+ * When normalNode is provided, uses actual scene normals for more accurate AO.
+ * Without normals, GTAO reconstructs them from depth gradients which can cause
+ * visible triangular artifacts at geometry edges, especially at larger radii.
+ *
  * Returns the AO pass and the AO value node for compositing.
  */
 export function createGTAOPass(
   scenePassDepth: any,
   camera: THREE.Camera,
-  config: GTAOConfig
+  config: GTAOConfig,
+  scenePassNormal?: any
 ): GTAOPassResult | null {
   try {
-    // @ts-expect-error - @types/three declares normalNode as non-nullable but actual API accepts null
-    const aoPass = ao(scenePassDepth, null, camera);
+    // Use provided normals for accurate AO, or null for depth-based reconstruction
+    // The ao() function accepts null for normalNode even though types say otherwise
+    const aoPass = ao(scenePassDepth, scenePassNormal ?? (null as any), camera);
     aoPass.radius.value = config.radius;
     const aoValueNode = aoPass.getTextureNode().r;
 
@@ -296,10 +297,7 @@ export interface BloomPassResult {
 /**
  * Create Bloom effect
  */
-export function createBloomPass(
-  inputNode: any,
-  config: BloomConfig
-): BloomPassResult | null {
+export function createBloomPass(inputNode: any, config: BloomConfig): BloomPassResult | null {
   try {
     const bloomPass = bloom(inputNode);
     bloomPass.threshold.value = config.threshold;
@@ -373,11 +371,7 @@ export function acesToneMap(color: any): any {
   const d = 0.59;
   const e = 0.14;
 
-  return clamp(
-    color.mul(color.mul(a).add(b)).div(color.mul(color.mul(c).add(d)).add(e)),
-    0.0,
-    1.0
-  );
+  return clamp(color.mul(color.mul(a).add(b)).div(color.mul(color.mul(c).add(d)).add(e)), 0.0, 1.0);
 }
 
 /**
@@ -415,7 +409,11 @@ export function createColorGradingPass(
       const uvCentered = uv().sub(0.5);
       const dist = length(uvCentered).mul(2.0);
       const vignetteFactor = smoothstep(float(1.4), float(0.5), dist);
-      const vignetteAmount = mix(float(1.0).sub(uniforms.vignetteIntensity), float(1.0), vignetteFactor);
+      const vignetteAmount = mix(
+        float(1.0).sub(uniforms.vignetteIntensity),
+        float(1.0),
+        vignetteFactor
+      );
       color.mulAssign(vignetteAmount);
     }
 
@@ -847,11 +845,7 @@ export function createFogOfWarPass(
     // ============================================
     // ANIMATED CLOUDS FOR UNEXPLORED
     // ============================================
-    const cloudPos = vec3(
-      worldX.mul(uCloudScale),
-      worldZ.mul(uCloudScale),
-      uTime.mul(uCloudSpeed)
-    );
+    const cloudPos = vec3(worldX.mul(uCloudScale), worldZ.mul(uCloudScale), uTime.mul(uCloudSpeed));
 
     // Multi-octave cloud noise
     const cloud1 = fbm3(cloudPos).mul(0.5).add(0.5); // Large swirls
