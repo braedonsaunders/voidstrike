@@ -130,7 +130,7 @@
         "shadowQuality": "high",
         "shadowDistance": 80,
         "ssaoEnabled": true,
-        "ssaoRadius": 4,
+        "ssaoRadius": 3.5,
         "ssaoIntensity": 1.0,
         "bloomEnabled": true,
         "bloomStrength": 0.3,

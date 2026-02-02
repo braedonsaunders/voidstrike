@@ -11,11 +11,7 @@ import { getPlayerColor, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { debugMesh } from '@/utils/debugLogger';
 import { CullingService, EntityCategory } from './services/CullingService';
-import {
-  BUILDING_RENDERER,
-  BUILDING_SELECTION_RING,
-  RENDER_ORDER,
-} from '@/data/rendering.config';
+import { BUILDING_RENDERER, BUILDING_SELECTION_RING, RENDER_ORDER } from '@/data/rendering.config';
 import {
   createConstructingMaterial,
   createFireMaterial,
@@ -126,7 +122,11 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
   if (source.index) {
     const srcIndex = source.index;
     const newIndexArray = srcIndex.array.slice(0);
-    const newIndex = new THREE.BufferAttribute(newIndexArray, srcIndex.itemSize, srcIndex.normalized);
+    const newIndex = new THREE.BufferAttribute(
+      newIndexArray,
+      srcIndex.itemSize,
+      srcIndex.normalized
+    );
     newIndex.needsUpdate = true;
     cloned.setIndex(newIndex);
   }
@@ -135,7 +135,7 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
   if (source.morphAttributes) {
     for (const name of Object.keys(source.morphAttributes)) {
       const srcMorphArray = source.morphAttributes[name];
-      cloned.morphAttributes[name] = srcMorphArray.map(srcAttr => {
+      cloned.morphAttributes[name] = srcMorphArray.map((srcAttr) => {
         const newArray = srcAttr.array.slice(0);
         const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
         newAttr.needsUpdate = true;
@@ -169,6 +169,13 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
       uvArray[i * 2 + 1] = pos.getZ(i) * 0.5 + 0.5;
     }
     cloned.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
+  }
+
+  // Ensure normal coordinates exist - required for proper lighting and SSAO
+  // Some models from Tripo/Meshy AI lack normals, causing GTAO to reconstruct
+  // normals from depth gradients which creates visible triangular artifacts
+  if (!cloned.attributes.normal && cloned.attributes.position) {
+    cloned.computeVertexNormals();
   }
 
   return cloned;
@@ -253,7 +260,12 @@ export class BuildingRenderer {
   // Fallback elevation heights when terrain isn't available
   private static readonly ELEVATION_HEIGHTS = BUILDING_RENDERER.ELEVATION_HEIGHTS;
 
-  constructor(scene: THREE.Scene, world: IWorldProvider, visionSystem?: VisionSystem, terrain?: Terrain) {
+  constructor(
+    scene: THREE.Scene,
+    world: IWorldProvider,
+    visionSystem?: VisionSystem,
+    terrain?: Terrain
+  ) {
     this.scene = scene;
     this.world = world;
     this.visionSystem = visionSystem ?? null;
@@ -337,15 +349,20 @@ export class BuildingRenderer {
    * Get or create an instanced mesh group for a building type + player combo.
    * Used for completed, non-selected, non-damaged buildings.
    */
-  private getOrCreateInstancedGroup(buildingType: string, playerId: string, lodLevel: LODLevel = 0): InstancedBuildingGroup {
+  private getOrCreateInstancedGroup(
+    buildingType: string,
+    playerId: string,
+    lodLevel: LODLevel = 0
+  ): InstancedBuildingGroup {
     const key = `${buildingType}_${playerId}_LOD${lodLevel}`;
     let group = this.instancedGroups.get(key);
 
     if (!group) {
       const playerColor = getPlayerColor(playerId);
       // Get the base mesh at the requested LOD level, falling back to next best
-      const baseMesh = AssetManager.getModelAtLOD(buildingType, lodLevel)
-        ?? AssetManager.getBuildingMesh(buildingType, playerColor);
+      const baseMesh =
+        AssetManager.getModelAtLOD(buildingType, lodLevel) ??
+        AssetManager.getBuildingMesh(buildingType, playerColor);
 
       // Find geometry, material, and world transforms from the base mesh
       // CRITICAL: Custom models have scale/rotation applied to Object3D, not geometry vertices
@@ -417,11 +434,15 @@ export class BuildingRenderer {
    * Check if a building can use instanced rendering.
    * Requirements: completed, not selected, not damaged (<100% health), visible, not flying
    */
-  private canUseInstancing(building: Building, health: Health | undefined, selectable: Selectable | undefined): boolean {
+  private canUseInstancing(
+    building: Building,
+    health: Health | undefined,
+    selectable: Selectable | undefined
+  ): boolean {
     // Note: In worker mode, components are plain objects, not class instances
     if (building.state !== 'complete') return false;
     if (selectable?.isSelected) return false;
-    if (health && (health.current / health.max) < 1) return false;
+    if (health && health.current / health.max < 1) return false;
     // Buildings with production queue shouldn't use instancing (need progress bar)
     if (building.productionQueue.length > 0) return false;
     // Flying buildings need individual rendering for height offset
@@ -453,7 +474,11 @@ export class BuildingRenderer {
   /**
    * PERF: Set opacity on cached mesh children (avoids traverse overhead)
    */
-  private setOpacityOnCachedMeshes(meshChildren: THREE.Mesh[], opacity: number, transparent: boolean): void {
+  private setOpacityOnCachedMeshes(
+    meshChildren: THREE.Mesh[],
+    opacity: number,
+    transparent: boolean
+  ): void {
     for (const mesh of meshChildren) {
       this.setMaterialOpacity(mesh, opacity, transparent);
     }
@@ -476,7 +501,12 @@ export class BuildingRenderer {
    * Set opacity on a mesh's material(s), handling both single materials and arrays.
    * Optionally applies a clipping plane for construction reveal effect.
    */
-  private setMaterialOpacity(mesh: THREE.Mesh, opacity: number, transparent: boolean, clippingPlane?: THREE.Plane): void {
+  private setMaterialOpacity(
+    mesh: THREE.Mesh,
+    opacity: number,
+    transparent: boolean,
+    clippingPlane?: THREE.Plane
+  ): void {
     const applyToMaterial = (mat: THREE.Material) => {
       if (mat instanceof THREE.MeshStandardMaterial) {
         mat.clippingPlanes = clippingPlane ? [clippingPlane] : [];
@@ -530,7 +560,11 @@ export class BuildingRenderer {
 
     // Fallback: get elevation from map data if available
     // This ensures buildings are placed correctly even if terrain isn't ready
-    const mapData = (this.terrain as unknown as { mapData?: { width: number; height: number; terrain: Array<Array<{ elevation: number }>> } })?.mapData;
+    const mapData = (
+      this.terrain as unknown as {
+        mapData?: { width: number; height: number; terrain: Array<Array<{ elevation: number }>> };
+      }
+    )?.mapData;
     if (mapData?.terrain) {
       const cellX = Math.floor(x);
       const cellY = Math.floor(y);
@@ -568,7 +602,6 @@ export class BuildingRenderer {
     // This ensures previous/current matrix pairs are aligned correctly for velocity
     // PERF: Only re-sort when entity count changes (add/remove) to avoid O(n log n) every frame
     const rawEntities = this.world.getEntitiesWith('Transform', 'Building');
-
 
     if (rawEntities.length !== this.cachedEntityCount) {
       // Rebuild cache - entity count changed (add/remove occurred)
@@ -640,10 +673,22 @@ export class BuildingRenderer {
       // Register building with culling service and update transform
       if (this.cullingService) {
         if (!this.cullingService.isRegistered(entity.id)) {
-          this.cullingService.registerEntity(entity.id, building.buildingId, ownerId, EntityCategory.Building);
+          this.cullingService.registerEntity(
+            entity.id,
+            building.buildingId,
+            ownerId,
+            EntityCategory.Building
+          );
           this.cullingService.markStatic(entity.id); // Buildings don't move
         }
-        this.cullingService.updateTransform(entity.id, transform.x, terrainHeight + buildingHeight / 2, transform.y, 0, 1);
+        this.cullingService.updateTransform(
+          entity.id,
+          transform.x,
+          terrainHeight + buildingHeight / 2,
+          transform.y,
+          0,
+          1
+        );
       }
 
       // PERF: Skip buildings outside camera frustum (using proper sphere-frustum intersection)
@@ -682,10 +727,18 @@ export class BuildingRenderer {
           // Set instance matrix - CRITICAL: Use model's world transforms from normalization
           // The Y offset ensures buildings are properly grounded (bottom at terrain level)
           // The quaternion captures the full rotation including MODEL_FORWARD_OFFSET and any parent rotations
-          this.transformUtils.tempPosition.set(transform.x, terrainHeight + group.modelYOffset, transform.y);
+          this.transformUtils.tempPosition.set(
+            transform.x,
+            terrainHeight + group.modelYOffset,
+            transform.y
+          );
           this.transformUtils.tempScale.copy(group.modelScale);
           this.transformUtils.tempQuaternion.copy(group.modelQuaternion);
-          this.transformUtils.tempMatrix.compose(this.transformUtils.tempPosition, this.transformUtils.tempQuaternion, this.transformUtils.tempScale);
+          this.transformUtils.tempMatrix.compose(
+            this.transformUtils.tempPosition,
+            this.transformUtils.tempQuaternion,
+            this.transformUtils.tempScale
+          );
           group.mesh.setMatrixAt(group.mesh.count, this.transformUtils.tempMatrix);
           group.entityIds.push(entity.id);
           group.mesh.count++;
@@ -866,7 +919,11 @@ export class BuildingRenderer {
 
         // Create/show blueprint effect
         if (!meshData.blueprintEffect) {
-          meshData.blueprintEffect = this.createBlueprintEffect(building.width, building.height, meshData.buildingHeight);
+          meshData.blueprintEffect = this.createBlueprintEffect(
+            building.width,
+            building.height,
+            meshData.buildingHeight
+          );
           this.scene.add(meshData.blueprintEffect);
         }
         meshData.blueprintEffect.visible = true;
@@ -900,7 +957,11 @@ export class BuildingRenderer {
 
         // Show blueprint effect when paused - indicates building needs worker to resume
         if (!meshData.blueprintEffect) {
-          meshData.blueprintEffect = this.createBlueprintEffect(building.width, building.height, meshData.buildingHeight);
+          meshData.blueprintEffect = this.createBlueprintEffect(
+            building.width,
+            building.height,
+            meshData.buildingHeight
+          );
           this.scene.add(meshData.blueprintEffect);
         }
         meshData.blueprintEffect.visible = true;
@@ -944,15 +1005,28 @@ export class BuildingRenderer {
 
         // Create/update construction effect (enhanced with welding, sparks, debris)
         if (!meshData.constructionEffect) {
-          meshData.constructionEffect = this.createConstructionEffect(building.width, building.height, meshData.buildingHeight);
+          meshData.constructionEffect = this.createConstructionEffect(
+            building.width,
+            building.height,
+            meshData.buildingHeight
+          );
           this.scene.add(meshData.constructionEffect);
         }
 
         // Position construction particles at the current build height (top of visible building)
         const buildHeight = meshData.buildingHeight * progress;
         meshData.constructionEffect.visible = true;
-        meshData.constructionEffect.position.set(transform.x, terrainHeight + buildHeight, transform.y);
-        this.updateConstructionEffect(meshData.constructionEffect, dt, building.width, building.height);
+        meshData.constructionEffect.position.set(
+          transform.x,
+          terrainHeight + buildHeight,
+          transform.y
+        );
+        this.updateConstructionEffect(
+          meshData.constructionEffect,
+          dt,
+          building.width,
+          building.height
+        );
 
         // Create/update ground dust effect (billowing dust at base)
         if (!meshData.groundDustEffect) {
@@ -961,11 +1035,21 @@ export class BuildingRenderer {
         }
         meshData.groundDustEffect.visible = true;
         meshData.groundDustEffect.position.set(transform.x, terrainHeight, transform.y);
-        this.updateGroundDustEffect(meshData.groundDustEffect, dt, building.width, building.height, progress);
+        this.updateGroundDustEffect(
+          meshData.groundDustEffect,
+          dt,
+          building.width,
+          building.height,
+          progress
+        );
 
         // Create/update scaffold effect (visible during early construction)
         if (!meshData.scaffoldEffect) {
-          meshData.scaffoldEffect = this.createScaffoldEffect(building.width, building.height, meshData.buildingHeight);
+          meshData.scaffoldEffect = this.createScaffoldEffect(
+            building.width,
+            building.height,
+            meshData.buildingHeight
+          );
           this.scene.add(meshData.scaffoldEffect);
         }
         // Scaffold fades out as building gets more complete
@@ -984,7 +1068,11 @@ export class BuildingRenderer {
       if (selectable?.isSelected) {
         this.selectionRingRenderer.addInstance({
           entityId: entity.id,
-          position: new THREE.Vector3(transform.x, terrainHeight + flyingOffset + 0.05, transform.y),
+          position: new THREE.Vector3(
+            transform.x,
+            terrainHeight + flyingOffset + 0.05,
+            transform.y
+          ),
           scale: ringSize,
           isOwned,
         });
@@ -995,7 +1083,11 @@ export class BuildingRenderer {
         // Note: In worker mode, components are plain objects, not class instances
         const healthPercent = health.current / health.max;
         // Use the actual 3D model height (meshData.buildingHeight) instead of grid cells (building.height)
-        meshData.healthBar.position.set(transform.x, terrainHeight + meshData.buildingHeight + flyingOffset + 0.5, transform.y);
+        meshData.healthBar.position.set(
+          transform.x,
+          terrainHeight + meshData.buildingHeight + flyingOffset + 0.5,
+          transform.y
+        );
         meshData.healthBar.visible = healthPercent < 1;
         this.updateHealthBar(meshData.healthBar, health);
 
@@ -1028,7 +1120,8 @@ export class BuildingRenderer {
       }
 
       // Thruster effects for flying buildings (lifting, flying, or landing)
-      const isFlyingState = building.state === 'lifting' || building.state === 'flying' || building.state === 'landing';
+      const isFlyingState =
+        building.state === 'lifting' || building.state === 'flying' || building.state === 'landing';
       if (isFlyingState && !meshData.thrusterEffect) {
         // Create thruster effect
         meshData.thrusterEffect = this.createThrusterEffect(building.width, building.height);
@@ -1043,7 +1136,11 @@ export class BuildingRenderer {
       // Animate thruster effect
       if (meshData.thrusterEffect) {
         // Position thrusters at the bottom of the building
-        meshData.thrusterEffect.position.set(transform.x, terrainHeight + flyingOffset, transform.y);
+        meshData.thrusterEffect.position.set(
+          transform.x,
+          terrainHeight + flyingOffset,
+          transform.y
+        );
         this.updateThrusterEffect(meshData.thrusterEffect, dt, building.liftProgress);
       }
 
@@ -1052,7 +1149,11 @@ export class BuildingRenderer {
       // Use the actual 3D model height (meshData.buildingHeight) instead of grid cells (building.height)
       if (isOwned) {
         if (building.state !== 'complete') {
-          meshData.progressBar.position.set(transform.x, terrainHeight + meshData.buildingHeight + flyingOffset + 0.75, transform.y);
+          meshData.progressBar.position.set(
+            transform.x,
+            terrainHeight + meshData.buildingHeight + flyingOffset + 0.75,
+            transform.y
+          );
           meshData.progressBar.visible = true;
           this.updateProgressBar(meshData.progressBar, building.buildProgress, true);
           // Billboard: make progress bar face the camera
@@ -1060,7 +1161,11 @@ export class BuildingRenderer {
             meshData.progressBar.lookAt(this.camera.position);
           }
         } else if (building.productionQueue.length > 0) {
-          meshData.progressBar.position.set(transform.x, terrainHeight + meshData.buildingHeight + flyingOffset + 0.75, transform.y);
+          meshData.progressBar.position.set(
+            transform.x,
+            terrainHeight + meshData.buildingHeight + flyingOffset + 0.75,
+            transform.y
+          );
           meshData.progressBar.visible = true;
           // Note: In worker mode, components are plain objects
           const productionProgress = building.productionQueue[0]?.progress ?? 0;
@@ -1143,7 +1248,7 @@ export class BuildingRenderer {
         child.renderOrder = RENDER_ORDER.UNIT;
         if (child.material) {
           if (Array.isArray(child.material)) {
-            child.material = child.material.map(mat => mat.clone());
+            child.material = child.material.map((mat) => mat.clone());
           } else {
             child.material = child.material.clone();
           }
@@ -1159,7 +1264,11 @@ export class BuildingRenderer {
 
     // Selection ring - kept for data structure but not displayed (using instanced rendering)
     const ringGeometry = new THREE.RingGeometry(0.8, 1, 16);
-    const selectionRingMaterial = new THREE.MeshBasicMaterial({ color: 0x00d4ff, transparent: true, opacity: 0.9 });
+    const selectionRingMaterial = new THREE.MeshBasicMaterial({
+      color: 0x00d4ff,
+      transparent: true,
+      opacity: 0.9,
+    });
     const selectionRing = new THREE.Mesh(ringGeometry, selectionRingMaterial);
     selectionRing.rotation.x = -Math.PI / 2;
     selectionRing.visible = false; // Always hidden, using instanced rendering instead
@@ -1234,7 +1343,9 @@ export class BuildingRenderer {
     fireParticles.userData.isFireParticles = true;
     fireParticles.userData.buildingWidth = buildingWidth;
     fireParticles.userData.buildingHeight = buildingHeight;
-    fireParticles.userData.lifetimes = new Float32Array(fireParticleCount).fill(0).map(() => Math.random());
+    fireParticles.userData.lifetimes = new Float32Array(fireParticleCount)
+      .fill(0)
+      .map(() => Math.random());
     fireGroup.add(fireParticles);
 
     // Smoke particles (larger, darker, rise slower)
@@ -1261,7 +1372,9 @@ export class BuildingRenderer {
     const smokeParticles = new THREE.Points(smokeGeometry, smokeParticleMaterial);
     smokeParticles.userData.isSmokeParticles = true;
     smokeParticles.userData.buildingHeight = buildingHeight;
-    smokeParticles.userData.lifetimes = new Float32Array(smokeParticleCount).fill(0).map(() => Math.random());
+    smokeParticles.userData.lifetimes = new Float32Array(smokeParticleCount)
+      .fill(0)
+      .map(() => Math.random());
     fireGroup.add(smokeParticles);
 
     // Ember particles (small bright sparks that shoot up)
@@ -1290,7 +1403,9 @@ export class BuildingRenderer {
     emberParticles.userData.isEmbers = true;
     emberParticles.userData.buildingWidth = buildingWidth;
     emberParticles.userData.buildingHeight = buildingHeight;
-    emberParticles.userData.lifetimes = new Float32Array(emberCount).fill(0).map(() => Math.random());
+    emberParticles.userData.lifetimes = new Float32Array(emberCount)
+      .fill(0)
+      .map(() => Math.random());
     emberParticles.userData.velocities = new Float32Array(emberCount * 3);
     for (let i = 0; i < emberCount; i++) {
       emberParticles.userData.velocities[i * 3] = (Math.random() - 0.5) * 2;
@@ -1309,14 +1424,16 @@ export class BuildingRenderer {
     for (const child of fireGroup.children) {
       if (!(child instanceof THREE.Points)) continue;
 
-      const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+      const positions = (child.geometry.attributes.position as THREE.BufferAttribute)
+        .array as Float32Array;
       const lifetimes = child.userData.lifetimes as Float32Array;
 
       if (child.userData.isFireParticles) {
         // Fire particles rise and flicker
         const bw = child.userData.buildingWidth;
         const bh = child.userData.buildingHeight;
-        const colors = (child.geometry.attributes.color as THREE.BufferAttribute).array as Float32Array;
+        const colors = (child.geometry.attributes.color as THREE.BufferAttribute)
+          .array as Float32Array;
 
         for (let i = 0; i < positions.length / 3; i++) {
           lifetimes[i] += dt * (1.5 + Math.random() * 0.5);
@@ -1345,7 +1462,6 @@ export class BuildingRenderer {
         // Pulse overall opacity
         const mat = child.material as THREE.PointsMaterial;
         mat.opacity = 0.7 + Math.sin(this.fireAnimTime * 15) * 0.2;
-
       } else if (child.userData.isSmokeParticles) {
         // Smoke rises slowly and drifts
         const bh = child.userData.buildingHeight;
@@ -1366,7 +1482,6 @@ export class BuildingRenderer {
             positions[i * 3 + 2] = (Math.random() - 0.5) * bh * 0.6;
           }
         }
-
       } else if (child.userData.isEmbers) {
         // Embers shoot up and arc down
         const bw = child.userData.buildingWidth;
@@ -1449,7 +1564,9 @@ export class BuildingRenderer {
     const coreParticles = new THREE.Points(coreGeometry, coreMaterial);
     coreParticles.userData.isThrusterCore = true;
     coreParticles.userData.thrusterOffsets = thrusterOffsets;
-    coreParticles.userData.lifetimes = new Float32Array(coreParticleCount).fill(0).map(() => Math.random());
+    coreParticles.userData.lifetimes = new Float32Array(coreParticleCount)
+      .fill(0)
+      .map(() => Math.random());
     thrusterGroup.add(coreParticles);
 
     // Glow/exhaust particles (larger, more diffuse)
@@ -1478,7 +1595,9 @@ export class BuildingRenderer {
     const glowParticles = new THREE.Points(glowGeometry, glowMaterial);
     glowParticles.userData.isThrusterGlow = true;
     glowParticles.userData.thrusterOffsets = thrusterOffsets;
-    glowParticles.userData.lifetimes = new Float32Array(glowParticleCount).fill(0).map(() => Math.random());
+    glowParticles.userData.lifetimes = new Float32Array(glowParticleCount)
+      .fill(0)
+      .map(() => Math.random());
     thrusterGroup.add(glowParticles);
 
     return thrusterGroup;
@@ -1494,12 +1613,14 @@ export class BuildingRenderer {
     for (const child of thrusterGroup.children) {
       if (!(child instanceof THREE.Points)) continue;
 
-      const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+      const positions = (child.geometry.attributes.position as THREE.BufferAttribute)
+        .array as Float32Array;
       const lifetimes = child.userData.lifetimes as Float32Array;
       const thrusterOffsets = child.userData.thrusterOffsets as Array<{ x: number; z: number }>;
 
       if (child.userData.isThrusterCore) {
-        const colors = (child.geometry.attributes.color as THREE.BufferAttribute).array as Float32Array;
+        const colors = (child.geometry.attributes.color as THREE.BufferAttribute)
+          .array as Float32Array;
 
         for (let i = 0; i < positions.length / 3; i++) {
           lifetimes[i] += dt * 4;
@@ -1531,7 +1652,6 @@ export class BuildingRenderer {
         // Pulse opacity
         const mat = child.material as THREE.PointsMaterial;
         mat.opacity = baseIntensity * (0.85 + Math.sin(this.fireAnimTime * 20) * 0.15);
-
       } else if (child.userData.isThrusterGlow) {
         for (let i = 0; i < positions.length / 3; i++) {
           lifetimes[i] += dt * 2;
@@ -1565,7 +1685,11 @@ export class BuildingRenderer {
   /**
    * Create construction effect (dust, sparks, welding flashes, metal debris)
    */
-  private createConstructionEffect(buildingWidth: number, buildingDepth: number, _buildingHeight: number): THREE.Group {
+  private createConstructionEffect(
+    buildingWidth: number,
+    buildingDepth: number,
+    _buildingHeight: number
+  ): THREE.Group {
     const effectGroup = new THREE.Group();
 
     // Create dust particles (scattered around construction area)
@@ -1677,11 +1801,17 @@ export class BuildingRenderer {
   /**
    * Update construction effect animation - enhanced with welding flashes and debris
    */
-  private updateConstructionEffect(effectGroup: THREE.Group, dt: number, buildingWidth: number, buildingDepth: number): void {
+  private updateConstructionEffect(
+    effectGroup: THREE.Group,
+    dt: number,
+    buildingWidth: number,
+    buildingDepth: number
+  ): void {
     for (const child of effectGroup.children) {
       if (!(child instanceof THREE.Points)) continue;
 
-      const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+      const positions = (child.geometry.attributes.position as THREE.BufferAttribute)
+        .array as Float32Array;
 
       if (child.userData.isSparks) {
         // Enhanced spark animation with physics-based arc trajectories
@@ -1730,7 +1860,6 @@ export class BuildingRenderer {
         // Pulse opacity based on construction activity
         const mat = child.material as THREE.PointsMaterial;
         mat.opacity = 0.7 + Math.sin(this.constructionAnimTime * 12) * 0.3;
-
       } else if (child.userData.isFlash) {
         // Welding flash animation - random bright bursts
         const lifetimes = child.userData.lifetimes as Float32Array;
@@ -1762,7 +1891,6 @@ export class BuildingRenderer {
         mat.opacity = anyActive ? 0.6 + flicker * 0.4 : 0;
         mat.size = 0.5 + flicker * 0.3;
         child.geometry.attributes.position.needsUpdate = true;
-
       } else if (child.userData.isDebris) {
         // Metal debris animation - small fragments with physics
         const lifetimes = child.userData.lifetimes as Float32Array;
@@ -1792,7 +1920,6 @@ export class BuildingRenderer {
         // Slight opacity variation
         const mat = child.material as THREE.PointsMaterial;
         mat.opacity = 0.7 + Math.sin(this.constructionAnimTime * 8) * 0.2;
-
       } else {
         // Dust animation - drift upward slowly
         const basePositions = child.userData.basePositions as Float32Array;
@@ -1820,11 +1947,19 @@ export class BuildingRenderer {
    * Create blueprint holographic effect for waiting_for_worker state
    * Shows a pulsing wireframe outline with scanning effect
    */
-  private createBlueprintEffect(buildingWidth: number, buildingDepth: number, buildingHeight: number): THREE.Group {
+  private createBlueprintEffect(
+    buildingWidth: number,
+    buildingDepth: number,
+    buildingHeight: number
+  ): THREE.Group {
     const effectGroup = new THREE.Group();
 
     // Create wireframe box outline (holographic blueprint edge lines)
-    const boxGeometry = new THREE.BoxGeometry(buildingWidth * 0.95, buildingHeight, buildingDepth * 0.95);
+    const boxGeometry = new THREE.BoxGeometry(
+      buildingWidth * 0.95,
+      buildingHeight,
+      buildingDepth * 0.95
+    );
     const edgesGeometry = new THREE.EdgesGeometry(boxGeometry);
     const wireframe = new THREE.LineSegments(edgesGeometry, this.blueprintLineMaterial.clone());
     wireframe.position.y = buildingHeight / 2;
@@ -1837,8 +1972,14 @@ export class BuildingRenderer {
     const hh = buildingHeight;
     const hd = buildingDepth * 0.48;
     const corners = [
-      [-hw, 0, -hd], [hw, 0, -hd], [-hw, 0, hd], [hw, 0, hd],
-      [-hw, hh, -hd], [hw, hh, -hd], [-hw, hh, hd], [hw, hh, hd],
+      [-hw, 0, -hd],
+      [hw, 0, -hd],
+      [-hw, 0, hd],
+      [hw, 0, hd],
+      [-hw, hh, -hd],
+      [hw, hh, -hd],
+      [-hw, hh, hd],
+      [hw, hh, hd],
     ];
     for (let i = 0; i < cornerCount; i++) {
       cornerPositions[i * 3] = corners[i][0];
@@ -1892,7 +2033,11 @@ export class BuildingRenderer {
   /**
    * Update blueprint effect animation
    */
-  private updateBlueprintEffect(effectGroup: THREE.Group, dt: number, buildingHeight: number): void {
+  private updateBlueprintEffect(
+    effectGroup: THREE.Group,
+    dt: number,
+    buildingHeight: number
+  ): void {
     for (const child of effectGroup.children) {
       if (child instanceof THREE.LineSegments) {
         // Pulse wireframe opacity
@@ -1911,13 +2056,15 @@ export class BuildingRenderer {
       } else if (child instanceof THREE.Points) {
         if (child.userData.isHologramParticles) {
           // Animate hologram particles - float and rotate around building
-          const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+          const positions = (child.geometry.attributes.position as THREE.BufferAttribute)
+            .array as Float32Array;
           const basePositions = child.userData.basePositions as Float32Array;
           const bh = child.userData.buildingHeight as number;
 
           for (let i = 0; i < positions.length / 3; i++) {
             // Rotate around Y axis
-            const angle = this.blueprintPulseTime * 0.5 + (i / (positions.length / 3)) * Math.PI * 2;
+            const angle =
+              this.blueprintPulseTime * 0.5 + (i / (positions.length / 3)) * Math.PI * 2;
             const baseX = basePositions[i * 3];
             const baseZ = basePositions[i * 3 + 2];
             const radius = Math.sqrt(baseX * baseX + baseZ * baseZ);
@@ -2034,14 +2181,21 @@ export class BuildingRenderer {
   /**
    * Update ground dust effect animation
    */
-  private updateGroundDustEffect(effectGroup: THREE.Group, dt: number, buildingWidth: number, buildingDepth: number, progress: number): void {
+  private updateGroundDustEffect(
+    effectGroup: THREE.Group,
+    dt: number,
+    buildingWidth: number,
+    buildingDepth: number,
+    progress: number
+  ): void {
     // Dust intensity decreases as construction progresses (less ground work later)
     const intensity = Math.max(0.2, 1 - progress * 0.8);
 
     for (const child of effectGroup.children) {
       if (!(child instanceof THREE.Points)) continue;
 
-      const positions = (child.geometry.attributes.position as THREE.BufferAttribute).array as Float32Array;
+      const positions = (child.geometry.attributes.position as THREE.BufferAttribute)
+        .array as Float32Array;
 
       if (child.userData.isLowDust) {
         // Low dust - slow drift and swirl
@@ -2050,7 +2204,8 @@ export class BuildingRenderer {
         for (let i = 0; i < positions.length / 3; i++) {
           const swirl = Math.sin(this.constructionAnimTime * 0.5 + i * 0.3) * 0.3;
           positions[i * 3] = basePositions[i * 3] + swirl;
-          positions[i * 3 + 2] = basePositions[i * 3 + 2] + Math.cos(this.constructionAnimTime * 0.5 + i * 0.3) * 0.3;
+          positions[i * 3 + 2] =
+            basePositions[i * 3 + 2] + Math.cos(this.constructionAnimTime * 0.5 + i * 0.3) * 0.3;
         }
 
         const mat = child.material as THREE.PointsMaterial;
@@ -2115,7 +2270,11 @@ export class BuildingRenderer {
    * Shows construction framework that fades as building materializes
    * PERF: Uses shared materials and geometries to avoid allocation
    */
-  private createScaffoldEffect(buildingWidth: number, buildingDepth: number, buildingHeight: number): THREE.Group {
+  private createScaffoldEffect(
+    buildingWidth: number,
+    buildingDepth: number,
+    buildingHeight: number
+  ): THREE.Group {
     const scaffoldGroup = new THREE.Group();
 
     // Scaffold dimensions - extend beyond building for visibility
@@ -2130,8 +2289,12 @@ export class BuildingRenderer {
 
     // PERF: Helper to create a cylinder between two points using shared geometry
     const createPole = (
-      startX: number, startY: number, startZ: number,
-      endX: number, endY: number, endZ: number,
+      startX: number,
+      startY: number,
+      startZ: number,
+      endX: number,
+      endY: number,
+      endZ: number,
       geometry: THREE.CylinderGeometry,
       material: THREE.Material
     ) => {
@@ -2144,11 +2307,7 @@ export class BuildingRenderer {
       mesh.scale.y = length;
 
       // Position at midpoint
-      mesh.position.set(
-        (startX + endX) * 0.5,
-        (startY + endY) * 0.5,
-        (startZ + endZ) * 0.5
-      );
+      mesh.position.set((startX + endX) * 0.5, (startY + endY) * 0.5, (startZ + endZ) * 0.5);
 
       // Orient cylinder to point from start to end
       direction.normalize();
@@ -2168,8 +2327,12 @@ export class BuildingRenderer {
     // Create vertical poles at corners
     for (const [cx, cz] of corners) {
       const pole = createPole(
-        cx, 0, cz,
-        cx, buildingHeight, cz,
+        cx,
+        0,
+        cz,
+        cx,
+        buildingHeight,
+        cz,
         this.scaffoldPoleGeometry,
         this.scaffoldPoleMaterial
       );
@@ -2185,8 +2348,12 @@ export class BuildingRenderer {
         const [x1, z1] = corners[i];
         const [x2, z2] = corners[(i + 1) % 4];
         const beam = createPole(
-          x1, y, z1,
-          x2, y, z2,
+          x1,
+          y,
+          z1,
+          x2,
+          y,
+          z2,
           this.scaffoldBeamGeometry,
           this.scaffoldBeamMaterial
         );
@@ -2203,8 +2370,12 @@ export class BuildingRenderer {
 
           // Diagonal 1
           const diag1 = createPole(
-            c1x, y, c1z,
-            c2x, y2, c2z,
+            c1x,
+            y,
+            c1z,
+            c2x,
+            y2,
+            c2z,
             this.scaffoldDiagonalGeometry,
             this.scaffoldBeamMaterial
           );
@@ -2212,8 +2383,12 @@ export class BuildingRenderer {
 
           // Diagonal 2
           const diag2 = createPole(
-            c2x, y, c2z,
-            c1x, y2, c1z,
+            c2x,
+            y,
+            c2z,
+            c1x,
+            y2,
+            c1z,
             this.scaffoldDiagonalGeometry,
             this.scaffoldBeamMaterial
           );
@@ -2303,7 +2478,10 @@ export class BuildingRenderer {
     const borderPadding = 0.08;
 
     // Outer border (bright cyan outline for high visibility)
-    const borderGeometry = new THREE.PlaneGeometry(barWidth + borderPadding * 2, barHeight + borderPadding * 2);
+    const borderGeometry = new THREE.PlaneGeometry(
+      barWidth + borderPadding * 2,
+      barHeight + borderPadding * 2
+    );
     const borderMaterial = new THREE.MeshBasicMaterial({
       color: 0x00ffff,
       transparent: true,
@@ -2372,7 +2550,7 @@ export class BuildingRenderer {
       // Note: In worker mode, components are plain objects, not class instances
       const percent = health.current / health.max;
       fill.scale.x = percent;
-      fill.position.x = (percent - 1);
+      fill.position.x = percent - 1;
 
       const material = fill.material as THREE.MeshBasicMaterial;
       if (percent > 0.6) {
@@ -2388,7 +2566,11 @@ export class BuildingRenderer {
   // Progress bar width constant (must match createProgressBar)
   private static readonly PROGRESS_BAR_WIDTH = 2.5;
 
-  private updateProgressBar(progressBar: THREE.Group, progress: number, isConstruction: boolean = false): void {
+  private updateProgressBar(
+    progressBar: THREE.Group,
+    progress: number,
+    isConstruction: boolean = false
+  ): void {
     const fill = progressBar.getObjectByName('fill') as THREE.Mesh;
     const edge = progressBar.getObjectByName('edge') as THREE.Mesh;
     const halfWidth = BuildingRenderer.PROGRESS_BAR_WIDTH / 2;
@@ -2472,7 +2654,7 @@ export class BuildingRenderer {
         if (child.material instanceof THREE.Material) {
           child.material.dispose();
         } else if (Array.isArray(child.material)) {
-          child.material.forEach(m => m.dispose());
+          child.material.forEach((m) => m.dispose());
         }
       }
     });

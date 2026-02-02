@@ -399,19 +399,26 @@ export class RenderPipeline {
     const scenePass = pass(this.scene, this.camera);
 
     // Setup MRT
-    const needsNormals = this.config.ssrEnabled || this.config.ssgiEnabled;
-    const needsVelocity = this.config.taaEnabled || this.config.ssgiEnabled ||
-                          this.config.temporalAOEnabled || this.config.temporalSSREnabled;
+    // Include aoEnabled to provide actual normals to GTAO for more accurate AO
+    // (without normals, GTAO reconstructs from depth which causes triangular artifacts)
+    const needsNormals = this.config.ssrEnabled || this.config.ssgiEnabled || this.config.aoEnabled;
+    const needsVelocity =
+      this.config.taaEnabled ||
+      this.config.ssgiEnabled ||
+      this.config.temporalAOEnabled ||
+      this.config.temporalSSREnabled;
 
     if (needsNormals || needsVelocity) {
       const customVelocity = createInstancedVelocityNode();
       if (needsNormals) {
-        scenePass.setMRT(mrt({
-          output: output,
-          normal: normalView.mul(0.5).add(0.5),
-          metalrough: vec2(materialMetalness, materialRoughness),
-          velocity: customVelocity,
-        }));
+        scenePass.setMRT(
+          mrt({
+            output: output,
+            normal: normalView.mul(0.5).add(0.5),
+            metalrough: vec2(materialMetalness, materialRoughness),
+            velocity: customVelocity,
+          })
+        );
         const metalRoughTexture = scenePass.getTexture('metalrough');
         if (metalRoughTexture) metalRoughTexture.type = THREE.UnsignedByteType;
       } else {
@@ -455,11 +462,16 @@ export class RenderPipeline {
         );
         outputNode = scenePassColor.mul(mix(float(1.0), aoValue, this.uAOIntensity));
       } else {
-        // Full-res AO
-        const result = createGTAOPass(scenePassDepth, this.camera, {
-          radius: this.config.aoRadius,
-          intensity: this.config.aoIntensity,
-        });
+        // Full-res AO - pass normals for accurate occlusion (avoids depth-based artifacts)
+        const result = createGTAOPass(
+          scenePassDepth,
+          this.camera,
+          {
+            radius: this.config.aoRadius,
+            intensity: this.config.aoIntensity,
+          },
+          scenePassNormal
+        );
         if (result) {
           this.aoPass = result.pass;
           let aoValue = result.aoValueNode;
@@ -492,18 +504,30 @@ export class RenderPipeline {
         outputNode = outputNode.add(ssrTexture.rgb.mul(ssrTexture.a));
       } else if (scenePassNormal && scenePassMetalRough) {
         // Full-res SSR
-        const result = createSSRPass(scenePassColor, scenePassDepth, scenePassNormal, scenePassMetalRough, this.camera, {
-          maxDistance: this.config.ssrMaxDistance,
-          opacity: this.config.ssrOpacity,
-          thickness: this.config.ssrThickness,
-          maxRoughness: this.config.ssrMaxRoughness,
-        });
+        const result = createSSRPass(
+          scenePassColor,
+          scenePassDepth,
+          scenePassNormal,
+          scenePassMetalRough,
+          this.camera,
+          {
+            maxDistance: this.config.ssrMaxDistance,
+            opacity: this.config.ssrOpacity,
+            thickness: this.config.ssrThickness,
+            maxRoughness: this.config.ssrMaxRoughness,
+          }
+        );
         if (result) {
           this.ssrPass = result.pass;
           let ssrTexture = result.textureNode;
 
           // Apply temporal blending if enabled
-          if (this.config.temporalSSREnabled && this.temporalSSRManager && scenePassVelocity && ssrTexture) {
+          if (
+            this.config.temporalSSREnabled &&
+            this.temporalSSRManager &&
+            scenePassVelocity &&
+            ssrTexture
+          ) {
             ssrTexture = createFullResTemporalSSRNode(
               ssrTexture,
               this.temporalSSRManager.getHistoryTexture(),
@@ -520,7 +544,11 @@ export class RenderPipeline {
     }
 
     // 4. Fog of War (classic RTS-style post-process)
-    if (this.config.fogOfWarEnabled && scenePassDepth && this.camera instanceof THREE.PerspectiveCamera) {
+    if (
+      this.config.fogOfWarEnabled &&
+      scenePassDepth &&
+      this.camera instanceof THREE.PerspectiveCamera
+    ) {
       this.fogOfWarPass = createFogOfWarPass(outputNode, scenePassDepth, this.camera);
       if (this.fogOfWarPass) {
         this.fogOfWarPass.applyConfig({
@@ -582,7 +610,11 @@ export class RenderPipeline {
         // Apply sharpening if not upscaling
         const useUpscaling = this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
         if (!useUpscaling && this.config.taaSharpeningEnabled) {
-          outputNode = createSharpeningPass(outputNode, this.uResolution, this.uSharpeningIntensity);
+          outputNode = createSharpeningPass(
+            outputNode,
+            this.uResolution,
+            this.uSharpeningIntensity
+          );
         }
       } else {
         // Fallback to FXAA
@@ -658,19 +690,26 @@ export class RenderPipeline {
     const needsRebuild =
       (config.bloomEnabled !== undefined && config.bloomEnabled !== this.config.bloomEnabled) ||
       (config.aoEnabled !== undefined && config.aoEnabled !== this.config.aoEnabled) ||
-      (config.temporalAOEnabled !== undefined && config.temporalAOEnabled !== this.config.temporalAOEnabled) ||
+      (config.temporalAOEnabled !== undefined &&
+        config.temporalAOEnabled !== this.config.temporalAOEnabled) ||
       (config.ssrEnabled !== undefined && config.ssrEnabled !== this.config.ssrEnabled) ||
-      (config.temporalSSREnabled !== undefined && config.temporalSSREnabled !== this.config.temporalSSREnabled) ||
+      (config.temporalSSREnabled !== undefined &&
+        config.temporalSSREnabled !== this.config.temporalSSREnabled) ||
       (config.ssgiEnabled !== undefined && config.ssgiEnabled !== this.config.ssgiEnabled) ||
       (config.fxaaEnabled !== undefined && config.fxaaEnabled !== this.config.fxaaEnabled) ||
       (config.taaEnabled !== undefined && config.taaEnabled !== this.config.taaEnabled) ||
-      (config.antiAliasingMode !== undefined && config.antiAliasingMode !== this.config.antiAliasingMode) ||
-      (config.taaSharpeningEnabled !== undefined && config.taaSharpeningEnabled !== this.config.taaSharpeningEnabled) ||
-      (config.vignetteEnabled !== undefined && config.vignetteEnabled !== this.config.vignetteEnabled) ||
+      (config.antiAliasingMode !== undefined &&
+        config.antiAliasingMode !== this.config.antiAliasingMode) ||
+      (config.taaSharpeningEnabled !== undefined &&
+        config.taaSharpeningEnabled !== this.config.taaSharpeningEnabled) ||
+      (config.vignetteEnabled !== undefined &&
+        config.vignetteEnabled !== this.config.vignetteEnabled) ||
       (config.upscalingMode !== undefined && config.upscalingMode !== this.config.upscalingMode) ||
       (config.renderScale !== undefined && config.renderScale !== this.config.renderScale) ||
-      (config.volumetricFogEnabled !== undefined && config.volumetricFogEnabled !== this.config.volumetricFogEnabled) ||
-      (config.fogOfWarEnabled !== undefined && config.fogOfWarEnabled !== this.config.fogOfWarEnabled);
+      (config.volumetricFogEnabled !== undefined &&
+        config.volumetricFogEnabled !== this.config.volumetricFogEnabled) ||
+      (config.fogOfWarEnabled !== undefined &&
+        config.fogOfWarEnabled !== this.config.fogOfWarEnabled);
 
     this.config = { ...this.config, ...config };
 
@@ -732,8 +771,13 @@ export class RenderPipeline {
   }
 
   // Accessors
-  getConfig(): PostProcessingConfig { return { ...this.config }; }
-  setCamera(camera: THREE.Camera): void { this.camera = camera; this.rebuild(); }
+  getConfig(): PostProcessingConfig {
+    return { ...this.config };
+  }
+  setCamera(camera: THREE.Camera): void {
+    this.camera = camera;
+    this.rebuild();
+  }
   setSize(width: number, height: number): void {
     if (this.uResolution.value.x !== width || this.uResolution.value.y !== height) {
       this.displayWidth = width;
@@ -748,20 +792,48 @@ export class RenderPipeline {
   }
 
   // Status methods
-  isSSREnabled(): boolean { return this.config.ssrEnabled; }
-  isTAAEnabled(): boolean { return this.config.taaEnabled && this.config.antiAliasingMode === 'taa'; }
-  isSSGIEnabled(): boolean { return this.config.ssgiEnabled; }
-  isVolumetricFogEnabled(): boolean { return this.config.volumetricFogEnabled; }
-  isFogOfWarEnabled(): boolean { return this.config.fogOfWarEnabled; }
-  isTemporalAOEnabled(): boolean { return this.config.temporalAOEnabled && this.config.aoEnabled; }
-  isTemporalSSREnabled(): boolean { return this.config.temporalSSREnabled && this.config.ssrEnabled; }
-  getAntiAliasingMode(): AntiAliasingMode { return this.config.antiAliasingMode; }
-  isUpscalingEnabled(): boolean { return this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0; }
-  getUpscalingMode(): UpscalingMode { return this.config.upscalingMode; }
-  getRenderScale(): number { return this.config.renderScale; }
-  getRenderScalePercent(): number { return Math.round(this.config.renderScale * 100); }
-  getRenderResolution(): { width: number; height: number } { return { width: this.renderWidth, height: this.renderHeight }; }
-  getDisplayResolution(): { width: number; height: number } { return { width: this.displayWidth, height: this.displayHeight }; }
+  isSSREnabled(): boolean {
+    return this.config.ssrEnabled;
+  }
+  isTAAEnabled(): boolean {
+    return this.config.taaEnabled && this.config.antiAliasingMode === 'taa';
+  }
+  isSSGIEnabled(): boolean {
+    return this.config.ssgiEnabled;
+  }
+  isVolumetricFogEnabled(): boolean {
+    return this.config.volumetricFogEnabled;
+  }
+  isFogOfWarEnabled(): boolean {
+    return this.config.fogOfWarEnabled;
+  }
+  isTemporalAOEnabled(): boolean {
+    return this.config.temporalAOEnabled && this.config.aoEnabled;
+  }
+  isTemporalSSREnabled(): boolean {
+    return this.config.temporalSSREnabled && this.config.ssrEnabled;
+  }
+  getAntiAliasingMode(): AntiAliasingMode {
+    return this.config.antiAliasingMode;
+  }
+  isUpscalingEnabled(): boolean {
+    return this.config.upscalingMode !== 'off' && this.config.renderScale < 1.0;
+  }
+  getUpscalingMode(): UpscalingMode {
+    return this.config.upscalingMode;
+  }
+  getRenderScale(): number {
+    return this.config.renderScale;
+  }
+  getRenderScalePercent(): number {
+    return Math.round(this.config.renderScale * 100);
+  }
+  getRenderResolution(): { width: number; height: number } {
+    return { width: this.renderWidth, height: this.renderHeight };
+  }
+  getDisplayResolution(): { width: number; height: number } {
+    return { width: this.displayWidth, height: this.displayHeight };
+  }
 
   // Fog of War methods
   /**
@@ -908,7 +980,9 @@ export class RenderPipeline {
     this.renderer.setSize(originalSize.x, originalSize.y, false);
   }
 
-  getPostProcessing(): PostProcessing { return this.displayPostProcessing || this.internalPostProcessing!; }
+  getPostProcessing(): PostProcessing {
+    return this.displayPostProcessing || this.internalPostProcessing!;
+  }
 
   dispose(): void {
     this.traaPass?.dispose?.();
@@ -968,7 +1042,9 @@ export class DamageVignette {
   private intensity = uniform(0);
   private color = uniform(new THREE.Color(0.8, 0.0, 0.0));
 
-  flash(intensity: number = 0.5): void { this.intensity.value = intensity; }
+  flash(intensity: number = 0.5): void {
+    this.intensity.value = intensity;
+  }
 
   update(deltaTime: number): void {
     if (this.intensity.value > 0) {
