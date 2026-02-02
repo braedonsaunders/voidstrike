@@ -768,26 +768,48 @@ export class RenderStateWorldAdapter implements IWorldProvider {
 
   /**
    * Get all entities with the specified components (simplified version)
+   * Handles common query patterns:
+   * - ('Unit') or ('Unit', 'Transform', ...) → units
+   * - ('Building') or ('Building', 'Transform', ...) → buildings
+   * - ('Resource') or ('Resource', 'Transform') → resources
+   * - ('Transform', 'Selectable') → units + buildings (selection queries)
+   * - ('Transform') alone → units only (legacy)
    */
   public getEntitiesWith(...componentTypes: string[]): IEntity[] {
     const results: IEntity[] = [];
 
-    // Check for Unit queries
-    if (componentTypes.includes('Unit') || (componentTypes.includes('Transform') && componentTypes.length === 1)) {
+    const hasUnit = componentTypes.includes('Unit');
+    const hasBuilding = componentTypes.includes('Building');
+    const hasResource = componentTypes.includes('Resource');
+    const hasSelectable = componentTypes.includes('Selectable');
+    const hasTransform = componentTypes.includes('Transform');
+
+    // Units: return when querying for Unit, Selectable (without Building/Resource filter),
+    // or Transform alone (legacy)
+    const includeUnits = hasUnit ||
+                         (hasSelectable && !hasBuilding && !hasResource) ||
+                         (hasTransform && componentTypes.length === 1);
+
+    // Buildings: return when querying for Building, or Selectable (without Unit/Resource filter)
+    const includeBuildings = hasBuilding ||
+                             (hasSelectable && !hasUnit && !hasResource);
+
+    // Resources: return when querying for Resource
+    const includeResources = hasResource;
+
+    if (includeUnits) {
       for (const adapter of this.unitEntities.values()) {
         results.push(adapter);
       }
     }
 
-    // Check for Building queries
-    if (componentTypes.includes('Building')) {
+    if (includeBuildings) {
       for (const adapter of this.buildingEntities.values()) {
         results.push(adapter);
       }
     }
 
-    // Check for Resource queries
-    if (componentTypes.includes('Resource')) {
+    if (includeResources) {
       for (const adapter of this.resourceEntities.values()) {
         results.push(adapter);
       }
