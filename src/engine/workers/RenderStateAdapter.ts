@@ -814,6 +814,15 @@ export class RenderStateWorldAdapter implements IWorldProvider {
   }
 
   /**
+   * Get vision data for a player from the current render state
+   * Used by fog of war rendering in worker mode
+   */
+  public getVisionDataForPlayer(playerId: string): Uint8Array | null {
+    if (!this.currentRenderState) return null;
+    return this.currentRenderState.visionGrids.get(playerId) ?? null;
+  }
+
+  /**
    * Clear all cached entities
    */
   public clear(): void {

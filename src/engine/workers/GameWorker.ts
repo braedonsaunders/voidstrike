@@ -607,7 +607,7 @@ export class WorkerGame extends GameCore {
       buildings,
       resources,
       projectiles,
-      visionGrids: [],
+      visionGrids: this.visionSystem.serializeVisionGrids(),
       playerResources: Array.from(this.playerResources.entries()),
       selectedEntityIds: [...this.selectedEntityIds],
       controlGroups: Array.from(this.controlGroups.entries()),

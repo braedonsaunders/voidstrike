@@ -17,9 +17,9 @@ import { debugPathfinding } from '@/utils/debugLogger';
 export type VisionState = 'unexplored' | 'explored' | 'visible';
 
 // Vision state encoding for worker communication
-const _VISION_UNEXPLORED = 0;
-const VISION_EXPLORED = 1;
-const VISION_VISIBLE = 2;
+export const VISION_UNEXPLORED = 0;
+export const VISION_EXPLORED = 1;
+export const VISION_VISIBLE = 2;
 
 // Watch tower with activation state
 export interface ActiveWatchTower extends WatchTower {
@@ -1059,5 +1059,54 @@ export class VisionSystem extends System {
     this.visionMaskCache.set(cacheKey, { mask, width: targetWidth, height: targetHeight, version: this.visionVersion });
 
     return mask;
+  }
+
+  /**
+   * Serialize all vision grids for worker-to-main-thread transfer
+   * Returns array of [playerId, Uint8Array] tuples
+   * Each Uint8Array encodes the vision state per cell (0=unexplored, 1=explored, 2=visible)
+   */
+  public serializeVisionGrids(): Array<[string, Uint8Array]> {
+    const result: Array<[string, Uint8Array]> = [];
+    const width = this.visionMap.width;
+    const height = this.visionMap.height;
+
+    for (const [playerId, visionGrid] of this.visionMap.playerVision) {
+      const data = new Uint8Array(width * height);
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const state = visionGrid[y]?.[x] ?? 'unexplored';
+          const index = y * width + x;
+
+          switch (state) {
+            case 'visible':
+              data[index] = VISION_VISIBLE;
+              break;
+            case 'explored':
+              data[index] = VISION_EXPLORED;
+              break;
+            default:
+              data[index] = VISION_UNEXPLORED;
+              break;
+          }
+        }
+      }
+
+      result.push([playerId, data]);
+    }
+
+    return result;
+  }
+
+  /**
+   * Get grid dimensions for deserialization
+   */
+  public getGridDimensions(): { width: number; height: number; cellSize: number } {
+    return {
+      width: this.visionMap.width,
+      height: this.visionMap.height,
+      cellSize: this.cellSize,
+    };
   }
 }
