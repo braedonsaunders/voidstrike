@@ -127,7 +127,6 @@ interface ThreatInfo {
 }
 
 // State
-let _config: AIWorkerConfig = {};
 let unitPriorities: Record<string, number> = DEFAULT_UNIT_PRIORITY;
 let threatWeights = THREAT_WEIGHTS;
 let focusFireThreshold = 0.3;
@@ -139,7 +138,6 @@ let initialized = false;
  */
 function init(workerConfig: AIWorkerConfig): boolean {
   try {
-    _config = workerConfig;
     unitPriorities = workerConfig.unitPriorities || DEFAULT_UNIT_PRIORITY;
     threatWeights = workerConfig.threatWeights || THREAT_WEIGHTS;
     focusFireThreshold = workerConfig.focusFireThreshold ?? 0.3;

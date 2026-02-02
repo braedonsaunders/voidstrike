@@ -88,7 +88,7 @@ const DEFAULT_CONFIG: CollisionConfig = {
     queryRadiusMultiplier: 2.0,
     strengthMoving: 0.15,
     strengthIdle: 1.2,
-    strengthArriving: 1.0,
+    strengthArriving: 1.2,
     strengthCombat: 0.3,
     maxForce: 2.0,
     flyingMultiplier: 1.2,
