@@ -574,7 +574,7 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
 
       {/* Tips */}
       <Section title="Tips" icon="💭" theme={theme} defaultOpen={false}>
-        <ul className="space-y-1.5 text-[11px]" style={{ color: theme.text.muted }}>
+        <ul className="space-y-1.5 text-[10px]" style={{ color: theme.text.muted }}>
           <li className="flex items-start gap-2">
             <span style={{ color: theme.primary }}>•</span>
             <span>Describe terrain features like &quot;central high ground&quot; or &quot;island bases&quot;</span>
