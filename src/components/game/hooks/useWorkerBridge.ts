@@ -207,7 +207,7 @@ export function useWorkerBridge({
       // Set terrain data on game instance
       game.setTerrainGrid(currentMap.terrain);
 
-      // Configure SelectionSystem for worker mode:
+      // Configure SelectionSystem:
       // - Use RenderStateWorldAdapter for entity queries (has actual entity data from worker)
       // - Sync selection changes to worker via WorkerBridge.setSelection
       const selectionSystem = game.selectionSystem;
@@ -218,6 +218,11 @@ export function useWorkerBridge({
       if (localPlayerId) {
         selectionSystem.setPlayerId(localPlayerId);
       }
+
+      // Forward commands to worker via WorkerBridge
+      game.setCommandCallback((command) => {
+        bridge.issueCommand(command);
+      });
 
       setIsInitialized(true);
       return true;
