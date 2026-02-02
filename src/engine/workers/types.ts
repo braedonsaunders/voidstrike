@@ -80,6 +80,9 @@ export interface UnitRenderState {
   // Combat stats for range overlays
   attackRange: number;
   sightRange: number;
+  // Selection properties for hit detection
+  selectionRadius: number;
+  selectionPriority: number;
 }
 
 /**
@@ -133,6 +136,9 @@ export interface BuildingRenderState {
   // Combat stats for range overlays
   attackRange: number;
   sightRange: number;
+  // Selection properties for hit detection
+  selectionRadius: number;
+  selectionPriority: number;
 }
 
 /**

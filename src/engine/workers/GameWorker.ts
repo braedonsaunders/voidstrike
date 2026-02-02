@@ -681,6 +681,9 @@ export class WorkerGame extends GameCore {
         // Combat stats for range overlays
         attackRange: unit.attackRange,
         sightRange: unit.sightRange,
+        // Selection properties for hit detection
+        selectionRadius: selectable.selectionRadius,
+        selectionPriority: selectable.selectionPriority,
       });
     }
 
@@ -725,6 +728,9 @@ export class WorkerGame extends GameCore {
         // Combat stats for range overlays
         attackRange: building.attackRange,
         sightRange: building.sightRange,
+        // Selection properties for hit detection
+        selectionRadius: selectable.selectionRadius,
+        selectionPriority: selectable.selectionPriority,
       });
     }
 
