@@ -877,6 +877,102 @@ export async function generateMapWithLLM(
   }
 }
 
+// Elevation constants for base generation
+const ELEVATION_HIGH = 220; // Main base level
+const ELEVATION_MID = 140;  // Natural expansion level
+const ELEVATION_LOW = 60;   // Ground level
+
+/**
+ * Check if a plateau command exists near a given position
+ */
+function hasPlateauNear(
+  paint: MapBlueprint['paint'],
+  x: number,
+  y: number,
+  minElevation: number
+): boolean {
+  return paint.some(cmd => {
+    if (cmd.cmd === 'plateau') {
+      const dx = cmd.x - x;
+      const dy = cmd.y - y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      // Consider it covered if a plateau is within its radius distance and has sufficient elevation
+      return dist < cmd.radius && cmd.elevation >= minElevation;
+    }
+    if (cmd.cmd === 'rect') {
+      // Check if point is inside rect with sufficient elevation
+      const inX = x >= cmd.x && x <= cmd.x + cmd.width;
+      const inY = y >= cmd.y && y <= cmd.y + cmd.height;
+      return inX && inY && cmd.elevation >= minElevation;
+    }
+    return false;
+  });
+}
+
+/**
+ * Check if a ramp command exists between two approximate positions
+ */
+function hasRampBetween(
+  paint: MapBlueprint['paint'],
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): boolean {
+  return paint.some(cmd => {
+    if (cmd.cmd !== 'ramp') return false;
+
+    // Normalize ramp endpoints
+    const from = Array.isArray(cmd.from) ? { x: cmd.from[0], y: cmd.from[1] } : cmd.from;
+    const to = Array.isArray(cmd.to) ? { x: cmd.to[0], y: cmd.to[1] } : cmd.to;
+
+    // Check if ramp is roughly between our two points (within tolerance)
+    const tolerance = 30;
+    const rampNearStart =
+      (Math.abs(from.x - x1) < tolerance && Math.abs(from.y - y1) < tolerance) ||
+      (Math.abs(from.x - x2) < tolerance && Math.abs(from.y - y2) < tolerance);
+    const rampNearEnd =
+      (Math.abs(to.x - x1) < tolerance && Math.abs(to.y - y1) < tolerance) ||
+      (Math.abs(to.x - x2) < tolerance && Math.abs(to.y - y2) < tolerance);
+
+    return rampNearStart || rampNearEnd;
+  });
+}
+
+/**
+ * Calculate midpoint between two positions, offset toward natural
+ */
+function calculateRampPosition(
+  mainX: number,
+  mainY: number,
+  natX: number,
+  natY: number
+): { fromX: number; fromY: number; toX: number; toY: number } {
+  // Ramp goes FROM high ground (main) TO low ground (natural direction)
+  const dx = natX - mainX;
+  const dy = natY - mainY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+
+  if (dist === 0) {
+    return { fromX: mainX, fromY: mainY, toX: natX, toY: natY };
+  }
+
+  // Normalize direction
+  const nx = dx / dist;
+  const ny = dy / dist;
+
+  // Ramp starts at edge of main plateau (radius ~22) and ends partway to natural
+  const rampStart = 20;
+  const rampLength = Math.min(dist * 0.4, 25); // 40% of distance or max 25 cells
+
+  return {
+    fromX: Math.round(mainX + nx * rampStart),
+    fromY: Math.round(mainY + ny * rampStart),
+    toX: Math.round(mainX + nx * (rampStart + rampLength)),
+    toY: Math.round(mainY + ny * (rampStart + rampLength)),
+  };
+}
+
 /**
  * Validate and fix common issues with LLM-generated blueprints
  */
@@ -906,9 +1002,9 @@ function validateAndFixBlueprint(
 
   // Ensure paint array starts with fill
   if (!fixed.paint || fixed.paint.length === 0) {
-    fixed.paint = [{ cmd: 'fill', elevation: 60 }];
+    fixed.paint = [{ cmd: 'fill', elevation: ELEVATION_LOW }];
   } else if (fixed.paint[0].cmd !== 'fill') {
-    fixed.paint = [{ cmd: 'fill', elevation: 60 }, ...fixed.paint];
+    fixed.paint = [{ cmd: 'fill', elevation: ELEVATION_LOW }, ...fixed.paint];
   }
 
   // Ensure border command exists
@@ -922,6 +1018,95 @@ function validateAndFixBlueprint(
     debugInitialization.warn('LLM did not generate bases - this will need manual placement');
     fixed.bases = [];
   }
+
+  // ============================================================================
+  // AUTO-GENERATE ELEVATION AND RAMPS FOR BASES
+  // ============================================================================
+
+  // Group bases by player slot
+  const mainBases = fixed.bases.filter(b => b.type === 'main' && b.playerSlot !== undefined);
+  const naturalBases = fixed.bases.filter(b => b.type === 'natural');
+
+  // Commands to insert (after fill, before border)
+  const elevationCommands: MapBlueprint['paint'] = [];
+  const rampCommands: MapBlueprint['paint'] = [];
+
+  // For each main base, ensure HIGH elevation plateau exists
+  for (const main of mainBases) {
+    if (!hasPlateauNear(fixed.paint, main.x, main.y, ELEVATION_HIGH)) {
+      elevationCommands.push({
+        cmd: 'plateau',
+        x: main.x,
+        y: main.y,
+        radius: 22,
+        elevation: ELEVATION_HIGH,
+      });
+    }
+  }
+
+  // For each natural base, ensure MID elevation plateau exists
+  for (const natural of naturalBases) {
+    if (!hasPlateauNear(fixed.paint, natural.x, natural.y, ELEVATION_MID)) {
+      elevationCommands.push({
+        cmd: 'plateau',
+        x: natural.x,
+        y: natural.y,
+        radius: 18,
+        elevation: ELEVATION_MID,
+      });
+    }
+  }
+
+  // For each main base, find closest natural and create ramp if needed
+  for (const main of mainBases) {
+    // Find the closest natural base
+    let closestNatural: (typeof naturalBases)[0] | null = null;
+    let closestDist = Infinity;
+
+    for (const natural of naturalBases) {
+      const dx = natural.x - main.x;
+      const dy = natural.y - main.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestNatural = natural;
+      }
+    }
+
+    // Create ramp if natural exists and no ramp exists
+    if (closestNatural && closestDist < 80) {
+      if (!hasRampBetween(fixed.paint, main.x, main.y, closestNatural.x, closestNatural.y)) {
+        const { fromX, fromY, toX, toY } = calculateRampPosition(
+          main.x,
+          main.y,
+          closestNatural.x,
+          closestNatural.y
+        );
+
+        rampCommands.push({
+          cmd: 'ramp',
+          from: [fromX, fromY],
+          to: [toX, toY],
+          width: 10,
+        });
+      }
+    }
+  }
+
+  // Insert elevation commands after fill but before other terrain commands
+  // Insert ramps after elevation commands
+  if (elevationCommands.length > 0 || rampCommands.length > 0) {
+    // Find border index
+    const borderIndex = fixed.paint.findIndex(cmd => cmd.cmd === 'border');
+    const insertIndex = borderIndex > 0 ? borderIndex : fixed.paint.length;
+
+    // Insert elevation first, then ramps (order matters - ramps read elevation)
+    fixed.paint.splice(insertIndex, 0, ...elevationCommands, ...rampCommands);
+  }
+
+  // ============================================================================
+  // DECORATION RULES
+  // ============================================================================
 
   // Ensure decoration rules exist with appropriate border
   if (!fixed.decorationRules) {
