@@ -197,10 +197,9 @@ export class VisionCompute {
         return;
       });
 
-      // Cell center in world coordinates (X horizontal, Z depth)
-      // Note: cellY maps to worldZ (depth), not worldY (altitude)
+      // Cell center in world coordinates
       const worldX = cellX.toFloat().mul(cellSize).add(cellSize.mul(0.5));
-      const worldZ = cellY.toFloat().mul(cellSize).add(cellSize.mul(0.5));
+      const worldY = cellY.toFloat().mul(cellSize).add(cellSize.mul(0.5));
 
       // Read previous frame's data for temporal accumulation
       const prevUV = vec2(
@@ -219,13 +218,13 @@ export class VisionCompute {
       Loop(casterCount, () => {
         const caster = casterBuffer.element(i);
         const casterX = caster.x;
-        const casterZ = caster.y; // caster.y stores Z (depth) coordinate
+        const casterY = caster.y;
         const sightRange = caster.z;
         const casterPlayer = caster.w.toInt();
 
         const dx = worldX.sub(casterX);
-        const dz = worldZ.sub(casterZ);
-        const distSq = dx.mul(dx).add(dz.mul(dz));
+        const dy = worldY.sub(casterY);
+        const distSq = dx.mul(dx).add(dy.mul(dy));
         const rangeSq = sightRange.mul(sightRange);
 
         If(distSq.lessThanEqual(rangeSq).and(casterPlayer.equal(targetPlayerId)), () => {

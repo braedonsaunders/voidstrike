@@ -1005,7 +1005,7 @@ export class UnitRenderer {
       // Check visibility for enemy units (skip in spectator mode - show all)
       let shouldShow = true;
       if (isEnemy && this.visionSystem && this.playerId) {
-        shouldShow = this.visionSystem.isVisible(this.playerId, transform.x, transform.z);
+        shouldShow = this.visionSystem.isVisible(this.playerId, transform.x, transform.y);
       }
 
       // Skip dead units
