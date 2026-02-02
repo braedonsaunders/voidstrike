@@ -221,6 +221,9 @@ class SelectableAdapter {
   public isSelected: boolean;
   public playerId: string;
   public controlGroup: number;
+  // Selection properties for hit detection
+  public selectionRadius: number;
+  public selectionPriority: number;
   // Default visual properties (not in render state, so use sensible defaults)
   public visualScale: number = 1;
   public visualHeight: number = 0;
@@ -229,12 +232,16 @@ class SelectableAdapter {
     this.isSelected = data.isSelected;
     this.playerId = data.playerId;
     this.controlGroup = data.controlGroup ?? 0;
+    this.selectionRadius = data.selectionRadius;
+    this.selectionPriority = data.selectionPriority;
   }
 
   public update(data: UnitRenderState): void {
     this.isSelected = data.isSelected;
     this.playerId = data.playerId;
     this.controlGroup = data.controlGroup ?? 0;
+    this.selectionRadius = data.selectionRadius;
+    this.selectionPriority = data.selectionPriority;
   }
 }
 
@@ -438,6 +445,9 @@ class BuildingSelectableAdapter {
   public isSelected: boolean;
   public playerId: string;
   public controlGroup: number;
+  // Selection properties for hit detection
+  public selectionRadius: number;
+  public selectionPriority: number;
   // Default visual properties (not in render state, so use sensible defaults)
   public visualScale: number = 1;
   public visualHeight: number = 0;
@@ -446,11 +456,15 @@ class BuildingSelectableAdapter {
     this.isSelected = data.isSelected;
     this.playerId = data.playerId;
     this.controlGroup = 0;
+    this.selectionRadius = data.selectionRadius;
+    this.selectionPriority = data.selectionPriority;
   }
 
   public update(data: BuildingRenderState): void {
     this.isSelected = data.isSelected;
     this.playerId = data.playerId;
+    this.selectionRadius = data.selectionRadius;
+    this.selectionPriority = data.selectionPriority;
   }
 }
 
