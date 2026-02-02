@@ -663,10 +663,12 @@ export class Game extends GameCore {
   public issueCommand(command: GameCommand): void {
     // Forward commands to worker for processing
     if (this.commandCallback) {
+      console.log('[Game] Forwarding command to worker:', command.type, command.entityIds);
       this.commandCallback(command);
       return;
     }
 
+    console.warn('[Game] No command callback set, command will process locally');
     if (isMultiplayerMode()) {
       const executionTick = this.currentTick + this.currentCommandDelay;
       command.tick = executionTick;

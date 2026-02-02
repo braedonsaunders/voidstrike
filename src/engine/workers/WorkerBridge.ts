@@ -391,8 +391,16 @@ export class WorkerBridge {
   // ============================================================================
 
   public issueCommand(command: GameCommand): void {
-    if (!this._initialized) return;
-    this.worker?.postMessage({ type: 'command', command } satisfies MainToWorkerMessage);
+    if (!this._initialized) {
+      console.warn('[WorkerBridge] issueCommand called before initialization, command dropped:', command.type);
+      return;
+    }
+    if (!this.worker) {
+      console.warn('[WorkerBridge] issueCommand called but worker is null, command dropped:', command.type);
+      return;
+    }
+    console.log('[WorkerBridge] Posting command to worker:', command.type, command.entityIds);
+    this.worker.postMessage({ type: 'command', command } satisfies MainToWorkerMessage);
   }
 
   // ============================================================================

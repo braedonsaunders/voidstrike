@@ -1163,7 +1163,11 @@ if (typeof self !== 'undefined') {
         }
 
         case 'command': {
-          if (!game) return;
+          if (!game) {
+            console.warn('[GameWorker] Received command but game is null:', message.command?.type);
+            return;
+          }
+          console.log('[GameWorker] Received command:', message.command.type, message.command.entityIds);
           game.issueCommand(message.command);
           break;
         }
