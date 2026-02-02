@@ -175,7 +175,9 @@ export class InputManager {
     } = {}
   ): void {
     if (this.initialized) {
-      debugInitialization.warn('[InputManager] Already initialized. Call dispose() first to reinitialize.');
+      debugInitialization.warn(
+        '[InputManager] Already initialized. Call dispose() first to reinitialize.'
+      );
       return;
     }
 
@@ -202,8 +204,12 @@ export class InputManager {
     document.addEventListener('mouseup', this.boundMouseUp);
 
     // Track mouse enter/leave
-    container.addEventListener('mouseenter', () => { this.mouseInBounds = true; });
-    container.addEventListener('mouseleave', () => { this.mouseInBounds = false; });
+    container.addEventListener('mouseenter', () => {
+      this.mouseInBounds = true;
+    });
+    container.addEventListener('mouseleave', () => {
+      this.mouseInBounds = false;
+    });
 
     this.initialized = true;
     debugInitialization.log('[InputManager] Initialized');
@@ -220,18 +226,11 @@ export class InputManager {
     eventBus?: EventBus | null;
     getLocalPlayerId?: () => string | null;
   }): void {
-    console.log('[InputManager] updateDependencies called', {
-      hasGame: !!options.game,
-      hasCamera: !!options.camera,
-      hasWorldProvider: !!options.worldProvider,
-      hasEventBus: !!options.eventBus,
-    });
     if (options.camera !== undefined) this.camera = options.camera;
     if (options.game !== undefined) this.game = options.game;
     if (options.worldProvider !== undefined) this.worldProvider = options.worldProvider;
     if (options.eventBus !== undefined) this.eventBus = options.eventBus;
     if (options.getLocalPlayerId !== undefined) this.getLocalPlayerIdFn = options.getLocalPlayerId;
-    console.log('[InputManager] After updateDependencies: game is now', !!this.game);
   }
 
   /**
@@ -484,7 +483,10 @@ export class InputManager {
 
   private handleKeyDown(e: KeyboardEvent): void {
     // Skip if typing in an input field
-    if ((e.target as HTMLElement).tagName === 'INPUT' || (e.target as HTMLElement).tagName === 'TEXTAREA') {
+    if (
+      (e.target as HTMLElement).tagName === 'INPUT' ||
+      (e.target as HTMLElement).tagName === 'TEXTAREA'
+    ) {
       return;
     }
 
@@ -553,7 +555,7 @@ export class InputManager {
     const dragDistance = this.dragStart
       ? Math.sqrt(
           Math.pow(containerPos.x - this.dragStart.x, 2) +
-          Math.pow(containerPos.y - this.dragStart.y, 2)
+            Math.pow(containerPos.y - this.dragStart.y, 2)
         )
       : 0;
 
