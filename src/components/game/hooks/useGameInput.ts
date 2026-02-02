@@ -70,7 +70,7 @@ export function useGameInput({
   cameraRef,
   gameRef,
   worldProviderRef,
-  eventBusRef: _eventBusRef,
+  eventBusRef,
   isGameInitialized,
   placementPreviewRef,
   wallPlacementPreviewRef: _wallPlacementPreviewRef,
@@ -155,6 +155,32 @@ export function useGameInput({
       eventBus: gameRef.current?.eventBus,
     });
   }, [cameraRef, gameRef, worldProviderRef, isGameInitialized]);
+
+  // =============================================================================
+  // VISUAL FEEDBACK EVENT FORWARDING
+  // =============================================================================
+
+  // Forward visual feedback events from game.eventBus to bridge.eventBus
+  // OverlayScene (Phaser) listens on bridge.eventBus for ground click indicators
+  useEffect(() => {
+    const gameEventBus = gameRef.current?.eventBus;
+    const bridgeEventBus = eventBusRef?.current;
+
+    // Only set up forwarding if both event buses exist and are different
+    if (!gameEventBus || !bridgeEventBus || gameEventBus === bridgeEventBus) return;
+
+    // Forward ground click visual feedback events
+    const forwardMoveGround = (data: unknown) => bridgeEventBus.emit('command:moveGround', data);
+    const forwardAttackGround = (data: unknown) => bridgeEventBus.emit('command:attackGround', data);
+
+    gameEventBus.on('command:moveGround', forwardMoveGround);
+    gameEventBus.on('command:attackGround', forwardAttackGround);
+
+    return () => {
+      gameEventBus.off('command:moveGround', forwardMoveGround);
+      gameEventBus.off('command:attackGround', forwardAttackGround);
+    };
+  }, [gameRef, eventBusRef, isGameInitialized]);
 
   // Update building handler with placement preview
   useEffect(() => {
