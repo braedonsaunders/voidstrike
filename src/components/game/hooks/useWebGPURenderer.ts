@@ -325,7 +325,7 @@ export function useWebGPURenderer({
       game.setTerrainGrid(currentMap.terrain);
       game.setDecorationCollisions(environment.getRockCollisions());
 
-      onProgress(55, 'Generating navigation mesh');
+      onProgress(65, 'Generating navigation mesh');
 
       // Generate navmesh
       debugInitialization.log('[useWebGPURenderer] Generating walkable geometry...');
