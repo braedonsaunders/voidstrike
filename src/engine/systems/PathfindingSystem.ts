@@ -486,8 +486,11 @@ export class PathfindingSystem extends System {
     if (success) {
       debugPathfinding.log('[PathfindingSystem] NavMesh ready');
 
-      // Cache geometry for worker
-      this.cachedNavMeshGeometry = { positions, indices };
+      // Cache geometry for worker - clone arrays to avoid issues if originals are transferred elsewhere
+      this.cachedNavMeshGeometry = {
+        positions: new Float32Array(positions),
+        indices: new Uint32Array(indices),
+      };
 
       // Send geometry to worker only if WASM is already initialized
       // Otherwise, handleWorkerMessage will send it when WASM init completes
