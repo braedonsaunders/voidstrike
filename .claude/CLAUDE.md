@@ -6,6 +6,25 @@ VOIDSTRIKE is a browser-based RTS game built with Next.js 14, Three.js r182, and
 
 **Tech Stack:** Next.js 16 | Three.js (WebGPU/TSL) | TypeScript | ECS Architecture | P2P Multiplayer
 
+### ⚠️ Coordinate System (Non-Standard)
+
+This codebase uses a **non-standard coordinate convention** that differs from Three.js:
+
+| Axis | This Codebase | Three.js Standard |
+|------|---------------|-------------------|
+| `transform.x` | Horizontal (east-west) | Horizontal (east-west) |
+| `transform.y` | **Depth (north-south)** | Vertical (up-down) |
+| `transform.z` | **Altitude (up-down)** | Depth (forward-back) |
+
+**Ground plane = X-Y** (not X-Z as in standard Three.js)
+
+This affects:
+- Vision/fog of war calculations
+- Minimap rendering
+- Any 2D map logic
+
+See `src/rendering/vision/VisionCoordinates.ts` for shared coordinate utilities.
+
 ---
 
 DO NOT CREATE MD FILES UNLESS EXPLICITLY TOLD TO DO SO.
