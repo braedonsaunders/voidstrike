@@ -49,6 +49,7 @@ import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/ga
 import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
 import { useProjectionStore } from '@/store/projectionStore';
 import { setCameraRef } from '@/store/cameraStore';
+import { InputManager } from '@/engine/input';
 import { MapData } from '@/data/maps';
 import { Resource } from '@/engine/components/Resource';
 import { Transform } from '@/engine/components/Transform';
@@ -268,6 +269,12 @@ export function useWebGPURenderer({
       cameraRef.current = camera;
       setCameraRef(camera);
       camera.setScreenDimensions(width, height);
+
+      // Update InputManager with camera so input handlers can convert screen to world coordinates
+      const inputManager = InputManager.getInstanceSync();
+      if (inputManager) {
+        inputManager.updateDependencies({ camera });
+      }
 
       // Preload water texture before creating environment
       await preloadWaterNormals();
