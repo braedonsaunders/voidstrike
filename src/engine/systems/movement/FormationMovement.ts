@@ -242,9 +242,11 @@ export class FormationMovement {
     if (entityIds.length === 1) {
       const entityId = entityIds[0];
       const entity = this.world.getEntity(entityId);
+      console.log('[FormationMovement] Single unit move - entity lookup:', { entityId, found: !!entity });
       if (!entity) return;
 
       const unit = entity.get<Unit>('Unit');
+      console.log('[FormationMovement] Unit component lookup:', { found: !!unit });
       if (!unit) return;
 
       // Validate target for unit's movement domain (prevents boats on land, etc.)
@@ -253,9 +255,15 @@ export class FormationMovement {
         targetPosition.y,
         unit.movementDomain
       );
+      console.log('[FormationMovement] Target validation:', {
+        original: targetPosition,
+        validated: validatedTarget,
+        movementDomain: unit.movementDomain
+      });
 
       // If no valid target can be found, abort the move command
       if (!validatedTarget) {
+        console.warn('[FormationMovement] No valid target found, aborting move');
         return;
       }
 
@@ -269,6 +277,7 @@ export class FormationMovement {
         if (unit.state === 'building' && unit.constructingBuildingId !== null) {
           unit.cancelBuilding();
         }
+        console.log('[FormationMovement] Setting move target:', validatedTarget);
         unit.setMoveTarget(validatedTarget.x, validatedTarget.y);
         unit.path = [];
         unit.pathIndex = 0;
