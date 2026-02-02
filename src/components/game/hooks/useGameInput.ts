@@ -170,15 +170,17 @@ export function useGameInput({
     if (!gameEventBus || !bridgeEventBus || gameEventBus === bridgeEventBus) return;
 
     // Forward ground click visual feedback events
-    const forwardMoveGround = (data: unknown) => bridgeEventBus.emit('command:moveGround', data);
-    const forwardAttackGround = (data: unknown) => bridgeEventBus.emit('command:attackGround', data);
-
-    gameEventBus.on('command:moveGround', forwardMoveGround);
-    gameEventBus.on('command:attackGround', forwardAttackGround);
+    // EventBus.on() returns an unsubscribe function
+    const unsubMoveGround = gameEventBus.on('command:moveGround', (data: unknown) => {
+      bridgeEventBus.emit('command:moveGround', data);
+    });
+    const unsubAttackGround = gameEventBus.on('command:attackGround', (data: unknown) => {
+      bridgeEventBus.emit('command:attackGround', data);
+    });
 
     return () => {
-      gameEventBus.off('command:moveGround', forwardMoveGround);
-      gameEventBus.off('command:attackGround', forwardAttackGround);
+      unsubMoveGround();
+      unsubAttackGround();
     };
   }, [gameRef, eventBusRef, isGameInitialized]);
 
