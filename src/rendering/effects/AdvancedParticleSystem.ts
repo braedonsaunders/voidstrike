@@ -276,7 +276,7 @@ export class AdvancedParticleSystem {
   // Uniforms for TSL soft particles
   private timeUniform: { value: number };
   private lightDirUniform: { value: THREE.Vector3 };
-  private depthTextureUniform: ReturnType<typeof uniform>;
+  private depthTextureNode: ReturnType<typeof texture>; // TextureNode with .sample() method
   private softnessUniform: ReturnType<typeof uniform>;
   private cameraNearUniform: ReturnType<typeof uniform>;
   private cameraFarUniform: ReturnType<typeof uniform>;
@@ -348,7 +348,7 @@ export class AdvancedParticleSystem {
     );
     placeholderDepth.needsUpdate = true;
 
-    this.depthTextureUniform = uniform(placeholderDepth);
+    this.depthTextureNode = texture(placeholderDepth);
     this.softnessUniform = uniform(0.5); // Default softness
     this.cameraNearUniform = uniform(0.1);
     this.cameraFarUniform = uniform(1000.0);
@@ -506,7 +506,7 @@ export class AdvancedParticleSystem {
    */
   private createSoftParticleMaterial(): MeshBasicNodeMaterial {
     const glowTex = this.glowTexture;
-    const depthTex = this.depthTextureUniform;
+    const depthTex = this.depthTextureNode;
     const softness = this.softnessUniform;
     const near = this.cameraNearUniform;
     const far = this.cameraFarUniform;
@@ -563,7 +563,8 @@ export class AdvancedParticleSystem {
    * Should be called with the scene's depth buffer texture
    */
   public setDepthTexture(depthTexture: THREE.Texture): void {
-    this.depthTextureUniform.value = depthTexture;
+    // Update the TextureNode's internal texture reference
+    (this.depthTextureNode as any).value = depthTexture;
   }
 
   /**
