@@ -35,7 +35,7 @@ function createTestState(overrides: Partial<AIStateSnapshot> = {}): AIStateSnaps
       hard: { targetWorkers: 60 },
       very_hard: { targetWorkers: 70 },
       insane: { targetWorkers: 80 },
-    } as any,
+    } as FactionAIConfig['difficultyConfig'],
   };
 
   return {
@@ -236,7 +236,11 @@ describe('evaluateCondition', () => {
   describe('edge cases', () => {
     it('returns false for unknown condition type', () => {
       const state = createTestState();
-      const condition = { type: 'unknownType', operator: '>', value: 0 } as unknown as RuleCondition;
+      const condition = {
+        type: 'unknownType',
+        operator: '>',
+        value: 0,
+      } as unknown as RuleCondition;
       expect(evaluateCondition(condition, state)).toBe(false);
     });
 
@@ -431,9 +435,7 @@ describe('calculateUtilityScore', () => {
     const state = createTestState({ minerals: 500 });
     const utility: UtilityScore = {
       baseScore: 100,
-      conditions: [
-        { type: 'minerals', operator: '>', value: 400, multiplier: 2 },
-      ],
+      conditions: [{ type: 'minerals', operator: '>', value: 400, multiplier: 2 }],
     };
 
     expect(calculateUtilityScore(utility, state)).toBe(200);
@@ -443,9 +445,7 @@ describe('calculateUtilityScore', () => {
     const state = createTestState({ minerals: 100 });
     const utility: UtilityScore = {
       baseScore: 100,
-      conditions: [
-        { type: 'minerals', operator: '>', value: 400, multiplier: 2 },
-      ],
+      conditions: [{ type: 'minerals', operator: '>', value: 400, multiplier: 2 }],
     };
 
     expect(calculateUtilityScore(utility, state)).toBe(100);
@@ -468,9 +468,7 @@ describe('calculateUtilityScore', () => {
     const state = createTestState({ enemyAirUnits: 5 });
     const utility: UtilityScore = {
       baseScore: 100,
-      conditions: [
-        { type: 'enemyAirUnits', operator: '>', value: 0, multiplier: 0.5 },
-      ],
+      conditions: [{ type: 'enemyAirUnits', operator: '>', value: 0, multiplier: 0.5 }],
     };
 
     expect(calculateUtilityScore(utility, state)).toBe(50);
@@ -520,14 +518,14 @@ describe('dominion AI macro rules', () => {
 
     const supplyCost = BUILDING_DEFINITIONS.supply_cache.mineralCost;
     const supplyRules = config!.macroRules.filter(
-      rule => rule.action.type === 'build' && rule.action.targetId === 'supply_cache'
+      (rule) => rule.action.type === 'build' && rule.action.targetId === 'supply_cache'
     );
 
     expect(supplyRules.length).toBeGreaterThan(0);
 
     for (const rule of supplyRules) {
       const mineralCondition = rule.conditions.find(
-        condition => condition.type === 'minerals' && condition.operator === '>='
+        (condition) => condition.type === 'minerals' && condition.operator === '>='
       );
       expect(mineralCondition).toBeDefined();
       expect(mineralCondition!.value).toBeGreaterThanOrEqual(supplyCost);

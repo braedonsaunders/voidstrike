@@ -127,7 +127,7 @@ interface ThreatInfo {
 }
 
 // State
-let config: AIWorkerConfig = {};
+let _config: AIWorkerConfig = {};
 let unitPriorities: Record<string, number> = DEFAULT_UNIT_PRIORITY;
 let threatWeights = THREAT_WEIGHTS;
 let focusFireThreshold = 0.3;
@@ -139,7 +139,7 @@ let initialized = false;
  */
 function init(workerConfig: AIWorkerConfig): boolean {
   try {
-    config = workerConfig;
+    _config = workerConfig;
     unitPriorities = workerConfig.unitPriorities || DEFAULT_UNIT_PRIORITY;
     threatWeights = workerConfig.threatWeights || THREAT_WEIGHTS;
     focusFireThreshold = workerConfig.focusFireThreshold ?? 0.3;
@@ -282,8 +282,17 @@ function calculateKitePosition(
     // Random direction if too close
     const angle = Math.random() * Math.PI * 2;
     return {
-      x: Math.max(2, Math.min(mapWidth - 2, unit.x + Math.cos(angle) * unit.attackRange * kiteDistanceMultiplier)),
-      y: Math.max(2, Math.min(mapHeight - 2, unit.y + Math.sin(angle) * unit.attackRange * kiteDistanceMultiplier)),
+      x: Math.max(
+        2,
+        Math.min(mapWidth - 2, unit.x + Math.cos(angle) * unit.attackRange * kiteDistanceMultiplier)
+      ),
+      y: Math.max(
+        2,
+        Math.min(
+          mapHeight - 2,
+          unit.y + Math.sin(angle) * unit.attackRange * kiteDistanceMultiplier
+        )
+      ),
     };
   }
 
@@ -360,7 +369,11 @@ function shouldTransform(
     if (nearbyGroundEnemies > 0 && nearbyAirEnemies === 0) {
       return { shouldTransform: true, targetMode: 'assault' };
     }
-    if (nearbyGroundEnemies >= 3 && nearbyAirEnemies <= 1 && groundThreatScore > airThreatScore * 2) {
+    if (
+      nearbyGroundEnemies >= 3 &&
+      nearbyAirEnemies <= 1 &&
+      groundThreatScore > airThreatScore * 2
+    ) {
       return { shouldTransform: true, targetMode: 'assault' };
     }
   } else {
@@ -368,7 +381,11 @@ function shouldTransform(
     if (nearbyAirEnemies > 0 && nearbyGroundEnemies === 0) {
       return { shouldTransform: true, targetMode: 'fighter' };
     }
-    if (nearbyAirEnemies >= 2 && nearbyGroundEnemies <= 1 && airThreatScore > groundThreatScore * 2) {
+    if (
+      nearbyAirEnemies >= 2 &&
+      nearbyGroundEnemies <= 1 &&
+      airThreatScore > groundThreatScore * 2
+    ) {
       return { shouldTransform: true, targetMode: 'fighter' };
     }
   }
@@ -389,7 +406,7 @@ function shouldSwitchTarget(
   if (unit.targetEntityId === bestTargetId) return false;
 
   // Find current target
-  const currentTarget = enemies.find(e => e.id === unit.targetEntityId);
+  const currentTarget = enemies.find((e) => e.id === unit.targetEntityId);
   if (!currentTarget || currentTarget.health <= 0) return true;
 
   const currentHealthPercent = currentTarget.health / currentTarget.maxHealth;
@@ -398,7 +415,7 @@ function shouldSwitchTarget(
   if (currentHealthPercent < focusFireThreshold) return false;
 
   // Find better target
-  const betterTarget = enemies.find(e => e.id === bestTargetId);
+  const betterTarget = enemies.find((e) => e.id === bestTargetId);
   if (!betterTarget) return false;
 
   const betterHealthPercent = betterTarget.health / betterTarget.maxHealth;
@@ -465,7 +482,13 @@ function evaluateMicro(
     // Check if should kite
     const kite = shouldKite(unit, enemyUnits);
     if (kite.shouldKite && kite.kiteFromX !== undefined && kite.kiteFromY !== undefined) {
-      const kitePos = calculateKitePosition(unit, kite.kiteFromX, kite.kiteFromY, mapWidth, mapHeight);
+      const kitePos = calculateKitePosition(
+        unit,
+        kite.kiteFromX,
+        kite.kiteFromY,
+        mapWidth,
+        mapHeight
+      );
       decisions.push({
         unitId: unit.id,
         action: 'kite',

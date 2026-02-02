@@ -150,7 +150,7 @@ describe('DefinitionValidator', () => {
 
     it('rejects manifest with missing id', () => {
       const manifest = createValidFactionManifest();
-      delete (manifest as any).id;
+      delete (manifest as Record<string, unknown>).id;
 
       const result = validator.validateFactionManifest(manifest);
       expect(result.valid).toBe(false);
@@ -822,7 +822,11 @@ describe('DefinitionValidator', () => {
     it('warns for invalid effect target reference', () => {
       const { units, buildings, research, abilities } = createTestData();
       research.research1.effects = [
-        { type: 'damage_bonus', value: 1, targets: ['nonexistent_target'] } as any,
+        {
+          type: 'damage_bonus',
+          value: 1,
+          targets: ['nonexistent_target'],
+        } as ResearchDefinition['effects'][number],
       ];
 
       const result = validator.validateReferences(units, buildings, research, abilities);
@@ -874,7 +878,9 @@ describe('DefinitionValidator', () => {
 
     it('handles effects without targets', () => {
       const { units, buildings, research, abilities } = createTestData();
-      research.research1.effects = [{ type: 'damage_bonus', value: 1 } as any];
+      research.research1.effects = [
+        { type: 'damage_bonus', value: 1 } as ResearchDefinition['effects'][number],
+      ];
 
       const result = validator.validateReferences(units, buildings, research, abilities);
       expect(result.valid).toBe(true);
