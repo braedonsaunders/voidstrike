@@ -9,9 +9,10 @@
  * COORDINATE SYSTEM (must match CPU fallback in FogOfWar.ts):
  * - See VisionCoordinates.ts for shared coordinate mapping utilities
  * - caster.x = world X (horizontal)
- * - caster.y = world Y (depth/north-south, NOT altitude)
+ * - caster.y = game's transform.y (depth/north-south, NOT altitude)
  * - Grid cell (cellX, cellY) maps to texture pixel (cellX, cellY) - NO Y-FLIP
- * - Shader UV: visionV = worldY / mapHeight (NOT worldZ)
+ * - Fog shader (EffectPasses.ts): uses Three.js worldZ for depth after camera reconstruction
+ *   (Game transform.y → Three.js position.z → worldZ in shader)
  *
  * Architecture:
  * - Storage buffer: Unit positions + sight ranges packed as vec4(x, y, sightRadius, playerId)
@@ -160,7 +161,9 @@ export class VisionCompute {
       this.gpuComputeAvailable = true;
       this.useCPUFallback = false;
 
-      debugShaders.log(`[VisionCompute] GPU compute initialized (${this.gridWidth}x${this.gridHeight} grid)`);
+      debugShaders.log(
+        `[VisionCompute] GPU compute initialized (${this.gridWidth}x${this.gridHeight} grid)`
+      );
       debugShaders.log('[GPU Vision] INITIALIZED with temporal smoothing');
     } catch (e) {
       const errorMsg = e instanceof Error ? e.message : String(e);
@@ -428,7 +431,9 @@ export class VisionCompute {
 
         if (!this.gpuComputeVerified) {
           this.gpuComputeVerified = true;
-          debugShaders.log(`[VisionCompute] GPU compute verified with temporal smoothing (${count} casters)`);
+          debugShaders.log(
+            `[VisionCompute] GPU compute verified with temporal smoothing (${count} casters)`
+          );
         }
       } catch (e) {
         const errorMsg = e instanceof Error ? e.message : String(e);
@@ -458,8 +463,8 @@ export class VisionCompute {
 
     // Return the buffer that was just written (current)
     return isA
-      ? this.visionTexturesB.get(playerId) ?? null
-      : this.visionTexturesA.get(playerId) ?? null;
+      ? (this.visionTexturesB.get(playerId) ?? null)
+      : (this.visionTexturesA.get(playerId) ?? null);
   }
 
   /**

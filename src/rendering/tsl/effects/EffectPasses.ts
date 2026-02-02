@@ -770,13 +770,12 @@ export function createFogOfWarPass(
     const worldZ = worldPos4.z;
 
     // Convert world position to vision grid UV
-    // In Three.js world space: worldZ is depth (north-south), worldY is altitude
-    // Vision grid: y=0 is south, y=max is north
-    // Texture: row 0 is UV v=0, row max is UV v=1
-    // Without flip: moving south (Z increases) → V increases → samples north
-    // With flip: moving south (Z increases) → V decreases → samples south ✓
+    // Game: transform.y = depth → Three.js position.z → worldZ after reconstruction
+    // Vision grid: visionGrid[cellY] where cellY = floor(worldZ / cellSize)
+    // Texture: row cellY stored at pixel y = cellY, UV v = cellY / gridHeight
+    // Therefore: visionV = worldZ / mapHeight (NO FLIP)
     const visionU = worldX.div(uMapDimensions.x);
-    const visionV = float(1.0).sub(worldZ.div(uMapDimensions.y)); // Flip V
+    const visionV = worldZ.div(uMapDimensions.y);
     const visionUV = vec2(visionU, visionV).toVar();
 
     // Clamp to valid range
