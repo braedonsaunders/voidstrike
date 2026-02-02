@@ -203,6 +203,7 @@ export function useWorkerBridge({
         aiEnabled: false, // AI runs in worker
       });
       gameRef.current = game;
+      console.log('[useWorkerBridge] Game instance created and assigned to gameRef.current:', !!game);
 
       // Set terrain data on game instance
       game.setTerrainGrid(currentMap.terrain);
@@ -220,7 +221,9 @@ export function useWorkerBridge({
       }
 
       // Forward commands to worker via WorkerBridge
+      console.log('[useWorkerBridge] Setting command callback to forward to WorkerBridge');
       game.setCommandCallback((command) => {
+        console.log('[useWorkerBridge] Command callback invoked:', command.type, command.entityIds);
         bridge.issueCommand(command);
       });
 
