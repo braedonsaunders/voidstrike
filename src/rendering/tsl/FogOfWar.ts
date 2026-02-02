@@ -15,7 +15,7 @@
  */
 
 import * as THREE from 'three';
-import { VisionSystem } from '@/engine/systems/VisionSystem';
+import { VisionSystem, VISION_UNEXPLORED, VISION_EXPLORED, VISION_VISIBLE } from '@/engine/systems/VisionSystem';
 import { VisionCompute } from '@/rendering/compute/VisionCompute';
 import { isSpectatorMode } from '@/store/gameSetupStore';
 import { getConsoleEngineSync } from '@/engine/debug/ConsoleEngine';
@@ -239,6 +239,87 @@ export class TSLFogOfWar {
         this.cpuTextureData[i * 4 + 1] = Math.round(targetVisible * 255);  // G - visible
         this.cpuTextureData[i * 4 + 2] = Math.round(velocity * 255);       // B - velocity
         this.cpuTextureData[i * 4 + 3] = Math.round(newSmooth * 255);      // A - smooth
+      }
+    }
+
+    this.cpuFogTexture.needsUpdate = true;
+  }
+
+  /**
+   * Update from serialized vision data (for worker mode)
+   * This method is used when vision data comes from RenderState instead of VisionSystem
+   * @param serializedData Uint8Array with vision states (0=unexplored, 1=explored, 2=visible)
+   */
+  public updateFromSerializedData(serializedData: Uint8Array): void {
+    if (!this.enabled || !this.playerId) return;
+
+    // In spectator mode, fog is disabled
+    if (isSpectatorMode()) {
+      return;
+    }
+
+    // Check if fog is disabled via debug console
+    const consoleEngine = getConsoleEngineSync();
+    if (consoleEngine?.getFlag('fogDisabled')) {
+      return;
+    }
+
+    // Throttle updates
+    const now = performance.now();
+    if (now - this.lastUpdateTime < this.updateInterval) {
+      return;
+    }
+    this.lastUpdateTime = now;
+
+    // Verify data size matches grid
+    const expectedSize = this.gridWidth * this.gridHeight;
+    if (serializedData.length !== expectedSize) {
+      debugShaders.warn(`[FogOfWar] Serialized data size mismatch: expected ${expectedSize}, got ${serializedData.length}`);
+      return;
+    }
+
+    // Update CPU texture from serialized data with temporal smoothing
+    for (let y = 0; y < this.gridHeight; y++) {
+      for (let x = 0; x < this.gridWidth; x++) {
+        // Flip Y for texture coordinates
+        const textureY = this.gridHeight - 1 - y;
+        const textureIndex = textureY * this.gridWidth + x;
+        const dataIndex = y * this.gridWidth + x;
+        const state = serializedData[dataIndex];
+
+        // Current visibility (target)
+        let targetVisible: number;
+        let targetExplored: number;
+
+        switch (state) {
+          case VISION_VISIBLE:
+            targetVisible = 1.0;
+            targetExplored = 1.0;
+            break;
+          case VISION_EXPLORED:
+            targetVisible = 0.0;
+            targetExplored = 1.0;
+            break;
+          case VISION_UNEXPLORED:
+          default:
+            targetVisible = 0.0;
+            targetExplored = 0.0;
+            break;
+        }
+
+        // Temporal smoothing
+        const prevSmooth = this.prevVisibility[textureIndex];
+        const newSmooth = prevSmooth + (targetVisible - prevSmooth) * this.temporalBlendSpeed;
+        this.prevVisibility[textureIndex] = newSmooth;
+
+        // Velocity (for edge effects)
+        const velocity = (targetVisible - prevSmooth) * 0.5 + 0.5; // Normalized to 0-1
+
+        // Write RGBA values (0-255)
+        this.cpuTextureData[textureIndex * 4 + 0] = Math.round(targetExplored * 255); // R - explored
+        this.cpuTextureData[textureIndex * 4 + 1] = Math.round(targetVisible * 255);  // G - visible
+        this.cpuTextureData[textureIndex * 4 + 2] = Math.round(velocity * 255);       // B - velocity
+        this.cpuTextureData[textureIndex * 4 + 3] = Math.round(newSmooth * 255);      // A - smooth
       }
     }
 

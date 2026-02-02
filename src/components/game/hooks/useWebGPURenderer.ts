@@ -46,6 +46,7 @@ import {
 import { useUIStore, FIXED_RESOLUTIONS } from '@/store/uiStore';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
+import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
 import { useProjectionStore } from '@/store/projectionStore';
 import { setCameraRef } from '@/store/cameraStore';
 import { MapData } from '@/data/maps';
@@ -402,10 +403,14 @@ export function useWebGPURenderer({
       resourceRendererRef.current = new ResourceRenderer(scene, getWorldProvider(), terrain);
 
       // Create fog of war
-      // In worker mode, fog of war visibility comes from RenderState, not visionSystem
-      if (fogOfWarEnabled && !isSpectatorMode() && !worldProviderRef?.current) {
+      // In worker mode, vision data comes from RenderState.visionGrids
+      // In non-worker mode, vision data comes from VisionSystem directly
+      if (fogOfWarEnabled && !isSpectatorMode()) {
         const fogOfWar = new TSLFogOfWar({ mapWidth, mapHeight });
-        fogOfWar.setVisionSystem(game.visionSystem);
+        // Only set vision system in non-worker mode
+        if (!worldProviderRef?.current) {
+          fogOfWar.setVisionSystem(game.visionSystem);
+        }
         fogOfWar.setPlayerId(localPlayerId);
         fogOfWarRef.current = fogOfWar;
       }
@@ -763,13 +768,35 @@ export function useWebGPURenderer({
         resourceTime = performance.now() - t;
 
         t = performance.now();
-        fogOfWarRef.current?.update();
+        // In worker mode, update fog of war from RenderState vision data
+        if (worldProviderRef?.current && fogOfWarRef.current) {
+          const localPlayerId = getLocalPlayerId();
+          if (localPlayerId) {
+            const visionData = RenderStateWorldAdapter.getInstance().getVisionDataForPlayer(localPlayerId);
+            if (visionData) {
+              fogOfWarRef.current.updateFromSerializedData(visionData);
+            }
+          }
+        } else {
+          fogOfWarRef.current?.update();
+        }
         fogTime = performance.now() - t;
       } else {
         unitRendererRef.current?.update();
         buildingRendererRef.current?.update();
         resourceRendererRef.current?.update();
-        fogOfWarRef.current?.update();
+        // In worker mode, update fog of war from RenderState vision data
+        if (worldProviderRef?.current && fogOfWarRef.current) {
+          const localPlayerId = getLocalPlayerId();
+          if (localPlayerId) {
+            const visionData = RenderStateWorldAdapter.getInstance().getVisionDataForPlayer(localPlayerId);
+            if (visionData) {
+              fogOfWarRef.current.updateFromSerializedData(visionData);
+            }
+          }
+        } else {
+          fogOfWarRef.current?.update();
+        }
       }
 
       // Update post-processing fog of war
