@@ -69,10 +69,12 @@ export class CommandInputHandler implements InputHandler {
 
       switch (commandMode) {
         case 'attack':
+          // Use ATTACK_MOVE when clicking ground (no target entity)
+          // This ensures MovementOrchestrator handles pathfinding
           game.issueCommand({
             tick: game.getCurrentTick(),
             playerId: localPlayer,
-            type: 'ATTACK',
+            type: 'ATTACK_MOVE',
             entityIds: selectedUnits,
             targetPosition: targetPos,
             queue: state.modifiers.shift,
