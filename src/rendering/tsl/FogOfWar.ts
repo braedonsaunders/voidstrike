@@ -21,6 +21,7 @@ import { isSpectatorMode } from '@/store/gameSetupStore';
 import { getConsoleEngineSync } from '@/engine/debug/ConsoleEngine';
 import { debugShaders } from '@/utils/debugLogger';
 import { clamp } from '@/utils/math';
+import { gridToTextureIndex } from '@/rendering/vision/VisionCoordinates';
 
 export interface TSLFogOfWarConfig {
   mapWidth: number;
@@ -201,8 +202,8 @@ export class TSLFogOfWar {
     // Update CPU texture from vision grid with temporal smoothing
     for (let y = 0; y < this.gridHeight; y++) {
       for (let x = 0; x < this.gridWidth; x++) {
-        // No Y-flip - matches GPU path (VisionCompute) which writes directly to (cellX, cellY)
-        const i = y * this.gridWidth + x;
+        // Use shared coordinate mapping (no Y-flip, matches GPU path)
+        const i = gridToTextureIndex(x, y, this.gridWidth);
         const state = visionGrid[y]?.[x] ?? 'unexplored';
 
         // Current visibility (target)
@@ -280,8 +281,8 @@ export class TSLFogOfWar {
     // Update CPU texture from serialized data with temporal smoothing
     for (let y = 0; y < this.gridHeight; y++) {
       for (let x = 0; x < this.gridWidth; x++) {
-        // No Y-flip - matches GPU path (VisionCompute)
-        const textureIndex = y * this.gridWidth + x;
+        // Use shared coordinate mapping (no Y-flip, matches GPU path)
+        const textureIndex = gridToTextureIndex(x, y, this.gridWidth);
         const dataIndex = y * this.gridWidth + x;
         const state = serializedData[dataIndex];
 

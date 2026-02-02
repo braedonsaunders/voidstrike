@@ -6,6 +6,13 @@
  *
  * Performance: 1000+ vision casters at 60Hz instead of hundreds at 2Hz.
  *
+ * COORDINATE SYSTEM (must match CPU fallback in FogOfWar.ts):
+ * - See VisionCoordinates.ts for shared coordinate mapping utilities
+ * - caster.x = world X (horizontal)
+ * - caster.y = world Y (depth/north-south, NOT altitude)
+ * - Grid cell (cellX, cellY) maps to texture pixel (cellX, cellY) - NO Y-FLIP
+ * - Shader UV: visionV = worldY / mapHeight (NOT worldZ)
+ *
  * Architecture:
  * - Storage buffer: Unit positions + sight ranges packed as vec4(x, y, sightRadius, playerId)
  * - Storage texture: RGBA per cell per player
