@@ -183,7 +183,7 @@ export class Game extends GameCore {
             if (command.playerId !== legacySlotId) {
               console.error(
                 `[Game] SECURITY: Rejected command with invalid playerId. ` +
-                `Valid slot IDs: [${validRemoteSlotIds.join(', ')}], Got: ${command.playerId}`
+                  `Valid slot IDs: [${validRemoteSlotIds.join(', ')}], Got: ${command.playerId}`
               );
               this.eventBus.emit('security:spoofedPlayerId', {
                 expectedPlayerId: validRemoteSlotIds.join(', '),
@@ -202,7 +202,7 @@ export class Game extends GameCore {
           if (command.tick < minTick || command.tick > maxTick) {
             console.error(
               `[Game] SECURITY: Rejected command with invalid tick. ` +
-              `Current: ${this.currentTick}, Command tick: ${command.tick}`
+                `Current: ${this.currentTick}, Command tick: ${command.tick}`
             );
             this.eventBus.emit('security:invalidCommandTick', {
               playerId: command.playerId,
@@ -216,7 +216,10 @@ export class Game extends GameCore {
           debugNetworking.log('[Game] Received remote command for tick', command.tick);
           this.queueCommandWithReceipt(command);
         } else if (message.commandType && message.data) {
-          debugNetworking.log('[Game] Received remote command (event format):', message.commandType);
+          debugNetworking.log(
+            '[Game] Received remote command (event format):',
+            message.commandType
+          );
           this.eventBus.emit(message.commandType, message.data);
         }
       } else if (message.type === 'quit') {
@@ -245,37 +248,43 @@ export class Game extends GameCore {
     addMultiplayerMessageHandler(this.multiplayerMessageHandler);
 
     // Wire local checksum events to network transmission
-    this.eventBus.on('checksum:computed', (data: {
-      tick: number;
-      checksum: number;
-      unitCount: number;
-      buildingCount: number;
-      resourceSum: number;
-    }) => {
-      sendMultiplayerMessage({
-        type: 'checksum' as const,
-        payload: { ...data, peerId: this.config.playerId },
-      });
-    });
+    this.eventBus.on(
+      'checksum:computed',
+      (data: {
+        tick: number;
+        checksum: number;
+        unitCount: number;
+        buildingCount: number;
+        resourceSum: number;
+      }) => {
+        sendMultiplayerMessage({
+          type: 'checksum' as const,
+          payload: { ...data, peerId: this.config.playerId },
+        });
+      }
+    );
   }
 
   private setupDesyncHandler(): void {
-    this.eventBus.on('desync:detected', (data: {
-      tick: number;
-      localChecksum: number;
-      remoteChecksum: number;
-      remotePeerId: string;
-    }) => {
-      console.error(`[Game] DESYNC at tick ${data.tick}!`);
-      reportDesync(data.tick);
-      this.eventBus.emit('multiplayer:desync', {
-        tick: data.tick,
-        localChecksum: data.localChecksum,
-        remoteChecksum: data.remoteChecksum,
-        message: `Game desynchronized at tick ${data.tick}.`,
-      });
-      this.state = 'ended';
-    });
+    this.eventBus.on(
+      'desync:detected',
+      (data: {
+        tick: number;
+        localChecksum: number;
+        remoteChecksum: number;
+        remotePeerId: string;
+      }) => {
+        console.error(`[Game] DESYNC at tick ${data.tick}!`);
+        reportDesync(data.tick);
+        this.eventBus.emit('multiplayer:desync', {
+          tick: data.tick,
+          localChecksum: data.localChecksum,
+          remoteChecksum: data.remoteChecksum,
+          message: `Game desynchronized at tick ${data.tick}.`,
+        });
+        this.state = 'ended';
+      }
+    );
   }
 
   private setupReconnectionHandler(): void {
@@ -304,8 +313,13 @@ export class Game extends GameCore {
       if (config.mapWidth) Game.instance.config.mapWidth = config.mapWidth;
       if (config.mapHeight) Game.instance.config.mapHeight = config.mapHeight;
 
-      if (Game.instance.config.mapWidth !== oldWidth || Game.instance.config.mapHeight !== oldHeight) {
-        debugInitialization.log(`[Game] DIMENSION CHANGE: ${oldWidth}x${oldHeight} -> ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}`);
+      if (
+        Game.instance.config.mapWidth !== oldWidth ||
+        Game.instance.config.mapHeight !== oldHeight
+      ) {
+        debugInitialization.log(
+          `[Game] DIMENSION CHANGE: ${oldWidth}x${oldHeight} -> ${Game.instance.config.mapWidth}x${Game.instance.config.mapHeight}`
+        );
         Game.instance.pathfindingSystem.reinitialize(
           Game.instance.config.mapWidth,
           Game.instance.config.mapHeight
@@ -339,7 +353,7 @@ export class Game extends GameCore {
 
     this.state = 'initializing';
     const countdownDuration = 4000;
-    const scheduledStartTime = gameStartTime ?? (Date.now() + countdownDuration);
+    const scheduledStartTime = gameStartTime ?? Date.now() + countdownDuration;
 
     const startGameLoop = () => {
       if (this.startMutex || this.state === 'running') return;
@@ -440,8 +454,8 @@ export class Game extends GameCore {
           // Timeout - report desync and proceed anyway to avoid infinite hang
           console.error(
             `[Game] LOCKSTEP TIMEOUT: No commands from all players for tick ${nextTick} ` +
-            `after waiting ${ticksWaited} ticks. Expected: ${this.getExpectedPlayerIds().join(', ')}, ` +
-            `Received: ${Array.from(this.tickCommandReceipts.get(nextTick) || []).join(', ')}`
+              `after waiting ${ticksWaited} ticks. Expected: ${this.getExpectedPlayerIds().join(', ')}, ` +
+              `Received: ${Array.from(this.tickCommandReceipts.get(nextTick) || []).join(', ')}`
           );
           reportDesync(nextTick);
           this.eventBus.emit('desync:detected', {
@@ -663,12 +677,9 @@ export class Game extends GameCore {
   public issueCommand(command: GameCommand): void {
     // Forward commands to worker for processing
     if (this.commandCallback) {
-      console.log('[Game] Forwarding command to worker:', command.type, command.entityIds);
       this.commandCallback(command);
       return;
     }
-
-    console.warn('[Game] No command callback set, command will process locally');
     if (isMultiplayerMode()) {
       const executionTick = this.currentTick + this.currentCommandDelay;
       command.tick = executionTick;
@@ -752,7 +763,7 @@ export class Game extends GameCore {
       const staleCommands = this.commandQueue.get(tick);
       console.error(
         `[Game] CRITICAL: Stale commands for tick ${tick} ` +
-        `(current: ${this.currentTick}). Commands from: ${staleCommands?.map(c => c.playerId).join(', ')}`
+          `(current: ${this.currentTick}). Commands from: ${staleCommands?.map((c) => c.playerId).join(', ')}`
       );
       reportDesync(tick);
       this.eventBus.emit('desync:detected', {
@@ -795,7 +806,7 @@ export class Game extends GameCore {
       if (selectable.playerId !== command.playerId) {
         console.error(
           `[Game] AUTHORIZATION FAILED: Player ${command.playerId} ` +
-          `tried to control entity ${entityId} owned by ${selectable.playerId}`
+            `tried to control entity ${entityId} owned by ${selectable.playerId}`
         );
         this.eventBus.emit('security:unauthorizedCommand', {
           playerId: command.playerId,

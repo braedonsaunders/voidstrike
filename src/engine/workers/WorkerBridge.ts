@@ -140,10 +140,7 @@ export class WorkerBridge {
   private async _initialize(): Promise<void> {
     debugInitialization.log('[WorkerBridge] _initialize() starting');
     // Create the worker
-    this.worker = new Worker(
-      new URL('./GameWorker.ts', import.meta.url),
-      { type: 'module' }
-    );
+    this.worker = new Worker(new URL('./GameWorker.ts', import.meta.url), { type: 'module' });
     debugInitialization.log('[WorkerBridge] Worker created:', !!this.worker);
 
     // Set up message handler
@@ -218,8 +215,12 @@ export class WorkerBridge {
         const renderState = deserializeRenderState(message.state);
 
         // Debug: log first render state with entities
-        if (!this.hasLoggedFirstRenderState &&
-            (renderState.units.length > 0 || renderState.buildings.length > 0 || renderState.resources.length > 0)) {
+        if (
+          !this.hasLoggedFirstRenderState &&
+          (renderState.units.length > 0 ||
+            renderState.buildings.length > 0 ||
+            renderState.resources.length > 0)
+        ) {
           debugInitialization.log('[WorkerBridge] First renderState message received:', {
             tick: renderState.tick,
             units: renderState.units.length,
@@ -360,9 +361,15 @@ export class WorkerBridge {
   // ============================================================================
 
   public start(): void {
-    debugInitialization.log('[WorkerBridge] start() called', { initialized: this._initialized, running: this._running, hasWorker: !!this.worker });
+    debugInitialization.log('[WorkerBridge] start() called', {
+      initialized: this._initialized,
+      running: this._running,
+      hasWorker: !!this.worker,
+    });
     if (!this._initialized || this._running) {
-      debugInitialization.log('[WorkerBridge] start() early return - already running or not initialized');
+      debugInitialization.log(
+        '[WorkerBridge] start() early return - already running or not initialized'
+      );
       return;
     }
     this._running = true;
@@ -392,14 +399,19 @@ export class WorkerBridge {
 
   public issueCommand(command: GameCommand): void {
     if (!this._initialized) {
-      console.warn('[WorkerBridge] issueCommand called before initialization, command dropped:', command.type);
+      console.warn(
+        '[WorkerBridge] issueCommand called before initialization, command dropped:',
+        command.type
+      );
       return;
     }
     if (!this.worker) {
-      console.warn('[WorkerBridge] issueCommand called but worker is null, command dropped:', command.type);
+      console.warn(
+        '[WorkerBridge] issueCommand called but worker is null, command dropped:',
+        command.type
+      );
       return;
     }
-    console.log('[WorkerBridge] Posting command to worker:', command.type, command.entityIds);
     this.worker.postMessage({ type: 'command', command } satisfies MainToWorkerMessage);
   }
 
@@ -426,7 +438,9 @@ export class WorkerBridge {
     );
   }
 
-  public setDecorationCollisions(collisions: Array<{ x: number; z: number; radius: number }>): void {
+  public setDecorationCollisions(
+    collisions: Array<{ x: number; z: number; radius: number }>
+  ): void {
     this.worker?.postMessage({ type: 'setDecorations', collisions } satisfies MainToWorkerMessage);
   }
 
@@ -448,7 +462,10 @@ export class WorkerBridge {
    * When disabled, zero overhead - no timing, no messages.
    */
   public setPerformanceCollection(enabled: boolean): void {
-    this.worker?.postMessage({ type: 'setPerformanceCollection', enabled } satisfies MainToWorkerMessage);
+    this.worker?.postMessage({
+      type: 'setPerformanceCollection',
+      enabled,
+    } satisfies MainToWorkerMessage);
   }
 
   // ============================================================================
@@ -459,9 +476,19 @@ export class WorkerBridge {
    * Spawn initial entities based on map data.
    * Sends map spawn/resource data to worker for entity creation.
    */
-  public spawnInitialEntities(mapData: MapData, playerSlots?: Array<{ id: string; type: 'human' | 'ai' | 'empty'; faction: string; aiDifficulty?: 'easy' | 'medium' | 'hard' | 'insane'; team?: number }>): void {
+  public spawnInitialEntities(
+    mapData: MapData,
+    playerSlots?: Array<{
+      id: string;
+      type: 'human' | 'ai' | 'empty';
+      faction: string;
+      aiDifficulty?: 'easy' | 'medium' | 'hard' | 'insane';
+      team?: number;
+    }>
+  ): void {
     // Convert expansions to flat resource array
-    const resources: Array<{ type: 'mineral' | 'vespene'; x: number; y: number; amount?: number }> = [];
+    const resources: Array<{ type: 'mineral' | 'vespene'; x: number; y: number; amount?: number }> =
+      [];
     for (const expansion of mapData.expansions) {
       for (const mineral of expansion.minerals) {
         resources.push({
@@ -490,7 +517,10 @@ export class WorkerBridge {
       watchTowers: mapData.watchTowers,
       playerSlots,
     };
-    this.worker?.postMessage({ type: 'spawnEntities', mapData: spawnData } satisfies MainToWorkerMessage);
+    this.worker?.postMessage({
+      type: 'spawnEntities',
+      mapData: spawnData,
+    } satisfies MainToWorkerMessage);
   }
 
   // ============================================================================
@@ -498,14 +528,22 @@ export class WorkerBridge {
   // ============================================================================
 
   public setSelection(entityIds: number[], playerId: string): void {
-    this.worker?.postMessage({ type: 'setSelection', entityIds, playerId } satisfies MainToWorkerMessage);
+    this.worker?.postMessage({
+      type: 'setSelection',
+      entityIds,
+      playerId,
+    } satisfies MainToWorkerMessage);
 
     // Also emit locally for UI update
     this.eventBus.emit('selection:changed', { entityIds, playerId });
   }
 
   public setControlGroup(groupNumber: number, entityIds: number[]): void {
-    this.worker?.postMessage({ type: 'setControlGroup', groupNumber, entityIds } satisfies MainToWorkerMessage);
+    this.worker?.postMessage({
+      type: 'setControlGroup',
+      groupNumber,
+      entityIds,
+    } satisfies MainToWorkerMessage);
   }
 
   // ============================================================================
@@ -551,7 +589,7 @@ export class WorkerBridge {
     if (!this._renderState) return [];
     if (!entityIds) return this._renderState.units;
     const idSet = new Set(entityIds);
-    return this._renderState.units.filter(u => idSet.has(u.id));
+    return this._renderState.units.filter((u) => idSet.has(u.id));
   }
 
   /**
@@ -561,7 +599,7 @@ export class WorkerBridge {
     if (!this._renderState) return [];
     if (!entityIds) return this._renderState.buildings;
     const idSet = new Set(entityIds);
-    return this._renderState.buildings.filter(b => idSet.has(b.id));
+    return this._renderState.buildings.filter((b) => idSet.has(b.id));
   }
 
   /**
@@ -595,26 +633,30 @@ export class WorkerBridge {
   /**
    * Get player resources
    */
-  public getPlayerResources(playerId: string): { minerals: number; vespene: number; supply: number; maxSupply: number } | undefined {
+  public getPlayerResources(
+    playerId: string
+  ): { minerals: number; vespene: number; supply: number; maxSupply: number } | undefined {
     return this._renderState?.playerResources.get(playerId);
   }
 
   /**
    * Get entity by ID (searches all entity types)
    */
-  public getEntityById(entityId: number): UnitRenderState | BuildingRenderState | ResourceRenderState | null {
+  public getEntityById(
+    entityId: number
+  ): UnitRenderState | BuildingRenderState | ResourceRenderState | null {
     if (!this._renderState) return null;
 
     // Search units
-    const unit = this._renderState.units.find(u => u.id === entityId);
+    const unit = this._renderState.units.find((u) => u.id === entityId);
     if (unit) return unit;
 
     // Search buildings
-    const building = this._renderState.buildings.find(b => b.id === entityId);
+    const building = this._renderState.buildings.find((b) => b.id === entityId);
     if (building) return building;
 
     // Search resources
-    const resource = this._renderState.resources.find(r => r.id === entityId);
+    const resource = this._renderState.resources.find((r) => r.id === entityId);
     if (resource) return resource;
 
     return null;

@@ -20,7 +20,11 @@ import { preloadWaterNormals } from '@/rendering/WaterMesh';
 import { UnitRenderer } from '@/rendering/UnitRenderer';
 import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
-import { BattleEffectsRenderer, AdvancedParticleSystem, VehicleEffectsSystem } from '@/rendering/effects';
+import {
+  BattleEffectsRenderer,
+  AdvancedParticleSystem,
+  VehicleEffectsSystem,
+} from '@/rendering/effects';
 import { RallyPointRenderer } from '@/rendering/RallyPointRenderer';
 import { WatchTowerRenderer } from '@/rendering/WatchTowerRenderer';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
@@ -47,6 +51,7 @@ import { useUIStore, FIXED_RESOLUTIONS } from '@/store/uiStore';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
+import type { WorkerBridge } from '@/engine/workers/WorkerBridge';
 import { useProjectionStore } from '@/store/projectionStore';
 import { setCameraRef } from '@/store/cameraStore';
 import { InputManager } from '@/engine/input';
@@ -88,6 +93,8 @@ export interface UseWebGPURendererProps {
   canvasRef: RefObject<HTMLCanvasElement | null>;
   containerRef: RefObject<HTMLDivElement | null>;
   gameRef: MutableRefObject<Game | null>;
+  /** Worker bridge for sending navmesh data to worker */
+  workerBridgeRef: MutableRefObject<WorkerBridge | null>;
   /** World provider for entity queries - if provided, uses this instead of game.world */
   worldProviderRef?: MutableRefObject<IWorldProvider | null>;
   /** Event bus for subscribing to game events - if provided, uses this instead of game.eventBus */
@@ -111,6 +118,7 @@ export function useWebGPURenderer({
   canvasRef,
   containerRef,
   gameRef,
+  workerBridgeRef,
   worldProviderRef,
   eventBusRef,
   getGameTime: getGameTimeProp,
@@ -217,7 +225,8 @@ export function useWebGPURenderer({
     if (!game) return false;
 
     // Helper to get world provider (uses worldProviderRef if available, falls back to game.world)
-    const getWorldProvider = (): IWorldProvider => worldProviderRef?.current ?? (game.world as unknown as IWorldProvider);
+    const getWorldProvider = (): IWorldProvider =>
+      worldProviderRef?.current ?? (game.world as unknown as IWorldProvider);
     // Helper to get event bus (uses eventBusRef if available, falls back to game.eventBus)
     const getEventBus = (): EventBus => eventBusRef?.current ?? game.eventBus;
 
@@ -288,17 +297,17 @@ export function useWebGPURenderer({
 
       // Position camera at player spawn
       const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
-      const playerSpawn =
-        currentMap.spawns?.find((s) => s.playerSlot === localPlayerSlot) ||
-        currentMap.spawns?.[0] ||
-        { x: mapWidth / 2, y: mapHeight / 2 };
+      const playerSpawn = currentMap.spawns?.find((s) => s.playerSlot === localPlayerSlot) ||
+        currentMap.spawns?.[0] || { x: mapWidth / 2, y: mapHeight / 2 };
       camera.setPosition(playerSpawn.x, playerSpawn.y);
       camera.setAngle(0);
 
       // Set up projection store
-      useProjectionStore.getState().setWorldToScreen((worldX: number, worldZ: number, worldY?: number) => {
-        return camera.worldToScreen(worldX, worldZ, worldY);
-      });
+      useProjectionStore
+        .getState()
+        .setWorldToScreen((worldX: number, worldZ: number, worldY?: number) => {
+          return camera.worldToScreen(worldX, worldZ, worldY);
+        });
 
       // Create terrain grid
       const grid = new TerrainGrid(mapWidth, mapHeight, 1);
@@ -334,6 +343,12 @@ export function useWebGPURenderer({
         debugInitialization.error('[useWebGPURenderer] NavMesh initialization failed!');
       }
 
+      // Send navmesh data to worker for pathfinding validation
+      if (workerBridgeRef.current) {
+        debugInitialization.log('[useWebGPURenderer] Sending navmesh data to worker...');
+        workerBridgeRef.current.setNavMesh(walkableGeometry.positions, walkableGeometry.indices);
+      }
+
       // Generate water navmesh for naval units (if map has water)
       debugInitialization.log('[useWebGPURenderer] Generating water geometry...');
       const waterGeometry = terrain.generateWaterGeometry();
@@ -345,6 +360,11 @@ export function useWebGPURenderer({
         if (waterNavMeshSuccess) {
           debugInitialization.log('[useWebGPURenderer] Water navmesh initialized for naval units');
         }
+        // Send water navmesh data to worker for naval pathfinding
+        if (workerBridgeRef.current) {
+          debugInitialization.log('[useWebGPURenderer] Sending water navmesh data to worker...');
+          workerBridgeRef.current.setWaterNavMesh(waterGeometry.positions, waterGeometry.indices);
+        }
       }
 
       const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
@@ -354,7 +374,9 @@ export function useWebGPURenderer({
       onVelocitySetupFailed(() => {
         const currentSettings = useUIStore.getState().graphicsSettings;
         if (currentSettings.antiAliasingMode === 'taa') {
-          debugPostProcessing.warn('[useWebGPURenderer] Auto-switching from TAA to FXAA due to vertex buffer limit');
+          debugPostProcessing.warn(
+            '[useWebGPURenderer] Auto-switching from TAA to FXAA due to vertex buffer limit'
+          );
           useUIStore.getState().setAntiAliasingMode('fxaa');
         }
       });
@@ -363,11 +385,13 @@ export function useWebGPURenderer({
       // In worker mode, worldProviderRef points to RenderStateWorldAdapter
       // visionSystem is null in worker mode - visibility comes from RenderState
       const worldProvider = getWorldProvider();
-      debugInitialization.log(`[useWebGPURenderer] Creating UnitRenderer with worldProvider: ${worldProvider.constructor.name}`);
+      debugInitialization.log(
+        `[useWebGPURenderer] Creating UnitRenderer with worldProvider: ${worldProvider.constructor.name}`
+      );
       unitRendererRef.current = new UnitRenderer(
         scene,
         worldProvider,
-        worldProviderRef?.current ? undefined : (fogOfWarEnabled ? game.visionSystem : undefined),
+        worldProviderRef?.current ? undefined : fogOfWarEnabled ? game.visionSystem : undefined,
         terrain
       );
       if (localPlayerId) {
@@ -395,11 +419,13 @@ export function useWebGPURenderer({
 
       // Create building renderer
       const buildingWorldProvider = getWorldProvider();
-      debugInitialization.log(`[useWebGPURenderer] Creating BuildingRenderer with worldProvider: ${buildingWorldProvider.constructor.name}`);
+      debugInitialization.log(
+        `[useWebGPURenderer] Creating BuildingRenderer with worldProvider: ${buildingWorldProvider.constructor.name}`
+      );
       buildingRendererRef.current = new BuildingRenderer(
         scene,
         buildingWorldProvider,
-        worldProviderRef?.current ? undefined : (fogOfWarEnabled ? game.visionSystem : undefined),
+        worldProviderRef?.current ? undefined : fogOfWarEnabled ? game.visionSystem : undefined,
         terrain
       );
       if (localPlayerId) {
@@ -423,15 +449,15 @@ export function useWebGPURenderer({
       }
 
       // Create battle effects
-      battleEffectsRef.current = new BattleEffectsRenderer(
-        scene,
-        getEventBus(),
-        (x, z) => terrain.getHeightAt(x, z)
+      battleEffectsRef.current = new BattleEffectsRenderer(scene, getEventBus(), (x, z) =>
+        terrain.getHeightAt(x, z)
       );
 
       // Create advanced particle system
       advancedParticlesRef.current = new AdvancedParticleSystem(scene, 15000);
-      advancedParticlesRef.current.setTerrainHeightFunction((x: number, z: number) => terrain.getHeightAt(x, z));
+      advancedParticlesRef.current.setTerrainHeightFunction((x: number, z: number) =>
+        terrain.getHeightAt(x, z)
+      );
       battleEffectsRef.current.setParticleSystem(advancedParticlesRef.current);
 
       // Connect projectile position callback
@@ -445,8 +471,14 @@ export function useWebGPURenderer({
       });
 
       // Create vehicle effects
-      vehicleEffectsRef.current = new VehicleEffectsSystem(game, advancedParticlesRef.current, AssetManager);
-      vehicleEffectsRef.current.setTerrainHeightFunction((x: number, z: number) => terrain.getHeightAt(x, z));
+      vehicleEffectsRef.current = new VehicleEffectsSystem(
+        game,
+        advancedParticlesRef.current,
+        AssetManager
+      );
+      vehicleEffectsRef.current.setTerrainHeightFunction((x: number, z: number) =>
+        terrain.getHeightAt(x, z)
+      );
 
       // Create rally point renderer
       rallyPointRendererRef.current = new RallyPointRenderer(
@@ -458,7 +490,10 @@ export function useWebGPURenderer({
       );
 
       // Create placement preview
-      placementPreviewRef.current = new BuildingPlacementPreview(currentMap, (x: number, y: number) => terrain.getHeightAt(x, y));
+      placementPreviewRef.current = new BuildingPlacementPreview(
+        currentMap,
+        (x: number, y: number) => terrain.getHeightAt(x, y)
+      );
       placementPreviewRef.current.setVespeneGeyserChecker((x: number, y: number) => {
         const world = getWorldProvider();
         const resources = world.getEntitiesWith('Resource', 'Transform');
@@ -475,16 +510,23 @@ export function useWebGPURenderer({
         }
         return false;
       });
-      placementPreviewRef.current.setPlacementValidator((centerX: number, centerY: number, w: number, h: number) => {
-        return game.isValidBuildingPlacement(centerX, centerY, w, h, undefined, true);
-      });
+      placementPreviewRef.current.setPlacementValidator(
+        (centerX: number, centerY: number, w: number, h: number) => {
+          return game.isValidBuildingPlacement(centerX, centerY, w, h, undefined, true);
+        }
+      );
       scene.add(placementPreviewRef.current.group);
 
       // Create wall placement preview
-      wallPlacementPreviewRef.current = new WallPlacementPreview(currentMap, (x: number, y: number) => terrain.getHeightAt(x, y));
-      wallPlacementPreviewRef.current.setPlacementValidator((x: number, y: number, w: number, h: number) => {
-        return game.isValidBuildingPlacement(x, y, w, h, undefined, true);
-      });
+      wallPlacementPreviewRef.current = new WallPlacementPreview(
+        currentMap,
+        (x: number, y: number) => terrain.getHeightAt(x, y)
+      );
+      wallPlacementPreviewRef.current.setPlacementValidator(
+        (x: number, y: number, w: number, h: number) => {
+          return game.isValidBuildingPlacement(x, y, w, h, undefined, true);
+        }
+      );
       scene.add(wallPlacementPreviewRef.current.group);
 
       // Create post-processing pipeline
@@ -557,8 +599,12 @@ export function useWebGPURenderer({
       environmentRef.current?.setParticleDensity(graphicsSettings.particleDensity);
       environmentRef.current?.setEnvironmentMapEnabled(graphicsSettings.environmentMapEnabled);
       environmentRef.current?.setShadowFill(graphicsSettings.shadowFill);
-      environmentRef.current?.setEmissiveDecorationsEnabled(graphicsSettings.emissiveDecorationsEnabled);
-      environmentRef.current?.setEmissiveIntensityMultiplier(graphicsSettings.emissiveIntensityMultiplier);
+      environmentRef.current?.setEmissiveDecorationsEnabled(
+        graphicsSettings.emissiveDecorationsEnabled
+      );
+      environmentRef.current?.setEmissiveIntensityMultiplier(
+        graphicsSettings.emissiveIntensityMultiplier
+      );
 
       // Configure water settings
       environmentRef.current?.setWaterEnabled(graphicsSettings.waterEnabled);
@@ -571,7 +617,9 @@ export function useWebGPURenderer({
       }
 
       // Create overlay manager
-      overlayManagerRef.current = new TSLGameOverlayManager(scene, currentMap, (x, y) => terrain.getHeightAt(x, y));
+      overlayManagerRef.current = new TSLGameOverlayManager(scene, currentMap, (x, y) =>
+        terrain.getHeightAt(x, y)
+      );
       overlayManagerRef.current.setWorld(getWorldProvider());
 
       // Create command queue renderer
@@ -598,7 +646,10 @@ export function useWebGPURenderer({
             targetIsFlying?: boolean;
           }) => {
             if (data.attackerPos && data.targetPos && advancedParticlesRef.current) {
-              const attackerTerrainHeight = terrain.getHeightAt(data.attackerPos.x, data.attackerPos.y);
+              const attackerTerrainHeight = terrain.getHeightAt(
+                data.attackerPos.x,
+                data.attackerPos.y
+              );
               const targetTerrainHeight = terrain.getHeightAt(data.targetPos.x, data.targetPos.y);
 
               const attackerAirborneHeight = data.attackerId
@@ -627,7 +678,11 @@ export function useWebGPURenderer({
       eventUnsubscribersRef.current.push(
         eventBus.on(
           'unit:died',
-          (data: { position?: { x: number; y: number }; isFlying?: boolean; unitType?: string }) => {
+          (data: {
+            position?: { x: number; y: number };
+            isFlying?: boolean;
+            unitType?: string;
+          }) => {
             if (data.position && advancedParticlesRef.current) {
               const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
               const airborneHeight = data.unitType
@@ -646,10 +701,17 @@ export function useWebGPURenderer({
       eventUnsubscribersRef.current.push(
         eventBus.on(
           'building:destroyed',
-          (data: { entityId: number; playerId: string; buildingType: string; position: { x: number; y: number } }) => {
+          (data: {
+            entityId: number;
+            playerId: string;
+            buildingType: string;
+            position: { x: number; y: number };
+          }) => {
             if (advancedParticlesRef.current) {
               const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
-              const isLarge = ['headquarters', 'infantry_bay', 'forge', 'hangar'].includes(data.buildingType);
+              const isLarge = ['headquarters', 'infantry_bay', 'forge', 'hangar'].includes(
+                data.buildingType
+              );
               _deathPos.set(data.position.x, terrainHeight + 1, data.position.y);
               advancedParticlesRef.current.emitExplosion(_deathPos, isLarge ? 2.5 : 1.5);
             }
@@ -659,7 +721,11 @@ export function useWebGPURenderer({
 
       // Create watch tower renderer
       // In worker mode, visionSystem is not available on main thread
-      if (currentMap.watchTowers && currentMap.watchTowers.length > 0 && !worldProviderRef?.current) {
+      if (
+        currentMap.watchTowers &&
+        currentMap.watchTowers.length > 0 &&
+        !worldProviderRef?.current
+      ) {
         game.visionSystem.setWatchTowers(currentMap.watchTowers);
         watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
       }
@@ -674,7 +740,17 @@ export function useWebGPURenderer({
       debugInitialization.error('[useWebGPURenderer] Initialization failed:', error);
       return false;
     }
-  }, [canvasRef, containerRef, gameRef, worldProviderRef, eventBusRef, map, onProgress, onWebGPUDetected, calculateDisplayResolution]);
+  }, [
+    canvasRef,
+    containerRef,
+    gameRef,
+    worldProviderRef,
+    eventBusRef,
+    map,
+    onProgress,
+    onWebGPUDetected,
+    calculateDisplayResolution,
+  ]);
 
   const startAnimationLoop = useCallback(() => {
     const game = gameRef.current;
@@ -685,11 +761,13 @@ export function useWebGPURenderer({
     if (!game || !camera || !scene || !renderContext) return;
 
     // Helper to get world provider (uses worldProviderRef if available, falls back to game.world)
-    const getWorldProvider = (): IWorldProvider => worldProviderRef?.current ?? (game.world as unknown as IWorldProvider);
+    const getWorldProvider = (): IWorldProvider =>
+      worldProviderRef?.current ?? (game.world as unknown as IWorldProvider);
     // Helper to get game time (uses prop if available, falls back to game.getGameTime())
     const getGameTimeValue = (): number => getGameTimeProp?.() ?? game.getGameTime();
     // Helper to check if game is finished (uses prop if available, falls back to game.gameStateSystem)
-    const checkGameFinished = (): boolean => isGameFinishedProp?.() ?? game.gameStateSystem.isGameFinished();
+    const checkGameFinished = (): boolean =>
+      isGameFinishedProp?.() ?? game.gameStateSystem.isGameFinished();
 
     let lastTime = performance.now();
     let lastRenderTime = 0;
@@ -779,7 +857,8 @@ export function useWebGPURenderer({
         if (worldProviderRef?.current && fogOfWarRef.current) {
           const localPlayerId = getLocalPlayerId();
           if (localPlayerId) {
-            const visionData = RenderStateWorldAdapter.getInstance().getVisionDataForPlayer(localPlayerId);
+            const visionData =
+              RenderStateWorldAdapter.getInstance().getVisionDataForPlayer(localPlayerId);
             if (visionData) {
               fogOfWarRef.current.updateFromSerializedData(visionData);
             }
@@ -796,7 +875,8 @@ export function useWebGPURenderer({
         if (worldProviderRef?.current && fogOfWarRef.current) {
           const localPlayerId = getLocalPlayerId();
           if (localPlayerId) {
-            const visionData = RenderStateWorldAdapter.getInstance().getVisionDataForPlayer(localPlayerId);
+            const visionData =
+              RenderStateWorldAdapter.getInstance().getVisionDataForPlayer(localPlayerId);
             if (visionData) {
               fogOfWarRef.current.updateFromSerializedData(visionData);
             }
@@ -847,7 +927,9 @@ export function useWebGPURenderer({
       }
 
       if (DETAILED_TIMING && sceneChildCount > 1500) {
-        debugPerformance.warn(`[LEAK?] Scene has ${sceneChildCount} children - check for object leaks!`);
+        debugPerformance.warn(
+          `[LEAK?] Scene has ${sceneChildCount} children - check for object leaks!`
+        );
       }
 
       // Update overlay manager with selected entities
@@ -900,7 +982,9 @@ export function useWebGPURenderer({
 
       const frameElapsed = performance.now() - frameStart;
       if (DETAILED_TIMING && frameElapsed > 16) {
-        debugPerformance.warn(`[FRAME] Total: ${frameElapsed.toFixed(1)}ms, Render: ${renderElapsed.toFixed(1)}ms`);
+        debugPerformance.warn(
+          `[FRAME] Total: ${frameElapsed.toFixed(1)}ms, Render: ${renderElapsed.toFixed(1)}ms`
+        );
       }
 
       // Update performance metrics once per second
@@ -949,11 +1033,7 @@ export function useWebGPURenderer({
         });
 
         const fps = frameElapsed > 0 ? 1000 / frameElapsed : 60;
-        PerformanceMonitor.updateRenderMetrics(
-          drawCallsThisSecond,
-          trianglesThisSecond,
-          fps
-        );
+        PerformanceMonitor.updateRenderMetrics(drawCallsThisSecond, trianglesThisSecond, fps);
 
         // Reset accumulators for next second
         accumulatedTrianglesRef.current = 0;

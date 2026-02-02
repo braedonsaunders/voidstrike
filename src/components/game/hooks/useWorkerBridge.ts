@@ -55,10 +55,7 @@ export interface UseWorkerBridgeReturn {
   getGameTime: () => number;
 }
 
-export function useWorkerBridge({
-  map,
-  onGameOver,
-}: UseWorkerBridgeProps): UseWorkerBridgeReturn {
+export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseWorkerBridgeReturn {
   // Refs
   const workerBridgeRef = useRef<WorkerBridge | null>(null);
   const eventHandlerRef = useRef<MainThreadEventHandler | null>(null);
@@ -80,7 +77,10 @@ export function useWorkerBridge({
 
   // Handle render state updates from worker
   const handleRenderState = useCallback((state: RenderState) => {
-    if (!firstRenderStateLoggedRef.current && (state.units.length > 0 || state.buildings.length > 0 || state.resources.length > 0)) {
+    if (
+      !firstRenderStateLoggedRef.current &&
+      (state.units.length > 0 || state.buildings.length > 0 || state.resources.length > 0)
+    ) {
       debugInitialization.log('[useWorkerBridge] Received first render state:', {
         tick: state.tick,
         units: state.units.length,
@@ -100,22 +100,23 @@ export function useWorkerBridge({
   }, []);
 
   // Handle game over
-  const handleGameOver = useCallback((winnerId: string | null, reason: string) => {
-    debugInitialization.log(`[useWorkerBridge] Game over: winner=${winnerId}, reason=${reason}`);
-    setIsGameFinished(true);
+  const handleGameOver = useCallback(
+    (winnerId: string | null, reason: string) => {
+      debugInitialization.log(`[useWorkerBridge] Game over: winner=${winnerId}, reason=${reason}`);
+      setIsGameFinished(true);
 
-    // Notify UI of game over
-    const message = winnerId
-      ? `Game over! ${winnerId === getLocalPlayerId() ? 'Victory!' : 'Defeat!'}`
-      : `Game over: ${reason}`;
-    useUIStore.getState().addNotification(
-      winnerId === getLocalPlayerId() ? 'success' : 'warning',
-      message,
-      10000
-    );
+      // Notify UI of game over
+      const message = winnerId
+        ? `Game over! ${winnerId === getLocalPlayerId() ? 'Victory!' : 'Defeat!'}`
+        : `Game over: ${reason}`;
+      useUIStore
+        .getState()
+        .addNotification(winnerId === getLocalPlayerId() ? 'success' : 'warning', message, 10000);
 
-    onGameOver?.(winnerId, reason);
-  }, [onGameOver]);
+      onGameOver?.(winnerId, reason);
+    },
+    [onGameOver]
+  );
 
   // Handle worker errors
   const handleWorkerError = useCallback((message: string, stack?: string) => {
@@ -188,7 +189,9 @@ export function useWorkerBridge({
       eventUnsubscribersRef.current.push(
         bridge.eventBus.on('multiplayer:playerQuit', () => {
           debugNetworking.log('[Game] Remote player quit the game');
-          useUIStore.getState().addNotification('warning', 'Remote player has left the game', 10000);
+          useUIStore
+            .getState()
+            .addNotification('warning', 'Remote player has left the game', 10000);
         })
       );
 
@@ -203,7 +206,6 @@ export function useWorkerBridge({
         aiEnabled: false, // AI runs in worker
       });
       gameRef.current = game;
-      console.log('[useWorkerBridge] Game instance created and assigned to gameRef.current:', !!game);
 
       // Set terrain data on game instance
       game.setTerrainGrid(currentMap.terrain);
@@ -221,9 +223,7 @@ export function useWorkerBridge({
       }
 
       // Forward commands to worker via WorkerBridge
-      console.log('[useWorkerBridge] Setting command callback to forward to WorkerBridge');
       game.setCommandCallback((command) => {
-        console.log('[useWorkerBridge] Command callback invoked:', command.type, command.entityIds);
         bridge.issueCommand(command);
       });
 
@@ -249,9 +249,9 @@ export function useWorkerBridge({
     if (!workerBridgeRef.current) return;
 
     if (!isBattleSimulatorMode()) {
-      const playerSlots = useGameSetupStore.getState().playerSlots.map(slot => ({
+      const playerSlots = useGameSetupStore.getState().playerSlots.map((slot) => ({
         id: slot.id,
-        type: (slot.type === 'open' || slot.type === 'closed') ? 'empty' as const : slot.type,
+        type: slot.type === 'open' || slot.type === 'closed' ? ('empty' as const) : slot.type,
         faction: slot.faction,
         aiDifficulty: slot.aiDifficulty,
         team: slot.team,

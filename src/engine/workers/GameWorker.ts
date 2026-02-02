@@ -96,7 +96,10 @@ export class WorkerGame extends GameCore {
   private pendingEvents: GameEvent[] = [];
 
   // Player resources cache
-  private playerResources: Map<string, { minerals: number; vespene: number; supply: number; maxSupply: number }> = new Map();
+  private playerResources: Map<
+    string,
+    { minerals: number; vespene: number; supply: number; maxSupply: number }
+  > = new Map();
 
   // Player team assignments (0 = FFA, 1-4 = team alliance)
   private playerTeams: Map<string, number> = new Map();
@@ -124,7 +127,12 @@ export class WorkerGame extends GameCore {
     this.tickMs = 1000 / config.tickRate;
 
     // Initialize player resources
-    this.playerResources.set(config.playerId, { minerals: 50, vespene: 0, supply: 0, maxSupply: 0 });
+    this.playerResources.set(config.playerId, {
+      minerals: 50,
+      vespene: 0,
+      supply: 0,
+      maxSupply: 0,
+    });
 
     // Setup event listeners for game events to forward
     this.setupEventListeners();
@@ -224,23 +232,25 @@ export class WorkerGame extends GameCore {
       },
 
       // AI LAYER (conditional)
-      ...(this.config.aiEnabled ? [
-        {
-          name: 'EnhancedAISystem',
-          dependencies: ['CombatSystem', 'ResourceSystem'],
-          factory: () => new EnhancedAISystem(this as any, this.config.aiDifficulty),
-        },
-        {
-          name: 'AIEconomySystem',
-          dependencies: ['EnhancedAISystem'],
-          factory: () => new AIEconomySystem(this as any),
-        },
-        {
-          name: 'AIMicroSystem',
-          dependencies: ['EnhancedAISystem', 'CombatSystem'],
-          factory: () => this.aiMicroSystem,
-        },
-      ] : []),
+      ...(this.config.aiEnabled
+        ? [
+            {
+              name: 'EnhancedAISystem',
+              dependencies: ['CombatSystem', 'ResourceSystem'],
+              factory: () => new EnhancedAISystem(this as any, this.config.aiDifficulty),
+            },
+            {
+              name: 'AIEconomySystem',
+              dependencies: ['EnhancedAISystem'],
+              factory: () => new AIEconomySystem(this as any),
+            },
+            {
+              name: 'AIMicroSystem',
+              dependencies: ['EnhancedAISystem', 'CombatSystem'],
+              factory: () => this.aiMicroSystem,
+            },
+          ]
+        : []),
 
       // META LAYER
       {
@@ -248,11 +258,15 @@ export class WorkerGame extends GameCore {
         dependencies: ['CombatSystem', 'ProductionSystem', 'ResourceSystem'],
         factory: () => this.gameStateSystem,
       },
-      ...(this.config.isMultiplayer && this.checksumSystem ? [{
-        name: 'ChecksumSystem',
-        dependencies: ['GameStateSystem'],
-        factory: () => this.checksumSystem!,
-      }] : []),
+      ...(this.config.isMultiplayer && this.checksumSystem
+        ? [
+            {
+              name: 'ChecksumSystem',
+              dependencies: ['GameStateSystem'],
+              factory: () => this.checksumSystem!,
+            },
+          ]
+        : []),
       {
         name: 'SaveLoadSystem',
         dependencies: ['GameStateSystem'],
@@ -569,7 +583,12 @@ export class WorkerGame extends GameCore {
     }
 
     for (const [playerId, supply] of playerSupply) {
-      const current = this.playerResources.get(playerId) ?? { minerals: 50, vespene: 0, supply: 0, maxSupply: 0 };
+      const current = this.playerResources.get(playerId) ?? {
+        minerals: 50,
+        vespene: 0,
+        supply: 0,
+        maxSupply: 0,
+      };
       current.supply = supply.supply;
       current.maxSupply = supply.maxSupply;
       this.playerResources.set(playerId, current);
@@ -584,11 +603,20 @@ export class WorkerGame extends GameCore {
 
     this.renderStatesSent++;
 
-    if (debugInitialization.isEnabled() && (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0)) {
-      debugInitialization.log(`[GameWorker] sendRenderState #${this.renderStatesSent}: units=${units.length}, buildings=${buildings.length}, resources=${resources.length}`);
+    if (
+      debugInitialization.isEnabled() &&
+      (this.renderStatesSent <= 5 || this.renderStatesSent % 100 === 0)
+    ) {
+      debugInitialization.log(
+        `[GameWorker] sendRenderState #${this.renderStatesSent}: units=${units.length}, buildings=${buildings.length}, resources=${resources.length}`
+      );
     }
 
-    if (debugInitialization.isEnabled() && !this.hasLoggedFirstRenderState && (units.length > 0 || buildings.length > 0 || resources.length > 0)) {
+    if (
+      debugInitialization.isEnabled() &&
+      !this.hasLoggedFirstRenderState &&
+      (units.length > 0 || buildings.length > 0 || resources.length > 0)
+    ) {
       debugInitialization.log('[GameWorker] First render state with entities:', {
         tick: this.currentTick,
         units: units.length,
@@ -613,13 +641,15 @@ export class WorkerGame extends GameCore {
       controlGroups: Array.from(this.controlGroups.entries()),
     };
 
-    postMessage({ type: 'renderState', state: serializedRenderState } satisfies WorkerToMainMessage);
+    postMessage({
+      type: 'renderState',
+      state: serializedRenderState,
+    } satisfies WorkerToMainMessage);
   }
 
   private collectUnitRenderState(): UnitRenderState[] {
     const states: UnitRenderState[] = [];
     const entities = this.world.getEntitiesWith('Transform', 'Unit', 'Health', 'Selectable');
-
 
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
@@ -672,7 +702,7 @@ export class WorkerGame extends GameCore {
         targetY: unit.targetY,
         speed: unit.speed,
         // Command queue (serialized for transfer)
-        commandQueue: unit.commandQueue.map(cmd => ({
+        commandQueue: unit.commandQueue.map((cmd) => ({
           type: cmd.type,
           targetX: cmd.targetX,
           targetY: cmd.targetY,
@@ -886,7 +916,7 @@ export class WorkerGame extends GameCore {
 
     // Get system timings from PerformanceMonitor
     const systemTimings = PerformanceMonitor.getSystemTimings();
-    const timingTuples: Array<[string, number]> = systemTimings.map(t => [t.name, t.duration]);
+    const timingTuples: Array<[string, number]> = systemTimings.map((t) => [t.name, t.duration]);
 
     // Cache for next call (in case update hasn't run)
     this.lastSystemTimings = timingTuples;
@@ -913,7 +943,9 @@ export class WorkerGame extends GameCore {
   public spawnInitialEntities(mapData: SpawnMapData): void {
     // Idempotency guard - prevent duplicate entity spawning
     if (this.entitiesAlreadySpawned) {
-      debugInitialization.log('[GameWorker] spawnInitialEntities called multiple times - skipping duplicate spawn');
+      debugInitialization.log(
+        '[GameWorker] spawnInitialEntities called multiple times - skipping duplicate spawn'
+      );
       return;
     }
     this.entitiesAlreadySpawned = true;
@@ -930,18 +962,19 @@ export class WorkerGame extends GameCore {
         const entity = this.world.createEntity();
         entity
           .add(new Transform(resourceDef.x, resourceDef.y, 0))
-          .add(new Resource(
-            resourceDef.type === 'mineral' ? 'minerals' : 'vespene',
-            resourceDef.amount ?? (resourceDef.type === 'mineral' ? 1500 : 2500)
-          ));
+          .add(
+            new Resource(
+              resourceDef.type === 'mineral' ? 'minerals' : 'vespene',
+              resourceDef.amount ?? (resourceDef.type === 'mineral' ? 1500 : 2500)
+            )
+          );
       }
       debugInitialization.log('[GameWorker] Spawned', mapData.resources.length, 'resources');
     }
 
     // Get active player slots
-    const activeSlots = mapData.playerSlots?.filter(
-      slot => slot.type === 'human' || slot.type === 'ai'
-    ) ?? [];
+    const activeSlots =
+      mapData.playerSlots?.filter((slot) => slot.type === 'human' || slot.type === 'ai') ?? [];
 
     const usedSpawnIndices = new Set<number>();
     const spawns = mapData.spawns ?? [];
@@ -950,7 +983,7 @@ export class WorkerGame extends GameCore {
     for (const slot of activeSlots) {
       const playerNumber = parseInt(slot.id.replace('player', ''), 10);
 
-      let spawnIndex = spawns.findIndex(s => s.playerSlot === playerNumber);
+      let spawnIndex = spawns.findIndex((s) => s.playerSlot === playerNumber);
       if (spawnIndex === -1 || usedSpawnIndices.has(spawnIndex)) {
         spawnIndex = spawns.findIndex((_, idx) => !usedSpawnIndices.has(idx));
       }
@@ -1066,7 +1099,13 @@ export class WorkerGame extends GameCore {
     }
   }
 
-  private spawnUnit(unitType: string, playerId: string, x: number, y: number, teamId: number): void {
+  private spawnUnit(
+    unitType: string,
+    playerId: string,
+    x: number,
+    y: number,
+    teamId: number
+  ): void {
     const unitDef = {
       id: unitType,
       name: 'Fabricator',
@@ -1112,7 +1151,6 @@ export class WorkerGame extends GameCore {
 
 let game: WorkerGame | null = null;
 
-
 if (typeof self !== 'undefined') {
   self.onmessage = async (event: MessageEvent<MainToWorkerMessage>) => {
     const message = event.data;
@@ -1135,7 +1173,10 @@ if (typeof self !== 'undefined') {
           debugInitialization.log('[GameWorker] Received start command');
           if (!game) {
             console.error('[GameWorker] Game not initialized when start called');
-            postMessage({ type: 'error', message: 'Game not initialized' } satisfies WorkerToMainMessage);
+            postMessage({
+              type: 'error',
+              message: 'Game not initialized',
+            } satisfies WorkerToMainMessage);
             return;
           }
           game.start();
@@ -1167,7 +1208,6 @@ if (typeof self !== 'undefined') {
             console.warn('[GameWorker] Received command but game is null:', message.command?.type);
             return;
           }
-          console.log('[GameWorker] Received command:', message.command.type, message.command.entityIds);
           game.issueCommand(message.command);
           break;
         }
@@ -1187,7 +1227,10 @@ if (typeof self !== 'undefined') {
           if (!game) return;
           const success = await game.initializeNavMesh(message.positions, message.indices);
           if (!success) {
-            postMessage({ type: 'error', message: 'Failed to initialize navmesh' } satisfies WorkerToMainMessage);
+            postMessage({
+              type: 'error',
+              message: 'Failed to initialize navmesh',
+            } satisfies WorkerToMainMessage);
           }
           break;
         }
@@ -1248,7 +1291,8 @@ if (typeof self !== 'undefined') {
 
 if (typeof self !== 'undefined') {
   self.onerror = (event) => {
-    const message = typeof event === 'string' ? event : (event as ErrorEvent).message ?? 'Unknown error';
+    const message =
+      typeof event === 'string' ? event : ((event as ErrorEvent).message ?? 'Unknown error');
     let stack: string | undefined;
     if (typeof event === 'object' && event !== null) {
       const errEvent = event as ErrorEvent;
