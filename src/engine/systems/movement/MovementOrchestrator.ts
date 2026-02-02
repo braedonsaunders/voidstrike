@@ -1000,8 +1000,37 @@ export class MovementOrchestrator {
             );
           }
           if (distance > 0.01) {
-            finalVx = (dx / distance) * unit.maxSpeed;
-            finalVy = (dy / distance) * unit.maxSpeed;
+            // Calculate initial direction toward target
+            let fallbackVx = (dx / distance) * unit.maxSpeed;
+            let fallbackVy = (dy / distance) * unit.maxSpeed;
+
+            // Apply building avoidance to prevent going through buildings
+            // This is critical when NavMesh crowd fails - we must still respect obstacles
+            this.pathfinding.calculateBuildingAvoidanceForce(
+              entityId,
+              transform,
+              unit,
+              tempBuildingAvoid,
+              fallbackVx,
+              fallbackVy
+            );
+            fallbackVx += tempBuildingAvoid.x;
+            fallbackVy += tempBuildingAvoid.y;
+
+            // Reduce speed when building avoidance is active to prevent overshooting
+            const avoidMag = Math.sqrt(
+              tempBuildingAvoid.x * tempBuildingAvoid.x +
+              tempBuildingAvoid.y * tempBuildingAvoid.y
+            );
+            if (avoidMag > 0.5) {
+              // Strong avoidance active - reduce speed to allow steering to take effect
+              const speedReduction = Math.max(0.3, 1.0 - avoidMag * 0.3);
+              fallbackVx *= speedReduction;
+              fallbackVy *= speedReduction;
+            }
+
+            finalVx = fallbackVx;
+            finalVy = fallbackVy;
           }
         }
 
@@ -1114,13 +1143,29 @@ export class MovementOrchestrator {
       }
     }
 
-    // Building avoidance - ONLY for non-crowd paths (flying units or crowd unavailable)
-    // When using crowd navigation, the navmesh already routes around buildings.
-    // Adding steering forces on top causes oscillation/vibration at building corners.
+    // Building avoidance - Two modes:
+    // 1. Full steering for non-crowd paths (flying units or crowd unavailable)
+    // 2. Emergency-only for crowd agents (safety net when NavMesh fails)
     if (!USE_RECAST_CROWD || unit.isFlying || !this.pathfinding.isAgentRegistered(entityId)) {
+      // Full building avoidance for non-crowd paths
       this.pathfinding.calculateBuildingAvoidanceForce(entityId, transform, unit, tempBuildingAvoid, finalVx, finalVy);
       finalVx += tempBuildingAvoid.x;
       finalVy += tempBuildingAvoid.y;
+    } else {
+      // Emergency building avoidance for crowd agents - only when very close to building
+      // This is a safety net for when NavMesh obstacles fail to register properly
+      this.pathfinding.calculateBuildingAvoidanceForce(entityId, transform, unit, tempBuildingAvoid, finalVx, finalVy);
+      const avoidMag = Math.sqrt(
+        tempBuildingAvoid.x * tempBuildingAvoid.x +
+        tempBuildingAvoid.y * tempBuildingAvoid.y
+      );
+      // Only apply if strong avoidance is detected (unit is close to building)
+      // This prevents oscillation while still catching penetration cases
+      if (avoidMag > 1.5) {
+        // Apply emergency avoidance with reduced strength to avoid oscillation
+        finalVx += tempBuildingAvoid.x * 0.7;
+        finalVy += tempBuildingAvoid.y * 0.7;
+      }
     }
 
     // Physics pushing

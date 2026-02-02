@@ -14,8 +14,8 @@
     "strengthMoving": 0.15,
     "_strengthMoving_description": "Separation while moving. Very weak - allows extreme clumping during movement.",
 
-    "strengthIdle": 0.8,
-    "_strengthIdle_description": "Separation when idle. Gentle spreading - not jerky adjustments.",
+    "strengthIdle": 1.2,
+    "_strengthIdle_description": "Separation when idle. Increased to prevent clustering after combat.",
 
     "strengthArriving": 1.0,
     "_strengthArriving_description": "Separation at destination. Gentle spread, not sudden explosion.",

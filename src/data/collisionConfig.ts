@@ -87,7 +87,7 @@ const DEFAULT_CONFIG: CollisionConfig = {
     multiplier: 1.0,
     queryRadiusMultiplier: 2.0,
     strengthMoving: 0.15,
-    strengthIdle: 0.8,
+    strengthIdle: 1.2,
     strengthArriving: 1.0,
     strengthCombat: 0.3,
     maxForce: 2.0,

@@ -700,15 +700,25 @@ export class AITacticsManager {
       const idleAssaultUnits = this.getIdleAssaultUnits(ai.playerId, armyUnits);
 
       if (idleAssaultUnits.length > 0) {
-        const command: GameCommand = {
-          tick: currentTick,
-          playerId: ai.playerId,
-          type: 'ATTACK',
-          entityIds: idleAssaultUnits,
-          targetPosition: attackTarget,
-        };
-        this.game.issueAICommand(command);
-        debugAI.log(`[AITactics] ${ai.playerId}: Re-commanding ${idleAssaultUnits.length} idle assault units`);
+        // Spread units around the target to prevent clumping
+        // Each unit gets a slightly different target position in a circle
+        const spreadRadius = 12;
+        for (let i = 0; i < idleAssaultUnits.length; i++) {
+          const angle = (i / idleAssaultUnits.length) * Math.PI * 2;
+          const spreadTarget = {
+            x: attackTarget.x + Math.cos(angle) * spreadRadius,
+            y: attackTarget.y + Math.sin(angle) * spreadRadius,
+          };
+          const command: GameCommand = {
+            tick: currentTick,
+            playerId: ai.playerId,
+            type: 'ATTACK',
+            entityIds: [idleAssaultUnits[i]],
+            targetPosition: spreadTarget,
+          };
+          this.game.issueAICommand(command);
+        }
+        debugAI.log(`[AITactics] ${ai.playerId}: Re-commanding ${idleAssaultUnits.length} idle assault units with spread positions`);
       }
 
       this.lastReCommandTick.set(ai.playerId, currentTick);
@@ -718,23 +728,68 @@ export class AITacticsManager {
     if (ai.lastAttackTick === 0 || currentTick - ai.lastAttackTick >= ai.attackCooldown) {
       ai.lastAttackTick = currentTick;
 
-      const command: GameCommand = {
-        tick: currentTick,
-        playerId: ai.playerId,
-        type: 'ATTACK',
-        entityIds: armyUnits,
-        targetPosition: attackTarget,
-      };
-      this.game.issueAICommand(command);
-
-      debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units${inHuntMode ? ' (HUNT MODE)' : ''}`);
+      if (inHuntMode && armyUnits.length > 1) {
+        // In hunt mode, spread units to surround the target and prevent clumping
+        const spreadRadius = 15;
+        for (let i = 0; i < armyUnits.length; i++) {
+          const angle = (i / armyUnits.length) * Math.PI * 2;
+          const spreadTarget = {
+            x: attackTarget.x + Math.cos(angle) * spreadRadius,
+            y: attackTarget.y + Math.sin(angle) * spreadRadius,
+          };
+          const command: GameCommand = {
+            tick: currentTick,
+            playerId: ai.playerId,
+            type: 'ATTACK',
+            entityIds: [armyUnits[i]],
+            targetPosition: spreadTarget,
+          };
+          this.game.issueAICommand(command);
+        }
+        debugAI.log(`[AITactics] ${ai.playerId}: HUNT MODE - spreading ${armyUnits.length} units around target`);
+      } else {
+        // Regular attack - send all units to same target
+        const command: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'ATTACK',
+          entityIds: armyUnits,
+          targetPosition: attackTarget,
+        };
+        this.game.issueAICommand(command);
+        debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units`);
+      }
     }
 
     // State transition logic
     if (enemyBuildingCount === 0) {
-      ai.state = 'building';
-      this.isEngaged.set(ai.playerId, false);
-      debugAI.log(`[AITactics] ${ai.playerId}: No enemy buildings remaining, returning to build`);
+      // No buildings left - check for remaining enemy units
+      if (this.hasRemainingEnemyUnits(ai)) {
+        // Hunt remaining enemy units
+        const enemyCluster = this.findEnemyUnitCluster(ai);
+        if (enemyCluster) {
+          debugAI.log(
+            `[AITactics] ${ai.playerId}: UNIT HUNT MODE - no buildings, targeting enemy units at ` +
+            `(${enemyCluster.x.toFixed(0)}, ${enemyCluster.y.toFixed(0)})`
+          );
+
+          // Attack-move to enemy unit cluster
+          const command: GameCommand = {
+            tick: currentTick,
+            playerId: ai.playerId,
+            type: 'ATTACK',
+            entityIds: armyUnits,
+            targetPosition: enemyCluster,
+          };
+          this.game.issueAICommand(command);
+        }
+      } else {
+        // Enemy fully eliminated - return units to base and transition to building
+        this.returnUnitsToBase(ai, armyUnits, currentTick);
+        ai.state = 'building';
+        this.isEngaged.set(ai.playerId, false);
+        debugAI.log(`[AITactics] ${ai.playerId}: Enemy eliminated, returning units to base`);
+      }
     } else if (!engaged && !inHuntMode) {
       const disengagedDuration = currentTick - (this.lastEngagementCheck.get(ai.playerId) || 0);
       if (disengagedDuration > 100) {
@@ -1143,6 +1198,71 @@ export class AITacticsManager {
   }
 
   /**
+   * Find enemy units when no buildings remain.
+   * Returns the centroid of the nearest enemy unit cluster, or null if no enemies exist.
+   */
+  private findEnemyUnitCluster(ai: AIPlayer): { x: number; y: number } | null {
+    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+    const enemyPositions: Array<{ x: number; y: number }> = [];
+
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const transform = entity.get<Transform>('Transform')!;
+      const health = entity.get<Health>('Health')!;
+
+      // Skip own units, dead units, and workers
+      if (selectable.playerId === ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (unit.isWorker) continue;
+
+      // Use isEnemy check for proper team handling
+      if (!isEnemy(ai.playerId, selectable.playerId)) continue;
+
+      enemyPositions.push({ x: transform.x, y: transform.y });
+    }
+
+    if (enemyPositions.length === 0) {
+      return null;
+    }
+
+    // Find centroid of enemy positions
+    let sumX = 0;
+    let sumY = 0;
+    for (const pos of enemyPositions) {
+      sumX += pos.x;
+      sumY += pos.y;
+    }
+
+    return {
+      x: sumX / enemyPositions.length,
+      y: sumY / enemyPositions.length,
+    };
+  }
+
+  /**
+   * Check if any enemy units remain (excluding workers).
+   */
+  private hasRemainingEnemyUnits(ai: AIPlayer): boolean {
+    const units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
+
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId === ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (unit.isWorker) continue;
+      if (!isEnemy(ai.playerId, selectable.playerId)) continue;
+
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
    * Find all enemy buildings for map sweeping.
    */
   public findAllEnemyBuildings(ai: AIPlayer): Array<{ x: number; y: number; entityId: number }> {
@@ -1211,5 +1331,113 @@ export class AITacticsManager {
     }
 
     return path.length > 0 ? path : null;
+  }
+
+  /**
+   * Recover stuck assault units that have been cleared from assault mode.
+   * Called in ALL AI states to prevent orphaned units from sitting forever.
+   *
+   * Units that timed out of assault mode (assaultIdleTicks exceeded threshold in CombatSystem)
+   * are now just idle and need to be re-commanded. This method rallies them back to base
+   * so the AI can use them in future attacks.
+   */
+  public recoverStuckAssaultUnits(ai: AIPlayer, currentTick: number): void {
+    const basePos = this.coordinator.findAIBase(ai);
+    if (!basePos) return;
+
+    const rallyPoint = {
+      x: basePos.x + 10,
+      y: basePos.y + 10,
+    };
+
+    const armyUnits = this.getArmyUnits(ai.playerId);
+    const unitsToRecover: number[] = [];
+
+    for (const entityId of armyUnits) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const unit = entity.get<Unit>('Unit');
+      const health = entity.get<Health>('Health');
+      const transform = entity.get<Transform>('Transform');
+      if (!unit || !health || !transform) continue;
+      if (health.isDead()) continue;
+
+      // Find idle units that are NOT in assault mode, NOT holding position,
+      // and are far from the rally point (likely orphaned after assault)
+      const isOrphanedUnit =
+        unit.state === 'idle' &&
+        !unit.isInAssaultMode &&
+        !unit.isHoldingPosition &&
+        unit.targetEntityId === null;
+
+      if (isOrphanedUnit) {
+        const dx = transform.x - rallyPoint.x;
+        const dy = transform.y - rallyPoint.y;
+        const distanceToRally = Math.sqrt(dx * dx + dy * dy);
+
+        // Only recover units that are far from base (likely stuck at enemy position)
+        if (distanceToRally > 40) {
+          unitsToRecover.push(entityId);
+        }
+      }
+    }
+
+    if (unitsToRecover.length > 0) {
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId: ai.playerId,
+        type: 'MOVE',
+        entityIds: unitsToRecover,
+        targetPosition: rallyPoint,
+      };
+      this.game.issueAICommand(command);
+      debugAI.log(
+        `[AITactics] ${ai.playerId}: Recovering ${unitsToRecover.length} orphaned units to rally point`
+      );
+    }
+  }
+
+  /**
+   * Return army units to base after victory/hunt completion.
+   * Clears assault mode on all units and issues move commands to rally point.
+   */
+  private returnUnitsToBase(ai: AIPlayer, armyUnits: number[], currentTick: number): void {
+    const basePos = this.coordinator.findAIBase(ai);
+    if (!basePos) return;
+
+    const rallyPoint = {
+      x: basePos.x + 10,
+      y: basePos.y + 10,
+    };
+
+    // Clear assault mode on all army units
+    for (const entityId of armyUnits) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) continue;
+
+      // Clear assault mode so units don't stay aggressive
+      unit.isInAssaultMode = false;
+      unit.assaultDestination = null;
+      unit.assaultIdleTicks = 0;
+    }
+
+    // Send all units back to rally point
+    if (armyUnits.length > 0) {
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId: ai.playerId,
+        type: 'MOVE',
+        entityIds: armyUnits,
+        targetPosition: rallyPoint,
+      };
+      this.game.issueAICommand(command);
+      debugAI.log(
+        `[AITactics] ${ai.playerId}: Returning ${armyUnits.length} units to base after victory`
+      );
+    }
   }
 }

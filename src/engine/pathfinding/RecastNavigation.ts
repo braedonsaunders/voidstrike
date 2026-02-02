@@ -1474,7 +1474,16 @@ export class RecastNavigation {
     height: number,
     _agentRadius: number = DEFAULT_AGENT_RADIUS
   ): void {
-    if (!this.tileCache || !this.navMesh) return;
+    if (!this.tileCache || !this.navMesh) {
+      // TileCache not available - buildings won't block pathfinding!
+      // This can happen if solo navmesh was generated instead of tilecache navmesh
+      debugPathfinding.warn(
+        `[RecastNavigation] Cannot add obstacle for building ${buildingEntityId}: ` +
+        `TileCache=${!!this.tileCache}, NavMesh=${!!this.navMesh}. ` +
+        `Building will NOT block unit pathfinding!`
+      );
+      return;
+    }
 
     // Remove existing obstacle if present
     if (this.obstacleRefs.has(buildingEntityId)) {
@@ -1523,7 +1532,16 @@ export class RecastNavigation {
     height: number,
     _agentRadius: number = DEFAULT_AGENT_RADIUS
   ): void {
-    if (!this.tileCache || !this.navMesh) return;
+    if (!this.tileCache || !this.navMesh) {
+      // TileCache not available - fall back to cylinder obstacle via addObstacle
+      // which will log its own warning
+      debugPathfinding.warn(
+        `[RecastNavigation] Cannot add box obstacle for building ${buildingEntityId}: ` +
+        `TileCache=${!!this.tileCache}, NavMesh=${!!this.navMesh}. ` +
+        `Building will NOT block unit pathfinding!`
+      );
+      return;
+    }
 
     if (this.obstacleRefs.has(buildingEntityId)) {
       this.removeObstacle(buildingEntityId);
