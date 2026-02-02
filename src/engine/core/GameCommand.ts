@@ -162,12 +162,14 @@ const COMMAND_EVENTS: Record<GameCommandType, string> = {
  * @param command The game command to dispatch
  */
 export function dispatchCommand(eventBus: EventBus, command: GameCommand): void {
+  console.log('[dispatchCommand] Dispatching command:', command.type, command.entityIds);
   // Emit generic command event for logging/debugging
   eventBus.emit('command:received', command);
 
   // Build event payload based on command type
   switch (command.type) {
     case 'MOVE':
+      console.log('[dispatchCommand] Emitting command:move event');
       eventBus.emit(COMMAND_EVENTS.MOVE, command);
       break;
 
