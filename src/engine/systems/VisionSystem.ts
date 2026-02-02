@@ -503,7 +503,7 @@ export class VisionSystem extends System {
 
       casters.push({
         x: transform.x,
-        y: transform.z, // Use Z (depth) not Y (altitude) for 2D vision grid
+        y: transform.y,
         sightRange: unit.sightRange,
         playerId: playerIndex,
       });
@@ -524,7 +524,7 @@ export class VisionSystem extends System {
 
       casters.push({
         x: transform.x,
-        y: transform.z, // Use Z (depth) not Y (altitude) for 2D vision grid
+        y: transform.y,
         sightRange: building.sightRange,
         playerId: playerIndex,
       });
@@ -569,8 +569,8 @@ export class VisionSystem extends System {
         if (!transform || !selectable) continue;
 
         const dx = transform.x - tower.x;
-        const dz = transform.z - tower.y; // tower.y is stored depth, compare with transform.z
-        const distSq = dx * dx + dz * dz;
+        const dy = transform.y - tower.y;
+        const distSq = dx * dx + dy * dy;
 
         if (distSq <= captureRadiusSq) {
           tower.controllingPlayers.add(selectable.playerId);
@@ -699,7 +699,7 @@ export class VisionSystem extends System {
       units.push({
         id: entity.id,
         x: transform.x,
-        y: transform.z, // Use Z (depth) for 2D vision grid
+        y: transform.y,
         sightRange: unit.sightRange,
         playerId: selectable.playerId,
       });
@@ -729,7 +729,7 @@ export class VisionSystem extends System {
       buildings.push({
         id: entity.id,
         x: transform.x,
-        y: transform.z, // Use Z (depth) for 2D vision grid
+        y: transform.y,
         sightRange: building.sightRange,
         playerId: selectable.playerId,
         isOperational: building.isOperational(),
@@ -869,8 +869,8 @@ export class VisionSystem extends System {
         if (!transform || !selectable) continue;
 
         const dx = transform.x - tower.x;
-        const dz = transform.z - tower.y; // tower.y is stored depth, compare with transform.z
-        const distSq = dx * dx + dz * dz;
+        const dy = transform.y - tower.y;
+        const distSq = dx * dx + dy * dy;
 
         if (distSq <= captureRadiusSq) {
           tower.controllingPlayers.add(selectable.playerId);
@@ -896,7 +896,7 @@ export class VisionSystem extends System {
 
     if (!transform || !unit || !selectable) return;
 
-    this.revealArea(selectable.playerId, transform.x, transform.z, unit.sightRange);
+    this.revealArea(selectable.playerId, transform.x, transform.y, unit.sightRange);
   }
 
   private updateBuildingVision(entity: Entity): void {
@@ -909,10 +909,10 @@ export class VisionSystem extends System {
     // Only provide vision if building is operational
     if (!building.isOperational()) return;
 
-    this.revealArea(selectable.playerId, transform.x, transform.z, building.sightRange);
+    this.revealArea(selectable.playerId, transform.x, transform.y, building.sightRange);
   }
 
-  private revealArea(playerId: string, worldX: number, worldZ: number, range: number): void {
+  private revealArea(playerId: string, worldX: number, worldY: number, range: number): void {
     this.ensurePlayerRegistered(playerId);
 
     const visionGrid = this.visionMap.playerVision.get(playerId)!;
@@ -921,7 +921,7 @@ export class VisionSystem extends System {
     const gridHeight = this.visionMap.height;
 
     const cellX = Math.floor(worldX / this.cellSize);
-    const cellY = Math.floor(worldZ / this.cellSize); // cellY maps to worldZ (depth)
+    const cellY = Math.floor(worldY / this.cellSize);
     const cellRange = Math.ceil(range / this.cellSize);
 
     const cellRangeSq = cellRange * cellRange;
@@ -948,7 +948,7 @@ export class VisionSystem extends System {
    */
   private detectCloakedUnitsInArea(
     playerId: string,
-    position: { x: number; y: number }, // y here is actually Z (depth) in world space
+    position: { x: number; y: number },
     radius: number
   ): void {
     const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
@@ -963,21 +963,21 @@ export class VisionSystem extends System {
       if (selectable.playerId === playerId) continue;
       if (!unit.isCloaked) continue;
 
-      // Check if within detection radius (position.y is depth/Z coordinate)
+      // Check if within detection radius
       const dx = transform.x - position.x;
-      const dz = transform.z - position.y; // position.y is Z in 2D map space
-      const distSq = dx * dx + dz * dz;
+      const dy = transform.y - position.y;
+      const distSq = dx * dx + dy * dy;
 
       if (distSq <= radiusSq) {
         // Emit detection event
         this.game.eventBus.emit('unit:detected', {
           entityId: entity.id,
           detectedBy: playerId,
-          position: { x: transform.x, y: transform.z }, // Report 2D map position
+          position: { x: transform.x, y: transform.y },
         });
 
         debugPathfinding.log(
-          `[VisionSystem] Detected cloaked unit ${entity.id} at (${transform.x.toFixed(1)}, ${transform.z.toFixed(1)})`
+          `[VisionSystem] Detected cloaked unit ${entity.id} at (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`
         );
       }
     }
@@ -985,12 +985,12 @@ export class VisionSystem extends System {
 
   // Public API for checking visibility
 
-  public getVisionState(playerId: string, worldX: number, worldZ: number): VisionState {
+  public getVisionState(playerId: string, worldX: number, worldY: number): VisionState {
     const visionGrid = this.visionMap.playerVision.get(playerId);
     if (!visionGrid) return 'unexplored';
 
     const cellX = Math.floor(worldX / this.cellSize);
-    const cellY = Math.floor(worldZ / this.cellSize); // cellY maps to worldZ (depth)
+    const cellY = Math.floor(worldY / this.cellSize);
 
     if (cellX < 0 || cellX >= this.visionMap.width || cellY < 0 || cellY >= this.visionMap.height) {
       return 'unexplored';
@@ -999,12 +999,12 @@ export class VisionSystem extends System {
     return visionGrid[cellY][cellX];
   }
 
-  public isVisible(playerId: string, worldX: number, worldZ: number): boolean {
-    return this.getVisionState(playerId, worldX, worldZ) === 'visible';
+  public isVisible(playerId: string, worldX: number, worldY: number): boolean {
+    return this.getVisionState(playerId, worldX, worldY) === 'visible';
   }
 
-  public isExplored(playerId: string, worldX: number, worldZ: number): boolean {
-    const state = this.getVisionState(playerId, worldX, worldZ);
+  public isExplored(playerId: string, worldX: number, worldY: number): boolean {
+    const state = this.getVisionState(playerId, worldX, worldY);
     return state === 'visible' || state === 'explored';
   }
 

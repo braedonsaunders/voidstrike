@@ -174,13 +174,13 @@ export function Minimap() {
       // Draw resources
       const resources = worldAdapter.getEntitiesWith('Transform', 'Resource');
       for (const entity of resources) {
-        const transform = entity.get('Transform') as { x: number; y: number; z: number } | undefined;
+        const transform = entity.get('Transform') as { x: number; y: number } | undefined;
         const resource = entity.get('Resource') as { resourceType: string } | undefined;
 
         if (!transform || !resource) continue;
 
         const x = transform.x * scale;
-        const y = transform.z * scale; // Use z (depth) for minimap Y
+        const y = transform.y * scale;
 
         ctx.fillStyle = resource.resourceType === 'minerals' ? '#00aaff' : '#00ff66';
         ctx.beginPath();
@@ -191,7 +191,7 @@ export function Minimap() {
       // Draw buildings
       const buildings = worldAdapter.getEntitiesWith('Transform', 'Building', 'Selectable', 'Health');
       for (const entity of buildings) {
-        const transform = entity.get('Transform') as { x: number; y: number; z: number } | undefined;
+        const transform = entity.get('Transform') as { x: number; y: number } | undefined;
         const building = entity.get('Building') as { width: number; height: number; state: string; isComplete?: () => boolean } | undefined;
         const selectable = entity.get('Selectable') as { playerId: string } | undefined;
         const health = entity.get('Health') as { current: number; max: number } | undefined;
@@ -202,13 +202,13 @@ export function Minimap() {
         // Skip enemy buildings that are not visible due to fog of war (unless spectator)
         const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
         if (localPlayer && selectable.playerId !== localPlayer && fogOfWarEnabled && game.visionSystem && !isSpectating) {
-          if (!game.visionSystem.isVisible(localPlayer, transform.x, transform.z)) {
+          if (!game.visionSystem.isVisible(localPlayer, transform.x, transform.y)) {
             continue;
           }
         }
 
         const x = transform.x * scale;
-        const y = transform.z * scale; // Use z (depth) for minimap Y
+        const y = transform.y * scale;
         const w = Math.max(building.width * scale, 4);
         const h = Math.max(building.height * scale, 4);
 
@@ -229,7 +229,7 @@ export function Minimap() {
       // Draw units
       const units = worldAdapter.getEntitiesWith('Transform', 'Unit', 'Selectable', 'Health');
       for (const entity of units) {
-        const transform = entity.get('Transform') as { x: number; y: number; z: number } | undefined;
+        const transform = entity.get('Transform') as { x: number; y: number } | undefined;
         const selectable = entity.get('Selectable') as { playerId: string } | undefined;
         const health = entity.get('Health') as { current: number; max: number } | undefined;
 
@@ -239,13 +239,13 @@ export function Minimap() {
         // Skip enemy units that are not visible due to fog of war (unless spectator)
         const fogEnabled = useGameSetupStore.getState().fogOfWar;
         if (localPlayer && selectable.playerId !== localPlayer && fogEnabled && game.visionSystem && !isSpectating) {
-          if (!game.visionSystem.isVisible(localPlayer, transform.x, transform.z)) {
+          if (!game.visionSystem.isVisible(localPlayer, transform.x, transform.y)) {
             continue;
           }
         }
 
         const x = transform.x * scale;
-        const y = transform.z * scale; // Use z (depth) for minimap Y
+        const y = transform.y * scale;
 
         // Unit color based on player's assigned color
         const unitPlayerHex = getPlayerColor(selectable.playerId);
