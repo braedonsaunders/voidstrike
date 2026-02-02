@@ -857,10 +857,13 @@ export class RenderPipeline {
 
   /**
    * Set fog of war map dimensions for proper world-space calculations
+   * @param width Map width in world units
+   * @param height Map height in world units
+   * @param cellSize Optional cell size for vision grid (default: 2)
    */
-  setFogOfWarMapDimensions(width: number, height: number): void {
+  setFogOfWarMapDimensions(width: number, height: number, cellSize: number = 2): void {
     if (this.fogOfWarPass) {
-      this.fogOfWarPass.uniforms.mapDimensions.value.set(width, height);
+      this.fogOfWarPass.setMapDimensions(width, height, cellSize);
     }
   }
 

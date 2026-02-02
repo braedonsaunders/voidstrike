@@ -659,6 +659,7 @@ export interface FogOfWarPassResult {
   updateTime: (t: number) => void;
   updateCamera: (cam: THREE.PerspectiveCamera) => void;
   applyConfig: (config: Partial<FogOfWarConfig>) => void;
+  setMapDimensions: (width: number, height: number, cellSize?: number) => void;
 }
 
 /**
@@ -1011,6 +1012,18 @@ export function createFogOfWarPass(
     }
   };
 
+  const setMapDimensions = (width: number, height: number, cellSize?: number) => {
+    uMapDimensions.value.set(width, height);
+    if (cellSize !== undefined) {
+      uCellSize.value = cellSize;
+      // Update grid dimensions based on map dimensions and cell size
+      uGridDimensions.value.set(
+        Math.ceil(width / cellSize),
+        Math.ceil(height / cellSize)
+      );
+    }
+  };
+
   return {
     node: fogOfWarNode(),
     uniforms,
@@ -1019,6 +1032,7 @@ export function createFogOfWarPass(
     updateTime,
     updateCamera,
     applyConfig,
+    setMapDimensions,
   };
 }
 
