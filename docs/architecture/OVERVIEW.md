@@ -422,6 +422,8 @@ voidstrike/
 │   │   │   ├── UpscalerNode.ts
 │   │   │   ├── VolumetricFog.ts
 │   │   │   └── WebGPURenderer.ts
+│   │   ├── vision/
+│   │   │   └── VisionCoordinates.ts
 │   │   ├── Biomes.ts
 │   │   ├── BuildingPlacementPreview.ts
 │   │   ├── BuildingRenderer.ts
@@ -592,6 +594,9 @@ voidstrike/
     │   │   └── visionSystem.test.ts
     │   └── workers/ # Web Workers
     │       └── gameWorker.test.ts
+    ├── rendering/ # Rendering systems
+    │   └── vision/
+    │       └── VisionCoordinates.test.ts
     ├── utils/ # Utility functions
     │   ├── BenchmarkRunner.ts
     │   ├── debugLogger.test.ts
