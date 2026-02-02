@@ -18,8 +18,6 @@
 ## ⚠️ Work in Progress
 
 - **Other factions/races** — Additional playable factions beyond Dominion
-- **Naval combat** — Water-based units and naval warfare mechanics
-- **Ramp pathfinding issues** — Units get stuck on terrain transitions
 - **Multiplayer testing** — Stress testing P2P netcode at scale
 
 ---
