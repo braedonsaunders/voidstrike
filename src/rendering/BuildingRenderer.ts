@@ -647,7 +647,7 @@ export class BuildingRenderer {
       // Check visibility for enemy buildings (skip in spectator mode - show all)
       let shouldShow = true;
       if (isEnemy && this.visionSystem && this.playerId) {
-        shouldShow = this.visionSystem.isExplored(this.playerId, transform.x, transform.y);
+        shouldShow = this.visionSystem.isExplored(this.playerId, transform.x, transform.z);
       }
 
       // PERF: Get cached terrain height (buildings rarely move)

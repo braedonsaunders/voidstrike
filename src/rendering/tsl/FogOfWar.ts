@@ -201,9 +201,9 @@ export class TSLFogOfWar {
     // Update CPU texture from vision grid with temporal smoothing
     for (let y = 0; y < this.gridHeight; y++) {
       for (let x = 0; x < this.gridWidth; x++) {
-        // Flip Y for texture coordinates
-        const textureY = this.gridHeight - 1 - y;
-        const i = textureY * this.gridWidth + x;
+        // No Y-flip needed - grid y maps directly to texture row
+        // Grid y=0 (worldZ~0) → texture row 0 (UV v~0)
+        const i = y * this.gridWidth + x;
         const state = visionGrid[y]?.[x] ?? 'unexplored';
 
         // Current visibility (target)
@@ -281,9 +281,9 @@ export class TSLFogOfWar {
     // Update CPU texture from serialized data with temporal smoothing
     for (let y = 0; y < this.gridHeight; y++) {
       for (let x = 0; x < this.gridWidth; x++) {
-        // Flip Y for texture coordinates
-        const textureY = this.gridHeight - 1 - y;
-        const textureIndex = textureY * this.gridWidth + x;
+        // No Y-flip needed - grid y maps directly to texture row
+        // Grid y=0 (worldZ~0) → texture row 0 (UV v~0)
+        const textureIndex = y * this.gridWidth + x;
         const dataIndex = y * this.gridWidth + x;
         const state = serializedData[dataIndex];
 
