@@ -46,11 +46,7 @@ export class GameplayInputHandler implements InputHandler {
   // KEYBOARD INPUT
   // =============================================================================
 
-  onKeyDown(
-    event: KeyboardInputEvent,
-    state: InputState,
-    deps: InputHandlerDependencies
-  ): boolean {
+  onKeyDown(event: KeyboardInputEvent, state: InputState, deps: InputHandlerDependencies): boolean {
     const { key } = event;
     const { game, world, eventBus, camera, getLocalPlayerId } = deps;
 
@@ -101,12 +97,7 @@ export class GameplayInputHandler implements InputHandler {
 
     // Control groups (0-9)
     if (/^[0-9]$/.test(key)) {
-      return this.handleControlGroup(
-        parseInt(key),
-        event.modifiers,
-        world,
-        camera
-      );
+      return this.handleControlGroup(parseInt(key), event.modifiers, world, camera);
     }
 
     return false;
@@ -116,11 +107,7 @@ export class GameplayInputHandler implements InputHandler {
   // KEYBOARD INPUT - KEY UP (for hold-to-show overlays)
   // =============================================================================
 
-  onKeyUp(
-    event: KeyboardInputEvent,
-    _state: InputState,
-    _deps: InputHandlerDependencies
-  ): boolean {
+  onKeyUp(event: KeyboardInputEvent, _state: InputState, _deps: InputHandlerDependencies): boolean {
     const { key } = event;
 
     // Hide attack range when 'a' is released (regardless of alt state)
@@ -148,11 +135,7 @@ export class GameplayInputHandler implements InputHandler {
   // MOUSE INPUT
   // =============================================================================
 
-  onMouseDown(
-    event: MouseInputEvent,
-    state: InputState,
-    deps: InputHandlerDependencies
-  ): boolean {
+  onMouseDown(event: MouseInputEvent, state: InputState, deps: InputHandlerDependencies): boolean {
     const { eventBus, game: _game, getLocalPlayerId: _getLocalPlayerId } = deps;
     const inputManager = InputManager.getInstance();
 
@@ -194,11 +177,7 @@ export class GameplayInputHandler implements InputHandler {
     return false;
   }
 
-  onMouseUp(
-    event: MouseInputEvent,
-    state: InputState,
-    deps: InputHandlerDependencies
-  ): boolean {
+  onMouseUp(event: MouseInputEvent, state: InputState, deps: InputHandlerDependencies): boolean {
     const { eventBus, getLocalPlayerId } = deps;
     const inputManager = InputManager.getInstance();
     const selectionState = inputManager.getSelectionState();
@@ -231,11 +210,7 @@ export class GameplayInputHandler implements InputHandler {
     return false;
   }
 
-  onClick(
-    event: MouseInputEvent,
-    state: InputState,
-    deps: InputHandlerDependencies
-  ): boolean {
+  onClick(event: MouseInputEvent, state: InputState, deps: InputHandlerDependencies): boolean {
     const { eventBus, getLocalPlayerId } = deps;
 
     if (event.button === MouseButton.Left && eventBus) {
@@ -299,18 +274,9 @@ export class GameplayInputHandler implements InputHandler {
   ): boolean {
     const { game, world, eventBus, camera, getLocalPlayerId } = deps;
 
-    console.log('[GameplayInputHandler] handleRightClick called', {
-      hasGame: !!game,
-      hasWorld: !!world,
-      hasEventBus: !!eventBus,
-      hasCamera: !!camera,
-      hasWorldPosition: !!event.worldPosition,
-    });
-
     if (!event.worldPosition || !camera || !world || !eventBus) return false;
 
     const selectedUnits = useGameStore.getState().selectedUnits;
-    console.log('[GameplayInputHandler] selectedUnits:', selectedUnits);
     if (selectedUnits.length === 0) return false;
 
     const queue = state.modifiers.shift;
@@ -417,7 +383,11 @@ export class GameplayInputHandler implements InputHandler {
     }
 
     // Set rally point for grounded production buildings
-    if (groundedProductionBuildingIds.length > 0 && flyingBuildingIds.length === 0 && unitIds.length === 0) {
+    if (
+      groundedProductionBuildingIds.length > 0 &&
+      flyingBuildingIds.length === 0 &&
+      unitIds.length === 0
+    ) {
       let targetId: number | undefined;
       if (clickedEntity) {
         const resource = clickedEntity.get<Resource>('Resource');
@@ -436,13 +406,7 @@ export class GameplayInputHandler implements InputHandler {
     }
 
     // Move units
-    console.log('[GameplayInputHandler] Move command check:', {
-      unitIdsLength: unitIds.length,
-      hasGame: !!game,
-      willIssueMoveCommand: unitIds.length > 0 && !!game,
-    });
     if (unitIds.length > 0 && game) {
-      console.log('[GameplayInputHandler] Issuing MOVE command to game.issueCommand');
       game.issueCommand({
         tick: game.getCurrentTick(),
         playerId: localPlayer,
@@ -564,7 +528,11 @@ export class GameplayInputHandler implements InputHandler {
           store.setLandingMode(true, store.selectedUnits[0]);
           InputManager.getInstance().setContext('landing');
           return true;
-        } else if (building.state === 'complete' && !building.isFlying && building.productionQueue.length === 0) {
+        } else if (
+          building.state === 'complete' &&
+          !building.isFlying &&
+          building.productionQueue.length === 0
+        ) {
           game.issueCommand({
             tick: game.getCurrentTick(),
             playerId: localPlayer,
@@ -714,7 +682,10 @@ export class GameplayInputHandler implements InputHandler {
     const maxScreenRadius = Math.max(resourceScreenRadius, unitScreenRadius, buildingScreenRadius);
     const worldSearchRadius = (maxScreenRadius / zoom) * 1.5 + 5;
 
-    type ClickCandidate = { entity: NonNullable<ReturnType<typeof world.getEntity>>; distance: number };
+    type ClickCandidate = {
+      entity: NonNullable<ReturnType<typeof world.getEntity>>;
+      distance: number;
+    };
     let closestEntity: ClickCandidate | null = null;
 
     // Check units first (priority)
@@ -776,7 +747,8 @@ export class GameplayInputHandler implements InputHandler {
 
       const getTerrainHeightFn = camera.getTerrainHeightFunction();
       const terrainHeight = getTerrainHeightFn?.(transform.x, transform.y) ?? 0;
-      const visualHeight = building.isFlying && building.state === 'flying' ? (selectable.visualHeight ?? 0) : 0;
+      const visualHeight =
+        building.isFlying && building.state === 'flying' ? (selectable.visualHeight ?? 0) : 0;
       const worldY = terrainHeight + visualHeight;
 
       const screenPos = camera.worldToScreen(transform.x, transform.y, worldY);
