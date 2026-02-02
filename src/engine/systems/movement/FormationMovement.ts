@@ -231,6 +231,11 @@ export class FormationMovement {
     targetPosition: { x: number; y: number };
     queue?: boolean;
   }): void {
+    console.log('[FormationMovement] handleMoveCommand received:', {
+      entityIds: data.entityIds,
+      targetPosition: data.targetPosition,
+      queue: data.queue,
+    });
     const { entityIds, targetPosition, queue } = data;
 
     // Single unit always goes directly to target
