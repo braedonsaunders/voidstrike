@@ -770,8 +770,9 @@ export function createFogOfWarPass(
     const worldZ = worldPos4.z;
 
     // Convert world position to vision grid UV
+    // Note: This codebase uses Y as depth (north-south), not Z
     const visionU = worldX.div(uMapDimensions.x);
-    const visionV = worldZ.div(uMapDimensions.y);
+    const visionV = worldY.div(uMapDimensions.y);
     const visionUV = vec2(visionU, visionV).toVar();
 
     // Clamp to valid range
