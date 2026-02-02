@@ -1017,5 +1017,9 @@ export class AICoordinator extends System {
         this.tacticsManager.executeHarassingPhase(ai, currentTick);
         break;
     }
+
+    // Always recover orphaned assault units regardless of AI state
+    // This prevents units from sitting forever after assault mode timeout
+    this.tacticsManager.recoverStuckAssaultUnits(ai, currentTick);
   }
 }

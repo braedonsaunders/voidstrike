@@ -72,6 +72,10 @@ function _getTargetPriority(unitId: string, _unit?: Unit): number {
   return getDefaultTargetPriority(unitId);
 }
 
+// Assault mode timeout - clear assault mode after this many ticks of being idle with no targets
+// 60 ticks = ~3 seconds at 20 ticks/sec - enough time to scan for new targets before giving up
+const ASSAULT_IDLE_TIMEOUT = 60;
+
 export class CombatSystem extends System {
   public readonly name = 'CombatSystem';
   // Priority is set by SystemRegistry based on dependencies (runs after MovementSystem, VisionSystem)
@@ -540,6 +544,17 @@ export class CombatSystem extends System {
           target = this.findBestTargetSpatial(attacker.id, transform, unit);
           // Track idle time for assault mode units
           unit.assaultIdleTicks++;
+
+          // Clear assault mode after timeout if no target found
+          // This allows the AI tactical system to reclaim and re-command these units
+          if (target === null && unit.assaultIdleTicks > ASSAULT_IDLE_TIMEOUT) {
+            unit.isInAssaultMode = false;
+            unit.assaultDestination = null;
+            unit.assaultIdleTicks = 0;
+            debugCombat.log(
+              `[CombatSystem] Unit ${attacker.id} cleared assault mode after ${ASSAULT_IDLE_TIMEOUT} ticks idle`
+            );
+          }
         } else if (unit.state === 'idle' || unit.isHoldingPosition) {
           // For regular idle units, do a fast check for enemies within ATTACK range
           // Uses light throttle (1 tick = ~50ms) for performance while staying responsive
