@@ -298,9 +298,19 @@ export class GameplayInputHandler implements InputHandler {
     deps: InputHandlerDependencies
   ): boolean {
     const { game, world, eventBus, camera, getLocalPlayerId } = deps;
+
+    console.log('[GameplayInputHandler] handleRightClick called', {
+      hasGame: !!game,
+      hasWorld: !!world,
+      hasEventBus: !!eventBus,
+      hasCamera: !!camera,
+      hasWorldPosition: !!event.worldPosition,
+    });
+
     if (!event.worldPosition || !camera || !world || !eventBus) return false;
 
     const selectedUnits = useGameStore.getState().selectedUnits;
+    console.log('[GameplayInputHandler] selectedUnits:', selectedUnits);
     if (selectedUnits.length === 0) return false;
 
     const queue = state.modifiers.shift;
@@ -426,7 +436,13 @@ export class GameplayInputHandler implements InputHandler {
     }
 
     // Move units
+    console.log('[GameplayInputHandler] Move command check:', {
+      unitIdsLength: unitIds.length,
+      hasGame: !!game,
+      willIssueMoveCommand: unitIds.length > 0 && !!game,
+    });
     if (unitIds.length > 0 && game) {
+      console.log('[GameplayInputHandler] Issuing MOVE command to game.issueCommand');
       game.issueCommand({
         tick: game.getCurrentTick(),
         playerId: localPlayer,
@@ -439,6 +455,8 @@ export class GameplayInputHandler implements InputHandler {
         targetPosition: { x: event.worldPosition.x, y: event.worldPosition.z },
         playerId: localPlayer,
       });
+    } else if (unitIds.length > 0 && !game) {
+      console.warn('[GameplayInputHandler] Cannot issue MOVE command - game is null!');
     }
 
     return true;

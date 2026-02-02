@@ -220,11 +220,18 @@ export class InputManager {
     eventBus?: EventBus | null;
     getLocalPlayerId?: () => string | null;
   }): void {
+    console.log('[InputManager] updateDependencies called', {
+      hasGame: !!options.game,
+      hasCamera: !!options.camera,
+      hasWorldProvider: !!options.worldProvider,
+      hasEventBus: !!options.eventBus,
+    });
     if (options.camera !== undefined) this.camera = options.camera;
     if (options.game !== undefined) this.game = options.game;
     if (options.worldProvider !== undefined) this.worldProvider = options.worldProvider;
     if (options.eventBus !== undefined) this.eventBus = options.eventBus;
     if (options.getLocalPlayerId !== undefined) this.getLocalPlayerIdFn = options.getLocalPlayerId;
+    console.log('[InputManager] After updateDependencies: game is now', !!this.game);
   }
 
   /**
