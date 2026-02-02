@@ -219,6 +219,12 @@ export function useWorkerBridge({
         selectionSystem.setPlayerId(localPlayerId);
       }
 
+      // Configure command forwarding for worker mode:
+      // Commands issued through Game.issueCommand should go to WorkerBridge
+      game.setCommandCallback((command) => {
+        bridge.issueCommand(command);
+      });
+
       setIsInitialized(true);
       return true;
     } catch (error) {

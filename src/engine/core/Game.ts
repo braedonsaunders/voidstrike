@@ -117,6 +117,9 @@ export class Game extends GameCore {
   // LOCKSTEP BARRIER: Track when we first started waiting for a tick
   private tickWaitStart: Map<number, number> = new Map();
 
+  // Callback for forwarding commands to worker in worker mode
+  private commandCallback: ((command: GameCommand) => void) | null = null;
+
   private constructor(config: Partial<GameConfig> = {}, statePort?: GameStatePort) {
     super(config);
 
@@ -649,7 +652,21 @@ export class Game extends GameCore {
     }
   }
 
+  /**
+   * Set a callback for forwarding commands to the worker.
+   * In worker mode, commands should go to WorkerBridge instead of being processed locally.
+   */
+  public setCommandCallback(callback: (command: GameCommand) => void): void {
+    this.commandCallback = callback;
+  }
+
   public issueCommand(command: GameCommand): void {
+    // In worker mode, forward commands to worker instead of processing locally
+    if (this.commandCallback) {
+      this.commandCallback(command);
+      return;
+    }
+
     if (isMultiplayerMode()) {
       const executionTick = this.currentTick + this.currentCommandDelay;
       command.tick = executionTick;
