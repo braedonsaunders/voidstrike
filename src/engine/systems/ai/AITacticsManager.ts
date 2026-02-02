@@ -1205,6 +1205,16 @@ export class AITacticsManager {
     const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
     const enemyPositions: Array<{ x: number; y: number }> = [];
 
+    // Get AI's team ID from one of its own units
+    let myTeamId = 0;
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      if (selectable.playerId === ai.playerId) {
+        myTeamId = selectable.teamId;
+        break;
+      }
+    }
+
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const unit = entity.get<Unit>('Unit')!;
@@ -1217,7 +1227,7 @@ export class AITacticsManager {
       if (unit.isWorker) continue;
 
       // Use isEnemy check for proper team handling
-      if (!isEnemy(ai.playerId, selectable.playerId)) continue;
+      if (!isEnemy(ai.playerId, myTeamId, selectable.playerId, selectable.teamId)) continue;
 
       enemyPositions.push({ x: transform.x, y: transform.y });
     }
@@ -1246,6 +1256,16 @@ export class AITacticsManager {
   private hasRemainingEnemyUnits(ai: AIPlayer): boolean {
     const units = this.world.getEntitiesWith('Unit', 'Selectable', 'Health');
 
+    // Get AI's team ID from one of its own units
+    let myTeamId = 0;
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      if (selectable.playerId === ai.playerId) {
+        myTeamId = selectable.teamId;
+        break;
+      }
+    }
+
     for (const entity of units) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const unit = entity.get<Unit>('Unit')!;
@@ -1254,7 +1274,7 @@ export class AITacticsManager {
       if (selectable.playerId === ai.playerId) continue;
       if (health.isDead()) continue;
       if (unit.isWorker) continue;
-      if (!isEnemy(ai.playerId, selectable.playerId)) continue;
+      if (!isEnemy(ai.playerId, myTeamId, selectable.playerId, selectable.teamId)) continue;
 
       return true;
     }
