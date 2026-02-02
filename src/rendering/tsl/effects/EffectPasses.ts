@@ -921,103 +921,89 @@ export function createFogOfWarPass(
 
     // Calculate ray direction for volumetric (camera to world position)
     const cameraPos = uCameraWorldMatrix.mul(vec4(0, 0, 0, 1)).xyz;
-    const rayDir = normalize(vec3(worldX, worldY, worldZ).sub(cameraPos));
+    const pixelWorldPos = vec3(worldX, worldY, worldZ);
+    const rayDir = normalize(pixelWorldPos.sub(cameraPos));
+
+    // Calculate distance to surface for raymarch
+    const surfaceDistance = length(pixelWorldPos.sub(cameraPos));
+    const maxDist = min(surfaceDistance, uVolMaxDistance);
+    const stepSize = maxDist.div(uVolSteps);
+
+    // Base fog density modulated by visibility state (sampled once at surface)
+    // Unexplored = full density, explored = reduced, visible = minimal
+    const baseFogDensity = isUnexplored.mul(1.0).add(exploredAmount.mul(0.3)).mul(uVolFogDensity);
+
+    // Light direction for scattering
+    const cosTheta = dot(rayDir, uVolLightDir);
+    // Henyey-Greenstein phase function (g=0.3 for slight forward scatter)
+    const g = float(0.3);
+    const g2 = g.mul(g);
+    const hgPhase = float(1.0)
+      .sub(g2)
+      .div(
+        float(1.0)
+          .add(g2)
+          .sub(g.mul(2.0).mul(cosTheta))
+          .pow(1.5)
+          .mul(4.0 * Math.PI)
+      );
 
     // Volumetric fog accumulation
     const volTransmittance = float(1.0).toVar();
     const volInScatter = vec3(0.0).toVar();
 
-    // Calculate distance to surface for raymarch
-    const surfaceDistance = length(vec3(worldX, worldY, worldZ).sub(cameraPos));
-    const maxDist = min(surfaceDistance, uVolMaxDistance);
-    const stepSize = maxDist.div(uVolSteps);
-
     // Raymarch loop (max 64 steps for ultra, fewer for high)
-    const stepIdx = int(0).toVar();
+    // NOTE: No texture sampling inside loop - TSL limitation
+    const loopIdx = int(0).toVar();
     Loop(64, () => {
-      // Early exit if we've done enough steps
-      If(stepIdx.greaterThanEqual(uVolSteps), () => {
+      // Early exit when we've done enough steps for current quality
+      If(loopIdx.greaterThanEqual(uVolSteps), () => {
         Break();
       });
 
-      // Current position along ray
-      const t = float(stepIdx).add(0.5).mul(stepSize);
+      // Current position along ray (offset by 0.5 for better sampling)
+      const t = float(loopIdx).add(0.5).mul(stepSize);
       const samplePos = cameraPos.add(rayDir.mul(t));
-
-      // Convert sample position to vision UV
-      const sampleVisionU = samplePos.x.div(uMapDimensions.x);
-      const sampleVisionV = samplePos.z.div(uMapDimensions.y);
-      const sampleVisionUV = clamp(vec2(sampleVisionU, sampleVisionV), 0.001, 0.999);
-
-      // Sample vision at this position
-      const volVisionSample = visionTextureNode.sample(sampleVisionUV);
-      const volExplored = volVisionSample.r;
-      const volVisible = volVisionSample.a
-        .greaterThan(0.0)
-        .select(volVisionSample.a, volVisionSample.g);
-
-      // Fog density based on vision state
-      // Unexplored = full density, explored = partial, visible = none
-      const unexploredDensity = float(1.0).sub(max(volVisible, volExplored));
-      const exploredDensityMod = volExplored.mul(float(1.0).sub(volVisible)).mul(0.3);
-      const totalDensity = unexploredDensity.add(exploredDensityMod);
 
       // Height-based density falloff (fog denser at low heights)
       const heightDensityFactor = exp(samplePos.y.negate().mul(uVolFogHeightFalloff));
-      const localDensity = uVolFogDensity.mul(totalDensity).mul(heightDensityFactor);
 
-      // Cloud noise for variation
-      const volCloudPos = vec3(
-        samplePos.x.mul(uCloudScale),
-        samplePos.z.mul(uCloudScale),
-        uTime.mul(uCloudSpeed)
-      );
-      const volCloudNoise = fbm3(volCloudPos).mul(0.5).add(0.5);
-      const noisyDensity = localDensity.mul(volCloudNoise.mul(0.5).add(0.5));
+      // Animated noise for cloud variation (computed from position)
+      const noiseX = samplePos.x.mul(uCloudScale);
+      const noiseZ = samplePos.z.mul(uCloudScale);
+      const noiseT = uTime.mul(uCloudSpeed);
+      const cloudNoise = fbm3(vec3(noiseX, noiseZ, noiseT))
+        .mul(0.5)
+        .add(0.5);
 
-      // Light scattering (simple directional)
-      const cosTheta = dot(rayDir, uVolLightDir);
-      // Henyey-Greenstein phase (g=0.3 for slight forward scatter)
-      const g = float(0.3);
-      const g2 = g.mul(g);
-      const phase = float(1.0)
-        .sub(g2)
-        .div(
-          float(1.0)
-            .add(g2)
-            .sub(g.mul(2.0).mul(cosTheta))
-            .pow(1.5)
-            .mul(4.0 * Math.PI)
-        );
+      // Local density with all factors
+      const localDensity = baseFogDensity
+        .mul(heightDensityFactor)
+        .mul(cloudNoise.mul(0.5).add(0.75));
 
-      // Accumulate scattering
-      const scatterAmount = noisyDensity.mul(phase).mul(uVolScattering).mul(stepSize);
+      // Accumulate light scattering
+      const scatterAmount = localDensity.mul(hgPhase).mul(uVolScattering).mul(stepSize);
       volInScatter.addAssign(uVolFogColor.mul(scatterAmount).mul(volTransmittance));
 
       // Beer-Lambert absorption
-      volTransmittance.mulAssign(exp(noisyDensity.mul(stepSize).negate()));
+      volTransmittance.mulAssign(exp(localDensity.mul(stepSize).negate()));
 
-      stepIdx.addAssign(1);
+      loopIdx.addAssign(1);
     });
 
-    // Combine volumetric result
+    // Combine volumetric fog result
     const volFogContribution = uVolFogColor.mul(float(1.0).sub(volTransmittance)).add(volInScatter);
+
+    // Blend fog with scene based on transmittance
     const volFinalColor = mix(volFogContribution, sceneColor, volTransmittance);
 
-    // Apply volumetric to explored areas too (lighter fog)
-    const volExploredColor = mix(exploredColor, volFinalColor, float(0.5));
+    // Apply explored darkening to volumetric result
+    const volWithExplored = mix(volFinalColor, exploredColor, exploredAmount.mul(0.5));
 
-    // Select between volumetric and 2D based on quality
-    // For 2D (low/medium): use flat cloud overlay
+    // For 2D (low/medium): apply flat cloud overlay
     finalColor.assign(mix(finalColor, cloudColor, isUnexplored.mul(heightFactor)));
 
-    // For volumetric (high/ultra): blend in raymarched fog
-    const volBlendAmount = float(1.0).sub(volTransmittance);
-    const volResult = mix(sceneColor, volFinalColor, volBlendAmount);
-    // Apply explored darkening to volumetric result
-    const volWithExplored = mix(volResult, volExploredColor, exploredAmount);
-
-    // Choose between 2D and volumetric based on quality
+    // For volumetric (high/ultra): use raymarched fog instead
     finalColor.assign(useVolumetric.select(volWithExplored, finalColor));
 
     // Add rim glow at visibility edges
