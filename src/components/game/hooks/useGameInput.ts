@@ -41,6 +41,8 @@ export interface UseGameInputProps {
   worldProviderRef?: MutableRefObject<IWorldProvider | null>;
   /** Event bus for emitting commands - if provided, uses this instead of game.eventBus */
   eventBusRef?: MutableRefObject<EventBus | null>;
+  /** Signal that game is initialized - triggers InputManager dependency update */
+  isGameInitialized?: boolean;
   placementPreviewRef: MutableRefObject<BuildingPlacementPreview | null>;
   /** @deprecated No longer used - wall placement handled by BuildingInputHandler */
   wallPlacementPreviewRef?: MutableRefObject<WallPlacementPreview | null>;
@@ -68,7 +70,8 @@ export function useGameInput({
   cameraRef,
   gameRef,
   worldProviderRef,
-  eventBusRef,
+  eventBusRef: _eventBusRef,
+  isGameInitialized,
   placementPreviewRef,
   wallPlacementPreviewRef: _wallPlacementPreviewRef,
   overlayManagerRef: _overlayManagerRef,
@@ -114,11 +117,13 @@ export function useGameInput({
     inputManager.registerHandler('landing', buildingHandler);
 
     // Initialize with container
+    // Use game.eventBus for selection events - these are internal to main thread
+    // and SelectionSystem listens on game.eventBus, not bridge.eventBus
     inputManager.initialize(container, {
       camera: cameraRef.current,
       game: gameRef.current,
       worldProvider: worldProviderRef?.current ?? (gameRef.current?.world as unknown as IWorldProvider),
-      eventBus: eventBusRef?.current ?? gameRef.current?.eventBus,
+      eventBus: gameRef.current?.eventBus,
       getLocalPlayerId,
     });
 
@@ -141,13 +146,15 @@ export function useGameInput({
     if (!initializedRef.current) return;
 
     const inputManager = InputManager.getInstance();
+    // Use game.eventBus for selection events - these are internal to main thread
+    // and SelectionSystem listens on game.eventBus, not bridge.eventBus
     inputManager.updateDependencies({
       camera: cameraRef.current,
       game: gameRef.current,
       worldProvider: worldProviderRef?.current ?? (gameRef.current?.world as unknown as IWorldProvider),
-      eventBus: eventBusRef?.current ?? gameRef.current?.eventBus,
+      eventBus: gameRef.current?.eventBus,
     });
-  }, [cameraRef, gameRef, worldProviderRef, eventBusRef]);
+  }, [cameraRef, gameRef, worldProviderRef, isGameInitialized]);
 
   // Update building handler with placement preview
   useEffect(() => {
