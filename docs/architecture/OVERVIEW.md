@@ -114,8 +114,7 @@ voidstrike/
 │   │   └── consoleCommands.ts
 │   ├── data/ # Game data definitions
 │   │   ├── abilities/
-│   │   │   ├── abilities.ts
-│   │   │   └── abilityMapper.ts
+│   │   │   └── abilities.ts
 │   │   ├── ai/ # AI subsystems
 │   │   │   ├── factions/
 │   │   │   │   └── dominion.ts
@@ -137,8 +136,7 @@ voidstrike/
 │   │   │   │   ├── ConnectivityValidator.ts
 │   │   │   │   ├── ElevationMap.ts
 │   │   │   │   ├── ElevationMapGenerator.ts
-│   │   │   │   ├── index.ts
-│   │   │   │   └── MapScaffolder.ts
+│   │   │   │   └── index.ts
 │   │   │   ├── json/
 │   │   │   │   ├── battle_arena.json
 │   │   │   │   ├── contested_frontier.json
@@ -197,8 +195,6 @@ voidstrike/
 │   │   │   ├── EditorCanvas.tsx
 │   │   │   ├── EditorContextMenu.tsx
 │   │   │   ├── EditorCore.tsx
-│   │   │   ├── EditorExportModal.tsx
-│   │   │   ├── EditorFloatingToolbar.tsx
 │   │   │   ├── EditorHeader.tsx
 │   │   │   ├── EditorMiniMap.tsx
 │   │   │   ├── EditorStatusBar.tsx
@@ -227,7 +223,6 @@ voidstrike/
 │   │   ├── terrain/
 │   │   │   └── EdgeDetector.ts
 │   │   ├── tools/ # Development tools
-│   │   │   ├── AngleConstraint.ts
 │   │   │   ├── index.ts
 │   │   │   ├── ObjectPlacer.ts
 │   │   │   └── TerrainBrush.ts
@@ -237,7 +232,6 @@ voidstrike/
 │   │   └── index.ts
 │   ├── engine/ # Game engine core
 │   │   ├── ai/ # AI subsystems
-│   │   │   ├── AbilityAI.ts
 │   │   │   ├── AIWorkerManager.ts
 │   │   │   ├── BehaviorTree.ts
 │   │   │   ├── FormationControl.ts
@@ -327,9 +321,7 @@ voidstrike/
 │   │   ├── network/
 │   │   │   ├── p2p/
 │   │   │   │   ├── index.ts
-│   │   │   │   ├── NostrMatchmaking.ts
-│   │   │   │   ├── NostrRelays.ts
-│   │   │   │   └── PeerRelay.ts
+│   │   │   │   └── NostrRelays.ts
 │   │   │   ├── CommandSigning.ts
 │   │   │   ├── DesyncDetection.ts
 │   │   │   ├── index.ts
@@ -983,7 +975,7 @@ VOIDSTRIKE uses a **fully serverless peer-to-peer architecture** with Nostr-base
 | Layer            | Technology          | Location                                     |
 | ---------------- | ------------------- | -------------------------------------------- |
 | Transport        | WebRTC DataChannels | `src/hooks/useMultiplayer.ts`                |
-| Signaling        | Nostr Protocol      | `src/engine/network/p2p/NostrMatchmaking.ts` |
+| Signaling        | Nostr Protocol      | `src/hooks/useMultiplayer.ts` (lobby codes)  |
 | NAT Traversal    | STUN (Google)       | ICE servers in useMultiplayer                |
 | Synchronization  | Lockstep            | `src/engine/network/types.ts`                |
 | Desync Detection | Checksums           | `src/engine/network/DesyncDetection.ts`      |
@@ -1071,7 +1063,7 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 ```
 
-For symmetric NATs, the peer relay system (`PeerRelay.ts`) routes through other players with E2E encryption (ECDH + AES-GCM).
+For symmetric NATs, STUN servers handle most traversal cases. A peer relay system for routing through other players was planned but not implemented.
 
 #### Alternative: Connection Codes (`src/engine/network/p2p/ConnectionCode.ts`)
 
@@ -1889,7 +1881,6 @@ src/data/maps/
     ├── ConnectivityAnalyzer.ts  # Analyzes maps for connectivity
     ├── ConnectivityValidator.ts # Reports connectivity issues
     ├── ConnectivityFixer.ts     # Auto-fixes ramps and connections
-    ├── MapScaffolder.ts         # Auto-generate maps from base positions
     └── index.ts                 # Public API exports
 ```
 

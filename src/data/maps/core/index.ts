@@ -11,7 +11,6 @@
  * - MapBlueprint - The complete map definition type
  * - generateMap() - Convert blueprint to MapData
  * - Paint command helpers (plateau, ramp, water, etc.)
- * - scaffoldMap() - Auto-generate maps from base positions
  * - Connectivity analysis and validation
  */
 
@@ -155,17 +154,3 @@ export {
   formatFixResult,
 } from './ConnectivityFixer';
 
-// ============================================================================
-// MAP SCAFFOLDER
-// ============================================================================
-
-export {
-  type MapScaffold,
-  type DesiredConnection,
-  type ScaffoldConfig,
-  scaffoldMap,
-  scaffold1v1Diagonal,
-  scaffold1v1Horizontal,
-  scaffold4Player,
-  addTerrain,
-} from './MapScaffolder';
