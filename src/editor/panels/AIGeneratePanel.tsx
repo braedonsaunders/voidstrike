@@ -16,6 +16,13 @@ import type { MapData } from '@/data/maps/MapTypes';
 import type { BiomeType } from '@/data/maps/core/ElevationMap';
 import { useLLMGeneration } from '../hooks/useLLMGeneration';
 import type { LLMProvider, MapGenerationSettings } from '../services/LLMMapGenerator';
+import {
+  MAP_PROMPT_PRESETS,
+  PRESET_CATEGORIES,
+  getPresetsByCategory,
+  type MapPromptPreset,
+  type PresetCategory,
+} from '../data/mapPromptPresets';
 
 // ============================================================================
 // TYPES
@@ -190,6 +197,22 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
   const theme = config.theme;
   const [state, actions] = useLLMGeneration();
   const [showApiKey, setShowApiKey] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<PresetCategory['id']>('standard');
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+
+  // Get presets for current category
+  const categoryPresets = getPresetsByCategory(selectedCategory);
+
+  // Apply a preset
+  const applyPreset = (preset: MapPromptPreset) => {
+    setSelectedPresetId(preset.id);
+    // Update theme with the preset prompt
+    actions.updateSettings({ theme: preset.prompt.trim() });
+    // Apply suggested settings if available
+    if (preset.suggestedSettings) {
+      actions.updateSettings(preset.suggestedSettings);
+    }
+  };
 
   // Handle successful generation
   useEffect(() => {
@@ -429,23 +452,129 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
         </div>
       </Section>
 
+      {/* Map Presets */}
+      <Section title="Map Presets" icon="📋" theme={theme}>
+        <div className="space-y-3">
+          {/* Category Tabs */}
+          <div className="grid grid-cols-3 gap-1">
+            {PRESET_CATEGORIES.map((category) => (
+              <ToggleButton
+                key={category.id}
+                active={selectedCategory === category.id}
+                onClick={() => {
+                  setSelectedCategory(category.id);
+                  setSelectedPresetId(null);
+                }}
+                theme={theme}
+              >
+                {category.name}
+              </ToggleButton>
+            ))}
+          </div>
+
+          {/* Preset List */}
+          <div className="space-y-1.5 max-h-48 overflow-y-auto">
+            {categoryPresets.map((preset) => (
+              <button
+                key={preset.id}
+                onClick={() => applyPreset(preset)}
+                className={`
+                  w-full p-2.5 rounded-lg text-left transition-all
+                  ${selectedPresetId === preset.id ? 'ring-1' : 'hover:bg-white/5'}
+                `}
+                style={{
+                  backgroundColor: selectedPresetId === preset.id
+                    ? `${theme.primary}15`
+                    : theme.surface,
+                  borderColor: theme.border,
+                  '--tw-ring-color': theme.primary,
+                } as React.CSSProperties}
+              >
+                <div className="flex items-center justify-between">
+                  <span
+                    className="text-xs font-medium"
+                    style={{
+                      color: selectedPresetId === preset.id
+                        ? theme.text.primary
+                        : theme.text.secondary,
+                    }}
+                  >
+                    {preset.name}
+                  </span>
+                  {selectedPresetId === preset.id && (
+                    <span className="text-[10px]" style={{ color: theme.primary }}>
+                      ✓
+                    </span>
+                  )}
+                </div>
+                <div
+                  className="text-[10px] mt-0.5 line-clamp-2"
+                  style={{ color: theme.text.muted }}
+                >
+                  {preset.description}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Category Description */}
+          <div
+            className="text-[10px] pt-2 border-t"
+            style={{
+              color: theme.text.muted,
+              borderColor: `${theme.border}40`,
+            }}
+          >
+            {PRESET_CATEGORIES.find((c) => c.id === selectedCategory)?.description}
+          </div>
+        </div>
+      </Section>
+
       {/* Theme Description */}
       <Section title="Theme Description" icon="💡" theme={theme}>
         <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <label
+              className="text-[10px] uppercase tracking-wider"
+              style={{ color: theme.text.muted }}
+            >
+              Prompt
+            </label>
+            {selectedPresetId && (
+              <button
+                onClick={() => {
+                  setSelectedPresetId(null);
+                  actions.updateSettings({ theme: '' });
+                }}
+                className="text-[10px] px-2 py-0.5 rounded hover:bg-white/10 transition-colors"
+                style={{ color: theme.text.muted }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
           <textarea
             value={state.settings.theme}
-            onChange={(e) => actions.updateSettings({ theme: e.target.value })}
-            placeholder="Describe your map vision... e.g., 'A frozen wasteland with a contested central high ground, multiple attack paths, and hidden gold bases'"
-            rows={4}
+            onChange={(e) => {
+              actions.updateSettings({ theme: e.target.value });
+              // Clear preset selection if user edits manually
+              if (selectedPresetId) {
+                setSelectedPresetId(null);
+              }
+            }}
+            placeholder="Select a preset above or describe your map vision... e.g., 'A frozen wasteland with a contested central high ground, multiple attack paths, and hidden gold bases'"
+            rows={5}
             className="w-full px-3 py-2 rounded-lg text-sm resize-none"
             style={{
               backgroundColor: theme.surface,
-              border: `1px solid ${theme.border}`,
+              border: `1px solid ${selectedPresetId ? theme.primary : theme.border}`,
               color: theme.text.primary,
             }}
           />
           <div className="mt-1 text-[10px]" style={{ color: theme.text.muted }}>
-            Be specific about layout, terrain features, and gameplay style
+            {selectedPresetId
+              ? 'Edit the preset prompt above or use as-is'
+              : 'Be specific about layout, terrain features, and gameplay style'}
           </div>
         </div>
       </Section>
