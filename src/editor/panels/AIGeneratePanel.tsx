@@ -10,12 +10,7 @@ import type { MapData } from '@/data/maps/MapTypes';
 import type { BiomeType } from '@/data/maps/core/ElevationMap';
 import { useLLMGeneration } from '../hooks/useLLMGeneration';
 import type { LLMProvider, MapGenerationSettings } from '../services/LLMMapGenerator';
-import {
-  PRESET_CATEGORIES,
-  getPresetsByCategory,
-  type MapPromptPreset,
-  type PresetCategory,
-} from '../data/mapPromptPresets';
+import mapPresetsConfig from '../configs/mapPresets.json';
 
 // ============================================================================
 // TYPES
@@ -27,6 +22,32 @@ export interface AIGeneratePanelProps {
 }
 
 type ThemeConfig = EditorConfig['theme'];
+
+interface PresetCategory {
+  id: string;
+  name: string;
+  description: string;
+}
+
+interface MapPreset {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  prompt: string;
+  suggestedSettings?: Partial<MapGenerationSettings>;
+}
+
+// ============================================================================
+// CONFIG DATA
+// ============================================================================
+
+const PRESET_CATEGORIES: PresetCategory[] = mapPresetsConfig.categories;
+const MAP_PRESETS: MapPreset[] = mapPresetsConfig.presets;
+
+function getPresetsByCategory(categoryId: string): MapPreset[] {
+  return MAP_PRESETS.filter((p) => p.category === categoryId);
+}
 
 // ============================================================================
 // CONSTANTS
@@ -131,7 +152,7 @@ function Collapsible({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="rounded overflow-hidden" style={{ backgroundColor: `${theme.surface}80` }}>
+    <div className="rounded overflow-hidden flex-shrink-0" style={{ backgroundColor: `${theme.surface}80` }}>
       <button
         onClick={() => setOpen(!open)}
         className="w-full px-2 py-1.5 flex items-center justify-between hover:bg-white/5 transition-colors"
@@ -162,19 +183,19 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
   const theme = config.theme;
   const [state, actions] = useLLMGeneration();
   const [showApiKey, setShowApiKey] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<PresetCategory['id']>('standard');
+  const [selectedCategory, setSelectedCategory] = useState<string>('standard');
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const [presetDropdownOpen, setPresetDropdownOpen] = useState(false);
 
   const categoryPresets = getPresetsByCategory(selectedCategory);
-  const selectedPreset = categoryPresets.find((p) => p.id === selectedPresetId);
+  const selectedPreset = MAP_PRESETS.find((p) => p.id === selectedPresetId);
 
-  const applyPreset = (preset: MapPromptPreset) => {
+  const applyPreset = (preset: MapPreset) => {
     setSelectedPresetId(preset.id);
     setPresetDropdownOpen(false);
     actions.updateSettings({ theme: preset.prompt.trim() });
     if (preset.suggestedSettings) {
-      actions.updateSettings(preset.suggestedSettings);
+      actions.updateSettings(preset.suggestedSettings as Partial<MapGenerationSettings>);
     }
   };
 
@@ -196,10 +217,10 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
   const hasValidKey = state.isKeyValid === true;
 
   return (
-    <div className="space-y-2.5 overflow-hidden">
-      {/* PROMPT SECTION */}
-      <div className="space-y-1.5">
-        <div className="flex items-center justify-between">
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* PROMPT SECTION - Grows to fill space */}
+      <div className="flex-1 flex flex-col min-h-0 mb-2">
+        <div className="flex items-center justify-between mb-1 flex-shrink-0">
           <span className="text-[9px] font-medium uppercase" style={{ color: theme.text.muted }}>
             Prompt
           </span>
@@ -215,7 +236,7 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
 
             {presetDropdownOpen && (
               <div
-                className="absolute right-0 top-full mt-1 w-56 rounded shadow-xl z-50 overflow-hidden"
+                className="absolute right-0 top-full mt-1 w-52 rounded shadow-xl z-50 overflow-hidden"
                 style={{ backgroundColor: theme.background, border: `1px solid ${theme.border}` }}
               >
                 <div className="flex border-b" style={{ borderColor: theme.border }}>
@@ -223,7 +244,7 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
                     <button
                       key={cat.id}
                       onClick={() => setSelectedCategory(cat.id)}
-                      className="flex-1 py-1.5 text-[9px] font-medium transition-colors"
+                      className="flex-1 py-1.5 text-[8px] font-medium transition-colors"
                       style={{
                         color: selectedCategory === cat.id ? theme.primary : theme.text.muted,
                         backgroundColor: selectedCategory === cat.id ? `${theme.primary}10` : 'transparent',
@@ -233,18 +254,18 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
                     </button>
                   ))}
                 </div>
-                <div className="max-h-44 overflow-y-auto">
+                <div className="max-h-48 overflow-y-auto">
                   {categoryPresets.map((preset) => (
                     <button
                       key={preset.id}
                       onClick={() => applyPreset(preset)}
-                      className="w-full px-2 py-1.5 text-left transition-colors hover:bg-white/5"
+                      className="w-full px-2 py-1.5 text-left transition-colors hover:bg-white/5 h-10 flex flex-col justify-center"
                       style={{ backgroundColor: selectedPresetId === preset.id ? `${theme.primary}15` : 'transparent' }}
                     >
-                      <div className="text-[10px] font-medium" style={{ color: theme.text.primary }}>
+                      <div className="text-[9px] font-medium truncate" style={{ color: theme.text.primary }}>
                         {preset.name}
                       </div>
-                      <div className="text-[8px] mt-0.5 truncate" style={{ color: theme.text.muted }}>
+                      <div className="text-[8px] truncate" style={{ color: theme.text.muted }}>
                         {preset.description}
                       </div>
                     </button>
@@ -257,7 +278,7 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
 
         {selectedPreset && (
           <div
-            className="flex items-center justify-between px-2 py-1 rounded"
+            className="flex items-center justify-between px-2 py-1 rounded mb-1 flex-shrink-0"
             style={{ backgroundColor: `${theme.primary}15` }}
           >
             <span className="text-[9px] font-medium truncate" style={{ color: theme.text.primary }}>
@@ -265,7 +286,7 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
             </span>
             <button
               onClick={() => { setSelectedPresetId(null); actions.updateSettings({ theme: '' }); }}
-              className="text-[9px] px-1 hover:bg-white/10 rounded"
+              className="text-[9px] px-1 hover:bg-white/10 rounded flex-shrink-0"
               style={{ color: theme.text.muted }}
             >
               ✕
@@ -280,8 +301,7 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
             if (selectedPresetId) setSelectedPresetId(null);
           }}
           placeholder="Describe terrain, layout, strategic elements..."
-          rows={3}
-          className="w-full px-2 py-1.5 rounded text-[10px] leading-relaxed resize-none focus:outline-none"
+          className="flex-1 w-full px-2 py-1.5 rounded text-[10px] leading-relaxed resize-none focus:outline-none min-h-[60px]"
           style={{
             backgroundColor: theme.surface,
             border: `1px solid ${theme.border}`,
@@ -290,11 +310,11 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
         />
       </div>
 
-      {/* MAP CONFIG */}
-      <div className="p-2 rounded space-y-2" style={{ backgroundColor: `${theme.surface}60` }}>
-        {/* Players + Size */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[8px] uppercase" style={{ color: theme.text.muted }}>Players</span>
+      {/* MAP CONFIG - Fixed height */}
+      <div className="p-2 rounded space-y-1.5 flex-shrink-0 mb-2" style={{ backgroundColor: `${theme.surface}60` }}>
+        {/* Players */}
+        <div className="flex items-center gap-2">
+          <span className="text-[8px] uppercase w-10 flex-shrink-0" style={{ color: theme.text.muted }}>Players</span>
           <div className="flex gap-px">
             {PLAYER_COUNTS.map((n) => (
               <Pill key={n} active={state.settings.playerCount === n} onClick={() => actions.updateSettings({ playerCount: n })} theme={theme}>
@@ -302,7 +322,11 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
               </Pill>
             ))}
           </div>
-          <span className="text-[8px] uppercase ml-1" style={{ color: theme.text.muted }}>Size</span>
+        </div>
+
+        {/* Size */}
+        <div className="flex items-center gap-2">
+          <span className="text-[8px] uppercase w-10 flex-shrink-0" style={{ color: theme.text.muted }}>Size</span>
           <div className="flex gap-px">
             {MAP_SIZES.map((s) => (
               <Pill key={s.id} active={state.settings.mapSize === s.id} onClick={() => actions.updateSettings({ mapSize: s.id })} theme={theme}>
@@ -313,8 +337,8 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
         </div>
 
         {/* Biome */}
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[8px] uppercase" style={{ color: theme.text.muted }}>Biome</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[8px] uppercase w-10 flex-shrink-0" style={{ color: theme.text.muted }}>Biome</span>
           <div className="flex gap-px flex-wrap">
             {BIOMES.map((b) => (
               <Pill key={b.id} active={state.settings.biome === b.id} onClick={() => actions.updateSettings({ biome: b.id })} theme={theme}>
@@ -325,7 +349,7 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
         </div>
 
         {/* Features */}
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 pt-1">
           <Toggle checked={state.settings.includeForests} onChange={(v) => actions.updateSettings({ includeForests: v })} label="Forests" theme={theme} />
           <Toggle checked={state.settings.includeWater} onChange={(v) => actions.updateSettings({ includeWater: v, islandMap: v ? state.settings.islandMap : false })} label="Water" theme={theme} />
           {state.settings.includeWater && (
@@ -338,7 +362,7 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
       <button
         onClick={handleGenerate}
         disabled={!canGenerate}
-        className="w-full py-2 rounded text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5"
+        className="w-full py-2 rounded text-[11px] font-semibold transition-all flex items-center justify-center gap-1.5 flex-shrink-0 mb-2"
         style={{
           backgroundColor: canGenerate ? theme.primary : theme.surface,
           color: canGenerate ? '#fff' : theme.text.muted,
@@ -352,17 +376,16 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
         )}
       </button>
 
-      {/* ERROR */}
+      {/* STATUS MESSAGES */}
       {state.error && (
-        <div className="p-2 rounded text-[9px]" style={{ backgroundColor: `${theme.error}10`, border: `1px solid ${theme.error}30`, color: theme.error }}>
+        <div className="p-2 rounded text-[9px] flex-shrink-0 mb-2" style={{ backgroundColor: `${theme.error}10`, border: `1px solid ${theme.error}30`, color: theme.error }}>
           <div className="font-medium">Failed</div>
           <div className="mt-0.5 opacity-80 truncate">{state.error}</div>
         </div>
       )}
 
-      {/* SUCCESS */}
       {state.lastGeneration && !state.isGenerating && !state.error && (
-        <div className="p-2 rounded text-[9px]" style={{ backgroundColor: `${theme.success}10`, border: `1px solid ${theme.success}30` }}>
+        <div className="p-2 rounded text-[9px] flex-shrink-0 mb-2" style={{ backgroundColor: `${theme.success}10`, border: `1px solid ${theme.success}30` }}>
           <div className="flex items-center justify-between">
             <span className="font-medium truncate" style={{ color: theme.success }}>
               ✓ {state.lastGeneration.blueprint.meta.name}
@@ -435,23 +458,25 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
 
       {/* HISTORY */}
       {state.generationHistory.length > 0 && (
-        <Collapsible title="History" theme={theme}>
-          <div className="space-y-0.5">
-            {state.generationHistory.slice(0, 5).map((entry) => (
-              <button
-                key={entry.id}
-                onClick={() => actions.loadFromHistory(entry.id)}
-                className="w-full p-1.5 rounded text-left text-[8px] hover:bg-white/5"
-                style={{ backgroundColor: theme.background }}
-              >
-                <div className="flex justify-between">
-                  <span style={{ color: theme.text.secondary }}>{entry.settings.playerCount}P {entry.settings.mapSize}</span>
-                  <span style={{ color: theme.text.muted }}>{new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </Collapsible>
+        <div className="mt-2">
+          <Collapsible title="History" theme={theme}>
+            <div className="space-y-0.5">
+              {state.generationHistory.slice(0, 5).map((entry) => (
+                <button
+                  key={entry.id}
+                  onClick={() => actions.loadFromHistory(entry.id)}
+                  className="w-full p-1.5 rounded text-left text-[8px] hover:bg-white/5"
+                  style={{ backgroundColor: theme.background }}
+                >
+                  <div className="flex justify-between">
+                    <span style={{ color: theme.text.secondary }}>{entry.settings.playerCount}P {entry.settings.mapSize}</span>
+                    <span style={{ color: theme.text.muted }}>{new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </Collapsible>
+        </div>
       )}
     </div>
   );
