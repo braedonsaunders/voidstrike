@@ -147,7 +147,6 @@ export function WebGPUGameCanvas() {
     eventBusRef,
     isGameInitialized: isWorkerInitialized,
     placementPreviewRef: refs.placementPreview,
-    wallPlacementPreviewRef: refs.wallPlacementPreview,
     overlayManagerRef: refs.overlayManager,
     lastControlGroupTap,
   });
@@ -160,7 +159,6 @@ export function WebGPUGameCanvas() {
     cameraRef: refs.camera,
     environmentRef: refs.environment,
     lightPoolRef: refs.lightPool,
-    fogOfWarRef: refs.fogOfWar,
     containerRef,
     map: CURRENT_MAP,
   });

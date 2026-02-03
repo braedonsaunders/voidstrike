@@ -114,7 +114,6 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
     setMultiplayer,
     setConnected,
     setHost,
-    setDataChannel,
   } = useMultiplayerStore();
 
   // Derived state
@@ -124,27 +123,24 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
   const isGuestMode = lobbyStatus === 'connected' && !isHost;
 
   // When connected as guest, set up multiplayer store
+  // Note: Data channel is set up via addPeer() in useMultiplayer.ts
   useEffect(() => {
     if (lobbyStatus === 'connected' && hostConnection) {
       setMultiplayer(true);
       setConnected(true);
       setHost(false);
-      setDataChannel(hostConnection);
     }
-  }, [lobbyStatus, hostConnection, setMultiplayer, setConnected, setHost, setDataChannel]);
+  }, [lobbyStatus, hostConnection, setMultiplayer, setConnected, setHost]);
 
   // When hosting with connected guests, set up multiplayer
+  // Note: Data channels are set up via addPeer() in useMultiplayer.ts
   useEffect(() => {
     if (isHost && guests.some(g => g.dataChannel)) {
       setMultiplayer(true);
       setConnected(true);
       setHost(true);
-      const firstConnectedGuest = guests.find(g => g.dataChannel);
-      if (firstConnectedGuest?.dataChannel) {
-        setDataChannel(firstConnectedGuest.dataChannel);
-      }
     }
-  }, [isHost, guests, setMultiplayer, setConnected, setHost, setDataChannel]);
+  }, [isHost, guests, setMultiplayer, setConnected, setHost]);
 
   // Send lobby state to guests whenever it changes (host only)
   useEffect(() => {

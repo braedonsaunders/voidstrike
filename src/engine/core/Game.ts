@@ -24,7 +24,6 @@ import {
   getDesyncState,
   useMultiplayerStore,
   getAdaptiveCommandDelay,
-  getSlotIdForPeer,
   getAllRemoteSlotIds,
   setOnReconnectedCallback,
 } from '@/store/multiplayerStore';
@@ -180,22 +179,17 @@ export class Game extends GameCore {
           // Commands use slot IDs (e.g., "player1", "player2"), not peer IDs
           const validRemoteSlotIds = getAllRemoteSlotIds();
           if (!validRemoteSlotIds.includes(command.playerId)) {
-            // Also check legacy single-peer mode
-            const legacyPeerId = useMultiplayerStore.getState().remotePeerId;
-            const legacySlotId = legacyPeerId ? getSlotIdForPeer(legacyPeerId) : null;
-            if (command.playerId !== legacySlotId) {
-              console.error(
-                `[Game] SECURITY: Rejected command with invalid playerId. ` +
-                  `Valid slot IDs: [${validRemoteSlotIds.join(', ')}], Got: ${command.playerId}`
-              );
-              this.eventBus.emit('security:spoofedPlayerId', {
-                expectedPlayerId: validRemoteSlotIds.join(', '),
-                spoofedPlayerId: command.playerId,
-                commandType: command.type,
-                tick: command.tick,
-              });
-              return;
-            }
+            console.error(
+              `[Game] SECURITY: Rejected command with invalid playerId. ` +
+                `Valid slot IDs: [${validRemoteSlotIds.join(', ')}], Got: ${command.playerId}`
+            );
+            this.eventBus.emit('security:spoofedPlayerId', {
+              expectedPlayerId: validRemoteSlotIds.join(', '),
+              spoofedPlayerId: command.playerId,
+              commandType: command.type,
+              tick: command.tick,
+            });
+            return;
           }
 
           // SECURITY: Validate command tick is within acceptable range
@@ -608,17 +602,6 @@ export class Game extends GameCore {
     for (const slotId of remoteSlotIds) {
       if (!players.includes(slotId)) {
         players.push(slotId);
-      }
-    }
-
-    // Fallback for legacy single-peer mode: try to get slot ID from peer ID mapping
-    if (remoteSlotIds.length === 0) {
-      const remotePeerId = useMultiplayerStore.getState().remotePeerId;
-      if (remotePeerId) {
-        const slotId = getSlotIdForPeer(remotePeerId);
-        if (slotId && !players.includes(slotId)) {
-          players.push(slotId);
-        }
       }
     }
 

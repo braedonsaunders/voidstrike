@@ -18,7 +18,6 @@ import type { IWorldProvider } from '@/engine/ecs/IWorldProvider';
 import type { EventBus } from '@/engine/core/EventBus';
 import { RTSCamera } from '@/rendering/Camera';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
-import { WallPlacementPreview } from '@/rendering/WallPlacementPreview';
 import { TSLGameOverlayManager } from '@/rendering/tsl';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import {
@@ -44,8 +43,6 @@ export interface UseGameInputProps {
   /** Signal that game is initialized - triggers InputManager dependency update */
   isGameInitialized?: boolean;
   placementPreviewRef: MutableRefObject<BuildingPlacementPreview | null>;
-  /** @deprecated No longer used - wall placement handled by BuildingInputHandler */
-  wallPlacementPreviewRef?: MutableRefObject<WallPlacementPreview | null>;
   overlayManagerRef: MutableRefObject<TSLGameOverlayManager | null>;
   lastControlGroupTap: MutableRefObject<{ group: number; time: number } | null>;
 }
