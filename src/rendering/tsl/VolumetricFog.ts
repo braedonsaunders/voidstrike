@@ -203,9 +203,15 @@ export function createVolumetricFogNode(
      * Update camera matrices (call before render)
      */
     updateCamera: (cam: THREE.PerspectiveCamera) => {
+      // Ensure camera matrices are current before copying
+      // (camera position may have changed but matrices not yet updated)
+      cam.updateMatrixWorld();
+      cam.updateProjectionMatrix();
+
       uCameraNear.value = cam.near;
       uCameraFar.value = cam.far;
-      uCameraPos.value.copy(cam.position);
+      // Extract world position from matrixWorld for consistency with world reconstruction
+      uCameraPos.value.setFromMatrixPosition(cam.matrixWorld);
       uInverseProjection.value.copy(cam.projectionMatrixInverse);
       uInverseView.value.copy(cam.matrixWorld);
     },
