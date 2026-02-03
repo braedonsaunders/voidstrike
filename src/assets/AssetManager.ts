@@ -1069,11 +1069,20 @@ export class AssetManager {
           // This must happen BEFORE any other processing to avoid render pipeline errors
           cleanupModelAttributes(model, assetId);
 
-          // Configure shadows
+          // Configure shadows and disable vertex colors (AI models often have baked AO)
           model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
               child.castShadow = true;
               child.receiveShadow = true;
+              // Disable vertex colors - AI-generated models (Tripo/Meshy) often bake
+              // ambient occlusion into vertex colors, causing dark triangular artifacts
+              const materials = Array.isArray(child.material) ? child.material : [child.material];
+              for (const mat of materials) {
+                if (mat && 'vertexColors' in mat) {
+                  mat.vertexColors = false;
+                  mat.needsUpdate = true;
+                }
+              }
             }
           });
 
@@ -1154,11 +1163,20 @@ export class AssetManager {
           // Clean up excess vertex attributes for WebGPU compatibility (max 8 buffers)
           cleanupModelAttributes(model, `${assetId}_LOD${lodLevel}`);
 
-          // Configure shadows (same as LOD0)
+          // Configure shadows and disable vertex colors (same as LOD0)
           model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
               child.castShadow = true;
               child.receiveShadow = true;
+              // Disable vertex colors - AI-generated models (Tripo/Meshy) often bake
+              // ambient occlusion into vertex colors, causing dark triangular artifacts
+              const materials = Array.isArray(child.material) ? child.material : [child.material];
+              for (const mat of materials) {
+                if (mat && 'vertexColors' in mat) {
+                  mat.vertexColors = false;
+                  mat.needsUpdate = true;
+                }
+              }
             }
           });
 
