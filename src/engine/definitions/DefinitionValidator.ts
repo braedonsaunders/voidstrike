@@ -22,7 +22,7 @@ type DamageType = 'normal' | 'explosive' | 'concussive' | 'psionic';
 const VALID_DAMAGE_TYPES: DamageType[] = ['normal', 'explosive', 'concussive', 'psionic'];
 // AbilityTargetType imported from engine layer - these are the valid target types
 const VALID_TARGET_TYPES: AbilityTargetType[] = ['none', 'point', 'unit', 'ally', 'self'];
-const VALID_UNIT_CATEGORIES = ['infantry', 'vehicle', 'ship'] as const;
+const VALID_UNIT_CATEGORIES = ['infantry', 'vehicle', 'ship', 'naval'] as const;
 const VALID_UPGRADE_EFFECT_TYPES = [
   'damage_bonus',
   'armor_bonus',
