@@ -11,7 +11,12 @@ import { Terrain } from './Terrain';
 import { getPlayerColor, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { debugAnimation, debugAssets, debugMesh, debugPerformance } from '@/utils/debugLogger';
-import { setupInstancedVelocity, swapInstanceMatrices, commitInstanceMatrices, disposeInstancedVelocity } from './tsl/InstancedVelocity';
+import {
+  setupInstancedVelocity,
+  swapInstanceMatrices,
+  commitInstanceMatrices,
+  disposeInstancedVelocity,
+} from './tsl/InstancedVelocity';
 import {
   UNIT_RENDERER,
   UNIT_SELECTION_RING,
@@ -68,7 +73,11 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
   if (source.index) {
     const srcIndex = source.index;
     const newIndexArray = srcIndex.array.slice(0);
-    const newIndex = new THREE.BufferAttribute(newIndexArray, srcIndex.itemSize, srcIndex.normalized);
+    const newIndex = new THREE.BufferAttribute(
+      newIndexArray,
+      srcIndex.itemSize,
+      srcIndex.normalized
+    );
     newIndex.needsUpdate = true;
     cloned.setIndex(newIndex);
   }
@@ -77,7 +86,7 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
   if (source.morphAttributes) {
     for (const name of Object.keys(source.morphAttributes)) {
       const srcMorphArray = source.morphAttributes[name];
-      cloned.morphAttributes[name] = srcMorphArray.map(srcAttr => {
+      cloned.morphAttributes[name] = srcMorphArray.map((srcAttr) => {
         const newArray = srcAttr.array.slice(0);
         const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
         newAttr.needsUpdate = true;
@@ -148,9 +157,9 @@ interface AnimatedUnitMesh {
 // Per-unit overlay data - now tracks instance indices instead of individual meshes
 // Selection rings and team markers use instanced rendering for ~150 fewer draw calls
 interface UnitOverlay {
-  healthBar: THREE.Group;  // Health bars kept individual due to dynamic width
+  healthBar: THREE.Group; // Health bars kept individual due to dynamic width
   lastHealth: number;
-  playerId: string;        // Track player for team marker color grouping
+  playerId: string; // Track player for team marker color grouping
   // PERF: Cached terrain height to avoid recalculation every frame
   cachedTerrainHeight: number;
   lastX: number;
@@ -160,7 +169,7 @@ interface UnitOverlay {
 // Instanced overlay group for team markers
 interface InstancedOverlayGroup {
   mesh: THREE.InstancedMesh;
-  entityIds: number[];     // Maps instance index to entity ID
+  entityIds: number[]; // Maps instance index to entity ID
   positions: THREE.Vector3[]; // Cached positions for matrix updates
   maxInstances: number;
 }
@@ -227,7 +236,9 @@ export class UnitRenderer {
   private camera: THREE.Camera | null = null;
 
   // PERF: Shared smooth rotation interpolation
-  private readonly smoothRotation: SmoothRotation = new SmoothRotation(UNIT_RENDERER.ROTATION_SMOOTH_FACTOR);
+  private readonly smoothRotation: SmoothRotation = new SmoothRotation(
+    UNIT_RENDERER.ROTATION_SMOOTH_FACTOR
+  );
 
   // PERF: Cached sorted entity list to avoid spread+sort every frame
   private cachedSortedEntities: IEntity[] = [];
@@ -244,7 +255,16 @@ export class UnitRenderer {
   // Track unit type geometries registered with GPU indirect renderer
   private gpuRegisteredUnitTypes: Set<string> = new Set();
 
-  constructor(scene: THREE.Scene, world: IWorldProvider, visionSystem?: VisionSystem, terrain?: Terrain) {
+  // LOD hysteresis: Track current LOD per entity to prevent flickering
+  // Key = entityId, Value = current LOD level
+  private entityCurrentLOD: Map<number, LODLevel> = new Map();
+
+  constructor(
+    scene: THREE.Scene,
+    world: IWorldProvider,
+    visionSystem?: VisionSystem,
+    terrain?: Terrain
+  ) {
     this.scene = scene;
     this.world = world;
     this.visionSystem = visionSystem ?? null;
@@ -277,7 +297,7 @@ export class UnitRenderer {
     });
 
     // Load custom GLB models (async, runs in background)
-    AssetManager.loadCustomModels().catch(err => {
+    AssetManager.loadCustomModels().catch((err) => {
       debugAssets.warn('[UnitRenderer] Error loading custom models:', err);
     });
   }
@@ -385,7 +405,9 @@ export class UnitRenderer {
       debugPerformance.log('[UnitRenderer] GPU indirect renderer initialized successfully');
       debugPerformance.log('[UnitRenderer] GPU-driven rendering pipeline READY:');
       debugPerformance.log('  - GPU Entity Buffer: INITIALIZED');
-      debugPerformance.log('  - GPU Culling Compute: ' + (this.gpuCullingInitialized ? 'READY' : 'PENDING'));
+      debugPerformance.log(
+        '  - GPU Culling Compute: ' + (this.gpuCullingInitialized ? 'READY' : 'PENDING')
+      );
       debugPerformance.log('  - GPU Indirect Draw: ENABLED');
       debugPerformance.log('[GPU Indirect Renderer] INITIALIZED - indirect draw calls enabled');
     } catch (e) {
@@ -397,7 +419,12 @@ export class UnitRenderer {
   /**
    * Register a unit type geometry with the GPU indirect renderer
    */
-  private registerUnitTypeForGPU(unitType: string, lodLevel: number, geometry: THREE.BufferGeometry, material?: THREE.Material): void {
+  private registerUnitTypeForGPU(
+    unitType: string,
+    lodLevel: number,
+    geometry: THREE.BufferGeometry,
+    material?: THREE.Material
+  ): void {
     if (!this.gpuIndirectRenderer || !this.cullingService) return;
 
     const key = `${unitType}_${lodLevel}`;
@@ -407,7 +434,9 @@ export class UnitRenderer {
     this.gpuIndirectRenderer.registerUnitType(typeIndex, lodLevel, geometry, material);
     this.gpuRegisteredUnitTypes.add(key);
 
-    debugPerformance.log(`[UnitRenderer] Registered unit type ${unitType} LOD${lodLevel} for GPU indirect rendering`);
+    debugPerformance.log(
+      `[UnitRenderer] Registered unit type ${unitType} LOD${lodLevel} for GPU indirect rendering`
+    );
   }
 
   /**
@@ -494,7 +523,8 @@ export class UnitRenderer {
       visibleCount: cullingStats?.visibleEntities ?? 0,
       totalIndirectDrawCalls: this.gpuIndirectRenderer?.getTotalVisibleCount() ?? 0,
       isUsingGPUCulling: cullingStats?.isUsingGPU ?? false,
-      gpuCullTimeMs: this.cullingService?.getCullingCompute().getGPUCullingStats().lastCullTimeMs ?? 0,
+      gpuCullTimeMs:
+        this.cullingService?.getCullingCompute().getGPUCullingStats().lastCullTimeMs ?? 0,
       quarantinedSlots: cullingStats?.quarantinedSlots ?? 0,
     };
   }
@@ -578,7 +608,6 @@ export class UnitRenderer {
     this.cullingService?.getCullingCompute().setLODConfig(lodConfig);
   }
 
-
   /**
    * Smoothly interpolate rotation with proper angle wrapping.
    * Uses exponential smoothing for frame-rate independent smooth rotation.
@@ -607,7 +636,11 @@ export class UnitRenderer {
    * Get or create an animated mesh for a specific unit entity.
    * Uses the data-driven AnimationController for state machine-based animation.
    */
-  private getOrCreateAnimatedUnit(entityId: number, unitType: string, playerId: string): AnimatedUnitMesh {
+  private getOrCreateAnimatedUnit(
+    entityId: number,
+    unitType: string,
+    playerId: string
+  ): AnimatedUnitMesh {
     let animUnit = this.animatedUnits.get(entityId);
 
     if (!animUnit) {
@@ -660,7 +693,7 @@ export class UnitRenderer {
       // Log animation state for debugging
       debugAnimation.log(
         `[UnitRenderer] ${unitType}: Created AnimationController with ${clips.length} clips, ` +
-        `${animConfig.layers.length} layers, initial state: ${controller.getCurrentState()}`
+          `${animConfig.layers.length} layers, initial state: ${controller.getCurrentState()}`
       );
 
       animUnit = {
@@ -688,7 +721,15 @@ export class UnitRenderer {
     const tracksToRemove: number[] = [];
 
     // Common root bone names in character rigs (case-insensitive matching)
-    const rootBoneNames = ['root', 'rootbone', 'root_bone', 'armature', 'hips', 'mixamorig:hips', 'pelvis'];
+    const rootBoneNames = [
+      'root',
+      'rootbone',
+      'root_bone',
+      'armature',
+      'hips',
+      'mixamorig:hips',
+      'pelvis',
+    ];
 
     for (let i = 0; i < clip.tracks.length; i++) {
       const track = clip.tracks[i];
@@ -702,7 +743,9 @@ export class UnitRenderer {
       const boneName = trackName.split('.')[0].toLowerCase();
 
       // Only remove if it's explicitly a root bone
-      const isRootBone = rootBoneNames.some(root => boneName === root || boneName === `mixamorig:${root}`);
+      const isRootBone = rootBoneNames.some(
+        (root) => boneName === root || boneName === `mixamorig:${root}`
+      );
 
       if (isRootBone) {
         tracksToRemove.push(i);
@@ -712,14 +755,20 @@ export class UnitRenderer {
     // Remove tracks in reverse order to maintain correct indices
     for (let i = tracksToRemove.length - 1; i >= 0; i--) {
       const removedTrack = clip.tracks.splice(tracksToRemove[i], 1)[0];
-      debugAnimation.log(`[UnitRenderer] Removed root motion track: ${removedTrack.name} from ${clip.name}`);
+      debugAnimation.log(
+        `[UnitRenderer] Removed root motion track: ${removedTrack.name} from ${clip.name}`
+      );
     }
   }
 
   /**
    * Get or create an instanced mesh group for a unit type + player combo at a specific LOD level
    */
-  private getOrCreateInstancedGroup(unitType: string, playerId: string, lodLevel: LODLevel = 0): InstancedUnitGroup {
+  private getOrCreateInstancedGroup(
+    unitType: string,
+    playerId: string,
+    lodLevel: LODLevel = 0
+  ): InstancedUnitGroup {
     const key = `${unitType}_${playerId}_LOD${lodLevel}`;
     let group = this.instancedGroups.get(key);
 
@@ -728,8 +777,9 @@ export class UnitRenderer {
 
       // Get the base mesh from AssetManager at the requested LOD level
       // Falls back to next best LOD if requested level isn't available
-      const baseMesh = AssetManager.getModelAtLOD(unitType, lodLevel)
-        ?? AssetManager.getUnitMesh(unitType, playerColor);
+      const baseMesh =
+        AssetManager.getModelAtLOD(unitType, lodLevel) ??
+        AssetManager.getUnitMesh(unitType, playerColor);
 
       // Update world matrices to get accurate world positions
       baseMesh.updateMatrixWorld(true);
@@ -769,11 +819,7 @@ export class UnitRenderer {
       }
 
       // Create instanced mesh
-      const instancedMesh = new THREE.InstancedMesh(
-        geometry,
-        material!,
-        MAX_INSTANCES_PER_TYPE
-      );
+      const instancedMesh = new THREE.InstancedMesh(geometry, material!, MAX_INSTANCES_PER_TYPE);
       instancedMesh.count = 0; // Start with no visible instances
       instancedMesh.castShadow = true;
       instancedMesh.receiveShadow = true;
@@ -802,7 +848,9 @@ export class UnitRenderer {
 
       // Log rotation as Euler for easier debugging
       const rotEuler = new THREE.Euler().setFromQuaternion(meshWorldRotation);
-      debugAssets.log(`[UnitRenderer] Created instanced group for ${unitType} LOD${lodLevel}: yOffset=${meshWorldY.toFixed(3)}, rotation=(${(rotEuler.x * 180/Math.PI).toFixed(1)}°, ${(rotEuler.y * 180/Math.PI).toFixed(1)}°, ${(rotEuler.z * 180/Math.PI).toFixed(1)}°), scale=${meshWorldScale.toFixed(3)}`);
+      debugAssets.log(
+        `[UnitRenderer] Created instanced group for ${unitType} LOD${lodLevel}: yOffset=${meshWorldY.toFixed(3)}, rotation=(${((rotEuler.x * 180) / Math.PI).toFixed(1)}°, ${((rotEuler.y * 180) / Math.PI).toFixed(1)}°, ${((rotEuler.z * 180) / Math.PI).toFixed(1)}°), scale=${meshWorldScale.toFixed(3)}`
+      );
 
       this.instancedGroups.set(key, group);
 
@@ -858,7 +906,11 @@ export class UnitRenderer {
         opacity: UNIT_TEAM_MARKER.OPACITY,
         side: THREE.DoubleSide,
       });
-      const mesh = new THREE.InstancedMesh(this.teamMarkerGeometry, material, MAX_OVERLAY_INSTANCES);
+      const mesh = new THREE.InstancedMesh(
+        this.teamMarkerGeometry,
+        material,
+        MAX_OVERLAY_INSTANCES
+      );
       mesh.count = 0;
       mesh.frustumCulled = false;
       // NOTE: Don't set mesh.rotation here - rotation is applied per-instance to avoid
@@ -894,7 +946,7 @@ export class UnitRenderer {
     return overlay.cachedTerrainHeight;
   }
 
-  public update(deltaTime: number = 1/60): void {
+  public update(deltaTime: number = 1 / 60): void {
     const updateStart = performance.now();
     this.frameCount++;
 
@@ -909,7 +961,6 @@ export class UnitRenderer {
     // This ensures previous/current matrix pairs are aligned correctly for velocity
     // PERF: Only re-sort when entity count changes (add/remove) to avoid O(n log n) every frame
     const rawEntities = this.world.getEntitiesWith('Transform', 'Unit');
-
 
     if (rawEntities.length !== this.cachedEntityCount) {
       // Rebuild cache - entity count changed (add/remove occurred)
@@ -957,18 +1008,20 @@ export class UnitRenderer {
         const cullingMode = stats.isUsingGPUCulling ? 'GPU' : 'CPU';
         debugPerformance.log(
           `[Unified Culling] ${stats.isUsingGPUCulling ? 'GPU ACTIVE' : 'CPU FALLBACK'} - ` +
-          `Entities: ${stats.managedEntities}/${stats.visibleCount} total/visible, ` +
-          `UnitTypes: ${stats.registeredUnitTypes}, ` +
-          `Culling: ${cullingMode} (${stats.gpuCullTimeMs.toFixed(2)}ms), ` +
-          `Indirect: ${stats.indirectReady ? 'ON' : 'OFF'}, ` +
-          `Quarantined: ${stats.quarantinedSlots}`
+            `Entities: ${stats.managedEntities}/${stats.visibleCount} total/visible, ` +
+            `UnitTypes: ${stats.registeredUnitTypes}, ` +
+            `Culling: ${cullingMode} (${stats.gpuCullTimeMs.toFixed(2)}ms), ` +
+            `Indirect: ${stats.indirectReady ? 'ON' : 'OFF'}, ` +
+            `Quarantined: ${stats.quarantinedSlots}`
         );
 
         // Validate mesh geometries periodically to detect any disposed buffers
         if (this.gpuIndirectRenderer) {
           const invalidCount = this.gpuIndirectRenderer.validateAllMeshes();
           if (invalidCount > 0) {
-            debugPerformance.warn(`[GPU Rendering] Found ${invalidCount} invalid meshes - hiding to prevent crashes`);
+            debugPerformance.warn(
+              `[GPU Rendering] Found ${invalidCount} invalid meshes - hiding to prevent crashes`
+            );
           }
         }
       }
@@ -1079,7 +1132,7 @@ export class UnitRenderer {
         animUnit.controller.update(deltaTime * animSpeedMultiplier);
       } else {
         // Use instanced rendering for non-animated units
-        // Calculate distance from camera for LOD selection
+        // Calculate distance from camera for LOD selection with hysteresis
         let lodLevel: LODLevel = 0;
         const settings = useUIStore.getState().graphicsSettings;
         if (settings.lodEnabled && this.camera) {
@@ -1087,20 +1140,20 @@ export class UnitRenderer {
           const dz = transform.y - this.camera.position.z; // transform.y is world Z
           const distanceToCamera = Math.sqrt(dx * dx + dz * dz);
 
-          // Select LOD level based on distance thresholds
-          if (distanceToCamera <= settings.lodDistance0) {
-            lodLevel = 0;
-          } else if (distanceToCamera <= settings.lodDistance1) {
-            lodLevel = 1;
-          } else {
-            lodLevel = 2;
-          }
+          // Get current LOD for hysteresis (null on first frame)
+          const currentLOD = this.entityCurrentLOD.get(entity.id) ?? null;
 
-          // Fall back to best available LOD if requested level isn't loaded
-          lodLevel = AssetManager.getBestLODForDistance(unit.unitId, distanceToCamera, {
-            LOD0_MAX: settings.lodDistance0,
-            LOD1_MAX: settings.lodDistance1,
-          });
+          // Select LOD with hysteresis to prevent flickering at distance boundaries
+          lodLevel = AssetManager.getBestLODWithHysteresis(
+            unit.unitId,
+            distanceToCamera,
+            currentLOD,
+            { LOD0_MAX: settings.lodDistance0, LOD1_MAX: settings.lodDistance1 },
+            settings.lodHysteresis ?? 0.1
+          );
+
+          // Store new LOD for next frame's hysteresis calculation
+          this.entityCurrentLOD.set(entity.id, lodLevel);
         }
 
         const group = this.getOrCreateInstancedGroup(unit.unitId, ownerId, lodLevel);
@@ -1114,15 +1167,25 @@ export class UnitRenderer {
           // baseRotation is the model's full base rotation (X, Y, Z from assets.json config).
           // We multiply: unit facing (Y rotation) × base rotation to get final orientation.
           // modelScale is the normalization scale from AssetManager (to achieve target height).
-          this.transformUtils.tempPosition.set(transform.x, unitHeight + group.yOffset, transform.y);
+          this.transformUtils.tempPosition.set(
+            transform.x,
+            unitHeight + group.yOffset,
+            transform.y
+          );
           // Create quaternion from unit's facing direction (Y rotation only) with smooth interpolation
           // smoothRotation already calculated above for GPU buffer
           this.transformUtils.tempEuler.set(0, smoothRotation, 0);
           this.transformUtils.tempFacingQuat.setFromEuler(this.transformUtils.tempEuler);
           // Combine: facing rotation × base rotation (order matters for proper orientation)
-          this.transformUtils.tempQuaternion.copy(this.transformUtils.tempFacingQuat).multiply(group.baseRotation);
+          this.transformUtils.tempQuaternion
+            .copy(this.transformUtils.tempFacingQuat)
+            .multiply(group.baseRotation);
           this.transformUtils.tempScale.setScalar(group.modelScale);
-          this.transformUtils.tempMatrix.compose(this.transformUtils.tempPosition, this.transformUtils.tempQuaternion, this.transformUtils.tempScale);
+          this.transformUtils.tempMatrix.compose(
+            this.transformUtils.tempPosition,
+            this.transformUtils.tempQuaternion,
+            this.transformUtils.tempScale
+          );
           group.mesh.setMatrixAt(instanceIndex, this.transformUtils.tempMatrix);
 
           group.mesh.count++;
@@ -1155,7 +1218,11 @@ export class UnitRenderer {
         overlay.healthBar.visible = healthPercent < 1;
         if (overlay.healthBar.visible) {
           // Position health bar above the unit model
-          overlay.healthBar.position.set(transform.x, unitHeight + modelHeight + UNIT_HEALTH_BAR.Y_OFFSET, transform.y);
+          overlay.healthBar.position.set(
+            transform.x,
+            unitHeight + modelHeight + UNIT_HEALTH_BAR.Y_OFFSET,
+            transform.y
+          );
           // Only update health bar visuals if health changed
           if (Math.abs(overlay.lastHealth - healthPercent) > 0.01) {
             this.healthBarRenderer.updateHealthBar(overlay.healthBar, health);
@@ -1172,7 +1239,12 @@ export class UnitRenderer {
         const idx = group.mesh.count;
         group.entityIds[idx] = entityId;
         // Team markers are flat on ground - use shared transform utils
-        this.transformUtils.composeGroundOverlay(data.position.x, data.position.y, data.position.z, 1);
+        this.transformUtils.composeGroundOverlay(
+          data.position.x,
+          data.position.y,
+          data.position.z,
+          1
+        );
         group.mesh.setMatrixAt(idx, this.transformUtils.tempMatrix);
         group.mesh.count++;
       }
@@ -1210,7 +1282,9 @@ export class UnitRenderer {
         const materials = group.mesh.material;
         this.queueGeometryForDisposal(group.mesh.geometry, materials);
         this.instancedGroups.delete(key);
-        debugPerformance.log(`[UnitRenderer] Cleaned up inactive mesh: ${key} (inactive for ${framesInactive} frames)`);
+        debugPerformance.log(
+          `[UnitRenderer] Cleaned up inactive mesh: ${key} (inactive for ${framesInactive} frames)`
+        );
       }
     }
 
@@ -1229,6 +1303,8 @@ export class UnitRenderer {
     for (const entityId of this.smoothRotation.keys()) {
       if (!this.entityIdTracker.has(entityId)) {
         this.smoothRotation.remove(entityId);
+        // Clean up LOD hysteresis tracking
+        this.entityCurrentLOD.delete(entityId);
         // Clean up culling service registration
         this.removeEntityFromCulling(entityId);
       }
@@ -1256,7 +1332,9 @@ export class UnitRenderer {
 
     const updateElapsed = performance.now() - updateStart;
     if (updateElapsed > 16) {
-      debugPerformance.warn(`[UnitRenderer] UPDATE: ${entities.length} entities took ${updateElapsed.toFixed(1)}ms`);
+      debugPerformance.warn(
+        `[UnitRenderer] UPDATE: ${entities.length} entities took ${updateElapsed.toFixed(1)}ms`
+      );
     }
   }
 
@@ -1396,9 +1474,10 @@ export class UnitRenderer {
     }
     this.teamMarkerGroups.clear();
 
-    // Clear rotation tracking
+    // Clear rotation and LOD tracking
     this.smoothRotation.clear();
     this.visibleUnits.clear();
+    this.entityCurrentLOD.clear();
 
     // Dispose GPU-driven rendering resources
     this.cullingService?.dispose();

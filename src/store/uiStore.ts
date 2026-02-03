@@ -205,6 +205,7 @@ export interface GraphicsSettings {
   lodDistance0: number; // Distance threshold for LOD0 (highest detail)
   lodDistance1: number; // Distance threshold for LOD1 (medium detail)
   // Beyond lodDistance1, LOD2 (lowest detail) is used
+  lodHysteresis: number; // Hysteresis margin (0.1 = 10%) to prevent LOD flickering at boundaries
 
   // Water
   waterEnabled: boolean;
@@ -662,6 +663,7 @@ export const useUIStore = create<UIState>((set, get) => ({
     lodEnabled: true,
     lodDistance0: 50, // Use LOD0 (highest detail) within 50 units from camera
     lodDistance1: 120, // Use LOD1 (medium detail) between 50-120 units, LOD2 beyond
+    lodHysteresis: 0.1, // 10% hysteresis to prevent LOD flickering
 
     // Water
     waterEnabled: true,

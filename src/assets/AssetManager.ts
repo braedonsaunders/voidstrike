@@ -65,10 +65,20 @@ export type LODLevel = 0 | 1 | 2;
 
 /** Default distance thresholds for LOD switching (in world units) */
 export const DEFAULT_LOD_DISTANCES = {
-  LOD0_MAX: 50,   // Use LOD0 (highest detail) within 50 units
-  LOD1_MAX: 120,  // Use LOD1 (medium detail) between 50-120 units
+  LOD0_MAX: 50, // Use LOD0 (highest detail) within 50 units
+  LOD1_MAX: 120, // Use LOD1 (medium detail) between 50-120 units
   // Beyond 120 units, use LOD2 (lowest detail)
 } as const;
+
+/**
+ * Default hysteresis margin for LOD transitions (as fraction of distance threshold).
+ * Prevents LOD flickering when camera hovers near distance boundaries.
+ *
+ * With 10% hysteresis:
+ * - LOD0→LOD1 at 55 units (50 * 1.10), LOD1→LOD0 at 45 units (50 * 0.90)
+ * - LOD1→LOD2 at 132 units (120 * 1.10), LOD2→LOD1 at 108 units (120 * 0.90)
+ */
+export const DEFAULT_LOD_HYSTERESIS = 0.1;
 
 // Asset definition types
 export interface AssetDefinition {
@@ -134,19 +144,19 @@ export type VehicleEffectCondition = 'always' | 'moving' | 'idle' | 'attacking' 
 
 /** Types of vehicle effects that can be attached */
 export type VehicleEffectType =
-  | 'engine_exhaust'    // Fire + smoke for engines
-  | 'thruster'          // Blue/energy thruster glow
-  | 'smoke_trail'       // Trailing smoke
-  | 'dust_cloud'        // Ground dust behind wheels/tracks
-  | 'afterburner'       // Intense engine fire
-  | 'hover_dust'        // Dust from hovering/landing
-  | 'sparks';           // Mechanical sparks
+  | 'engine_exhaust' // Fire + smoke for engines
+  | 'thruster' // Blue/energy thruster glow
+  | 'smoke_trail' // Trailing smoke
+  | 'dust_cloud' // Ground dust behind wheels/tracks
+  | 'afterburner' // Intense engine fire
+  | 'hover_dust' // Dust from hovering/landing
+  | 'sparks'; // Mechanical sparks
 
 /** Attachment point for an effect (local coordinates relative to unit) */
 export interface EffectAttachment {
-  x: number;      // Local offset X (right/left)
-  y: number;      // Local offset Y (up/down)
-  z: number;      // Local offset Z (front/back)
+  x: number; // Local offset X (right/left)
+  y: number; // Local offset Y (up/down)
+  z: number; // Local offset Z (front/back)
   scale?: number; // Size multiplier for this attachment (default: 1.0)
 }
 
@@ -154,9 +164,9 @@ export interface EffectAttachment {
 export interface VehicleEffectDefinition {
   type: VehicleEffectType;
   attachments: EffectAttachment[];
-  emitRate: number;           // Particles per second per attachment
+  emitRate: number; // Particles per second per attachment
   conditions: VehicleEffectCondition[];
-  speedScale?: boolean;       // Scale emit rate with movement speed
+  speedScale?: boolean; // Scale emit rate with movement speed
 }
 
 /** Container for all effects on a unit */
@@ -319,7 +329,7 @@ function cleanupVertexAttributes(
   const essentialAttributes = new Set([
     'position',
     'normal',
-    'uv',       // Only first UV set
+    'uv', // Only first UV set
     'tangent',
   ]);
 
@@ -433,7 +443,12 @@ function cleanupModelAttributes(model: THREE.Object3D, assetId: string): void {
  * @param assetId - Optional asset ID for caching Y offset
  * @param scaleMultiplier - Optional additional scale multiplier applied after height normalization
  */
-function normalizeModel(root: THREE.Object3D, targetHeight: number, assetId?: string, scaleMultiplier: number = 1.0): void {
+function normalizeModel(
+  root: THREE.Object3D,
+  targetHeight: number,
+  assetId?: string,
+  scaleMultiplier: number = 1.0
+): void {
   // Update world matrices first
   root.updateMatrixWorld(true);
 
@@ -449,14 +464,18 @@ function normalizeModel(root: THREE.Object3D, targetHeight: number, assetId?: st
   const size = box.getSize(new THREE.Vector3());
 
   // Log model info for debugging
-  debugAssets.log(`[AssetManager] Model bounds: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), min.y=${box.min.y.toFixed(2)}`);
+  debugAssets.log(
+    `[AssetManager] Model bounds: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), min.y=${box.min.y.toFixed(2)}`
+  );
 
   // Scale to target height if model has height, then apply scale multiplier
   if (size.y > 0.001) {
     const heightScale = targetHeight / size.y;
     const finalScale = heightScale * scaleMultiplier;
     root.scale.setScalar(finalScale);
-    debugAssets.log(`[AssetManager] Applied scale: ${finalScale.toFixed(4)} (height: ${heightScale.toFixed(4)} × multiplier: ${scaleMultiplier.toFixed(2)}) to achieve height ${(targetHeight * scaleMultiplier).toFixed(2)}`);
+    debugAssets.log(
+      `[AssetManager] Applied scale: ${finalScale.toFixed(4)} (height: ${heightScale.toFixed(4)} × multiplier: ${scaleMultiplier.toFixed(2)}) to achieve height ${(targetHeight * scaleMultiplier).toFixed(2)}`
+    );
   }
 
   // Update matrices after scaling
@@ -473,7 +492,9 @@ function normalizeModel(root: THREE.Object3D, targetHeight: number, assetId?: st
       depth: finalSize.z,
       height: finalSize.y,
     });
-    debugAssets.log(`[AssetManager] Stored bounding dimensions for ${assetId}: ${finalSize.x.toFixed(2)} x ${finalSize.z.toFixed(2)} x ${finalSize.y.toFixed(2)}`);
+    debugAssets.log(
+      `[AssetManager] Stored bounding dimensions for ${assetId}: ${finalSize.x.toFixed(2)} x ${finalSize.z.toFixed(2)} x ${finalSize.y.toFixed(2)}`
+    );
   }
 
   // Ground the model (set bottom at y=0) - minY anchor
@@ -484,7 +505,9 @@ function normalizeModel(root: THREE.Object3D, targetHeight: number, assetId?: st
     // Store the Y offset for instanced rendering
     if (assetId) {
       modelYOffsets.set(assetId, root.position.y);
-      debugAssets.log(`[AssetManager] Stored Y offset for ${assetId}: ${root.position.y.toFixed(4)}`);
+      debugAssets.log(
+        `[AssetManager] Stored Y offset for ${assetId}: ${root.position.y.toFixed(4)}`
+      );
     }
   }
 }
@@ -513,12 +536,16 @@ function applyScaleAndGround(root: THREE.Object3D, assetId: string, scale: numbe
   const size = box.getSize(new THREE.Vector3());
 
   // Log model info for debugging
-  debugAssets.log(`[AssetManager] ${assetId} original bounds: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), min.y=${box.min.y.toFixed(2)}`);
+  debugAssets.log(
+    `[AssetManager] ${assetId} original bounds: size=(${size.x.toFixed(2)}, ${size.y.toFixed(2)}, ${size.z.toFixed(2)}), min.y=${box.min.y.toFixed(2)}`
+  );
 
   // Apply scale multiplier
   if (scale !== 1.0) {
     root.scale.setScalar(scale);
-    debugAssets.log(`[AssetManager] ${assetId} applied scale: ${scale.toFixed(2)} -> final size: ${(size.y * scale).toFixed(2)}`);
+    debugAssets.log(
+      `[AssetManager] ${assetId} applied scale: ${scale.toFixed(2)} -> final size: ${(size.y * scale).toFixed(2)}`
+    );
   }
 
   // Update matrices after scaling
@@ -530,7 +557,9 @@ function applyScaleAndGround(root: THREE.Object3D, assetId: string, scale: numbe
   // Ground the model (set bottom at y=0) - minY anchor
   if (isFinite(box.min.y)) {
     root.position.y = -box.min.y;
-    debugAssets.log(`[AssetManager] ${assetId} grounded: position.y = ${root.position.y.toFixed(4)}`);
+    debugAssets.log(
+      `[AssetManager] ${assetId} grounded: position.y = ${root.position.y.toFixed(4)}`
+    );
 
     // Store the Y offset for instanced rendering
     modelYOffsets.set(assetId, root.position.y);
@@ -561,7 +590,11 @@ function deepCloneGeometry(source: THREE.BufferGeometry): THREE.BufferGeometry {
   if (source.index) {
     const srcIndex = source.index;
     const newIndexArray = srcIndex.array.slice(0);
-    const newIndex = new THREE.BufferAttribute(newIndexArray, srcIndex.itemSize, srcIndex.normalized);
+    const newIndex = new THREE.BufferAttribute(
+      newIndexArray,
+      srcIndex.itemSize,
+      srcIndex.normalized
+    );
     newIndex.needsUpdate = true;
     cloned.setIndex(newIndex);
   }
@@ -570,7 +603,7 @@ function deepCloneGeometry(source: THREE.BufferGeometry): THREE.BufferGeometry {
   if (source.morphAttributes) {
     for (const name of Object.keys(source.morphAttributes)) {
       const srcMorphArray = source.morphAttributes[name];
-      cloned.morphAttributes[name] = srcMorphArray.map(srcAttr => {
+      cloned.morphAttributes[name] = srcMorphArray.map((srcAttr) => {
         const newArray = srcAttr.array.slice(0);
         const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
         newAttr.needsUpdate = true;
@@ -627,14 +660,14 @@ function deepCloneModelHierarchy(node: THREE.Object3D): THREE.Object3D {
     const clonedGeometry = deepCloneGeometry(node.geometry);
     // Clone material (shallow is fine, materials don't cause GPU buffer issues)
     const clonedMaterial = Array.isArray(node.material)
-      ? node.material.map(m => m.clone())
+      ? node.material.map((m) => m.clone())
       : node.material.clone();
     clonedNode = new THREE.Mesh(clonedGeometry, clonedMaterial);
   } else if (node instanceof THREE.SkinnedMesh) {
     // SkinnedMesh needs special handling - deep clone geometry
     const clonedGeometry = deepCloneGeometry(node.geometry);
     const clonedMaterial = Array.isArray(node.material)
-      ? node.material.map(m => m.clone())
+      ? node.material.map((m) => m.clone())
       : node.material.clone();
     // Create new SkinnedMesh with cloned geometry
     clonedNode = new THREE.SkinnedMesh(clonedGeometry, clonedMaterial);
@@ -642,13 +675,13 @@ function deepCloneModelHierarchy(node: THREE.Object3D): THREE.Object3D {
   } else if (node instanceof THREE.Points) {
     const clonedGeometry = deepCloneGeometry(node.geometry);
     const clonedMaterial = Array.isArray(node.material)
-      ? node.material.map(m => m.clone())
+      ? node.material.map((m) => m.clone())
       : node.material.clone();
     clonedNode = new THREE.Points(clonedGeometry, clonedMaterial);
   } else if (node instanceof THREE.Line) {
     const clonedGeometry = deepCloneGeometry(node.geometry);
     const clonedMaterial = Array.isArray(node.material)
-      ? node.material.map(m => m.clone())
+      ? node.material.map((m) => m.clone())
       : node.material.clone();
     clonedNode = new THREE.Line(clonedGeometry, clonedMaterial);
   } else {
@@ -798,7 +831,10 @@ export const Materials = {
 };
 
 // Clone a material with a different color (for player colors)
-export function colorMaterial(baseMaterial: THREE.MeshStandardMaterial, color: number): THREE.MeshStandardMaterial {
+export function colorMaterial(
+  baseMaterial: THREE.MeshStandardMaterial,
+  color: number
+): THREE.MeshStandardMaterial {
   const mat = baseMaterial.clone();
   mat.color.setHex(color);
   return mat;
@@ -842,7 +878,9 @@ export class AssetManager {
       wrapper.add(cloned);
       wrapper.updateMatrixWorld(true);
 
-      debugAssets.log(`[AssetManager] Custom ${unitId}: ${meshCount} meshes, inner pos.y=${cloned.position.y.toFixed(3)}, scale=${cloned.scale.x.toFixed(4)}`);
+      debugAssets.log(
+        `[AssetManager] Custom ${unitId}: ${meshCount} meshes, inner pos.y=${cloned.position.y.toFixed(3)}, scale=${cloned.scale.x.toFixed(4)}`
+      );
 
       return wrapper;
     }
@@ -859,7 +897,9 @@ export class AssetManager {
     const scaleMultiplier = assetScaleMultipliers.get(unitId);
     if (scaleMultiplier !== undefined && scaleMultiplier !== 1.0) {
       result.scale.multiplyScalar(scaleMultiplier);
-      debugAssets.log(`[AssetManager] Procedural ${unitId}: applied scale multiplier ${scaleMultiplier}`);
+      debugAssets.log(
+        `[AssetManager] Procedural ${unitId}: applied scale multiplier ${scaleMultiplier}`
+      );
     }
 
     // Apply player color if provided
@@ -909,7 +949,9 @@ export class AssetManager {
       wrapper.add(cloned);
       wrapper.updateMatrixWorld(true);
 
-      debugAssets.log(`[AssetManager] Custom building ${buildingId}: ${meshCount} meshes, inner pos.y=${cloned.position.y.toFixed(3)}, scale=${cloned.scale.x.toFixed(4)}`);
+      debugAssets.log(
+        `[AssetManager] Custom building ${buildingId}: ${meshCount} meshes, inner pos.y=${cloned.position.y.toFixed(3)}, scale=${cloned.scale.x.toFixed(4)}`
+      );
 
       return wrapper;
     }
@@ -926,7 +968,9 @@ export class AssetManager {
     const scaleMultiplier = assetScaleMultipliers.get(buildingId);
     if (scaleMultiplier !== undefined && scaleMultiplier !== 1.0) {
       result.scale.multiplyScalar(scaleMultiplier);
-      debugAssets.log(`[AssetManager] Procedural building ${buildingId}: applied scale multiplier ${scaleMultiplier}`);
+      debugAssets.log(
+        `[AssetManager] Procedural building ${buildingId}: applied scale multiplier ${scaleMultiplier}`
+      );
     }
 
     if (playerColor !== undefined) {
@@ -1128,7 +1172,10 @@ export class AssetManager {
 
           // Log animation names and store them per threejs-builder skill
           if (hasAnimations) {
-            debugAssets.log(`[AssetManager] ${assetId} animations:`, gltf.animations.map(a => a.name));
+            debugAssets.log(
+              `[AssetManager] ${assetId} animations:`,
+              gltf.animations.map((a) => a.name)
+            );
             assetAnimations.set(assetId, gltf.animations);
           }
 
@@ -1467,6 +1514,89 @@ export class AssetManager {
   }
 
   /**
+   * Get the best available LOD level with hysteresis to prevent flickering.
+   *
+   * Hysteresis adds a "dead zone" around LOD boundaries:
+   * - Switching to a lower-detail LOD requires crossing (threshold * (1 + hysteresis))
+   * - Switching to a higher-detail LOD requires crossing (threshold * (1 - hysteresis))
+   *
+   * @param assetId - The asset identifier
+   * @param distance - Current distance from camera
+   * @param currentLOD - The entity's current LOD level (null if unknown)
+   * @param lodDistances - Distance thresholds for LOD levels
+   * @param hysteresis - Hysteresis margin as fraction (0.1 = 10%)
+   */
+  static getBestLODWithHysteresis(
+    assetId: string,
+    distance: number,
+    currentLOD: LODLevel | null,
+    lodDistances: { LOD0_MAX: number; LOD1_MAX: number } = DEFAULT_LOD_DISTANCES,
+    hysteresis: number = DEFAULT_LOD_HYSTERESIS
+  ): LODLevel {
+    // If no current LOD known, use standard selection (no hysteresis on first assignment)
+    if (currentLOD === null) {
+      return this.getBestLODForDistance(assetId, distance, lodDistances);
+    }
+
+    // Calculate hysteresis-adjusted thresholds
+    // To switch UP (to lower detail): use threshold * (1 + hysteresis)
+    // To switch DOWN (to higher detail): use threshold * (1 - hysteresis)
+    const lod0UpThreshold = lodDistances.LOD0_MAX * (1 + hysteresis); // 55 @ 10%
+    const lod0DownThreshold = lodDistances.LOD0_MAX * (1 - hysteresis); // 45 @ 10%
+    const lod1UpThreshold = lodDistances.LOD1_MAX * (1 + hysteresis); // 132 @ 10%
+    const lod1DownThreshold = lodDistances.LOD1_MAX * (1 - hysteresis); // 108 @ 10%
+
+    let idealLOD: LODLevel;
+
+    // Apply hysteresis based on current LOD
+    if (currentLOD === 0) {
+      // Currently at LOD0, only switch to LOD1 if we cross the UP threshold
+      if (distance > lod1UpThreshold) {
+        idealLOD = 2;
+      } else if (distance > lod0UpThreshold) {
+        idealLOD = 1;
+      } else {
+        idealLOD = 0;
+      }
+    } else if (currentLOD === 1) {
+      // Currently at LOD1
+      if (distance > lod1UpThreshold) {
+        idealLOD = 2; // Switch up to LOD2
+      } else if (distance < lod0DownThreshold) {
+        idealLOD = 0; // Switch down to LOD0
+      } else {
+        idealLOD = 1; // Stay at LOD1
+      }
+    } else {
+      // Currently at LOD2, only switch to lower LODs if we cross DOWN thresholds
+      if (distance < lod0DownThreshold) {
+        idealLOD = 0;
+      } else if (distance < lod1DownThreshold) {
+        idealLOD = 1;
+      } else {
+        idealLOD = 2;
+      }
+    }
+
+    // Check if ideal LOD is available, fall back if not
+    const levels = availableLODLevels.get(assetId);
+    if (!levels) return 0;
+
+    if (levels.has(idealLOD)) return idealLOD;
+
+    // Fall back to closest available LOD
+    if (idealLOD === 2) {
+      if (levels.has(1)) return 1;
+      return 0;
+    } else if (idealLOD === 1) {
+      if (levels.has(2)) return 2;
+      return 0;
+    }
+
+    return 0;
+  }
+
+  /**
    * Get the original model at a specific LOD level (NOT cloned).
    * Returns the cached original model - caller must NOT modify it.
    * Use for InstancedMesh where we extract geometry/material once.
@@ -1478,7 +1608,12 @@ export class AssetManager {
       case 1:
         return customAssetsLOD1.get(assetId) ?? customAssets.get(assetId) ?? null;
       case 2:
-        return customAssetsLOD2.get(assetId) ?? customAssetsLOD1.get(assetId) ?? customAssets.get(assetId) ?? null;
+        return (
+          customAssetsLOD2.get(assetId) ??
+          customAssetsLOD1.get(assetId) ??
+          customAssets.get(assetId) ??
+          null
+        );
       default:
         return null;
     }
@@ -1595,21 +1730,25 @@ export class AssetManager {
    */
   static preloadCommonAssets(): void {
     // Units
-    ['fabricator', 'trooper', 'breacher', 'medic', 'devastator', 'valkyrie', 'specter'].forEach(id => {
-      this.getUnitMesh(id);
-    });
+    ['fabricator', 'trooper', 'breacher', 'medic', 'devastator', 'valkyrie', 'specter'].forEach(
+      (id) => {
+        this.getUnitMesh(id);
+      }
+    );
 
     // Buildings
-    ['headquarters', 'supply_cache', 'infantry_bay', 'extractor', 'forge', 'hangar'].forEach(id => {
-      this.getBuildingMesh(id);
-    });
+    ['headquarters', 'supply_cache', 'infantry_bay', 'extractor', 'forge', 'hangar'].forEach(
+      (id) => {
+        this.getBuildingMesh(id);
+      }
+    );
 
     // Resources
     this.getResourceMesh('minerals');
     this.getResourceMesh('plasma');
 
     // Projectiles
-    ['bullet', 'missile', 'laser'].forEach(id => {
+    ['bullet', 'missile', 'laser'].forEach((id) => {
       this.getProjectileMesh(id);
     });
   }
@@ -1749,7 +1888,12 @@ export class AssetManager {
     await this.loadConfig();
 
     // Build model list from config or use hardcoded defaults
-    const customModels: Array<{ path: string; assetId: string; targetHeight?: number; scale?: number }> = [];
+    const customModels: Array<{
+      path: string;
+      assetId: string;
+      targetHeight?: number;
+      scale?: number;
+    }> = [];
 
     if (!assetsConfig) {
       debugAssets.warn('[AssetManager] assets.json not found, using procedural meshes only');
@@ -1858,7 +2002,12 @@ export class AssetManager {
      * Load a single model with all its LOD levels
      * Uses worker for network I/O - no HEAD requests needed (worker handles 404s gracefully)
      */
-    const loadModelWithLODs = async (model: { path: string; assetId: string; targetHeight?: number; scale?: number }): Promise<boolean> => {
+    const loadModelWithLODs = async (model: {
+      path: string;
+      assetId: string;
+      targetHeight?: number;
+      scale?: number;
+    }): Promise<boolean> => {
       try {
         const lod0Path = model.path;
         const lod1Path = lod0Path.replace('_LOD0.glb', '_LOD1.glb');
@@ -1869,28 +2018,49 @@ export class AssetManager {
 
         // Load LOD0 first (required) - this will throw if file doesn't exist
         try {
-          await this.loadGLTF(lod0Path, model.assetId, { targetHeight: model.targetHeight, scale: model.scale });
+          await this.loadGLTF(lod0Path, model.assetId, {
+            targetHeight: model.targetHeight,
+            scale: model.scale,
+          });
           lodLevels.add(0);
         } catch {
           // LOD0 doesn't exist - use procedural mesh
-          debugAssets.log(`[AssetManager] No custom model found at ${lod0Path}, using procedural mesh`);
+          debugAssets.log(
+            `[AssetManager] No custom model found at ${lod0Path}, using procedural mesh`
+          );
           return false;
         }
 
         // Load LOD1 and LOD2 in parallel (optional, silent fail)
         // No HEAD requests - worker fetch returns null for missing files
         await Promise.all([
-          this.loadGLTFForLOD(lod1Path, model.assetId, 1, { targetHeight: model.targetHeight, scale: model.scale })
-            .then(() => { lodLevels.add(1); })
-            .catch(() => { /* LOD1 not available */ }),
-          this.loadGLTFForLOD(lod2Path, model.assetId, 2, { targetHeight: model.targetHeight, scale: model.scale })
-            .then(() => { lodLevels.add(2); })
-            .catch(() => { /* LOD2 not available */ }),
+          this.loadGLTFForLOD(lod1Path, model.assetId, 1, {
+            targetHeight: model.targetHeight,
+            scale: model.scale,
+          })
+            .then(() => {
+              lodLevels.add(1);
+            })
+            .catch(() => {
+              /* LOD1 not available */
+            }),
+          this.loadGLTFForLOD(lod2Path, model.assetId, 2, {
+            targetHeight: model.targetHeight,
+            scale: model.scale,
+          })
+            .then(() => {
+              lodLevels.add(2);
+            })
+            .catch(() => {
+              /* LOD2 not available */
+            }),
         ]);
 
         // Store available LOD levels for this asset
         availableLODLevels.set(model.assetId, lodLevels);
-        debugAssets.log(`[AssetManager] ✓ Loaded ${model.assetId} with LOD levels: [${Array.from(lodLevels).join(', ')}]`);
+        debugAssets.log(
+          `[AssetManager] ✓ Loaded ${model.assetId} with LOD levels: [${Array.from(lodLevels).join(', ')}]`
+        );
         return true;
       } catch (error) {
         debugAssets.log(`[AssetManager] Could not load ${model.path}:`, error);
@@ -1922,7 +2092,9 @@ export class AssetManager {
       }
     }
     const loadTime = performance.now() - startTime;
-    debugAssets.log(`[AssetManager] Parallel loading completed in ${loadTime.toFixed(0)}ms (${CONCURRENCY_LIMIT} concurrent)`)
+    debugAssets.log(
+      `[AssetManager] Parallel loading completed in ${loadTime.toFixed(0)}ms (${CONCURRENCY_LIMIT} concurrent)`
+    );
 
     // Log LOD summary
     let lodSummary = '[AssetManager] LOD Summary: ';
@@ -1939,7 +2111,9 @@ export class AssetManager {
 
     // Notify all listeners that models have been loaded
     if (loadedCount > 0) {
-      debugAssets.log(`[AssetManager] Notifying ${onModelsLoadedCallbacks.length} listeners to refresh meshes`);
+      debugAssets.log(
+        `[AssetManager] Notifying ${onModelsLoadedCallbacks.length} listeners to refresh meshes`
+      );
       for (const callback of onModelsLoadedCallbacks) {
         try {
           callback();
@@ -2023,11 +2197,7 @@ export class ProceduralGenerator {
         const height = 1 + Math.random() * 1.5;
         const geo = new THREE.ConeGeometry(0.3 + Math.random() * 0.2, height, 6);
         const mesh = new THREE.Mesh(geo, Materials.resources.mineral);
-        mesh.position.set(
-          (Math.random() - 0.5) * 1.5,
-          height / 2,
-          (Math.random() - 0.5) * 1.5
-        );
+        mesh.position.set((Math.random() - 0.5) * 1.5, height / 2, (Math.random() - 0.5) * 1.5);
         mesh.rotation.set(
           (Math.random() - 0.5) * 0.3,
           Math.random() * Math.PI * 2,
@@ -2732,11 +2902,7 @@ export class ProceduralGenerator {
       const lightGeo = new THREE.SphereGeometry(0.15, 8, 8);
       const lightMat = new THREE.MeshBasicMaterial({ color: 0x40ff40 });
       const light = new THREE.Mesh(lightGeo, lightMat);
-      light.position.set(
-        (i % 2 === 0 ? -1.5 : 1.5),
-        2.1,
-        (i < 2 ? -1.5 : 1.5)
-      );
+      light.position.set(i % 2 === 0 ? -1.5 : 1.5, 2.1, i < 2 ? -1.5 : 1.5);
       group.add(light);
     }
 
@@ -2826,7 +2992,7 @@ export class ProceduralGenerator {
       const launcherGeo = new THREE.CylinderGeometry(0.15, 0.15, 1, 8);
       const launcher = new THREE.Mesh(launcherGeo, Materials.dominion.accent);
       launcher.userData.isAccent = true;
-      launcher.position.set(0.2, 1.7, (i === 0 ? 0.3 : -0.3));
+      launcher.position.set(0.2, 1.7, i === 0 ? 0.3 : -0.3);
       launcher.rotation.x = Math.PI / 6;
       launcher.castShadow = true;
       group.add(launcher);

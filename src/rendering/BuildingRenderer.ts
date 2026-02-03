@@ -261,6 +261,10 @@ export class BuildingRenderer {
     frameQueued: number;
   }> = [];
 
+  // LOD hysteresis: Track current LOD per entity to prevent flickering
+  // Key = entityId, Value = current LOD level
+  private entityCurrentLOD: Map<number, LODLevel> = new Map();
+
   // Fallback elevation heights when terrain isn't available
   private static readonly ELEVATION_HEIGHTS = BUILDING_RENDERER.ELEVATION_HEIGHTS;
 
@@ -704,17 +708,28 @@ export class BuildingRenderer {
 
       // PERFORMANCE: Try to use instanced rendering for completed static buildings
       if (this.canUseInstancing(building, health, selectable)) {
-        // Calculate LOD level based on distance from camera
+        // Calculate LOD level based on distance from camera with hysteresis
         let lodLevel: LODLevel = 0;
         const settings = useUIStore.getState().graphicsSettings;
         if (settings.lodEnabled && this.camera) {
           const dx = transform.x - this.camera.position.x;
           const dz = transform.y - this.camera.position.z;
           const distanceToCamera = Math.sqrt(dx * dx + dz * dz);
-          lodLevel = AssetManager.getBestLODForDistance(building.buildingId, distanceToCamera, {
-            LOD0_MAX: settings.lodDistance0,
-            LOD1_MAX: settings.lodDistance1,
-          });
+
+          // Get current LOD for hysteresis (null on first frame)
+          const currentLOD = this.entityCurrentLOD.get(entity.id) ?? null;
+
+          // Select LOD with hysteresis to prevent flickering at distance boundaries
+          lodLevel = AssetManager.getBestLODWithHysteresis(
+            building.buildingId,
+            distanceToCamera,
+            currentLOD,
+            { LOD0_MAX: settings.lodDistance0, LOD1_MAX: settings.lodDistance1 },
+            settings.lodHysteresis ?? 0.1
+          );
+
+          // Store new LOD for next frame's hysteresis calculation
+          this.entityCurrentLOD.set(entity.id, lodLevel);
         }
 
         const group = this.getOrCreateInstancedGroup(building.buildingId, ownerId, lodLevel);
@@ -1214,6 +1229,8 @@ export class BuildingRenderer {
         meshData.clippingPlane = null;
         this.disposeGroup(meshData.group);
         this.buildingMeshes.delete(entityId);
+        // Clean up LOD hysteresis tracking
+        this.entityCurrentLOD.delete(entityId);
       }
     }
   }
@@ -2734,6 +2751,9 @@ export class BuildingRenderer {
       scheduleGeometryDisposal(group.mesh.geometry, group.mesh.material);
     }
     this.instancedGroups.clear();
+
+    // Clear LOD hysteresis tracking
+    this.entityCurrentLOD.clear();
   }
 
   /**

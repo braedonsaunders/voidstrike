@@ -32,7 +32,12 @@ import {
 
 import { StorageInstancedBufferAttribute } from 'three/webgpu';
 
-import { GPUEntityBuffer, EntitySlot, EntityCategory, createIndirectArgsBuffer } from './GPUEntityBuffer';
+import {
+  GPUEntityBuffer,
+  EntitySlot,
+  EntityCategory,
+  createIndirectArgsBuffer,
+} from './GPUEntityBuffer';
 import { debugShaders } from '@/utils/debugLogger';
 import { DEFAULT_LOD_DISTANCES } from '@/assets/AssetManager';
 
@@ -41,6 +46,7 @@ export interface LODConfig {
   LOD0_MAX: number; // Distance for highest detail
   LOD1_MAX: number; // Distance for medium detail
   // Beyond LOD1_MAX = LOD2 (lowest detail)
+  hysteresis?: number; // Hysteresis margin as fraction (0.1 = 10%) to prevent flickering
 }
 
 const DEFAULT_LOD_CONFIG: LODConfig = {
@@ -79,6 +85,9 @@ export class UnifiedCullingCompute {
   private tempSphere: THREE.Sphere;
   private cachedVisibleSlots: EntitySlot[] = [];
   private cachedLODAssignments: Map<number, number> = new Map();
+
+  // LOD hysteresis: stores previous LOD per entity to prevent flickering
+  private previousLODAssignments: Map<number, number> = new Map();
 
   // GPU compute structures
   private gpuComputeAvailable = false;
@@ -154,7 +163,11 @@ export class UnifiedCullingCompute {
 
       // Create storage buffers for input data
       this.transformStorageAttribute = new StorageInstancedBufferAttribute(transformData, 16);
-      this.transformStorageBuffer = storage(this.transformStorageAttribute, 'mat4', MAX_GPU_ENTITIES);
+      this.transformStorageBuffer = storage(
+        this.transformStorageAttribute,
+        'mat4',
+        MAX_GPU_ENTITIES
+      );
 
       this.metadataStorageAttribute = new StorageInstancedBufferAttribute(metadataData, 4);
       this.metadataStorageBuffer = storage(this.metadataStorageAttribute, 'vec4', MAX_GPU_ENTITIES);
@@ -269,8 +282,8 @@ export class UnifiedCullingCompute {
       // Read metadata: vec4(entityId, packedTypeAndCategory, playerId, boundingRadius)
       const metadata = metadataBuffer.element(entityIndex);
       const packedTypeAndCategory = int(metadata.y);
-      const typeIndex = packedTypeAndCategory.bitAnd(int(0xFFFF));
-      const category = packedTypeAndCategory.shiftRight(int(16)).bitAnd(int(0xFFFF));
+      const typeIndex = packedTypeAndCategory.bitAnd(int(0xffff));
+      const category = packedTypeAndCategory.shiftRight(int(16)).bitAnd(int(0xffff));
       const playerId = int(metadata.z);
       const radius = metadata.w;
 
@@ -282,27 +295,39 @@ export class UnifiedCullingCompute {
       // Test each plane
       const p0 = frustumPlanes.element(int(0));
       const d0 = p0.x.mul(posX).add(p0.y.mul(posY)).add(p0.z.mul(posZ)).add(p0.w);
-      If(d0.lessThan(radius.negate()), () => { visible.assign(0); });
+      If(d0.lessThan(radius.negate()), () => {
+        visible.assign(0);
+      });
 
       const p1 = frustumPlanes.element(int(1));
       const d1 = p1.x.mul(posX).add(p1.y.mul(posY)).add(p1.z.mul(posZ)).add(p1.w);
-      If(d1.lessThan(radius.negate()), () => { visible.assign(0); });
+      If(d1.lessThan(radius.negate()), () => {
+        visible.assign(0);
+      });
 
       const p2 = frustumPlanes.element(int(2));
       const d2 = p2.x.mul(posX).add(p2.y.mul(posY)).add(p2.z.mul(posZ)).add(p2.w);
-      If(d2.lessThan(radius.negate()), () => { visible.assign(0); });
+      If(d2.lessThan(radius.negate()), () => {
+        visible.assign(0);
+      });
 
       const p3 = frustumPlanes.element(int(3));
       const d3 = p3.x.mul(posX).add(p3.y.mul(posY)).add(p3.z.mul(posZ)).add(p3.w);
-      If(d3.lessThan(radius.negate()), () => { visible.assign(0); });
+      If(d3.lessThan(radius.negate()), () => {
+        visible.assign(0);
+      });
 
       const p4 = frustumPlanes.element(int(4));
       const d4 = p4.x.mul(posX).add(p4.y.mul(posY)).add(p4.z.mul(posZ)).add(p4.w);
-      If(d4.lessThan(radius.negate()), () => { visible.assign(0); });
+      If(d4.lessThan(radius.negate()), () => {
+        visible.assign(0);
+      });
 
       const p5 = frustumPlanes.element(int(5));
       const d5 = p5.x.mul(posX).add(p5.y.mul(posY)).add(p5.z.mul(posZ)).add(p5.w);
-      If(d5.lessThan(radius.negate()), () => { visible.assign(0); });
+      If(d5.lessThan(radius.negate()), () => {
+        visible.assign(0);
+      });
 
       // If visible, calculate LOD and update output buffers
       If(visible.greaterThan(0), () => {
@@ -323,7 +348,9 @@ export class UnifiedCullingCompute {
         });
 
         // Calculate index into indirect args buffer
-        const indirectIndex = typeIndex.mul(maxLODs).mul(maxPlayers)
+        const indirectIndex = typeIndex
+          .mul(maxLODs)
+          .mul(maxPlayers)
           .add(lod.mul(maxPlayers))
           .add(playerId);
         const instanceCountOffset = indirectIndex.mul(int(5)).add(int(1));
@@ -350,10 +377,7 @@ export class UnifiedCullingCompute {
    * Update frustum from camera
    */
   updateFrustum(camera: THREE.Camera): void {
-    this.frustumMatrix.multiplyMatrices(
-      camera.projectionMatrix,
-      camera.matrixWorldInverse
-    );
+    this.frustumMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(this.frustumMatrix);
 
     // Update GPU uniforms
@@ -385,6 +409,22 @@ export class UnifiedCullingCompute {
   }
 
   /**
+   * Remove LOD hysteresis tracking for an entity (call when entity is unregistered)
+   */
+  removeEntityLODTracking(entityId: number): void {
+    this.previousLODAssignments.delete(entityId);
+    this.cachedLODAssignments.delete(entityId);
+  }
+
+  /**
+   * Clear all LOD hysteresis tracking (call on scene reset)
+   */
+  clearLODTracking(): void {
+    this.previousLODAssignments.clear();
+    this.cachedLODAssignments.clear();
+  }
+
+  /**
    * Perform GPU culling
    *
    * Dispatches two compute passes:
@@ -392,7 +432,12 @@ export class UnifiedCullingCompute {
    * 2. Cull: Tests each entity with sphere-frustum intersection
    */
   cullGPU(entityBuffer: GPUEntityBuffer, camera: THREE.Camera): void {
-    if (!this.renderer || !this.cullingComputeNode || !this.resetComputeNode || this.useCPUFallback) {
+    if (
+      !this.renderer ||
+      !this.cullingComputeNode ||
+      !this.resetComputeNode ||
+      this.useCPUFallback
+    ) {
       return;
     }
 
@@ -453,23 +498,67 @@ export class UnifiedCullingCompute {
         continue;
       }
 
-      // LOD selection
+      // LOD selection with hysteresis
       const dx = x - cameraPosition.x;
       const dy = y - cameraPosition.y;
       const dz = z - cameraPosition.z;
-      const distanceSq = dx * dx + dy * dy + dz * dz;
+      const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+      // Get previous LOD for hysteresis (undefined on first frame)
+      const previousLOD = this.previousLODAssignments.get(slot.entityId);
+      const hysteresis = this.lodConfig.hysteresis ?? 0.1;
 
       let lod: number;
-      if (distanceSq <= this.lodConfig.LOD0_MAX * this.lodConfig.LOD0_MAX) {
-        lod = 0;
-      } else if (distanceSq <= this.lodConfig.LOD1_MAX * this.lodConfig.LOD1_MAX) {
-        lod = 1;
+
+      if (previousLOD === undefined) {
+        // First time seeing this entity, use standard thresholds
+        if (distance <= this.lodConfig.LOD0_MAX) {
+          lod = 0;
+        } else if (distance <= this.lodConfig.LOD1_MAX) {
+          lod = 1;
+        } else {
+          lod = 2;
+        }
       } else {
-        lod = 2;
+        // Apply hysteresis based on current LOD
+        const lod0UpThreshold = this.lodConfig.LOD0_MAX * (1 + hysteresis);
+        const lod0DownThreshold = this.lodConfig.LOD0_MAX * (1 - hysteresis);
+        const lod1UpThreshold = this.lodConfig.LOD1_MAX * (1 + hysteresis);
+        const lod1DownThreshold = this.lodConfig.LOD1_MAX * (1 - hysteresis);
+
+        if (previousLOD === 0) {
+          // Currently at LOD0, only switch up if past threshold + margin
+          if (distance > lod1UpThreshold) {
+            lod = 2;
+          } else if (distance > lod0UpThreshold) {
+            lod = 1;
+          } else {
+            lod = 0;
+          }
+        } else if (previousLOD === 1) {
+          // Currently at LOD1
+          if (distance > lod1UpThreshold) {
+            lod = 2;
+          } else if (distance < lod0DownThreshold) {
+            lod = 0;
+          } else {
+            lod = 1;
+          }
+        } else {
+          // Currently at LOD2, only switch down if past threshold - margin
+          if (distance < lod0DownThreshold) {
+            lod = 0;
+          } else if (distance < lod1DownThreshold) {
+            lod = 1;
+          } else {
+            lod = 2;
+          }
+        }
       }
 
       this.cachedVisibleSlots.push(slot);
       this.cachedLODAssignments.set(slot.entityId, lod);
+      this.previousLODAssignments.set(slot.entityId, lod);
     }
 
     return {
@@ -630,6 +719,7 @@ export class UnifiedCullingCompute {
   dispose(): void {
     this.cachedVisibleSlots.length = 0;
     this.cachedLODAssignments.clear();
+    this.previousLODAssignments.clear();
     this.resetComputeNode = null;
     this.cullingComputeNode = null;
     this.transformStorageAttribute = null;
