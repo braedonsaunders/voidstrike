@@ -411,10 +411,16 @@ export class RenderPipeline {
     if (needsNormals || needsVelocity) {
       const customVelocity = createInstancedVelocityNode();
       if (needsNormals) {
+        // Fix for TSL normalView variable initialization issue (Three.js #32009):
+        // normalView may not be properly initialized in MRT shader contexts, causing
+        // black/undefined normals for some pixels. Using .toVar() forces proper
+        // variable initialization, preventing triangular artifacts where GTAO would
+        // fall back to depth-based normal reconstruction.
+        const normalViewVar = normalView.toVar();
         scenePass.setMRT(
           mrt({
             output: output,
-            normal: normalView.mul(0.5).add(0.5),
+            normal: normalViewVar.mul(0.5).add(0.5),
             metalrough: vec2(materialMetalness, materialRoughness),
             velocity: customVelocity,
           })
