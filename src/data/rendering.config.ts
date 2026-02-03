@@ -339,25 +339,10 @@ export const RENDER_ORDER = {
 
 /** Faction-specific projectile colors */
 export const FACTION_COLORS = {
-  terran: {
+  dominion: {
     primary: 0xffaa00,    // Orange-yellow tracer
     secondary: 0xff6600,  // Orange trail
     glow: 0xffdd44,       // Bright yellow glow
-  },
-  dominion: {
-    primary: 0xffaa00,    // Orange-yellow tracer (same as terran for now)
-    secondary: 0xff6600,  // Orange trail
-    glow: 0xffdd44,       // Bright yellow glow
-  },
-  protoss: {
-    primary: 0x4488ff,    // Blue energy
-    secondary: 0x8844ff,  // Purple trail
-    glow: 0x66aaff,       // Cyan glow
-  },
-  zerg: {
-    primary: 0x88ff44,    // Acid green
-    secondary: 0x44aa00,  // Dark green trail
-    glow: 0xaaff66,       // Bright green glow
   },
   neutral: {
     primary: 0xffaa00,

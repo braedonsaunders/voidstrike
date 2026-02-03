@@ -587,18 +587,6 @@ class DefinitionRegistryClass {
     };
   }
 
-  /**
-   * Get ability definitions.
-   * @see @/data/abilities/abilities.ts
-   */
-  public getAbilityDefinitions() {
-    const abilities = require('@/data/abilities/abilities');
-    return {
-      abilities: abilities.ABILITY_DEFINITIONS,
-      registry: abilities.AbilityRegistry,
-      getAbility: abilities.getAbility,
-    };
-  }
 }
 
 // Export singleton instance

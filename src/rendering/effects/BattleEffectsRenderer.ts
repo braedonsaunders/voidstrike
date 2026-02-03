@@ -718,7 +718,7 @@ export class BattleEffectsRenderer {
           data.targetPos.y
         );
 
-        const faction = (data.attackerFaction as keyof typeof FACTION_COLORS) || 'terran';
+        const faction = (data.attackerFaction as keyof typeof FACTION_COLORS) || 'dominion';
 
         // Only create instant weapon visuals (lasers, melee) when damage > 0
         // Projectile-based attacks (damage === 0) are handled by projectile:spawned event
@@ -758,7 +758,7 @@ export class BattleEffectsRenderer {
         data.targetPos.y
       );
 
-      const faction = (data.faction as keyof typeof FACTION_COLORS) || 'terran';
+      const faction = (data.faction as keyof typeof FACTION_COLORS) || 'dominion';
 
       // Calculate duration based on distance and a base speed
       const distance = startPos.distanceTo(endPos);

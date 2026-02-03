@@ -11,8 +11,15 @@
  *   Output: { type: 'visionResult', playerVisions: Map<playerId, Uint8Array>, version }
  */
 
-// Debug flag for worker logging (workers can't access UI store)
-const _DEBUG = false;
+import { debugLog, setWorkerDebugSettings } from '@/utils/debugLogger';
+import type { DebugSettings } from '@/store/uiStore';
+
+// Vision debug uses the general 'terrain' category since there's no specific vision category
+const debugVision = {
+  log: (...args: unknown[]) => debugLog.log('terrain', ...args),
+  warn: (...args: unknown[]) => debugLog.warn('terrain', ...args),
+  error: (...args: unknown[]) => debugLog.error('terrain', ...args),
+};
 
 // Vision states (encoded as numbers for efficient TypedArray transfer)
 const VISION_UNEXPLORED = 0;
@@ -62,7 +69,12 @@ interface UpdateVisionMessage {
   version: number;
 }
 
-type WorkerMessage = InitMessage | UpdateVisionMessage;
+interface SetDebugSettingsMessage {
+  type: 'setDebugSettings';
+  settings: DebugSettings;
+}
+
+type WorkerMessage = InitMessage | UpdateVisionMessage | SetDebugSettingsMessage;
 
 // State
 let gridWidth = 0;
@@ -91,7 +103,7 @@ function init(mapWidth: number, mapHeight: number, newCellSize: number): boolean
     initialized = true;
     return true;
   } catch (error) {
-    console.error('[VisionWorker] Init failed:', error);
+    debugVision.error('[VisionWorker] Init failed:', error);
     return false;
   }
 }
@@ -235,7 +247,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
 
     case 'updateVision': {
       if (!initialized) {
-        console.error('[VisionWorker] Not initialized');
+        debugVision.error('[VisionWorker] Not initialized');
         return;
       }
 
@@ -263,6 +275,11 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
         gridWidth,
         gridHeight,
       });
+      break;
+    }
+
+    case 'setDebugSettings': {
+      setWorkerDebugSettings(message.settings);
       break;
     }
   }

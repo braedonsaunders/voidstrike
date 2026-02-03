@@ -83,11 +83,7 @@ export {
 
 // ==================== ABILITIES ====================
 export {
-  ABILITY_DEFINITIONS,
-  AbilityRegistry,
-  getAbility,
   unitHasAbility,
-  getUnitAbilities,
   canUseAbility,
   calculateAbilityDamage,
   type AbilityDataDefinition,
