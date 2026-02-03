@@ -124,9 +124,11 @@ export function createQuarterSSRPipeline(
     const scenePass = pass(scene, camera);
 
     // Enable MRT for SSR (normals and metalrough needed)
+    // Fix for TSL normalView variable initialization issue (Three.js #32009)
+    const normalViewVar = normalView.toVar();
     scenePass.setMRT(mrt({
       output: output,
-      normal: normalView.mul(0.5).add(0.5),
+      normal: normalViewVar.mul(0.5).add(0.5),
       metalrough: vec2(materialMetalness, materialRoughness),
     }));
 
