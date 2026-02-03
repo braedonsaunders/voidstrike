@@ -1,17 +1,14 @@
 /**
- * WaterMesh - Localized water surface rendering using Three.js WaterMesh addon
+ * @deprecated This file is deprecated. Use the new unified water system instead:
+ * - UnifiedWaterMesh from '@/rendering/water/UnifiedWaterMesh'
+ * - TSLWaterMaterial from '@/rendering/tsl/WaterMaterial'
+ * - WaterMemoryManager from '@/rendering/water/WaterMemoryManager'
  *
- * Creates animated water surfaces at locations where water_shallow/water_deep
- * terrain features exist. Uses the official Three.js WaterMesh for realistic
- * reflections and proper water appearance.
+ * The old WaterMesh created separate ThreeWaterMesh instances per region,
+ * causing GPU memory exhaustion (3GB+) on maps with many water regions.
+ * The new system merges all water into a single draw call with <100MB usage.
  *
- * Features:
- * - Real scene reflections via Three.js WaterMesh
- * - Proper water normal map animation
- * - Physically-based fresnel and specular
- * - Flood-fill region detection for efficient mesh creation
- * - Frustum culling for performance
- * - Quality settings (low/medium/high/ultra)
+ * This file is kept for reference only and will be removed in a future version.
  */
 
 import * as THREE from 'three';
@@ -146,6 +143,7 @@ function generateFallbackNormals(): THREE.DataTexture {
 
 /**
  * Preload water normals - call during app initialization
+ * @deprecated Use the new unified water system instead
  */
 export function preloadWaterNormals(): Promise<void> {
   return new Promise((resolve) => {
@@ -180,6 +178,9 @@ export interface WaterRegion {
   hasAdjacentOppositeType: boolean; // Whether this region borders the opposite water type
 }
 
+/**
+ * @deprecated Use UnifiedWaterMesh from '@/rendering/water/UnifiedWaterMesh' instead
+ */
 export class WaterMesh {
   public group: THREE.Group;
 

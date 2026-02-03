@@ -115,7 +115,7 @@
         "particleDensity": 5.0,
         "waterEnabled": true,
         "waterQuality": "medium",
-        "waterReflectionsEnabled": true
+        "waterReflectionsEnabled": false
       }
     },
     "high": {

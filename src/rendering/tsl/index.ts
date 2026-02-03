@@ -10,11 +10,15 @@
 // Core renderer
 export {
   createWebGPURenderer,
+  attemptRecovery,
   updateRendererSize,
   render,
   disposeRenderer,
   type WebGPURendererConfig,
   type RenderContext,
+  type DeviceLostEvent,
+  type DeviceLostReason,
+  type RecoveryOptions,
 } from './WebGPURenderer';
 
 // Noise utilities
@@ -84,3 +88,13 @@ export {
   type RCASConfig,
   type TSUConfig,
 } from './UpscalerNode';
+
+// Water Material
+export {
+  TSLWaterMaterial,
+  createWaterMaterial,
+  updateWaterMaterial,
+  loadWaterNormalsTexture,
+  getWaterNormalsTextureSync,
+  type WaterMaterialConfig,
+} from './WaterMaterial';

@@ -1292,93 +1292,139 @@ VOIDSTRIKE features a world-class battle effects system with:
 
 ### Overview
 
-VOIDSTRIKE features a two-layer water rendering system for both game rendering and map editor:
+VOIDSTRIKE features a unified water rendering system that replaces the old per-region ThreeWaterMesh approach. The new system dramatically reduces memory usage while maintaining visual quality:
 
-1. **OceanWater (Global)** - Reflection-based water shader with RTS optimizations
-2. **WaterMesh (Localized)** - Per-cell water surfaces for water features (lakes, rivers)
+- **Memory Reduction**: From 3GB+ down to <100MB for complex island maps
+- **Performance**: Single draw call for all water regardless of region count
+- **Quality Tiers**: Automatic quality selection based on 100MB memory budget
+- **Recovery**: WebGPU device lost detection with automatic fallback
 
-### OceanWater (Reflection-Based Water)
+### Architecture
 
-**File:** `src/rendering/tsl/OceanWater.ts`
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     UNIFIED WATER SYSTEM                         │
+│                                                                  │
+│  UnifiedWaterMesh (src/rendering/water/UnifiedWaterMesh.ts)     │
+│  └─ Single merged BufferGeometry for all water cells            │
+│  └─ Vertex attributes: position, normal, uv, aWaterData         │
+│  └─ aWaterData = vec3(regionId, isDeep, elevation)              │
+│                                                                  │
+│  TSLWaterMaterial (src/rendering/tsl/WaterMaterial.ts)          │
+│  └─ TSL/NodeMaterial-based water shader                         │
+│  └─ Texture-based dual-layer animated normals                   │
+│  └─ Depth-based shallow/deep color blending                     │
+│  └─ Fresnel reflections + specular highlights                   │
+│                                                                  │
+│  WaterMemoryManager (src/rendering/water/WaterMemoryManager.ts) │
+│  └─ Automatic quality selection based on memory budget          │
+│  └─ 100MB budget enforcement                                    │
+│                                                                  │
+│  PlanarReflection (src/rendering/water/PlanarReflection.ts)     │
+│  └─ Single shared reflection render target (ultra only)         │
+│  └─ 1024x1024 resolution, throttled updates                     │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-Hybrid water shader combining Three.js WaterMesh reflection techniques with RTS-appropriate
-wave displacement. Designed to eliminate the "big color gradients moving back and forth"
-issue from the previous procedural approach.
+### Quality Tiers
+
+The water system automatically selects quality based on available memory:
+
+| Quality | Cell Merge | Texture Size | Reflections | Memory |
+|---------|------------|--------------|-------------|--------|
+| Low | 4x4 | 50 | Cubemap only | ~5MB |
+| Medium | 2x2 | 40 | SSR | ~10MB |
+| High | 1x1 | 30 | SSR | ~15MB |
+| Ultra | 1x1 | 25 | SSR + Planar | ~80MB |
+
+**Cell Merge**: Higher merge factors reduce vertex count by grouping adjacent water cells into single quads, trading some detail for better performance.
+
+**Texture Size**: World-space texture tiling frequency (lower = larger, more detailed tiles).
+
+**Reflections**:
+- Cubemap: Static environment map
+- SSR: Screen-space reflections from post-processing
+- Planar: Real-time planar reflection render target
+
+### Device Lost Recovery
+
+The water system handles WebGPU device loss gracefully:
+
+1. **Detection**: Monitors `GPUDevice.lost` promise
+2. **Recovery**: Automatically reduces quality tier and recreates resources
+3. **Fallback**: Switches to WebGL after 3 failed WebGPU recovery attempts
+4. **Notification**: User is notified of quality reduction
+
+**Implementation:**
+```typescript
+// WaterMemoryManager.ts
+async handleDeviceLost(device: GPUDevice) {
+  await device.lost;
+  console.warn('[WaterMemoryManager] Device lost, reducing quality');
+
+  // Reduce quality tier
+  const currentQuality = this.getCurrentQuality();
+  const newQuality = this.getNextLowerQuality(currentQuality);
+
+  if (newQuality) {
+    this.setQuality(newQuality);
+  } else {
+    // No lower quality available, switch to WebGL
+    this.switchToWebGL();
+  }
+}
+```
+
+### Shader Features
+
+**TSLWaterMaterial** provides high-quality water rendering using Three.js Shading Language:
 
 | Feature | Description |
 |---------|-------------|
-| **Texture-Based Normals** | 4-sample animated normal map (generated procedurally at startup) |
-| **Fixed Depth Coloring** | Distance-based color variation instead of wave-height mixing |
-| **Clean Fresnel** | Schlick approximation for angle-dependent reflectivity |
-| **Subtle Gerstner Waves** | 3 overlapping waves for gentle vertex displacement |
-| **Stable Sky Reflection** | Consistent sky color blending, no oscillating gradients |
-| **Subtle Caustics** | Low-intensity underwater light shimmer |
-| **Lava Support** | Volcanic biomes render as animated lava with glow |
+| **Dual-Layer Normals** | Two animated normal maps at different scales/speeds |
+| **Depth-Based Coloring** | Shallow water (turquoise) → deep water (dark blue) |
+| **Fresnel Reflections** | Angle-dependent reflectivity (Schlick approximation) |
+| **Specular Highlights** | Phong-style highlights for sunlight glints |
+| **Wave Animation** | Time-based UV scrolling for both normal layers |
+| **Per-Region Data** | Vertex attribute stores region ID, depth flag, elevation |
 
-**Key Differences from Previous OceanWater:**
-
-| Aspect | OceanWater (Old) | OceanWater (New) |
-|--------|------------------|------------------------|
-| Normal generation | Procedural sin/cos | 4-sample texture animation |
-| Color mixing | Wave-height based (gradient issue) | Distance-based (stable) |
-| Reflectivity | 0.35 | 0.25 (less reflective) |
-| Wave height | 0.12 | 0.08 (subtler) |
-| Fresnel power | 3.5 | 3.0 (softer) |
-
-**Normal Map Generation:**
-```typescript
-// Procedurally generated at startup (512x512)
-// Multiple sine waves with irrational ratios prevent tiling
-const wave1 = Math.sin(u * 12.7 + v * 8.3) * 0.3;
-const wave2 = Math.sin(u * 23.1 - v * 17.9) * 0.2;
-// ... combined for natural wave patterns
+**Vertex Attributes:**
+```glsl
+// aWaterData components:
+// x: regionId (0-255)
+// y: isDeep (0.0 or 1.0)
+// z: elevation (-1.0 to 1.0)
 ```
 
-**Gerstner Wave Configuration (RTS-Scale):**
+### Memory Budget System
+
+**WaterMemoryManager** enforces a 100MB memory budget:
+
 ```typescript
-const waves = [
-  { direction: (1.0, 0.15), steepness: 0.035, wavelength: 47.0 },
-  { direction: (0.2, 1.0), steepness: 0.028, wavelength: 31.0 },
-  { direction: (0.7, 0.7), steepness: 0.020, wavelength: 19.0 },
-];
+const budgets = {
+  low: 5 * 1024 * 1024,      // 5MB
+  medium: 10 * 1024 * 1024,   // 10MB
+  high: 15 * 1024 * 1024,     // 15MB
+  ultra: 80 * 1024 * 1024,    // 80MB
+};
+
+// Estimate geometry memory
+const positionBytes = vertexCount * 3 * 4;  // vec3 float32
+const normalBytes = vertexCount * 3 * 4;
+const uvBytes = vertexCount * 2 * 4;
+const waterDataBytes = vertexCount * 3 * 4;
+const indexBytes = indexCount * 4;
+
+const geometryMemory = positionBytes + normalBytes + uvBytes + waterDataBytes + indexBytes;
+
+// Add texture memory
+const normalMapMemory = 1024 * 1024 * 4 * 2;  // 2x RGBA 1024x1024
+
+// Add reflection memory (if ultra)
+const reflectionMemory = quality === 'ultra' ? 1024 * 1024 * 4 : 0;
+
+const totalMemory = geometryMemory + normalMapMemory + reflectionMemory;
 ```
-
-**Configurable Parameters:**
-- Wave height and speed
-- Water colors (shallow/deep/sky)
-- Reflectivity (0-1)
-- Distortion scale
-- Fresnel power
-- Specular power
-- Opacity
-
-### WaterMesh (Localized Water)
-
-**File:** `src/rendering/WaterMesh.ts`
-
-TSL-animated water surfaces for water terrain features:
-
-| Feature | Description |
-|---------|-------------|
-| **Flood-Fill Regions** | Groups connected water cells into efficient batched meshes |
-| **Depth-Aware Materials** | Separate materials for shallow vs deep water |
-| **Animated Waves** | Multi-layer sine wave animation |
-| **Fresnel Effect** | Angle-dependent reflectivity |
-| **Caustic Highlights** | Light pattern simulation on water surface |
-| **Ripple Effects** | High-frequency surface detail animation |
-
-**Terrain Integration:**
-- Renders at `elevation * HEIGHT_SCALE + 0.15` (offset above terrain)
-- Distinguishes `water_shallow` (0.65 opacity) and `water_deep` (0.8 opacity)
-- Supports both game and editor coordinate systems
-
-### Editor Integration
-
-**File:** `src/editor/rendering3d/EditorTerrain.ts`
-
-The map editor renders water with proper orientation:
-- WaterMesh added as child of terrain mesh
-- Counter-rotation applied to compensate for terrain rotation: `waterMesh.group.rotation.x = Math.PI / 2`
 
 ### Biome Water Configuration
 
@@ -1391,6 +1437,36 @@ The map editor renders water with proper orientation:
 | Void | ✗ | -1 | - | Disabled |
 | Jungle | ✗ | -1 | - | Disabled |
 | Ocean | ✓ | 0.5 | 0x1060a0 | Deep ocean for naval |
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `src/rendering/water/UnifiedWaterMesh.ts` | Core geometry class - merges all water cells |
+| `src/rendering/water/WaterMemoryManager.ts` | Memory budget management and quality selection |
+| `src/rendering/water/PlanarReflection.ts` | Shared planar reflection render target |
+| `src/rendering/tsl/WaterMaterial.ts` | TSL water shader with dual-layer normals |
+| `src/rendering/WaterMesh.ts` | **DEPRECATED** (kept for reference) |
+
+### Migration Notes
+
+**Old System (Per-Region):**
+- Each water region created a separate ThreeWaterMesh
+- Island maps with 50+ regions = 50+ draw calls
+- Each region had its own BufferGeometry and Material
+- Memory usage scaled linearly with region count
+
+**New System (Unified):**
+- Single merged BufferGeometry for entire map
+- One draw call regardless of region count
+- Per-vertex region data via attributes
+- Memory usage constant regardless of region complexity
+
+**Breaking Changes:**
+- `ThreeWaterMesh` class removed
+- `WaterMesh.createForRegion()` replaced with `UnifiedWaterMesh.create()`
+- Region-specific materials replaced with single shared material
+- Water update API changed from per-region to per-map
 
 ---
 

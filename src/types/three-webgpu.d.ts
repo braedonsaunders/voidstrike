@@ -653,3 +653,139 @@ declare module 'three' {
     _uColor?: { value: Color };
   }
 }
+
+// ============================================
+// WebGPU API Types
+// ============================================
+// Minimal WebGPU type declarations for device lost detection.
+// These supplement the DOM types which may not include WebGPU yet.
+
+declare global {
+  /**
+   * Reason for WebGPU device loss as reported by the browser.
+   */
+  type GPUDeviceLostReason = 'destroyed' | 'unknown';
+
+  /**
+   * Information about a lost WebGPU device.
+   */
+  interface GPUDeviceLostInfo {
+    /** Reason the device was lost */
+    readonly reason: GPUDeviceLostReason;
+    /** Human-readable message with additional details */
+    readonly message: string;
+  }
+
+  /**
+   * Information about a GPU adapter.
+   */
+  interface GPUAdapterInfo {
+    /** Vendor name (e.g., "nvidia", "amd", "intel") */
+    readonly vendor: string;
+    /** GPU architecture (e.g., "ampere", "rdna3") */
+    readonly architecture: string;
+    /** Device identifier */
+    readonly device: string;
+    /** Human-readable description */
+    readonly description: string;
+  }
+
+  /**
+   * Supported limits for a GPU adapter.
+   */
+  interface GPUSupportedLimits {
+    readonly maxTextureDimension1D: number;
+    readonly maxTextureDimension2D: number;
+    readonly maxTextureDimension3D: number;
+    readonly maxTextureArrayLayers: number;
+    readonly maxBindGroups: number;
+    readonly maxBindingsPerBindGroup: number;
+    readonly maxDynamicUniformBuffersPerPipelineLayout: number;
+    readonly maxDynamicStorageBuffersPerPipelineLayout: number;
+    readonly maxSampledTexturesPerShaderStage: number;
+    readonly maxSamplersPerShaderStage: number;
+    readonly maxStorageBuffersPerShaderStage: number;
+    readonly maxStorageTexturesPerShaderStage: number;
+    readonly maxUniformBuffersPerShaderStage: number;
+    readonly maxUniformBufferBindingSize: number;
+    readonly maxStorageBufferBindingSize: number;
+    readonly minUniformBufferOffsetAlignment: number;
+    readonly minStorageBufferOffsetAlignment: number;
+    readonly maxVertexBuffers: number;
+    readonly maxBufferSize: number;
+    readonly maxVertexAttributes: number;
+    readonly maxVertexBufferArrayStride: number;
+    readonly maxInterStageShaderComponents: number;
+    readonly maxColorAttachments: number;
+    readonly maxColorAttachmentBytesPerSample: number;
+    readonly maxComputeWorkgroupStorageSize: number;
+    readonly maxComputeInvocationsPerWorkgroup: number;
+    readonly maxComputeWorkgroupSizeX: number;
+    readonly maxComputeWorkgroupSizeY: number;
+    readonly maxComputeWorkgroupSizeZ: number;
+    readonly maxComputeWorkgroupsPerDimension: number;
+    [key: string]: number;
+  }
+
+  /**
+   * WebGPU GPU Adapter - represents a physical GPU.
+   */
+  interface GPUAdapter {
+    /** Information about the adapter */
+    readonly info: GPUAdapterInfo;
+    /** Supported limits */
+    readonly limits: GPUSupportedLimits;
+    /** Request a device from this adapter */
+    requestDevice(descriptor?: GPUDeviceDescriptor): Promise<GPUDevice>;
+  }
+
+  /**
+   * Options for requesting a GPU adapter.
+   */
+  interface GPURequestAdapterOptions {
+    powerPreference?: 'low-power' | 'high-performance';
+    forceFallbackAdapter?: boolean;
+  }
+
+  /**
+   * Descriptor for requesting a GPU device.
+   */
+  interface GPUDeviceDescriptor {
+    label?: string;
+    requiredFeatures?: string[];
+    requiredLimits?: Record<string, number>;
+  }
+
+  /**
+   * WebGPU GPU Device - represents a logical connection to a GPU.
+   */
+  interface GPUDevice {
+    /** Promise that resolves when the device is lost */
+    readonly lost: Promise<GPUDeviceLostInfo>;
+    /** Destroy the device */
+    destroy(): void;
+    /** Device label for debugging */
+    label: string;
+  }
+
+  /**
+   * WebGPU entry point on the Navigator object.
+   */
+  interface GPU {
+    /** Request a GPU adapter */
+    requestAdapter(options?: GPURequestAdapterOptions): Promise<GPUAdapter | null>;
+    /** Get the preferred canvas format for this system */
+    getPreferredCanvasFormat(): string;
+  }
+
+  /**
+   * Extend Navigator to include WebGPU entry point.
+   */
+  interface Navigator {
+    /** WebGPU entry point - may be undefined if WebGPU is not supported */
+    readonly gpu?: GPU;
+  }
+}
+
+// Ensure this file is treated as a module
+export {};
