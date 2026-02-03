@@ -1112,6 +1112,25 @@ export class Terrain {
   }
 
   /**
+   * Get the raw heightmap data for vision LOS calculations
+   * Returns a copy of the heightmap array (gridWidth x gridHeight)
+   */
+  public getHeightMapData(): Float32Array {
+    return this.heightMap.slice();
+  }
+
+  /**
+   * Get heightmap dimensions
+   */
+  public getHeightMapDimensions(): { width: number; height: number; cellSize: number } {
+    return {
+      width: this.gridWidth,
+      height: this.gridHeight,
+      cellSize: this.cellSize,
+    };
+  }
+
+  /**
    * Smooth the heightmap using Gaussian-like averaging
    * Preserves large features while smoothing rough transitions
    * IMPORTANT: Skips ramp cells and plateau edges to preserve clean geometry
