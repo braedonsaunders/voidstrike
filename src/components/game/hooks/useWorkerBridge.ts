@@ -150,6 +150,7 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
       }
 
       // Create worker bridge for game logic communication
+      const fogOfWar = useGameSetupStore.getState().fogOfWar;
       const bridge = WorkerBridge.getInstance({
         config: {
           mapWidth,
@@ -159,6 +160,7 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
           playerId: localPlayerId ?? 'spectator',
           aiEnabled: !isBattleSimulatorMode() && !isMultiplayer,
           aiDifficulty: 'medium',
+          fogOfWar,
         },
         playerId: localPlayerId ?? 'spectator',
         onRenderState: handleRenderState,

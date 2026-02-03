@@ -59,6 +59,7 @@ export interface GameConfig {
   playerId: string;
   aiEnabled: boolean;
   aiDifficulty: 'easy' | 'medium' | 'hard' | 'insane';
+  fogOfWar: boolean;
 }
 
 export const DEFAULT_CONFIG: GameConfig = {
@@ -69,6 +70,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   playerId: 'player1',
   aiEnabled: true,
   aiDifficulty: 'medium',
+  fogOfWar: true,
 };
 
 /**
