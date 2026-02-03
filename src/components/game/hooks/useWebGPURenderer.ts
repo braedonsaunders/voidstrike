@@ -730,6 +730,12 @@ export function useWebGPURenderer({
         watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
       }
 
+      // Connect terrain height provider to vision system for LOS blocking (Phase 2)
+      // This enables height-based line-of-sight calculations (high ground advantage)
+      if (!worldProviderRef?.current) {
+        game.visionSystem.setHeightProvider((x: number, y: number) => terrain.getHeightAt(x, y));
+      }
+
       isInitializedRef.current = true;
 
       // Start animation loop
