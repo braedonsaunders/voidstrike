@@ -283,11 +283,8 @@ export class TSLWaterMaterial {
     // Note: ior is a regular property, not a node property
     material.ior = WATER_IOR;
 
-    // Environment map for reflections (if provided)
-    if (config.envMap) {
-      material.envMap = config.envMap;
-      material.envMapIntensity = 0.8;
-    }
+    // Note: Environment map reflections are handled by the scene's environment
+    // rather than per-material envMap in TSL node materials
 
     // Opaque rendering for proper depth sorting with terrain
     material.transparent = false;
