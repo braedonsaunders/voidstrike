@@ -12,6 +12,10 @@ import { WatchTower } from '@/data/maps/MapTypes';
 import type { VisionCompute, VisionCaster } from '@/rendering/compute/VisionCompute';
 import type { WebGPURenderer } from 'three/webgpu';
 import { debugPathfinding } from '@/utils/debugLogger';
+// Industry-standard fog of war optimizations
+import { VisionOptimizer } from './vision/VisionOptimizer';
+import { LineOfSight, type HeightProvider } from './vision/LineOfSight';
+import { SDFVisionRenderer } from './vision/SDFVisionRenderer';
 
 // Vision states for fog of war
 export type VisionState = 'unexplored' | 'explored' | 'visible';
@@ -92,6 +96,26 @@ export class VisionSystem extends System {
   // Track active computation path for debugging
   private activeComputePath: 'gpu' | 'worker' | 'main-thread' | null = null;
 
+  // ============================================
+  // INDUSTRY-STANDARD OPTIMIZATIONS
+  // ============================================
+
+  // Phase 1: Reference counting and cell boundary tracking
+  private visionOptimizer: VisionOptimizer | null = null;
+  private useOptimizedVision: boolean = true; // Enable by default
+
+  // Phase 2: Height-based line-of-sight blocking
+  private lineOfSight: LineOfSight | null = null;
+  private useLOSBlocking: boolean = true; // Enable by default
+  private heightProvider: HeightProvider | null = null;
+
+  // Phase 3: SDF-based edge rendering
+  private sdfRenderer: SDFVisionRenderer | null = null;
+  private useSDF: boolean = true; // Enable by default
+
+  // Track entity cell positions for boundary detection
+  private entityCellPositions: Map<number, { cellX: number; cellY: number }> = new Map();
+
   constructor(game: Game, mapWidth: number, mapHeight: number, cellSize: number = 2) {
     super(game);
     this.mapWidth = mapWidth;
@@ -99,6 +123,52 @@ export class VisionSystem extends System {
     this.cellSize = cellSize;
     this.initializeWorker();
     this.setupEventListeners();
+    this.initializeOptimizations();
+  }
+
+  /**
+   * Initialize industry-standard fog of war optimizations
+   */
+  private initializeOptimizations(): void {
+    const gridWidth = Math.ceil(this.mapWidth / this.cellSize);
+    const gridHeight = Math.ceil(this.mapHeight / this.cellSize);
+
+    // Phase 1: Reference counting optimizer
+    if (this.useOptimizedVision) {
+      this.visionOptimizer = new VisionOptimizer({
+        gridWidth,
+        gridHeight,
+        cellSize: this.cellSize,
+        mapWidth: this.mapWidth,
+        mapHeight: this.mapHeight,
+      });
+      debugPathfinding.log('[VisionSystem] Phase 1: Reference counting enabled');
+    }
+
+    // Phase 2: Line-of-sight blocking
+    if (this.useLOSBlocking) {
+      this.lineOfSight = new LineOfSight({
+        gridWidth,
+        gridHeight,
+        cellSize: this.cellSize,
+        mapWidth: this.mapWidth,
+        mapHeight: this.mapHeight,
+        losBlockingThreshold: 1.0, // 1 world unit height difference blocks LOS
+      });
+      debugPathfinding.log('[VisionSystem] Phase 2: LOS blocking enabled');
+    }
+
+    // Phase 3: SDF renderer for smooth edges
+    if (this.useSDF) {
+      this.sdfRenderer = new SDFVisionRenderer({
+        gridWidth,
+        gridHeight,
+        cellSize: this.cellSize,
+        maxDistance: 8, // 8 cells max SDF propagation
+        edgeSoftness: 0.3,
+      });
+      debugPathfinding.log('[VisionSystem] Phase 3: SDF edge rendering enabled');
+    }
   }
 
   /**
@@ -318,6 +388,47 @@ export class VisionSystem extends System {
         cellSize: this.cellSize,
       });
     }
+
+    // Reinitialize optimization systems
+    const gridWidth = Math.ceil(this.mapWidth / this.cellSize);
+    const gridHeight = Math.ceil(this.mapHeight / this.cellSize);
+
+    if (this.visionOptimizer) {
+      this.visionOptimizer.reinitialize({
+        gridWidth,
+        gridHeight,
+        cellSize: this.cellSize,
+        mapWidth: this.mapWidth,
+        mapHeight: this.mapHeight,
+      });
+    }
+
+    if (this.lineOfSight) {
+      this.lineOfSight.reinitialize({
+        gridWidth,
+        gridHeight,
+        cellSize: this.cellSize,
+        mapWidth: this.mapWidth,
+        mapHeight: this.mapHeight,
+        losBlockingThreshold: 1.0,
+      });
+      // Re-attach height provider if available
+      if (this.heightProvider) {
+        this.lineOfSight.setHeightProvider(this.heightProvider);
+      }
+    }
+
+    if (this.sdfRenderer) {
+      this.sdfRenderer.reinitialize({
+        gridWidth,
+        gridHeight,
+        cellSize: this.cellSize,
+        maxDistance: 8,
+        edgeSoftness: 0.3,
+      });
+    }
+
+    this.entityCellPositions.clear();
   }
 
   private initializeVisionMap(): void {
@@ -403,6 +514,87 @@ export class VisionSystem extends System {
     return this.gpuVisionCompute;
   }
 
+  // ============================================
+  // PHASE 1-3 PUBLIC API
+  // ============================================
+
+  /**
+   * Set the height provider for line-of-sight calculations
+   * Call this after terrain is initialized (e.g., from Terrain.getHeightAt)
+   */
+  public setHeightProvider(provider: HeightProvider): void {
+    this.heightProvider = provider;
+    if (this.lineOfSight) {
+      this.lineOfSight.setHeightProvider(provider);
+      debugPathfinding.log('[VisionSystem] Height provider set for LOS blocking');
+    }
+  }
+
+  /**
+   * Enable/disable reference counting optimization (Phase 1)
+   */
+  public setOptimizedVisionEnabled(enabled: boolean): void {
+    this.useOptimizedVision = enabled;
+    if (!enabled && this.visionOptimizer) {
+      this.visionOptimizer.dispose();
+      this.visionOptimizer = null;
+    } else if (enabled && !this.visionOptimizer) {
+      this.initializeOptimizations();
+    }
+  }
+
+  /**
+   * Enable/disable line-of-sight blocking (Phase 2)
+   */
+  public setLOSBlockingEnabled(enabled: boolean): void {
+    this.useLOSBlocking = enabled;
+    debugPathfinding.log(`[VisionSystem] LOS blocking ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * Enable/disable SDF edge rendering (Phase 3)
+   */
+  public setSDFRenderingEnabled(enabled: boolean): void {
+    this.useSDF = enabled;
+    debugPathfinding.log(`[VisionSystem] SDF rendering ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
+  /**
+   * Get the vision optimizer instance (for debugging/stats)
+   */
+  public getVisionOptimizer(): VisionOptimizer | null {
+    return this.visionOptimizer;
+  }
+
+  /**
+   * Get the line-of-sight system instance
+   */
+  public getLineOfSight(): LineOfSight | null {
+    return this.lineOfSight;
+  }
+
+  /**
+   * Get the SDF renderer instance
+   */
+  public getSDFRenderer(): SDFVisionRenderer | null {
+    return this.sdfRenderer;
+  }
+
+  /**
+   * Check if optimizations are enabled
+   */
+  public getOptimizationStatus(): {
+    referenceCountingEnabled: boolean;
+    losBlockingEnabled: boolean;
+    sdfRenderingEnabled: boolean;
+  } {
+    return {
+      referenceCountingEnabled: this.useOptimizedVision,
+      losBlockingEnabled: this.useLOSBlocking,
+      sdfRenderingEnabled: this.useSDF,
+    };
+  }
+
   /**
    * Get numeric player index for GPU (creates if not exists)
    */
@@ -433,6 +625,21 @@ export class VisionSystem extends System {
       this.gpuVisionCompute = null;
     }
     this.useGPUVision = false;
+
+    // Clean up optimization systems
+    if (this.visionOptimizer) {
+      this.visionOptimizer.dispose();
+      this.visionOptimizer = null;
+    }
+    if (this.lineOfSight) {
+      this.lineOfSight.dispose();
+      this.lineOfSight = null;
+    }
+    if (this.sdfRenderer) {
+      this.sdfRenderer.dispose();
+      this.sdfRenderer = null;
+    }
+    this.entityCellPositions.clear();
   }
 
   public update(_deltaTime: number): void {
