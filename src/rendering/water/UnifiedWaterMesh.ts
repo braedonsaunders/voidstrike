@@ -136,8 +136,9 @@ export class UnifiedWaterMesh {
     this.geometry = new THREE.BufferGeometry();
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.frustumCulled = true;
-    // Render water BEFORE terrain (negative render order) so terrain properly occludes it
-    this.mesh.renderOrder = -10;
+    // Render water AFTER terrain (positive render order) so water depth-tests against
+    // terrain's already-written depth buffer - prevents water from appearing over higher terrain
+    this.mesh.renderOrder = 5;
 
     // Shore group for transitions
     this.shoreGroup = new THREE.Group();
@@ -839,10 +840,6 @@ export class UnifiedWaterMesh {
     const visited = new Set<string>();
     const regions: WaterRegion[] = [];
 
-    // Debug: Count feature types
-    const featureCounts: Record<string, number> = {};
-    let totalCells = 0;
-
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const key = `${x},${y}`;
@@ -852,11 +849,6 @@ export class UnifiedWaterMesh {
         if (!cell) continue;
 
         const feature = cell.feature || 'none';
-
-        // Debug: Count features
-        featureCounts[feature] = (featureCounts[feature] || 0) + 1;
-        totalCells++;
-
         if (feature !== 'water_shallow' && feature !== 'water_deep') continue;
 
         const region = this.floodFillRegion(terrain, x, y, width, height, visited);
@@ -864,47 +856,6 @@ export class UnifiedWaterMesh {
           regions.push(region);
         }
       }
-    }
-
-    // Debug log
-    console.log(
-      '[UnifiedWaterMesh] Map dimensions:',
-      width,
-      'x',
-      height,
-      '=',
-      width * height,
-      'total possible cells'
-    );
-    console.log(
-      '[UnifiedWaterMesh] Terrain rows:',
-      terrain.length,
-      'First row cols:',
-      terrain[0]?.length
-    );
-    console.log('[UnifiedWaterMesh] Sample cell [0][0]:', JSON.stringify(terrain[0]?.[0]));
-    console.log('[UnifiedWaterMesh] Feature counts:', featureCounts);
-    console.log(
-      '[UnifiedWaterMesh] Cells counted in loop:',
-      totalCells,
-      'Regions:',
-      regions.length
-    );
-    const totalWaterCells = regions.reduce((sum, r) => sum + r.cells.length, 0);
-    console.log('[UnifiedWaterMesh] Total water cells:', totalWaterCells);
-    if (regions.length > 0) {
-      console.log(
-        '[UnifiedWaterMesh] Region 0: cells=',
-        regions[0].cells.length,
-        'bounds x=',
-        regions[0].minX,
-        '-',
-        regions[0].maxX,
-        'y=',
-        regions[0].minY,
-        '-',
-        regions[0].maxY
-      );
     }
 
     return regions;
@@ -955,13 +906,6 @@ export class UnifiedWaterMesh {
           hasAdjacentOppositeType = true;
         }
         continue;
-      }
-
-      // Debug: Log first few cells being added
-      if (cells.length < 5) {
-        console.log(
-          `[FloodFill] Adding cell (${x},${y}) feature="${feature}" target="${targetFeature}"`
-        );
       }
 
       visited.add(key);
