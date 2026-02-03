@@ -406,6 +406,11 @@ export class AICoordinator extends System {
     return this.positionalAnalysis;
   }
 
+  /** Get the world instance for subsystems that need entity access */
+  public getWorld() {
+    return this.world;
+  }
+
   /**
    * Update shared AI primitives with current game state.
    * Called once per update cycle, before individual AI updates.

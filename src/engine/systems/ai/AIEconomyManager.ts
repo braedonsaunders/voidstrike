@@ -481,8 +481,11 @@ export class AIEconomyManager {
                                unit.targetX === null &&
                                unit.targetY === null &&
                                unit.gatherTargetId === null;
+      // Workers in 'returning' state have finished gathering and are moving back to base
+      // They can be reassigned if a higher priority task is available
+      const isReturning = unit.state === 'returning';
 
-      if (isIdle || isMovingNoTarget) {
+      if (isIdle || isMovingNoTarget || isReturning) {
         idleWorkers.push({
           entityId: entity.id,
           x: transform.x,

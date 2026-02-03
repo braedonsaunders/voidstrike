@@ -451,7 +451,7 @@ export class Game extends GameCore {
         const ticksWaited = this.currentTick - waitStartTick;
 
         if (ticksWaited >= this.LOCKSTEP_TIMEOUT_TICKS) {
-          // Timeout - report desync and proceed anyway to avoid infinite hang
+          // Timeout - report desync and stop processing
           console.error(
             `[Game] LOCKSTEP TIMEOUT: No commands from all players for tick ${nextTick} ` +
               `after waiting ${ticksWaited} ticks. Expected: ${this.getExpectedPlayerIds().join(', ')}, ` +
@@ -465,8 +465,10 @@ export class Game extends GameCore {
             remotePeerId: useMultiplayerStore.getState().remotePeerId || 'unknown',
             reason: 'lockstep_timeout',
           });
-          // Clear wait tracking and proceed - game may desync but won't freeze
+          // Clear wait tracking and stop - game is in desync state requiring reconnection/resync
           this.tickWaitStart.delete(nextTick);
+          // Do not continue processing ticks - the desync handler will set state to 'ended'
+          return;
         } else {
           // Still waiting - skip this frame
           return;
