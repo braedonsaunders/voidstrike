@@ -48,9 +48,9 @@ export interface GenerationResult {
 // Map sizes in cells
 const MAP_SIZES: Record<MapGenerationSettings['mapSize'], { width: number; height: number }> = {
   small: { width: 128, height: 128 },
-  medium: { width: 176, height: 176 },
-  large: { width: 224, height: 224 },
-  huge: { width: 256, height: 256 },
+  medium: { width: 192, height: 192 },
+  large: { width: 320, height: 320 },
+  huge: { width: 512, height: 512 },
 };
 
 // Default models per provider
@@ -87,8 +87,8 @@ const MAP_BLUEPRINT_SCHEMA = {
       type: 'object',
       required: ['width', 'height', 'biome'],
       properties: {
-        width: { type: 'number', description: 'Map width in cells (128-256)' },
-        height: { type: 'number', description: 'Map height in cells (128-256)' },
+        width: { type: 'number', description: 'Map width in cells (128-512)' },
+        height: { type: 'number', description: 'Map height in cells (128-512)' },
         biome: {
           type: 'string',
           enum: ['grassland', 'desert', 'frozen', 'volcanic', 'void', 'jungle'],
@@ -388,8 +388,8 @@ const GEMINI_SCHEMA = {
       type: 'object',
       required: ['width', 'height', 'biome'],
       properties: {
-        width: { type: 'integer', description: 'Map width in cells (128-256)' },
-        height: { type: 'integer', description: 'Map height in cells (128-256)' },
+        width: { type: 'integer', description: 'Map width in cells (128-512)' },
+        height: { type: 'integer', description: 'Map height in cells (128-512)' },
         biome: {
           type: 'string',
           enum: ['grassland', 'desert', 'frozen', 'volcanic', 'void', 'jungle'],
