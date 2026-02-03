@@ -67,7 +67,7 @@ export interface GameStartPayload {
   startTime: number;
 }
 
-// Default STUN servers (configurable via NEXT_PUBLIC_ICE_SERVERS env var)
+// Default STUN servers (loaded from public/data/networking.json at runtime)
 const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
@@ -75,25 +75,31 @@ const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun3.l.google.com:19302' },
 ];
 
-function getIceServers(): RTCIceServer[] {
-  // Next.js inlines NEXT_PUBLIC_* env vars at build time
-  const envServers = (
-    typeof process !== 'undefined' ? process.env?.NEXT_PUBLIC_ICE_SERVERS : undefined
-  ) as string | undefined;
-  if (envServers) {
-    try {
-      const parsed = JSON.parse(envServers) as RTCIceServer[];
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+let cachedIceServers: RTCIceServer[] | null = null;
+
+async function loadIceServers(): Promise<RTCIceServer[]> {
+  if (cachedIceServers) return cachedIceServers;
+
+  try {
+    const response = await fetch('/data/networking.json');
+    if (response.ok) {
+      const config = await response.json();
+      if (Array.isArray(config.iceServers) && config.iceServers.length > 0) {
+        cachedIceServers = config.iceServers;
+        return cachedIceServers;
       }
-    } catch {
-      debugNetworking.warn('[Lobby] Invalid NEXT_PUBLIC_ICE_SERVERS format, using defaults');
     }
+  } catch {
+    debugNetworking.warn('[Lobby] Failed to load networking.json, using defaults');
   }
-  return DEFAULT_ICE_SERVERS;
+
+  cachedIceServers = DEFAULT_ICE_SERVERS;
+  return cachedIceServers;
 }
 
-const ICE_SERVERS = getIceServers();
+function getIceServersSync(): RTCIceServer[] {
+  return cachedIceServers || DEFAULT_ICE_SERVERS;
+}
 
 export type LobbyStatus =
   | 'disabled' // Nostr not active (single-player mode)
@@ -308,6 +314,9 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
 
     const initLobby = async () => {
       try {
+        // Preload ICE servers from config
+        await loadIceServers();
+
         // Generate keys and code
         const secretKey = generateSecretKey();
         const pubkey = getPublicKey(secretKey);
@@ -412,7 +421,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
               }
 
               // Create peer connection for this guest
-              const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+              const pc = new RTCPeerConnection({ iceServers: getIceServersSync() });
 
               // Create data channel
               const channel = pc.createDataChannel('game', { ordered: true });
@@ -635,7 +644,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
             const hostPubkey = event.pubkey;
 
             // Create peer connection
-            const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+            const pc = new RTCPeerConnection({ iceServers: getIceServersSync() });
             pcRef.current = pc;
 
             // Handle incoming data channel
