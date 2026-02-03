@@ -5,6 +5,7 @@ import type { IGameInstance } from '../core/IGameInstance';
 import { RESEARCH_DEFINITIONS, ResearchDefinition } from '@/data/research/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { debugProduction } from '@/utils/debugLogger';
+import { validateEntityAlive } from '@/utils/EntityValidator';
 
 export class ResearchSystem extends System {
   public readonly name = 'ResearchSystem';
@@ -58,7 +59,7 @@ export class ResearchSystem extends System {
     // Find first valid building
     for (const entityId of entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'ResearchSystem:handleResearchCommand')) continue;
 
       const building = entity.get<Building>('Building');
       const selectable = entity.get<Selectable>('Selectable');
@@ -99,7 +100,7 @@ export class ResearchSystem extends System {
 
     // Get the building's owner
     const entity = this.world.getEntity(buildingId);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, buildingId, 'ResearchSystem:handleResearchComplete')) return;
 
     const selectable = entity.get<Selectable>('Selectable');
     const playerId = selectable?.playerId ?? 'player1';
