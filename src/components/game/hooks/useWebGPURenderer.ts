@@ -250,11 +250,13 @@ export function useWebGPURenderer({
       });
 
       // Show user notification
-      useUIStore.getState().addNotification(
-        'error',
-        `GPU device lost: ${event.reason === 'destroyed' ? 'Device was reset' : 'Unexpected error'}. Attempting recovery...`,
-        10000
-      );
+      useUIStore
+        .getState()
+        .addNotification(
+          'error',
+          `GPU device lost: ${event.reason === 'destroyed' ? 'Device was reset' : 'Unexpected error'}. Attempting recovery...`,
+          10000
+        );
 
       // Stop the animation loop
       if (animationFrameIdRef.current) {
@@ -280,11 +282,13 @@ export function useWebGPURenderer({
       const canvas = canvasRef.current;
       if (!canvas) {
         debugInitialization.error('[useWebGPURenderer] No canvas available for recovery');
-        useUIStore.getState().addNotification(
-          'error',
-          'Cannot recover: Canvas not available. Please refresh the page.',
-          0
-        );
+        useUIStore
+          .getState()
+          .addNotification(
+            'error',
+            'Cannot recover: Canvas not available. Please refresh the page.',
+            0
+          );
         isRecoveringRef.current = false;
         return;
       }
@@ -328,7 +332,10 @@ export function useWebGPURenderer({
         renderContextRef.current?.renderer.dispose();
         renderContextRef.current = null;
       } catch (disposeError) {
-        debugInitialization.warn('[useWebGPURenderer] Error disposing resources during recovery:', disposeError);
+        debugInitialization.warn(
+          '[useWebGPURenderer] Error disposing resources during recovery:',
+          disposeError
+        );
       }
 
       // Attempt recovery with reduced quality
@@ -363,11 +370,13 @@ export function useWebGPURenderer({
         newContext.onDeviceLost(newCallback);
 
         // Show success notification
-        useUIStore.getState().addNotification(
-          'info',
-          `Graphics recovered using ${newContext.isWebGPU ? 'WebGPU' : 'WebGL'}. Quality may be reduced.`,
-          5000
-        );
+        useUIStore
+          .getState()
+          .addNotification(
+            'info',
+            `Graphics recovered using ${newContext.isWebGPU ? 'WebGPU' : 'WebGL'}. Quality may be reduced.`,
+            5000
+          );
 
         // Apply reduced quality graphics settings to prevent future issues
         if (shouldForceWebGL || !newContext.isWebGPU) {
@@ -375,7 +384,7 @@ export function useWebGPURenderer({
           const currentSettings = useUIStore.getState().graphicsSettings;
           if (currentSettings.postProcessingEnabled) {
             debugInitialization.log('[useWebGPURenderer] Reducing post-processing for stability');
-            useUIStore.getState().setPostProcessingEnabled(false);
+            useUIStore.getState().setGraphicsSetting('postProcessingEnabled', false);
           }
         }
 
@@ -385,18 +394,22 @@ export function useWebGPURenderer({
         isRecoveringRef.current = false;
 
         // Notify user that reinit is needed
-        useUIStore.getState().addNotification(
-          'warning',
-          'Graphics context recovered. Some visual elements may need to reload.',
-          8000
-        );
+        useUIStore
+          .getState()
+          .addNotification(
+            'warning',
+            'Graphics context recovered. Some visual elements may need to reload.',
+            8000
+          );
       } catch (recoveryError) {
         debugInitialization.error('[useWebGPURenderer] Recovery failed:', recoveryError);
-        useUIStore.getState().addNotification(
-          'error',
-          'Failed to recover graphics context. Please refresh the page to continue playing.',
-          0
-        );
+        useUIStore
+          .getState()
+          .addNotification(
+            'error',
+            'Failed to recover graphics context. Please refresh the page to continue playing.',
+            0
+          );
         isRecoveringRef.current = false;
       }
     },

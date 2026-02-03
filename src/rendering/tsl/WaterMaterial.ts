@@ -34,9 +34,8 @@ import {
   sin,
   cos,
   attribute,
-  mul,
   add,
-  timerGlobal,
+  time,
   type ShaderNodeObject,
 } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
@@ -89,7 +88,7 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
   low: {
     waveAmplitude: 0.02,
     waveFrequency: 1.0,
-    textureSize: 50.0,      // Coarser waves, calmer appearance
+    textureSize: 50.0, // Coarser waves, calmer appearance
     distortionScale: 0.5,
     fresnelPower: 2.0,
     reflectionStrength: 0.2,
@@ -116,7 +115,7 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
   ultra: {
     waveAmplitude: 0.08,
     waveFrequency: 2.5,
-    textureSize: 25.0,      // Finer waves, more visible detail
+    textureSize: 25.0, // Finer waves, more visible detail
     distortionScale: 1.25,
     fresnelPower: 5.0,
     reflectionStrength: 0.5,
@@ -176,9 +175,6 @@ export class TSLWaterMaterial {
   ): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
 
-    // Get time from Three.js global timer
-    const time = timerGlobal().mul(this.uTimeScale);
-
     // Water data attribute: vec3(regionId, isDeep, elevation)
     // isDeep: 0 = shallow, 1 = deep
     const hasWaterDataAttr = true; // UnifiedWaterMesh always provides this
@@ -211,7 +207,11 @@ export class TSLWaterMaterial {
       const fresnelFactor = pow(fresnel, this.uFresnelPower);
 
       // Specular highlight from sun
-      const reflectDir = normalize(this.uSunDirection.negate().add(worldNormal.mul(dot(worldNormal, this.uSunDirection).mul(2.0))));
+      const reflectDir = normalize(
+        this.uSunDirection
+          .negate()
+          .add(worldNormal.mul(dot(worldNormal, this.uSunDirection).mul(2.0)))
+      );
       const specular = pow(clamp(dot(viewDir, reflectDir), 0.0, 1.0), float(32.0));
       const specularColor = vec3(1.0, 1.0, 0.95).mul(specular).mul(0.5);
 
@@ -237,10 +237,12 @@ export class TSLWaterMaterial {
         const scaledY = worldUV.y.mul(uvScale);
 
         // Multi-scale wave normals
-        const wave1 = sin(scaledX.mul(50.0).add(time.mul(1.2)))
-          .mul(cos(scaledY.mul(40.0).add(time.mul(0.8))));
-        const wave2 = sin(scaledX.mul(100.0).sub(time.mul(0.9)))
-          .mul(cos(scaledY.mul(80.0).add(time.mul(1.1))));
+        const wave1 = sin(scaledX.mul(50.0).add(time.mul(1.2))).mul(
+          cos(scaledY.mul(40.0).add(time.mul(0.8)))
+        );
+        const wave2 = sin(scaledX.mul(100.0).sub(time.mul(0.9))).mul(
+          cos(scaledY.mul(80.0).add(time.mul(1.1)))
+        );
         const wave3 = sin(scaledX.mul(25.0).add(scaledY.mul(30.0)).add(time.mul(0.5)));
 
         const distortion = float(settings.distortionScale);
@@ -248,7 +250,9 @@ export class TSLWaterMaterial {
         const ny = wave2.mul(0.03).add(wave3.mul(0.015)).mul(distortion);
         const nz = float(1.0);
 
-        return normalize(vec3(nx, ny, nz)).mul(0.5).add(0.5);
+        return normalize(vec3(nx, ny, nz))
+          .mul(0.5)
+          .add(0.5);
       }
 
       // TEXTURE-BASED NORMALS - matches original WaterMesh addon
@@ -258,8 +262,8 @@ export class TSLWaterMaterial {
 
       // Two scrolling normal map layers at different scales and speeds
       // This creates the characteristic animated water surface
-      const scroll1 = time.mul(0.03);  // Layer 1 scroll speed
-      const scroll2 = time.mul(0.02);  // Layer 2 scroll speed (slower)
+      const scroll1 = time.mul(0.03); // Layer 1 scroll speed
+      const scroll2 = time.mul(0.02); // Layer 2 scroll speed (slower)
 
       // Layer 1: Primary wave direction
       const uv1 = vec2(
@@ -268,7 +272,7 @@ export class TSLWaterMaterial {
       );
 
       // Layer 2: Secondary wave at different angle and scale
-      const texScale2 = texScale.mul(0.5);  // Larger waves for layer 2
+      const texScale2 = texScale.mul(0.5); // Larger waves for layer 2
       const uv2 = vec2(
         worldUV.x.mul(texScale2).sub(scroll2.mul(0.7)),
         worldUV.y.mul(texScale2).add(scroll2)
@@ -286,11 +290,7 @@ export class TSLWaterMaterial {
 
       // Apply distortion scale to control wave intensity
       const distortion = float(settings.distortionScale);
-      const scaledNormal = vec3(
-        blended.x.mul(distortion),
-        blended.y.mul(distortion),
-        blended.z
-      );
+      const scaledNormal = vec3(blended.x.mul(distortion), blended.y.mul(distortion), blended.z);
 
       return normalize(scaledNormal).mul(0.5).add(0.5);
     })();
