@@ -1106,12 +1106,8 @@ export class AssetManager {
                   stdMat.needsUpdate = true;
                 }
               }
-
-              // Force compute smooth vertex normals - AI models often have
-              // incorrect or flat normals that cause dark triangular artifacts
-              if (child.geometry && child.geometry.attributes.position) {
-                child.geometry.computeVertexNormals();
-              }
+              // NOTE: Don't force computeVertexNormals() - GLTF normals are usually correct
+              // and recomputing can break smooth shading on indexed geometry with hard edges
             }
           });
 
@@ -1220,12 +1216,8 @@ export class AssetManager {
                   stdMat.needsUpdate = true;
                 }
               }
-
-              // Force compute smooth vertex normals - AI models often have
-              // incorrect or flat normals that cause dark triangular artifacts
-              if (child.geometry && child.geometry.attributes.position) {
-                child.geometry.computeVertexNormals();
-              }
+              // NOTE: Don't force computeVertexNormals() - GLTF normals are usually correct
+              // and recomputing can break smooth shading on indexed geometry with hard edges
             }
           });
 
