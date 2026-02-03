@@ -1077,19 +1077,38 @@ export class AssetManager {
           // This must happen BEFORE any other processing to avoid render pipeline errors
           cleanupModelAttributes(model, assetId);
 
-          // Configure shadows and disable vertex colors (AI models often have baked AO)
+          // Configure shadows and fix AI model artifacts
           model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
               child.castShadow = true;
               child.receiveShadow = true;
-              // Disable vertex colors - AI-generated models (Tripo/Meshy) often bake
-              // ambient occlusion into vertex colors, causing dark triangular artifacts
+
+              // Fix materials - AI-generated models often have issues
               const materials = Array.isArray(child.material) ? child.material : [child.material];
               for (const mat of materials) {
-                if (mat && 'vertexColors' in mat) {
-                  mat.vertexColors = false;
+                if (mat) {
+                  // Disable vertex colors - AI models bake AO into vertex colors
+                  if ('vertexColors' in mat) {
+                    mat.vertexColors = false;
+                  }
+                  // Clear any aoMap/lightMap that might be causing artifacts
+                  // These maps often use UV2 which gets stripped, causing visual issues
+                  if ('aoMap' in mat) {
+                    (mat as THREE.MeshStandardMaterial).aoMap = null;
+                    (mat as THREE.MeshStandardMaterial).aoMapIntensity = 0;
+                  }
+                  if ('lightMap' in mat) {
+                    (mat as THREE.MeshStandardMaterial).lightMap = null;
+                    (mat as THREE.MeshStandardMaterial).lightMapIntensity = 0;
+                  }
                   mat.needsUpdate = true;
                 }
+              }
+
+              // Force compute smooth vertex normals - AI models often have
+              // incorrect or flat normals that cause dark triangular artifacts
+              if (child.geometry && child.geometry.attributes.position) {
+                child.geometry.computeVertexNormals();
               }
             }
           });
@@ -1171,19 +1190,37 @@ export class AssetManager {
           // Clean up excess vertex attributes for WebGPU compatibility (max 8 buffers)
           cleanupModelAttributes(model, `${assetId}_LOD${lodLevel}`);
 
-          // Configure shadows and disable vertex colors (same as LOD0)
+          // Configure shadows and fix AI model artifacts (same as LOD0)
           model.traverse((child) => {
             if (child instanceof THREE.Mesh) {
               child.castShadow = true;
               child.receiveShadow = true;
-              // Disable vertex colors - AI-generated models (Tripo/Meshy) often bake
-              // ambient occlusion into vertex colors, causing dark triangular artifacts
+
+              // Fix materials - AI-generated models often have issues
               const materials = Array.isArray(child.material) ? child.material : [child.material];
               for (const mat of materials) {
-                if (mat && 'vertexColors' in mat) {
-                  mat.vertexColors = false;
+                if (mat) {
+                  // Disable vertex colors - AI models bake AO into vertex colors
+                  if ('vertexColors' in mat) {
+                    mat.vertexColors = false;
+                  }
+                  // Clear any aoMap/lightMap that might be causing artifacts
+                  if ('aoMap' in mat) {
+                    (mat as THREE.MeshStandardMaterial).aoMap = null;
+                    (mat as THREE.MeshStandardMaterial).aoMapIntensity = 0;
+                  }
+                  if ('lightMap' in mat) {
+                    (mat as THREE.MeshStandardMaterial).lightMap = null;
+                    (mat as THREE.MeshStandardMaterial).lightMapIntensity = 0;
+                  }
                   mat.needsUpdate = true;
                 }
+              }
+
+              // Force compute smooth vertex normals - AI models often have
+              // incorrect or flat normals that cause dark triangular artifacts
+              if (child.geometry && child.geometry.attributes.position) {
+                child.geometry.computeVertexNormals();
               }
             }
           });
