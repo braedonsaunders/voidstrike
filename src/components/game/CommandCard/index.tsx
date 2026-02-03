@@ -23,6 +23,16 @@ function CommandCardInner() {
   const [hoveredCmd, setHoveredCmd] = useState<string | null>(null);
   const [menuMode, setMenuMode] = useState<MenuMode>('main');
   const [buildingStateVersion, setBuildingStateVersion] = useState(0);
+  const [prevSelectedUnits, setPrevSelectedUnits] = useState<number[]>([]);
+
+  // Reset menu mode when selection changes (computed during render per React guidelines)
+  // See: https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  if (selectedUnits !== prevSelectedUnits) {
+    setPrevSelectedUnits(selectedUnits);
+    if (menuMode !== 'main') {
+      setMenuMode('main');
+    }
+  }
 
   // Subscribe to building state change events
   useEffect(() => {
@@ -45,11 +55,6 @@ function CommandCardInner() {
       unsub4();
     };
   }, []);
-
-  // Reset to main menu when selection changes
-  useEffect(() => {
-    setMenuMode('main');
-  }, [selectedUnits]);
 
   // Determine if selection is a unit or building
   const selectionType = useMemo(() => {
