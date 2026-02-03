@@ -136,7 +136,8 @@ export class UnifiedWaterMesh {
     this.geometry = new THREE.BufferGeometry();
     this.mesh = new THREE.Mesh(this.geometry, this.material);
     this.mesh.frustumCulled = true;
-    this.mesh.renderOrder = 5; // Water renders after terrain
+    // Render water BEFORE terrain (negative render order) so terrain properly occludes it
+    this.mesh.renderOrder = -10;
 
     // Shore group for transitions
     this.shoreGroup = new THREE.Group();
@@ -838,6 +839,10 @@ export class UnifiedWaterMesh {
     const visited = new Set<string>();
     const regions: WaterRegion[] = [];
 
+    // Debug: Count feature types
+    const featureCounts: Record<string, number> = {};
+    let totalCells = 0;
+
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
         const key = `${x},${y}`;
@@ -847,6 +852,11 @@ export class UnifiedWaterMesh {
         if (!cell) continue;
 
         const feature = cell.feature || 'none';
+
+        // Debug: Count features
+        featureCounts[feature] = (featureCounts[feature] || 0) + 1;
+        totalCells++;
+
         if (feature !== 'water_shallow' && feature !== 'water_deep') continue;
 
         const region = this.floodFillRegion(terrain, x, y, width, height, visited);
@@ -855,6 +865,14 @@ export class UnifiedWaterMesh {
         }
       }
     }
+
+    // Debug log
+    console.log('[UnifiedWaterMesh] Feature counts:', featureCounts);
+    console.log('[UnifiedWaterMesh] Total cells:', totalCells, 'Water regions:', regions.length);
+    console.log(
+      '[UnifiedWaterMesh] Total water cells:',
+      regions.reduce((sum, r) => sum + r.cells.length, 0)
+    );
 
     return regions;
   }

@@ -322,18 +322,15 @@ export class TSLWaterMaterial {
     material.roughnessNode = roughnessNode;
     material.metalnessNode = metalnessNode;
 
-    // Enable transparency with depth writing for proper terrain occlusion
-    // Water needs to write depth so terrain above water level properly occludes it
-    material.transparent = true;
+    // CRITICAL: Water must be OPAQUE for proper depth sorting with terrain
+    // With transparent=true, Three.js renders water in the transparent pass AFTER
+    // all opaque objects (terrain), causing water to appear on top of elevated terrain
+    // even with depthTest=true - the depth test passes because terrain already rendered.
+    // Using opaque rendering ensures water participates in normal depth sorting.
+    material.transparent = false;
     material.side = THREE.DoubleSide;
     material.depthWrite = true;
     material.depthTest = true;
-
-    // Polygon offset pushes water slightly back in depth to reduce z-fighting
-    // with terrain at similar elevations
-    material.polygonOffset = true;
-    material.polygonOffsetFactor = 1;
-    material.polygonOffsetUnits = 1;
 
     return material;
   }
