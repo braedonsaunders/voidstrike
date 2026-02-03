@@ -104,6 +104,8 @@ const suppressedWarnings = [
   'Vertex attribute "prevInstanceMatrix1" not found',
   'Vertex attribute "prevInstanceMatrix2" not found',
   'Vertex attribute "prevInstanceMatrix3" not found',
+  // Three.js TSL internal deprecation - normalView now includes transforms
+  '"transformedNormalView" is deprecated',
 ];
 
 let warningsSupressed = false;

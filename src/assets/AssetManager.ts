@@ -1088,10 +1088,12 @@ export class AssetManager {
               for (const mat of materials) {
                 if (mat && (mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
                   const stdMat = mat as THREE.MeshStandardMaterial;
-                  // Disable vertex colors - AI models bake AO into vertex colors
+                  // Disable vertex colors and ensure smooth shading
                   stdMat.vertexColors = false;
+                  stdMat.flatShading = false;
                   // Clear ALL texture maps that could cause triangular artifacts
-                  // AI-generated models often have corrupted or low-quality maps
+                  // AI-generated models often bake AO/lighting into textures
+                  stdMat.map = null; // Base color texture often has baked lighting
                   stdMat.aoMap = null;
                   stdMat.aoMapIntensity = 0;
                   stdMat.lightMap = null;
@@ -1199,9 +1201,12 @@ export class AssetManager {
               for (const mat of materials) {
                 if (mat && (mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
                   const stdMat = mat as THREE.MeshStandardMaterial;
-                  // Disable vertex colors - AI models bake AO into vertex colors
+                  // Disable vertex colors and ensure smooth shading
                   stdMat.vertexColors = false;
+                  stdMat.flatShading = false;
                   // Clear ALL texture maps that could cause triangular artifacts
+                  // AI-generated models often bake AO/lighting into textures
+                  stdMat.map = null; // Base color texture often has baked lighting
                   stdMat.aoMap = null;
                   stdMat.aoMapIntensity = 0;
                   stdMat.lightMap = null;
