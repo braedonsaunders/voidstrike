@@ -920,10 +920,14 @@ export function createFogOfWarPass(
     finalColor.addAssign(rimContribution);
 
     // ============================================
-    // VOLUMETRIC FOG (high/ultra quality only)
+    // VOLUMETRIC FOG - DISABLED
     // ============================================
-    // For quality >= 2, add raymarched volumetric fog depth
-    const useVolumetric = uQuality.greaterThanEqual(2);
+    // Volumetric fog raymarch disabled for fog of war - it causes positional
+    // shifts due to camera angle bias when sampling visibility along rays.
+    // AAA RTS games use texture-based fog of war, not volumetric raymarching.
+    // The surface-based effects (desaturation, darkening, clouds) provide
+    // the correct visual feedback without coordinate system issues.
+    const useVolumetric = float(0).greaterThan(1); // Always false
 
     // Use direct camera position uniform (more reliable than matrix extraction)
     const pixelWorldPos = vec3(worldX, worldY, worldZ);
