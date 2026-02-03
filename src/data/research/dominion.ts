@@ -15,7 +15,7 @@ export type UpgradeEffect = {
   type: 'damage_bonus' | 'armor_bonus' | 'attack_speed' | 'ability_unlock' | 'range_bonus' | 'health_bonus' | 'speed_bonus';
   value: number;
   targets?: string[]; // unit IDs this affects, empty = all
-  unitTypes?: ('infantry' | 'vehicle' | 'ship')[]; // unit type categories
+  unitTypes?: ('infantry' | 'vehicle' | 'ship' | 'naval')[]; // unit type categories
 };
 
 export interface ResearchDefinition {
