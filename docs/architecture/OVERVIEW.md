@@ -63,6 +63,13 @@ voidstrike/
 │   │   └── MusicPlayer.ts
 │   ├── components/ # React components
 │   │   ├── game/
+│   │   │   ├── CommandCard/
+│   │   │   │   ├── hooks/ # React hooks
+│   │   │   │   │   └── ...
+│   │   │   │   ├── CommandGrid.tsx
+│   │   │   │   ├── constants.ts
+│   │   │   │   ├── index.tsx
+│   │   │   │   └── types.ts
 │   │   │   ├── hooks/ # React hooks
 │   │   │   │   ├── index.ts
 │   │   │   │   ├── useCameraControl.ts
@@ -75,7 +82,6 @@ voidstrike/
 │   │   │   ├── BaseModal.tsx
 │   │   │   ├── BasePanel.tsx
 │   │   │   ├── BattleSimulatorPanel.tsx
-│   │   │   ├── CommandCard.tsx
 │   │   │   ├── ConsolePanel.tsx
 │   │   │   ├── DebugMenuPanel.tsx
 │   │   │   ├── GraphicsOptionsPanel.tsx
@@ -108,6 +114,12 @@ voidstrike/
 │   │   ├── lobby/
 │   │   │   └── LobbyBrowser.tsx
 │   │   ├── ui/
+│   │   │   ├── CommandButton.tsx
+│   │   │   ├── CommandTooltip.tsx
+│   │   │   ├── CostDisplay.tsx
+│   │   │   ├── EmptySlot.tsx
+│   │   │   ├── IconBadge.tsx
+│   │   │   ├── index.ts
 │   │   │   └── Tooltip.tsx
 │   │   └── Providers.tsx
 │   ├── config/ # Configuration files
@@ -436,9 +448,15 @@ voidstrike/
 │   │   │   ├── TerrainMaterial.ts
 │   │   │   ├── UpscalerNode.ts
 │   │   │   ├── VolumetricFog.ts
+│   │   │   ├── WaterMaterial.ts
 │   │   │   └── WebGPURenderer.ts
 │   │   ├── vision/
 │   │   │   └── VisionCoordinates.ts
+│   │   ├── water/
+│   │   │   ├── index.ts
+│   │   │   ├── PlanarReflection.ts
+│   │   │   ├── UnifiedWaterMesh.ts
+│   │   │   └── WaterMemoryManager.ts
 │   │   ├── Biomes.ts
 │   │   ├── BuildingPlacementPreview.ts
 │   │   ├── BuildingRenderer.ts
@@ -455,12 +473,7 @@ voidstrike/
 │   │   ├── Terrain.ts
 │   │   ├── UnitRenderer.ts
 │   │   ├── WallPlacementPreview.ts
-│   │   ├── WatchTowerRenderer.ts
-│   │   └── water/              # Unified water rendering system
-│   │       ├── UnifiedWaterMesh.ts
-│   │       ├── WaterMemoryManager.ts
-│   │       ├── PlanarReflection.ts
-│   │       └── index.ts
+│   │   └── WatchTowerRenderer.ts
 │   ├── store/ # State management
 │   │   ├── cameraStore.ts
 │   │   ├── gameSetupStore.ts
@@ -471,6 +484,7 @@ voidstrike/
 │   ├── types/
 │   │   └── three-webgpu.d.ts
 │   ├── utils/ # Utility functions
+│   │   ├── commandIcons.ts
 │   │   ├── debugLogger.ts
 │   │   ├── EntityValidator.ts
 │   │   ├── FixedPoint.ts
@@ -535,7 +549,8 @@ voidstrike/
 │   │   │   ├── building.schema.json
 │   │   │   ├── faction-manifest.schema.json
 │   │   │   └── unit.schema.json
-│   │   └── game.json
+│   │   ├── game.json
+│   │   └── networking.json
 │   ├── draco/
 │   │   ├── draco_decoder.js
 │   │   └── draco_wasm_wrapper.js
