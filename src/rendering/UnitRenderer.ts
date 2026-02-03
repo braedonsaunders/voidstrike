@@ -46,11 +46,6 @@ import { CullingService, EntityCategory } from './services/CullingService';
 import { LODConfig } from './compute/UnifiedCullingCompute';
 import { GPUIndirectRenderer } from './compute/GPUIndirectRenderer';
 
-// Unit geometry cloning - doesn't force recompute normals (units have good normals)
-function cloneGeometryForGPUUnit(source: THREE.BufferGeometry): THREE.BufferGeometry {
-  return cloneGeometryForGPU(source, { recomputeNormals: false });
-}
-
 // Instance data for a single unit type + player combo at a specific LOD level
 interface InstancedUnitGroup {
   mesh: THREE.InstancedMesh;
@@ -716,7 +711,8 @@ export class UnitRenderer {
           // Clone geometry with proper GPU buffer initialization.
           // This avoids sharing disposal lifecycle with asset cache and
           // ensures required attributes (UVs) exist for WebGPU shaders.
-          geometry = cloneGeometryForGPU(child.geometry);
+          // Units have proper normals, so don't recompute them.
+          geometry = cloneGeometryForGPU(child.geometry, { recomputeNormals: false });
           material = child.material;
           // Get the mesh's world position Y - this is lost when extracting geometry
           const worldPos = new THREE.Vector3();

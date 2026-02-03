@@ -33,7 +33,6 @@ import {
   vec3,
   vec4,
   float,
-  int,
   Fn,
   mix,
   smoothstep,
@@ -43,11 +42,6 @@ import {
   min,
   max,
   texture,
-  normalize,
-  exp,
-  Loop,
-  If,
-  Break,
 } from 'three/tsl';
 
 // WebGPU post-processing nodes from addons
