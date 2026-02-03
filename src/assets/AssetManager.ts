@@ -584,6 +584,26 @@ function deepCloneGeometry(source: THREE.BufferGeometry): THREE.BufferGeometry {
     cloned.addGroup(group.start, group.count, group.materialIndex);
   }
 
+  // Ensure UV coordinates exist - required by many shaders (slot 1)
+  // Some models from Tripo/Meshy AI lack UVs, causing "Vertex buffer slot 1" errors
+  if (!cloned.attributes.uv && cloned.attributes.position) {
+    const posCount = cloned.attributes.position.count;
+    const uvArray = new Float32Array(posCount * 2);
+    const pos = cloned.attributes.position;
+    for (let i = 0; i < posCount; i++) {
+      uvArray[i * 2] = pos.getX(i) * 0.5 + 0.5;
+      uvArray[i * 2 + 1] = pos.getZ(i) * 0.5 + 0.5;
+    }
+    cloned.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
+  }
+
+  // Ensure normal coordinates exist - required for proper lighting and SSAO
+  // Some models from Tripo/Meshy AI lack normals, causing GTAO to reconstruct
+  // normals from depth gradients which creates visible triangular artifacts
+  if (!cloned.attributes.normal && cloned.attributes.position) {
+    cloned.computeVertexNormals();
+  }
+
   return cloned;
 }
 

@@ -253,6 +253,13 @@ export class GPUIndirectRenderer {
       instancedGeometry.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
     }
 
+    // Ensure normal coordinates exist - required for proper lighting and SSAO
+    // Some models from Tripo/Meshy AI lack normals, causing GTAO to reconstruct
+    // normals from depth gradients which creates visible triangular artifacts
+    if (!instancedGeometry.attributes.normal && instancedGeometry.attributes.position) {
+      instancedGeometry.computeVertexNormals();
+    }
+
     // Create per-instance position offset attribute (vec3)
     // This is simpler than full mat4 transforms and works with WebGPU
     const instanceOffsetData = new Float32Array(MAX_UNITS * 3);
