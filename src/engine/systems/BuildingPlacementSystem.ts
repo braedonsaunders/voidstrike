@@ -11,7 +11,7 @@ import { Wall } from '../components/Wall';
 import { EnhancedAISystem } from './EnhancedAISystem';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { WALL_DEFINITIONS } from '@/data/buildings/walls';
-import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
+import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { debugBuildingPlacement } from '@/utils/debugLogger';
 import { SeededRandom, distance, clamp } from '@/utils/math';
 
@@ -133,7 +133,7 @@ export class BuildingPlacementSystem extends System {
     const aiSystem = this.getAISystem();
     const aiPlayer = aiSystem?.getAIPlayer(playerId);
     const isPlayerAI = aiPlayer !== undefined;
-    const isPlayerLocal = !isPlayerAI && isLocalPlayer(playerId);
+    const isPlayerLocal = !isPlayerAI && playerId === this.game.config.playerId;
 
     // Check resources based on player type
     if (isPlayerAI && aiPlayer) {
@@ -417,14 +417,12 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // FIX: Check AI status FIRST before checking local player
-    // In worker context, isLocalPlayer may incorrectly return true for AI players
-    // because the Zustand store isn't synchronized with the main thread
+    // Check AI status FIRST before checking local player
     const aiSystem = this.getAISystem();
     const aiPlayer = aiSystem?.getAIPlayer(playerId);
     const isPlayerAI = aiPlayer !== undefined;
     // Only consider as local human player if NOT an AI player
-    const isPlayerLocal = !isPlayerAI && isLocalPlayer(playerId);
+    const isPlayerLocal = !isPlayerAI && playerId === this.game.config.playerId;
 
     // Check resources (local player via game store, AI via AI state)
     if (isPlayerLocal) {
@@ -842,7 +840,7 @@ export class BuildingPlacementSystem extends System {
       if (building.supplyProvided > 0 && selectable?.playerId) {
         const aiSystem = this.getAISystem();
         const isAI = aiSystem?.isAIPlayer(selectable.playerId) ?? false;
-        if (!isAI && isLocalPlayer(selectable.playerId)) {
+        if (!isAI && selectable.playerId === this.game.config.playerId) {
           this.game.statePort.addMaxSupply(building.supplyProvided);
         }
       }
@@ -915,7 +913,7 @@ export class BuildingPlacementSystem extends System {
     const aiSystem = this.getAISystem();
     const aiPlayer = aiSystem?.getAIPlayer(playerId);
     const isPlayerAI = aiPlayer !== undefined;
-    const isPlayerLocal = !isPlayerAI && isLocalPlayer(playerId);
+    const isPlayerLocal = !isPlayerAI && playerId === this.game.config.playerId;
 
     // Check resources (local player via game store, AI via AI state)
     if (isPlayerAI && aiPlayer) {
@@ -1688,7 +1686,7 @@ export class BuildingPlacementSystem extends System {
             if (building.supplyProvided > 0 && selectable?.playerId) {
               const aiSystem = this.getAISystem();
               const isAI = aiSystem?.isAIPlayer(selectable.playerId) ?? false;
-              if (!isAI && isLocalPlayer(selectable.playerId)) {
+              if (!isAI && selectable.playerId === this.game.config.playerId) {
                 this.game.statePort.addMaxSupply(building.supplyProvided);
               }
             }
@@ -2021,7 +2019,7 @@ export class BuildingPlacementSystem extends System {
           debugBuildingPlacement.log(
             `BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.plasmaCost} plasma to AI ${selectable.playerId} for cancelled ${building.name}`
           );
-        } else if (isLocalPlayer(selectable.playerId)) {
+        } else if (selectable.playerId === this.game.config.playerId) {
           // Refund to local human player
           this.game.statePort.addResources(definition.mineralCost, definition.plasmaCost);
           debugBuildingPlacement.log(

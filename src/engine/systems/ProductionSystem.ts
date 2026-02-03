@@ -5,7 +5,6 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Ability, DOMINION_ABILITIES } from '../components/Ability';
 import type { IGameInstance } from '../core/IGameInstance';
-import { isLocalPlayer } from '@/store/gameSetupStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import {
   BUILDING_DEFINITIONS,
@@ -95,7 +94,7 @@ export class ProductionSystem extends System {
           if (cancelled.supplyAllocated) {
             // Note: AI supply is recalculated from entities, no manual adjustment needed
           }
-        } else if (playerId && isLocalPlayer(playerId)) {
+        } else if (playerId === this.game.config.playerId) {
           // Refund to local human player
           this.game.statePort.addResources(mineralRefund, plasmaRefund);
           if (cancelled.supplyAllocated) {
@@ -429,7 +428,7 @@ export class ProductionSystem extends System {
       }
 
       // Emit production complete for Phaser overlay (local player's units only)
-      if (ownerPlayerId && isLocalPlayer(ownerPlayerId)) {
+      if (ownerPlayerId === this.game.config.playerId) {
         const unitDef = UNIT_DEFINITIONS[item.id];
         this.game.eventBus.emit('production:complete', {
           buildingId,
@@ -450,7 +449,7 @@ export class ProductionSystem extends System {
         const buildingSelectable = buildingEntity?.isDestroyed()
           ? undefined
           : buildingEntity?.get<Selectable>('Selectable');
-        if (buildingSelectable?.playerId && isLocalPlayer(buildingSelectable.playerId)) {
+        if (buildingSelectable?.playerId === this.game.config.playerId) {
           this.game.eventBus.emit('research:complete', {
             buildingId,
             upgradeId: item.id,

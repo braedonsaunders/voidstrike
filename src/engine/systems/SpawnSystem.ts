@@ -11,7 +11,6 @@ import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { DOMINION_ABILITIES } from '../components/Ability';
 import { debugSpawning } from '@/utils/debugLogger';
-import { isLocalPlayer } from '@/store/gameSetupStore';
 import { AssetManager } from '@/assets/AssetManager';
 import { EnhancedAISystem } from './EnhancedAISystem';
 
@@ -262,7 +261,7 @@ export class SpawnSystem extends System {
           const aiSystem = this.getAISystem();
           const isAI = aiSystem?.isAIPlayer(selectable.playerId) ?? false;
 
-          if (!isAI && isLocalPlayer(selectable.playerId)) {
+          if (!isAI && selectable.playerId === this.game.config.playerId) {
             this.game.statePort.addSupply(-definition.supplyCost);
           }
         }

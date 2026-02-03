@@ -11,7 +11,6 @@ import { snapValue } from '@/utils/FixedPoint';
 import { distance } from '@/utils/math';
 import { getDamageMultiplier } from '@/data/combat/combat';
 import { debugCombat as debugProjectile } from '@/utils/debugLogger';
-import { isLocalPlayer } from '@/store/gameSetupStore';
 import { AssetManager } from '@/assets/AssetManager';
 import { validateEntityAlive } from '@/utils/EntityValidator';
 
@@ -309,7 +308,7 @@ export class ProjectileSystem extends System {
             });
 
             // Emit player:damage for local player overlay effects
-            if (targetSelectable?.playerId && isLocalPlayer(targetSelectable.playerId)) {
+            if (targetSelectable?.playerId === this.game.config.playerId) {
               this.game.eventBus.emit('player:damage', {
                 damage: finalDamage,
                 position: { x: targetTransform.x, y: targetTransform.y },
@@ -425,7 +424,7 @@ export class ProjectileSystem extends System {
       });
 
       // Emit player:damage for local player overlay effects
-      if (selectable.playerId && isLocalPlayer(selectable.playerId)) {
+      if (selectable.playerId === this.game.config.playerId) {
         this.game.eventBus.emit('player:damage', {
           damage: damageWithMultiplier,
           position: { x: transform.x, y: transform.y },
@@ -490,7 +489,7 @@ export class ProjectileSystem extends System {
       });
 
       // Emit player:damage for local player overlay effects
-      if (selectable.playerId && isLocalPlayer(selectable.playerId)) {
+      if (selectable.playerId === this.game.config.playerId) {
         this.game.eventBus.emit('player:damage', {
           damage: damageWithMultiplier,
           position: { x: transform.x, y: transform.y },

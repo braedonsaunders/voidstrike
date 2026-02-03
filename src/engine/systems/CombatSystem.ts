@@ -6,7 +6,6 @@ import type { IGameInstance } from '../core/IGameInstance';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
-import { isLocalPlayer } from '@/store/gameSetupStore';
 import { debugCombat } from '@/utils/debugLogger';
 import { deterministicDamage, quantize, QUANT_DAMAGE } from '@/utils/FixedPoint';
 import { getDamageMultiplier, COMBAT_CONFIG } from '@/data/combat/combat';
@@ -506,7 +505,7 @@ export class CombatSystem extends System {
           this.game.eventBus.emit('unit:died', {
             entityId: entity.id,
             position: { x: transform.x, y: transform.y },
-            isPlayerUnit: selectable?.playerId ? isLocalPlayer(selectable.playerId) : false,
+            isPlayerUnit: selectable?.playerId === this.game.config.playerId,
             isFlying: unit.isFlying,
             playerId: selectable?.playerId,
             unitType: unit.unitId,
@@ -1129,7 +1128,7 @@ export class CombatSystem extends System {
       });
 
       // Emit player:damage for Phaser overlay effects
-      if (targetSelectable?.playerId && isLocalPlayer(targetSelectable.playerId)) {
+      if (targetSelectable?.playerId === this.game.config.playerId) {
         playerDamagePayload.damage = finalDamage;
         playerDamagePayload.position.x = targetTransform.x;
         playerDamagePayload.position.y = targetTransform.y;
