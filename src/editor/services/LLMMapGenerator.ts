@@ -10,7 +10,6 @@ import type {
   MapBlueprint,
   BiomeType,
   DecorationStyle,
-  BaseLocation,
   ResourceDirection,
 } from '@/data/maps/core/ElevationMap';
 import { generateMap } from '@/data/maps/core/ElevationMapGenerator';
