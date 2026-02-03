@@ -30,7 +30,7 @@ interface Archetype {
 }
 
 /** Maximum CONCURRENT entities - with ID recycling, this is the actual limit, not lifetime total */
-const MAX_ENTITIES = 4096;
+const MAX_ENTITIES = 65536;
 
 export class World {
   /** Entities keyed by INDEX (not full EntityId) for O(1) lookup from SpatialGrid results */

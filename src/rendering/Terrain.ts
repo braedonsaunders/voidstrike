@@ -4,7 +4,7 @@ import { BiomeConfig, BIOMES, blendBiomeColors } from './Biomes';
 import { TSLTerrainMaterial } from './tsl/TerrainMaterial';
 import AssetManager from '@/assets/AssetManager';
 import { debugTerrain } from '@/utils/debugLogger';
-import { clamp } from '@/utils/math';
+import { clamp, lerp } from '@/utils/math';
 
 // Import from central pathfinding config - SINGLE SOURCE OF TRUTH
 import {
@@ -96,10 +96,6 @@ initPermutation(42);
 // Smooth interpolation (quintic curve for C2 continuity)
 function fade(t: number): number {
   return t * t * t * (t * (t * 6 - 15) + 10);
-}
-
-function lerp(a: number, b: number, t: number): number {
-  return a + t * (b - a);
 }
 
 function grad(hash: number, x: number, y: number): number {

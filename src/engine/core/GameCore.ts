@@ -12,7 +12,7 @@
 import { World } from '../ecs/World';
 import { EventBus } from '../core/EventBus';
 import { SystemRegistry, SystemDefinition } from '../core/SystemRegistry';
-import { bootstrapDefinitions, definitionsReady } from '../definitions';
+import { initializeDefinitions, definitionsReady } from '../definitions';
 import type { IGameInstance } from './IGameInstance';
 import type { System } from '../ecs/System';
 import type { GameStatePort } from './GameStatePort';
@@ -158,7 +158,7 @@ export abstract class GameCore implements IGameInstance {
         '[GameCore] Definitions not initialized before GameCore creation. Starting async load...'
       );
       // Fire off async load, but this may cause race conditions
-      bootstrapDefinitions();
+      initializeDefinitions();
     }
 
     // Initialize ECS World with map dimensions
