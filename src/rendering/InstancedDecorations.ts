@@ -111,6 +111,10 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
   // or flat normals that cause dark triangular artifacts, especially with GTAO
   if (cloned.attributes.position) {
     cloned.computeVertexNormals();
+    // Ensure normals are uploaded to GPU
+    if (cloned.attributes.normal) {
+      cloned.attributes.normal.needsUpdate = true;
+    }
   }
 
   return cloned;
@@ -197,17 +201,22 @@ function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Materi
   if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
     const stdMaterial = material as THREE.MeshStandardMaterial;
 
-    // Fix AI model artifacts - disable vertex colors and clear baked maps
-    // AI-generated models bake ambient occlusion into vertex colors causing triangles
+    // Fix AI model artifacts - disable vertex colors and clear ALL texture maps
+    // AI-generated models often have corrupted or low-quality maps that cause
+    // triangular artifacts following mesh topology
     stdMaterial.vertexColors = false;
+    // Clear all maps that could cause per-pixel or per-vertex artifacts
     stdMaterial.aoMap = null;
     stdMaterial.aoMapIntensity = 0;
     stdMaterial.lightMap = null;
     stdMaterial.lightMapIntensity = 0;
-    // Clear normal map - AI models often have corrupted or low-quality normal maps
-    // that cause triangular artifacts when combined with vertex normals
     stdMaterial.normalMap = null;
     stdMaterial.normalScale.set(1, 1);
+    stdMaterial.metalnessMap = null;
+    stdMaterial.roughnessMap = null;
+    stdMaterial.displacementMap = null;
+    stdMaterial.alphaMap = null;
+    stdMaterial.bumpMap = null;
 
     const hints = assetId ? AssetManager.getRenderingHints(assetId) : null;
 
