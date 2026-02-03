@@ -18,6 +18,7 @@
  */
 
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
 
 /**
  * Configuration for planar reflection system
@@ -40,7 +41,9 @@ export interface PlanarReflectionConfig {
 /**
  * Default configuration values
  */
-const DEFAULT_CONFIG: Required<Omit<PlanarReflectionConfig, 'layers'>> & { layers: THREE.Layers | null } = {
+const DEFAULT_CONFIG: Required<Omit<PlanarReflectionConfig, 'layers'>> & {
+  layers: THREE.Layers | null;
+} = {
   resolution: 1024,
   waterHeight: 0,
   layers: null,
@@ -64,10 +67,12 @@ export class PlanarReflection {
   private reflectionCamera: THREE.PerspectiveCamera | THREE.OrthographicCamera;
 
   /** Configuration */
-  private config: Required<Omit<PlanarReflectionConfig, 'layers'>> & { layers: THREE.Layers | null };
+  private config: Required<Omit<PlanarReflectionConfig, 'layers'>> & {
+    layers: THREE.Layers | null;
+  };
 
   /** Renderer reference */
-  private renderer: THREE.WebGLRenderer | THREE.WebGPURenderer;
+  private renderer: THREE.WebGLRenderer | WebGPURenderer;
 
   /** Frame counter for update throttling */
   private frameCounter: number = 0;
@@ -101,10 +106,7 @@ export class PlanarReflection {
    * @param renderer - Three.js WebGL or WebGPU renderer
    * @param config - Configuration options
    */
-  constructor(
-    renderer: THREE.WebGLRenderer | THREE.WebGPURenderer,
-    config: PlanarReflectionConfig
-  ) {
+  constructor(renderer: THREE.WebGLRenderer | WebGPURenderer, config: PlanarReflectionConfig) {
     this.renderer = renderer;
     this.config = { ...DEFAULT_CONFIG, ...config, layers: config.layers ?? null };
 
@@ -133,15 +135,12 @@ export class PlanarReflection {
 
     // Set up clip layers if provided
     if (this.config.layers) {
-      this.reflectionCamera.layers = this.config.layers.clone();
+      this.reflectionCamera.layers.mask = this.config.layers.mask;
     }
 
     // Create reflection plane (water surface)
     // Normal points up (positive Y), passing through waterHeight
-    this.reflectionPlane = new THREE.Plane(
-      new THREE.Vector3(0, 1, 0),
-      -this.config.waterHeight
-    );
+    this.reflectionPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.config.waterHeight);
 
     // Create clip plane (slightly below water to avoid artifacts)
     this.clipPlane = new THREE.Plane(
@@ -199,7 +198,7 @@ export class PlanarReflection {
   public setLayers(layers: THREE.Layers | null): void {
     this.config.layers = layers;
     if (layers) {
-      this.reflectionCamera.layers = layers.clone();
+      this.reflectionCamera.layers.mask = layers.mask;
     } else {
       this.reflectionCamera.layers.enableAll();
     }
@@ -222,7 +221,7 @@ export class PlanarReflection {
     if (!this.enabled) return false;
 
     const frame = frameCount ?? this.frameCounter;
-    return (frame % this.config.updateInterval) === 0;
+    return frame % this.config.updateInterval === 0;
   }
 
   /**
@@ -254,10 +253,11 @@ export class PlanarReflection {
       (this.renderer as THREE.WebGLRenderer).xr.enabled = false;
     }
 
-    // Apply clip plane if enabled
-    const originalClippingPlanes = this.renderer.clippingPlanes;
+    // Apply clip plane if enabled (clippingPlanes exists on both renderers at runtime)
+    const rendererWithClipping = this.renderer as THREE.WebGLRenderer;
+    const originalClippingPlanes = rendererWithClipping.clippingPlanes;
     if (this.config.useClipPlane) {
-      this.renderer.clippingPlanes = [this.clipPlane];
+      rendererWithClipping.clippingPlanes = [this.clipPlane];
     }
 
     // Render to reflection target
@@ -265,9 +265,9 @@ export class PlanarReflection {
     this.renderer.clear();
     this.renderer.render(scene, this.reflectionCamera);
 
-    // Restore render state
-    this.renderer.setRenderTarget(originalRenderTarget);
-    this.renderer.clippingPlanes = originalClippingPlanes;
+    // Restore render state (type assertion needed for mixed WebGL/WebGPU types)
+    this.renderer.setRenderTarget(originalRenderTarget as THREE.WebGLRenderTarget | null);
+    rendererWithClipping.clippingPlanes = originalClippingPlanes;
 
     if ((this.renderer as THREE.WebGLRenderer).xr) {
       (this.renderer as THREE.WebGLRenderer).xr.enabled = originalXrEnabled;
@@ -306,12 +306,18 @@ export class PlanarReflection {
     this.reflectionCamera.up.set(0, -1, 0);
 
     // Copy projection properties
-    if (camera instanceof THREE.PerspectiveCamera && this.reflectionCamera instanceof THREE.PerspectiveCamera) {
+    if (
+      camera instanceof THREE.PerspectiveCamera &&
+      this.reflectionCamera instanceof THREE.PerspectiveCamera
+    ) {
       this.reflectionCamera.fov = camera.fov;
       this.reflectionCamera.aspect = camera.aspect;
       this.reflectionCamera.near = camera.near;
       this.reflectionCamera.far = camera.far;
-    } else if (camera instanceof THREE.OrthographicCamera && this.reflectionCamera instanceof THREE.OrthographicCamera) {
+    } else if (
+      camera instanceof THREE.OrthographicCamera &&
+      this.reflectionCamera instanceof THREE.OrthographicCamera
+    ) {
       this.reflectionCamera.left = camera.left;
       this.reflectionCamera.right = camera.right;
       this.reflectionCamera.top = camera.top;
@@ -328,17 +334,29 @@ export class PlanarReflection {
    * Update the texture matrix for reflection UV mapping
    * This transforms world coordinates to reflection texture coordinates
    */
-  private updateTextureMatrix(camera: THREE.Camera): void {
+  private updateTextureMatrix(_camera: THREE.Camera): void {
     // Texture matrix: transforms from world space to reflection texture space
     // Formula: textureMatrix = biasMatrix * projectionMatrix * viewMatrix
     //
     // The bias matrix maps from NDC [-1,1] to texture coords [0,1]
 
     this.textureMatrix.set(
-      0.5, 0.0, 0.0, 0.5,
-      0.0, 0.5, 0.0, 0.5,
-      0.0, 0.0, 0.5, 0.5,
-      0.0, 0.0, 0.0, 1.0
+      0.5,
+      0.0,
+      0.0,
+      0.5,
+      0.0,
+      0.5,
+      0.0,
+      0.5,
+      0.0,
+      0.0,
+      0.5,
+      0.5,
+      0.0,
+      0.0,
+      0.0,
+      1.0
     );
 
     this.textureMatrix.multiply(this.reflectionCamera.projectionMatrix);
@@ -433,7 +451,7 @@ export class PlanarReflection {
  * @returns Configured PlanarReflection instance
  */
 export function createPlanarReflectionForQuality(
-  renderer: THREE.WebGLRenderer | THREE.WebGPURenderer,
+  renderer: THREE.WebGLRenderer | WebGPURenderer,
   quality: 'low' | 'medium' | 'high' | 'ultra',
   waterHeight: number
 ): PlanarReflection | null {

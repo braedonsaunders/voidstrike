@@ -1,18 +1,22 @@
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
 import { MapData } from '@/data/maps';
 import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
 import { TSLMapBorderFog } from './tsl/MapBorderFog';
 import { EnvironmentParticles } from './EnhancedDecorations';
-import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles, InstancedCrystals, updateDecorationFrustum } from './InstancedDecorations';
+import {
+  InstancedTrees,
+  InstancedRocks,
+  InstancedGrass,
+  InstancedPebbles,
+  InstancedCrystals,
+  updateDecorationFrustum,
+} from './InstancedDecorations';
 import { DecorationLightManager } from './DecorationLightManager';
 import { EmissiveDecorationManager } from './EmissiveDecorationManager';
 import { LightPool } from './LightPool';
-import {
-  SHADOW_QUALITY_PRESETS,
-  ENVIRONMENT,
-  type ShadowQuality,
-} from '@/data/rendering.config';
+import { SHADOW_QUALITY_PRESETS, ENVIRONMENT, type ShadowQuality } from '@/data/rendering.config';
 
 // New unified water system imports
 import {
@@ -87,7 +91,7 @@ export class EnvironmentManager {
   private emissiveLightPool: LightPool | null = null;
 
   // Renderer reference for planar reflections
-  private renderer: THREE.WebGLRenderer | THREE.WebGPURenderer | null = null;
+  private renderer: THREE.WebGLRenderer | WebGPURenderer | null = null;
 
   // Lighting
   private ambientLight: THREE.AmbientLight;
@@ -105,8 +109,10 @@ export class EnvironmentManager {
   // Shadow update throttling - adaptive based on scene activity
   private shadowFrameCounter = 0;
   // Base intervals: active (units moving) vs static (empty scene)
-  private static readonly SHADOW_UPDATE_INTERVAL_ACTIVE: number = ENVIRONMENT.SHADOW_UPDATE_INTERVAL_ACTIVE;
-  private static readonly SHADOW_UPDATE_INTERVAL_STATIC: number = ENVIRONMENT.SHADOW_UPDATE_INTERVAL_STATIC;
+  private static readonly SHADOW_UPDATE_INTERVAL_ACTIVE: number =
+    ENVIRONMENT.SHADOW_UPDATE_INTERVAL_ACTIVE;
+  private static readonly SHADOW_UPDATE_INTERVAL_STATIC: number =
+    ENVIRONMENT.SHADOW_UPDATE_INTERVAL_STATIC;
   private shadowUpdateInterval: number = EnvironmentManager.SHADOW_UPDATE_INTERVAL_STATIC;
   private hasMovingEntities = false; // Hint from game about scene activity
 
@@ -233,7 +239,7 @@ export class EnvironmentManager {
    * Set the renderer reference for planar reflections
    * Must be called after construction if ultra quality water is desired
    */
-  public setRenderer(renderer: THREE.WebGLRenderer | THREE.WebGPURenderer): void {
+  public setRenderer(renderer: THREE.WebGLRenderer | WebGPURenderer): void {
     this.renderer = renderer;
 
     // If we're at ultra quality and reflections are enabled, create planar reflection
@@ -285,7 +291,10 @@ export class EnvironmentManager {
 
     // Emissive decoration manager with optional light attachment
     this.emissiveLightPool = new LightPool(this.scene, 16);
-    this.emissiveDecorationManager = new EmissiveDecorationManager(this.scene, this.emissiveLightPool);
+    this.emissiveDecorationManager = new EmissiveDecorationManager(
+      this.scene,
+      this.emissiveLightPool
+    );
 
     // Register crystals with emissive decoration manager for pulsing animation
     if (this.crystals) {
@@ -315,7 +324,12 @@ export class EnvironmentManager {
     }
 
     // MapDecorations handles watch towers and destructibles (non-instanced objects)
-    this.mapDecorations = new MapDecorations(this.mapData, this.terrain, this.scene, this.decorationLightManager);
+    this.mapDecorations = new MapDecorations(
+      this.mapData,
+      this.terrain,
+      this.scene,
+      this.decorationLightManager
+    );
     this.scene.add(this.mapDecorations.group);
   }
 
@@ -410,11 +424,7 @@ export class EnvironmentManager {
     // Calculate average water height for reflection plane
     const waterHeight = this.biome.waterLevel ?? 0.15;
 
-    this.planarReflection = createPlanarReflectionForQuality(
-      this.renderer,
-      'ultra',
-      waterHeight
-    );
+    this.planarReflection = createPlanarReflectionForQuality(this.renderer, 'ultra', waterHeight);
   }
 
   /**
@@ -786,13 +796,34 @@ export class EnvironmentManager {
       let fogFar: number;
 
       switch (biomeType) {
-        case 'jungle': fogNear = 30; fogFar = 120; break;
-        case 'volcanic': fogNear = 25; fogFar = 100; break;
-        case 'void': fogNear = 20; fogFar = 90; break;
-        case 'frozen': fogNear = 50; fogFar = 160; break;
-        case 'desert': fogNear = 80; fogFar = 250; break;
-        case 'ocean': fogNear = 70; fogFar = 220; break;
-        default: fogNear = 60; fogFar = 180; break;
+        case 'jungle':
+          fogNear = 30;
+          fogFar = 120;
+          break;
+        case 'volcanic':
+          fogNear = 25;
+          fogFar = 100;
+          break;
+        case 'void':
+          fogNear = 20;
+          fogFar = 90;
+          break;
+        case 'frozen':
+          fogNear = 50;
+          fogFar = 160;
+          break;
+        case 'desert':
+          fogNear = 80;
+          fogFar = 250;
+          break;
+        case 'ocean':
+          fogNear = 70;
+          fogFar = 220;
+          break;
+        default:
+          fogNear = 60;
+          fogFar = 180;
+          break;
       }
 
       this.scene.fog = new THREE.Fog(this.biome.colors.fog, fogNear, fogFar);
@@ -811,13 +842,34 @@ export class EnvironmentManager {
       let baseFogFar: number;
 
       switch (biomeType) {
-        case 'jungle': baseFogNear = 30; baseFogFar = 120; break;
-        case 'volcanic': baseFogNear = 25; baseFogFar = 100; break;
-        case 'void': baseFogNear = 20; baseFogFar = 90; break;
-        case 'frozen': baseFogNear = 50; baseFogFar = 160; break;
-        case 'desert': baseFogNear = 80; baseFogFar = 250; break;
-        case 'ocean': baseFogNear = 70; baseFogFar = 220; break;
-        default: baseFogNear = 60; baseFogFar = 180; break;
+        case 'jungle':
+          baseFogNear = 30;
+          baseFogFar = 120;
+          break;
+        case 'volcanic':
+          baseFogNear = 25;
+          baseFogFar = 100;
+          break;
+        case 'void':
+          baseFogNear = 20;
+          baseFogFar = 90;
+          break;
+        case 'frozen':
+          baseFogNear = 50;
+          baseFogFar = 160;
+          break;
+        case 'desert':
+          baseFogNear = 80;
+          baseFogFar = 250;
+          break;
+        case 'ocean':
+          baseFogNear = 70;
+          baseFogFar = 220;
+          break;
+        default:
+          baseFogNear = 60;
+          baseFogFar = 180;
+          break;
       }
 
       // Inverse density - higher density = closer fog
