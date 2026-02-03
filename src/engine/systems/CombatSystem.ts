@@ -31,7 +31,7 @@ const attackEventPayload = {
   targetPlayerId: undefined as string | undefined,
   attackerIsFlying: false,
   targetIsFlying: false,
-  attackerFaction: 'terran' as string,
+  attackerFaction: 'dominion' as string,
 };
 
 const splashEventPayload = {
@@ -1100,7 +1100,7 @@ export class CombatSystem extends System {
       attackEventPayload.targetPlayerId = targetSelectable?.playerId;
       attackEventPayload.attackerIsFlying = attacker.isFlying;
       attackEventPayload.targetIsFlying = targetIsFlying;
-      attackEventPayload.attackerFaction = attacker.faction || 'terran';
+      attackEventPayload.attackerFaction = attacker.faction || 'dominion';
       this.game.eventBus.emit('combat:attack', attackEventPayload);
 
       // Emit damage:dealt for Phaser damage number system
@@ -1144,7 +1144,7 @@ export class CombatSystem extends System {
       const projectileEntity = this.game.projectileSystem.spawnProjectile({
         sourceEntityId: attackerId,
         sourcePlayerId: attackerSelectable?.playerId ?? '',
-        sourceFaction: attacker.faction || 'terran',
+        sourceFaction: attacker.faction || 'dominion',
         startX: attackerTransform.x,
         startY: attackerTransform.y,
         startZ: attackerTransform.z + startZ,
@@ -1180,7 +1180,7 @@ export class CombatSystem extends System {
       attackEventPayload.targetPlayerId = targetSelectable?.playerId;
       attackEventPayload.attackerIsFlying = attacker.isFlying;
       attackEventPayload.targetIsFlying = targetIsFlying;
-      attackEventPayload.attackerFaction = attacker.faction || 'terran';
+      attackEventPayload.attackerFaction = attacker.faction || 'dominion';
       this.game.eventBus.emit('combat:attack', attackEventPayload);
     }
 

@@ -703,7 +703,7 @@ function cloneModel(original: THREE.Object3D, assetId: string): THREE.Object3D {
 
 // Standard materials library
 export const Materials = {
-  // Dominion (Terran-like) faction
+  // Dominion faction
   dominion: {
     metal: new THREE.MeshStandardMaterial({
       color: 0x6080a0,
@@ -735,7 +735,7 @@ export const Materials = {
     }),
   },
 
-  // Synthesis (Protoss-like) faction
+  // Synthesis faction (placeholder)
   synthesis: {
     crystal: new THREE.MeshStandardMaterial({
       color: 0x4080ff,
@@ -758,7 +758,7 @@ export const Materials = {
     }),
   },
 
-  // Swarm (Zerg-like) faction
+  // Swarm faction (placeholder)
   swarm: {
     chitin: new THREE.MeshStandardMaterial({
       color: 0x4a3040,

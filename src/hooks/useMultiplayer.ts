@@ -85,8 +85,9 @@ async function loadIceServers(): Promise<RTCIceServer[]> {
     if (response.ok) {
       const config = await response.json();
       if (Array.isArray(config.iceServers) && config.iceServers.length > 0) {
-        cachedIceServers = config.iceServers;
-        return cachedIceServers;
+        const servers = config.iceServers as RTCIceServer[];
+        cachedIceServers = servers;
+        return servers;
       }
     }
   } catch {
@@ -94,7 +95,7 @@ async function loadIceServers(): Promise<RTCIceServer[]> {
   }
 
   cachedIceServers = DEFAULT_ICE_SERVERS;
-  return cachedIceServers;
+  return DEFAULT_ICE_SERVERS;
 }
 
 function getIceServersSync(): RTCIceServer[] {
