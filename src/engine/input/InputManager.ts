@@ -107,6 +107,8 @@ export class InputManager {
   private boundContextMenu: (e: MouseEvent) => void;
   private boundBlur: () => void;
   private boundVisibilityChange: () => void;
+  private boundMouseEnter: () => void;
+  private boundMouseLeave: () => void;
 
   // Subscribers for state changes
   private selectionSubscribers: Set<(state: SelectionState) => void> = new Set();
@@ -127,6 +129,8 @@ export class InputManager {
     this.boundContextMenu = this.handleContextMenu.bind(this);
     this.boundBlur = this.handleBlur.bind(this);
     this.boundVisibilityChange = this.handleVisibilityChange.bind(this);
+    this.boundMouseEnter = this.handleMouseEnter.bind(this);
+    this.boundMouseLeave = this.handleMouseLeave.bind(this);
   }
 
   /**
@@ -204,12 +208,8 @@ export class InputManager {
     document.addEventListener('mouseup', this.boundMouseUp);
 
     // Track mouse enter/leave
-    container.addEventListener('mouseenter', () => {
-      this.mouseInBounds = true;
-    });
-    container.addEventListener('mouseleave', () => {
-      this.mouseInBounds = false;
-    });
+    container.addEventListener('mouseenter', this.boundMouseEnter);
+    container.addEventListener('mouseleave', this.boundMouseLeave);
 
     this.initialized = true;
     debugInitialization.log('[InputManager] Initialized');
@@ -254,6 +254,8 @@ export class InputManager {
       this.container.removeEventListener('mousedown', this.boundMouseDown);
       this.container.removeEventListener('contextmenu', this.boundContextMenu);
       this.container.removeEventListener('wheel', this.boundWheel);
+      this.container.removeEventListener('mouseenter', this.boundMouseEnter);
+      this.container.removeEventListener('mouseleave', this.boundMouseLeave);
     }
 
     // Clear state
@@ -645,6 +647,14 @@ export class InputManager {
     if (document.hidden) {
       this.handleBlur();
     }
+  }
+
+  private handleMouseEnter(): void {
+    this.mouseInBounds = true;
+  }
+
+  private handleMouseLeave(): void {
+    this.mouseInBounds = false;
   }
 
   // =============================================================================

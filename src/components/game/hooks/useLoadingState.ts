@@ -6,7 +6,7 @@
  */
 
 import type { MutableRefObject } from 'react';
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 
 import type { EventBus } from '@/engine/core/EventBus';
 import { useGameStore } from '@/store/gameStore';
@@ -47,6 +47,15 @@ export function useLoadingState({
 
   // Track animation frame for cleanup
   const animationFrameRef = useRef<number | null>(null);
+
+  // Clean up animation frame on unmount
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
 
   // Update loading progress and status
   const setProgress = useCallback((progress: number, status: string) => {
