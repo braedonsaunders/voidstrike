@@ -12,6 +12,7 @@ import {
 } from '@/data/buildings/dominion';
 import { findBuildingTarget } from '../combat/TargetAcquisition';
 import { distance } from '@/utils/math';
+import { validateEntityAlive } from '@/utils/EntityValidator';
 
 interface LiftOffCommand {
   buildingId: number;
@@ -72,7 +73,7 @@ export class BuildingMechanicsSystem extends System {
 
   private handleAddonLiftCommand(command: { buildingId: number; playerId?: string }): void {
     const entity = this.world.getEntity(command.buildingId);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleAddonLiftCommand')) return;
 
     const building = entity.get<Building>('Building');
     if (!building || !building.addonEntityId) return;
@@ -100,7 +101,7 @@ export class BuildingMechanicsSystem extends System {
     // This handles a building attaching to an existing addon at a position
     // The building should fly to the position and then attach
     const entity = this.world.getEntity(command.buildingId);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleAddonLandCommand')) return;
 
     const building = entity.get<Building>('Building');
     if (!building) return;
@@ -113,7 +114,7 @@ export class BuildingMechanicsSystem extends System {
 
   private handleLiftOffCommand(command: LiftOffCommand): void {
     const entity = this.world.getEntity(command.buildingId);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleLiftOffCommand')) return;
 
     const building = entity.get<Building>('Building');
     if (!building) return;
@@ -145,7 +146,7 @@ export class BuildingMechanicsSystem extends System {
 
   private handleLandCommand(command: LandCommand): void {
     const entity = this.world.getEntity(command.buildingId);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleLandCommand')) return;
 
     const building = entity.get<Building>('Building');
     const transform = entity.get<Transform>('Transform');
@@ -181,7 +182,7 @@ export class BuildingMechanicsSystem extends System {
 
   private handleFlyingBuildingMoveCommand(command: FlyingBuildingMoveCommand): void {
     const entity = this.world.getEntity(command.buildingId);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleFlyingBuildingMoveCommand')) return;
 
     const building = entity.get<Building>('Building');
     if (!building) return;
@@ -194,7 +195,7 @@ export class BuildingMechanicsSystem extends System {
 
   private handleBuildAddonCommand(command: BuildAddonCommand): void {
     const entity = this.world.getEntity(command.buildingId);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleBuildAddonCommand')) return;
 
     const building = entity.get<Building>('Building');
     const transform = entity.get<Transform>('Transform');
@@ -252,7 +253,7 @@ export class BuildingMechanicsSystem extends System {
 
   private handleLowerSupplyDepotCommand(command: LowerSupplyDepotCommand): void {
     const entity = this.world.getEntity(command.buildingId);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleLowerSupplyDepotCommand')) return;
 
     const building = entity.get<Building>('Building');
     if (!building) return;
@@ -272,7 +273,7 @@ export class BuildingMechanicsSystem extends System {
   private handleDemolishCommand(command: DemolishCommand): void {
     for (const entityId of command.entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'BuildingMechanicsSystem:handleDemolishCommand')) continue;
 
       const building = entity.get<Building>('Building');
       const transform = entity.get<Transform>('Transform');
