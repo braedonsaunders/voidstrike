@@ -117,9 +117,45 @@ export function usePostProcessing({
 
       // Handle post-processing toggle
       if (settings.postProcessingEnabled !== prevSettings.postProcessingEnabled) {
+        const fogOfWarNeeded = useGameSetupStore.getState().fogOfWar && !isSpectatorMode();
+
         if (!settings.postProcessingEnabled) {
           renderPipelineRef.current?.dispose();
           renderPipelineRef.current = null;
+
+          // If fog of war is needed, create a minimal pipeline with only fog of war enabled
+          // Fog of war requires the post-processing pipeline for depth-based world reconstruction
+          if (fogOfWarNeeded && renderContextRef.current && sceneRef.current && cameraRef.current) {
+            renderPipelineRef.current = new RenderPipeline(
+              renderContextRef.current.renderer,
+              sceneRef.current,
+              cameraRef.current.camera,
+              {
+                // Disable all effects except fog of war
+                bloomEnabled: false,
+                aoEnabled: false,
+                ssrEnabled: false,
+                ssgiEnabled: false,
+                antiAliasingMode: 'off',
+                fxaaEnabled: false,
+                taaEnabled: false,
+                upscalingMode: 'off',
+                vignetteEnabled: false,
+                volumetricFogEnabled: false,
+                // Keep fog of war enabled with current settings
+                fogOfWarEnabled: true,
+                fogOfWarQuality: settings.fogOfWarQuality,
+                fogOfWarEdgeBlur: settings.fogOfWarEdgeBlur,
+                fogOfWarDesaturation: settings.fogOfWarDesaturation,
+                fogOfWarExploredDarkness: settings.fogOfWarExploredDarkness,
+                fogOfWarUnexploredDarkness: settings.fogOfWarUnexploredDarkness,
+                fogOfWarCloudSpeed: settings.fogOfWarCloudSpeed,
+                fogOfWarRimIntensity: settings.fogOfWarRimIntensity,
+                fogOfWarHeightInfluence: settings.fogOfWarHeightInfluence,
+              }
+            );
+            renderPipelineRef.current.setFogOfWarMapDimensions(mapRef.current.width, mapRef.current.height);
+          }
         } else if (renderContextRef.current && sceneRef.current && cameraRef.current) {
           renderPipelineRef.current = new RenderPipeline(
             renderContextRef.current.renderer,
