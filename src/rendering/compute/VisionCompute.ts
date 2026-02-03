@@ -73,15 +73,11 @@ export interface VisionCaster {
   y: number;
   sightRange: number;
   playerId: number;
-  // Optional height for LOS calculations
-  height?: number;
 }
 
 export interface VisionComputeConfig {
   mapWidth: number;
   mapHeight: number;
-  // LOS blocking threshold (height difference to block vision)
-  losBlockingThreshold?: number;
   cellSize: number;
 }
 
@@ -119,12 +115,6 @@ export class VisionCompute {
   // Compute shader nodes per player
   private computeNodes: Map<number, ComputeNodeCache> = new Map();
 
-  // Height texture for LOS blocking (Phase 2)
-  private heightTexture: THREE.DataTexture | null = null;
-  private heightData: Float32Array | null = null;
-  private useLOSBlocking = true;
-  private losBlockingThreshold = 1.0;
-
   // Uniforms
   private uGridWidth = uniform(0);
   private uGridHeight = uniform(0);
@@ -133,8 +123,6 @@ export class VisionCompute {
   private uTargetPlayerId = uniform(0);
   private uTemporalBlend = uniform(TEMPORAL_BLEND_SPEED);
   private uDeltaTime = uniform(0.016); // ~60fps default
-  private uLOSThreshold = uniform(1.0); // Height difference to block LOS
-  private uUseLOS = uniform(1.0); // 1.0 = enabled, 0.0 = disabled
 
   // State tracking
   private gpuComputeAvailable = false;
@@ -385,76 +373,6 @@ export class VisionCompute {
    */
   public setTemporalBlendSpeed(speed: number): void {
     this.uTemporalBlend.value = clamp(speed, 0.01, 1.0);
-  }
-
-  // ============================================
-  // PHASE 2: HEIGHT-BASED LOS BLOCKING
-  // ============================================
-
-  /**
-   * Set height data for LOS blocking
-   * Heights should be a Float32Array of size gridWidth * gridHeight
-   * with terrain heights at each cell
-   */
-  public setHeightData(heights: Float32Array): void {
-    if (heights.length !== this.gridWidth * this.gridHeight) {
-      debugShaders.warn('[VisionCompute] Height data size mismatch');
-      return;
-    }
-
-    this.heightData = heights;
-
-    // Create or update height texture
-    if (!this.heightTexture) {
-      this.heightTexture = new THREE.DataTexture(
-        heights,
-        this.gridWidth,
-        this.gridHeight,
-        THREE.RedFormat,
-        THREE.FloatType
-      );
-      this.heightTexture.minFilter = THREE.LinearFilter;
-      this.heightTexture.magFilter = THREE.LinearFilter;
-      this.heightTexture.wrapS = THREE.ClampToEdgeWrapping;
-      this.heightTexture.wrapT = THREE.ClampToEdgeWrapping;
-    } else {
-      // Update existing texture data
-      this.heightTexture.image.data = heights;
-    }
-    this.heightTexture.needsUpdate = true;
-
-    debugShaders.log('[VisionCompute] Height data set for LOS blocking');
-  }
-
-  /**
-   * Enable/disable LOS blocking
-   */
-  public setLOSBlockingEnabled(enabled: boolean): void {
-    this.useLOSBlocking = enabled;
-    this.uUseLOS.value = enabled ? 1.0 : 0.0;
-    debugShaders.log(`[VisionCompute] LOS blocking ${enabled ? 'enabled' : 'disabled'}`);
-  }
-
-  /**
-   * Set LOS blocking threshold (height difference required to block vision)
-   */
-  public setLOSBlockingThreshold(threshold: number): void {
-    this.losBlockingThreshold = threshold;
-    this.uLOSThreshold.value = threshold;
-  }
-
-  /**
-   * Get height texture for shader access
-   */
-  public getHeightTexture(): THREE.DataTexture | null {
-    return this.heightTexture;
-  }
-
-  /**
-   * Check if LOS blocking is enabled and has height data
-   */
-  public isLOSBlockingActive(): boolean {
-    return this.useLOSBlocking && this.heightData !== null;
   }
 
   /**
