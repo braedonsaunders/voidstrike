@@ -102,6 +102,13 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
     cloned.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
   }
 
+  // Ensure normal coordinates exist - required for proper lighting and SSAO
+  // Some models from Tripo/Meshy AI lack normals, causing GTAO to reconstruct
+  // normals from depth gradients which creates visible triangular artifacts
+  if (!cloned.attributes.normal && cloned.attributes.position) {
+    cloned.computeVertexNormals();
+  }
+
   return cloned;
 }
 
