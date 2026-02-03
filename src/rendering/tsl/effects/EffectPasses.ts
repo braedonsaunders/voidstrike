@@ -86,6 +86,8 @@ export interface SSGIConfig {
 export interface GTAOConfig {
   radius: number;
   intensity: number;
+  samples?: number; // Number of AO samples (higher = better quality, more expensive)
+  useTemporalFiltering?: boolean; // Enable temporal filtering to reduce noise (requires TAA)
 }
 
 export interface SSRConfig {
@@ -206,6 +208,16 @@ export function createGTAOPass(
     // Higher thickness = more tolerance for depth differences = fewer edge artifacts
     if (aoPass.thickness) {
       aoPass.thickness.value = 0.5;
+    }
+    // Set higher sample count to reduce visible dithering/noise pattern
+    // Default is often low (8-16), we use 32 for better quality on smooth surfaces
+    if (aoPass.samples) {
+      aoPass.samples.value = config.samples ?? 32;
+    }
+    // Enable temporal filtering to reduce noise when TAA is available
+    // This smooths the AO over multiple frames, eliminating the stipple pattern
+    if (config.useTemporalFiltering !== undefined) {
+      aoPass.useTemporalFiltering = config.useTemporalFiltering;
     }
     const aoValueNode = aoPass.getTextureNode().r;
 

@@ -75,6 +75,10 @@ export function createQuarterAOPipeline(
     // @ts-expect-error - @types/three declares normalNode as non-nullable but actual API accepts null
     const quarterAO = ao(scenePassDepth, null, camera);
     quarterAO.radius.value = aoRadius;
+    // Set higher sample count to reduce visible dithering/noise pattern
+    if (quarterAO.samples) {
+      quarterAO.samples.value = 32;
+    }
 
     // Output just the AO value (single channel)
     const aoValue = quarterAO.getTextureNode().r;
