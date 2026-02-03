@@ -11,6 +11,7 @@ import { getPlayerColor, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { debugMesh } from '@/utils/debugLogger';
 import { CullingService, EntityCategory } from './services/CullingService';
+import { getConsoleEngineSync } from '@/engine/debug/ConsoleEngine';
 import { BUILDING_RENDERER, BUILDING_SELECTION_RING, RENDER_ORDER } from '@/data/rendering.config';
 import {
   createConstructingMaterial,
@@ -648,10 +649,13 @@ export class BuildingRenderer {
       const isOwned = !isSpectating && ownerId === this.playerId;
       const isEnemy = !isSpectating && selectable && ownerId !== this.playerId;
 
-      // Check visibility for enemy buildings (skip in spectator mode - show all)
+      // Check visibility for enemy buildings (skip in spectator mode or if fog disabled - show all)
       let shouldShow = true;
       if (isEnemy && this.visionSystem && this.playerId) {
-        shouldShow = this.visionSystem.isExplored(this.playerId, transform.x, transform.y);
+        const fogDisabled = getConsoleEngineSync()?.getFlag('fogDisabled');
+        if (!fogDisabled) {
+          shouldShow = this.visionSystem.isExplored(this.playerId, transform.x, transform.y);
+        }
       }
 
       // PERF: Get cached terrain height (buildings rarely move)
