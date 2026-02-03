@@ -10,7 +10,6 @@ import { isLocalPlayer } from '@/store/gameSetupStore';
 import { debugCombat } from '@/utils/debugLogger';
 import { deterministicDamage, quantize, QUANT_DAMAGE } from '@/utils/FixedPoint';
 import { getDamageMultiplier, COMBAT_CONFIG } from '@/data/combat/combat';
-import { getDefaultTargetPriority } from '@/data/units/categories';
 import AssetManager from '@/assets/AssetManager';
 import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/data/projectiles';
 import { SpatialEntityData, SpatialUnitState } from '../core/SpatialGrid';
@@ -61,17 +60,6 @@ const underAttackPayload = {
 
 // Combat constants now loaded from data-driven config (@/data/combat/combat.ts)
 // Target priorities now loaded from unit definitions or categories (@/data/units/categories.ts)
-
-/**
- * Get target priority for a unit, checking unit component first, then category defaults.
- * Higher values = more likely to be targeted first.
- */
-function _getTargetPriority(unitId: string, _unit?: Unit): number {
-  // First check if unit has explicit priority set (from unit definition)
-  // The Unit component doesn't store targetPriority directly, so we use category defaults
-  // Fall back to category-based default priority from data config
-  return getDefaultTargetPriority(unitId);
-}
 
 // Assault mode timeout - clear assault mode after this many ticks of being idle with no targets
 // 60 ticks = ~3 seconds at 20 ticks/sec - enough time to scan for new targets before giving up
@@ -346,7 +334,7 @@ export class CombatSystem extends System {
   /**
    * PERF OPTIMIZATION: Rebuild attack ready queue from all combat units
    */
-  private rebuildAttackQueue(_gameTime: number): void {
+  private rebuildAttackQueue(): void {
     this.attackReadyQueue.length = 0;
 
     for (const entityId of this.combatActiveUnits) {
@@ -488,7 +476,7 @@ export class CombatSystem extends System {
 
     // PERF OPTIMIZATION: Rebuild attack queue if dirty
     if (this.attackQueueDirty) {
-      this.rebuildAttackQueue(gameTime);
+      this.rebuildAttackQueue();
     }
 
     // PERF OPTIMIZATION: First pass - handle dead units (fast scan of all units)

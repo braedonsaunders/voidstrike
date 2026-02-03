@@ -64,17 +64,6 @@ export function updateAnimationParameters(
 }
 
 /**
- * Unit states that should play walk animation when moving
- */
-const _WALKING_STATES = new Set([
-  'moving',
-  'attackmoving',
-  'patrolling',
-  'gathering',
-  'building',
-]);
-
-/**
  * Get the logical animation state from game state
  * (for debugging / state inspection)
  */

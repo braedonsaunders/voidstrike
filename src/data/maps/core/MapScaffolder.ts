@@ -162,33 +162,6 @@ function findClosestOfType(
   return closest;
 }
 
-/** Find all bases of a specific type belonging to a player */
-function _findPlayerBases(
-  bases: BaseLocation[],
-  playerSlot: number,
-  type?: BaseType
-): BaseLocation[] {
-  return bases.filter(b =>
-    b.playerSlot === playerSlot &&
-    (!type || b.type === type)
-  );
-}
-
-/** Group bases by player */
-function _groupByPlayer(bases: BaseLocation[]): Map<number, BaseLocation[]> {
-  const groups = new Map<number, BaseLocation[]>();
-
-  for (const base of bases) {
-    const slot = base.playerSlot ?? 0;
-    if (!groups.has(slot)) {
-      groups.set(slot, []);
-    }
-    groups.get(slot)!.push(base);
-  }
-
-  return groups;
-}
-
 // =============================================================================
 // CONNECTION DETECTION
 // =============================================================================
@@ -240,7 +213,6 @@ function detectConnections(
   // Get mains
   const mains = bases.filter(b => b.type === 'main');
   const naturals = bases.filter(b => b.type === 'natural');
-  const _thirds = bases.filter(b => b.type === 'third');
 
   // Auto-connect mains to their closest natural
   if (config.autoConnectMainNatural) {

@@ -153,32 +153,6 @@ const TECH_TREE: Record<string, { requires: string[]; enables: string[] }> = {
 };
 
 /**
- * Strategy indicators
- */
-const _STRATEGY_INDICATORS = {
-  rush: {
-    signs: ['early_aggression', 'low_workers', 'few_buildings', 'no_expansion'],
-    antiSigns: ['expansion', 'high_tech'],
-  },
-  macro: {
-    signs: ['expansion', 'high_workers', 'multiple_production'],
-    antiSigns: ['early_aggression', 'low_workers'],
-  },
-  tech: {
-    signs: ['early_gas', 'tech_buildings', 'low_army'],
-    antiSigns: ['early_aggression', 'no_gas'],
-  },
-  turtle: {
-    signs: ['defensive_buildings', 'late_expansion', 'static_defense'],
-    antiSigns: ['early_expansion', 'mobile_army'],
-  },
-  air_transition: {
-    signs: ['hangar', 'air_units', 'starport_activity'],
-    antiSigns: ['no_air_tech'],
-  },
-};
-
-/**
  * Scouting Memory - Tracks and infers enemy strategy
  */
 export class ScoutingMemory {
