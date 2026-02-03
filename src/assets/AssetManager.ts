@@ -1086,22 +1086,24 @@ export class AssetManager {
               // Fix materials - AI-generated models often have issues
               const materials = Array.isArray(child.material) ? child.material : [child.material];
               for (const mat of materials) {
-                if (mat) {
+                if (mat && (mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+                  const stdMat = mat as THREE.MeshStandardMaterial;
                   // Disable vertex colors - AI models bake AO into vertex colors
-                  if ('vertexColors' in mat) {
-                    mat.vertexColors = false;
-                  }
-                  // Clear any aoMap/lightMap that might be causing artifacts
-                  // These maps often use UV2 which gets stripped, causing visual issues
-                  if ('aoMap' in mat) {
-                    (mat as THREE.MeshStandardMaterial).aoMap = null;
-                    (mat as THREE.MeshStandardMaterial).aoMapIntensity = 0;
-                  }
-                  if ('lightMap' in mat) {
-                    (mat as THREE.MeshStandardMaterial).lightMap = null;
-                    (mat as THREE.MeshStandardMaterial).lightMapIntensity = 0;
-                  }
-                  mat.needsUpdate = true;
+                  stdMat.vertexColors = false;
+                  // Clear ALL texture maps that could cause triangular artifacts
+                  // AI-generated models often have corrupted or low-quality maps
+                  stdMat.aoMap = null;
+                  stdMat.aoMapIntensity = 0;
+                  stdMat.lightMap = null;
+                  stdMat.lightMapIntensity = 0;
+                  stdMat.normalMap = null;
+                  stdMat.normalScale.set(1, 1);
+                  stdMat.bumpMap = null;
+                  stdMat.displacementMap = null;
+                  stdMat.metalnessMap = null;
+                  stdMat.roughnessMap = null;
+                  stdMat.alphaMap = null;
+                  stdMat.needsUpdate = true;
                 }
               }
 
@@ -1199,21 +1201,23 @@ export class AssetManager {
               // Fix materials - AI-generated models often have issues
               const materials = Array.isArray(child.material) ? child.material : [child.material];
               for (const mat of materials) {
-                if (mat) {
+                if (mat && (mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+                  const stdMat = mat as THREE.MeshStandardMaterial;
                   // Disable vertex colors - AI models bake AO into vertex colors
-                  if ('vertexColors' in mat) {
-                    mat.vertexColors = false;
-                  }
-                  // Clear any aoMap/lightMap that might be causing artifacts
-                  if ('aoMap' in mat) {
-                    (mat as THREE.MeshStandardMaterial).aoMap = null;
-                    (mat as THREE.MeshStandardMaterial).aoMapIntensity = 0;
-                  }
-                  if ('lightMap' in mat) {
-                    (mat as THREE.MeshStandardMaterial).lightMap = null;
-                    (mat as THREE.MeshStandardMaterial).lightMapIntensity = 0;
-                  }
-                  mat.needsUpdate = true;
+                  stdMat.vertexColors = false;
+                  // Clear ALL texture maps that could cause triangular artifacts
+                  stdMat.aoMap = null;
+                  stdMat.aoMapIntensity = 0;
+                  stdMat.lightMap = null;
+                  stdMat.lightMapIntensity = 0;
+                  stdMat.normalMap = null;
+                  stdMat.normalScale.set(1, 1);
+                  stdMat.bumpMap = null;
+                  stdMat.displacementMap = null;
+                  stdMat.metalnessMap = null;
+                  stdMat.roughnessMap = null;
+                  stdMat.alphaMap = null;
+                  stdMat.needsUpdate = true;
                 }
               }
 
