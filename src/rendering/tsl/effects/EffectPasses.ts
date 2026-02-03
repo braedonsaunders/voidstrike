@@ -934,9 +934,24 @@ export function createFogOfWarPass(
     const maxDist = min(surfaceDistance, uVolMaxDistance);
     const stepSize = maxDist.div(uVolSteps);
 
-    // Base fog density from visibility (sampled ONCE at surface - no loop sampling)
+    // Sample visibility at a point along the ray (30% from camera to surface)
+    // This prevents the southward shift caused by sampling only at the surface,
+    // which with the RTS camera angle would bias fog toward unexplored areas
+    const volSamplePoint = uCameraPos.add(rayDir.mul(surfaceDistance.mul(0.3)));
+    const volVisionU = volSamplePoint.x.div(uMapDimensions.x);
+    const volVisionV = volSamplePoint.z.div(uMapDimensions.y);
+    const volVisionUV = clamp(vec2(volVisionU, volVisionV), 0.001, 0.999);
+    const volVisionSample = visionTextureNode.sample(volVisionUV);
+    const volExplored = volVisionSample.r;
+    const volVisible = volVisionSample.g;
+    const volIsVisible = smoothstep(float(0.4), float(0.6), volVisible);
+    const volIsExplored = smoothstep(float(0.4), float(0.6), volExplored);
+    const volIsUnexplored = float(1.0).sub(max(volIsVisible, volIsExplored));
+    const volExploredAmount = volIsExplored.mul(float(1.0).sub(volIsVisible));
+
+    // Base fog density from visibility sampled along the ray
     // Unexplored = full fog, explored = partial, visible = none
-    const baseDensity = isUnexplored.add(exploredAmount.mul(0.4)).mul(uVolFogDensity);
+    const baseDensity = volIsUnexplored.add(volExploredAmount.mul(0.4)).mul(uVolFogDensity);
 
     // Volumetric accumulation
     const volTransmittance = float(1.0).toVar();
