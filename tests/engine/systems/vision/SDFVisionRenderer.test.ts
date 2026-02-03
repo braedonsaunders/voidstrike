@@ -37,8 +37,20 @@ describe('SDFVisionRenderer', () => {
 
       sdfRenderer.updateSDF('player1', mask);
 
+      // Verify texture exists and has correct dimensions
       const texture = sdfRenderer.getSDFTexture('player1');
-      expect(texture.needsUpdate).toBe(true);
+      expect(texture).toBeDefined();
+      expect(texture.image.width).toBe(defaultConfig.gridWidth);
+      expect(texture.image.height).toBe(defaultConfig.gridHeight);
+
+      // Verify the SDF data was actually processed - center should have high values (visible)
+      // and edges of the visible area should be lower (near boundary)
+      const edgeFactorCenter = sdfRenderer.getEdgeFactor(8, 8, 'player1');
+      const edgeFactorBoundary = sdfRenderer.getEdgeFactor(6, 6, 'player1');
+
+      // Center should have lower edge factor (farther from boundary)
+      // Boundary should have higher edge factor (on the edge)
+      expect(edgeFactorBoundary).toBeGreaterThanOrEqual(edgeFactorCenter);
     });
   });
 

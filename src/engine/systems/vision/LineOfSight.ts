@@ -156,6 +156,11 @@ export class LineOfSight {
     const stepY = dy / numSamples;
     const heightStep = (endHeight - startHeight) / numSamples;
 
+    // Get caster's ground level height (eye height minus offset)
+    // Terrain at or below caster's ground can't block their vision (high ground advantage)
+    const eyeHeightOffset = 0.5;
+    const casterGroundHeight = startHeight - eyeHeightOffset;
+
     // Sample terrain along the ray
     for (let i = 1; i < numSamples; i++) {
       const sampleX = startX + stepX * i;
@@ -164,6 +169,12 @@ export class LineOfSight {
 
       // Get terrain height at this sample point
       const terrainHeight = this.getHeight(sampleX, sampleY);
+
+      // High ground advantage: terrain at or below caster's level can't block their vision
+      // This allows units on high ground to see down without their own terrain blocking them
+      if (terrainHeight <= casterGroundHeight) {
+        continue;
+      }
 
       // Check if terrain blocks the sight line
       // Terrain blocks if it's higher than the sight line by the threshold
@@ -179,11 +190,7 @@ export class LineOfSight {
    * Check LOS for all cells in sight range and return visible cells
    * This is the main entry point for visibility calculation
    */
-  public getVisibleCells(
-    casterX: number,
-    casterY: number,
-    sightRange: number
-  ): Set<number> {
+  public getVisibleCells(casterX: number, casterY: number, sightRange: number): Set<number> {
     const visibleCells = new Set<number>();
 
     if (!this.getHeight) {
@@ -219,14 +226,9 @@ export class LineOfSight {
         }
 
         // Check LOS
-        if (this.hasLineOfSight(
-          casterX,
-          casterY,
-          casterHeight,
-          targetCellX,
-          targetCellY,
-          sightRange
-        )) {
+        if (
+          this.hasLineOfSight(casterX, casterY, casterHeight, targetCellX, targetCellY, sightRange)
+        ) {
           visibleCells.add(targetCellY * this.config.gridWidth + targetCellX);
         }
       }
@@ -467,7 +469,7 @@ export class LineOfSight {
    * Check if a specific cell blocks vision (for terrain features)
    * Used for features like dense forest that block vision
    */
-  public doesCellBlockVision(cellX: number, cellY: number): boolean {
+  public doesCellBlockVision(_cellX: number, _cellY: number): boolean {
     // This would check terrain features if we had that data
     // For now, only terrain height is considered
     return false;
