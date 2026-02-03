@@ -81,11 +81,16 @@ export function createVolumetricFogNode(
   const uTime = uniform(0.0);
 
   // Camera uniforms for world reconstruction
+  // Ensure camera matrices are current before cloning
+  camera.updateMatrixWorld();
+  camera.updateProjectionMatrix();
   const uCameraNear = uniform(camera.near);
   const uCameraFar = uniform(camera.far);
-  const uCameraPos = uniform(camera.position);
-  const uInverseProjection = uniform(new THREE.Matrix4());
-  const uInverseView = uniform(new THREE.Matrix4());
+  const uCameraPos = uniform(camera.position.clone());
+  // Initialize with actual camera matrices to avoid WebGPU writeBuffer errors
+  // (empty Matrix4() can cause "Overload resolution failed" before updateCamera() is called)
+  const uInverseProjection = uniform(camera.projectionMatrixInverse.clone());
+  const uInverseView = uniform(camera.matrixWorld.clone());
 
   // Fog node using TSL Fn
   const volumetricFogNode = Fn(() => {
