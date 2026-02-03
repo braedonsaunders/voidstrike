@@ -181,6 +181,7 @@ voidstrike/
 │   │   ├── config/ # Configuration files
 │   │   │   └── EditorConfig.ts
 │   │   ├── configs/
+│   │   │   ├── mapPresets.json
 │   │   │   └── voidstrike.ts
 │   │   ├── core/
 │   │   │   ├── panels/
@@ -202,8 +203,6 @@ voidstrike/
 │   │   │   ├── EditorMiniMap.tsx
 │   │   │   ├── EditorStatusBar.tsx
 │   │   │   └── EditorToolbar.tsx
-│   │   ├── data/ # Game data definitions
-│   │   │   └── mapPromptPresets.ts
 │   │   ├── hooks/ # React hooks
 │   │   │   ├── useEditorState.ts
 │   │   │   └── useLLMGeneration.ts
