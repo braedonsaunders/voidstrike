@@ -335,6 +335,11 @@ voidstrike/
 │   │   │   │   ├── index.ts
 │   │   │   │   ├── MovementOrchestrator.ts
 │   │   │   │   └── PathfindingMovement.ts
+│   │   │   ├── vision/
+│   │   │   │   ├── index.ts
+│   │   │   │   ├── LineOfSight.ts
+│   │   │   │   ├── SDFVisionRenderer.ts
+│   │   │   │   └── VisionOptimizer.ts
 │   │   │   ├── AbilitySystem.ts
 │   │   │   ├── AIEconomySystem.ts
 │   │   │   ├── AIMicroSystem.ts
@@ -582,6 +587,10 @@ voidstrike/
     │   │   ├── movement/
     │   │   │   ├── flockingBehavior.perf.test.ts
     │   │   │   └── flockingBehavior.test.ts
+    │   │   ├── vision/
+    │   │   │   ├── LineOfSight.test.ts
+    │   │   │   ├── SDFVisionRenderer.test.ts
+    │   │   │   └── VisionOptimizer.test.ts
     │   │   ├── abilitySystem.test.ts
     │   │   ├── buildingPlacementSystem.test.ts
     │   │   ├── combatSystem.test.ts
