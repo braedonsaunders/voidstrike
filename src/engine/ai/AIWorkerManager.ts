@@ -224,13 +224,28 @@ export class AIWorkerManager {
     // Find friendly base position
     const friendlyBasePosition = this.findFriendlyBase(aiPlayerId);
 
-    // Create promise for result
+    // Create promise for result with timeout
+    const WORKER_TIMEOUT_MS = 5000;
+
     const resultPromise = new Promise<MicroDecision[]>((resolve) => {
       this.pendingMicroRequests.set(aiPlayerId, {
         tick: currentTick,
         aiPlayerId,
         resolve,
       });
+    });
+
+    const timeoutPromise = new Promise<MicroDecision[]>((_, reject) => {
+      setTimeout(() => {
+        // Clean up pending request on timeout
+        if (this.pendingMicroRequests.has(aiPlayerId)) {
+          this.pendingMicroRequests.delete(aiPlayerId);
+          debugAI.warn(
+            `[AIWorkerManager] Worker timeout for player ${aiPlayerId} at tick ${currentTick}`
+          );
+        }
+        reject(new Error(`AI worker timeout after ${WORKER_TIMEOUT_MS}ms`));
+      }, WORKER_TIMEOUT_MS);
     });
 
     // Send to worker
@@ -247,7 +262,12 @@ export class AIWorkerManager {
       seed: 12345 + currentTick,
     });
 
-    return resultPromise;
+    // Race between result and timeout, return null on timeout instead of throwing
+    try {
+      return await Promise.race([resultPromise, timeoutPromise]);
+    } catch {
+      return null;
+    }
   }
 
   /**

@@ -14,12 +14,12 @@ A groundbreaking multiplayer architecture that requires **zero servers** to oper
 
 ## Reliability Assessment
 
-| Phase | Component | Reliability | Why |
-|-------|-----------|-------------|-----|
-| **1** | Connection Codes | ✅ **100%** | Pure WebRTC encoding. Zero external dependencies. Cannot fail. |
-| **2** | LAN Discovery (mDNS) | ⏳ Not implemented | Requires Electron/Tauri for desktop build |
-| **3** | Nostr Discovery | ❌ Removed | Infrastructure removed - lobby codes used instead |
-| **4** | Peer Relay | ❌ Removed | Infrastructure removed - STUN servers handle most NAT cases |
+| Phase | Component            | Reliability        | Why                                                                                   |
+| ----- | -------------------- | ------------------ | ------------------------------------------------------------------------------------- |
+| **1** | Connection Codes     | ⚠️ Partial         | SDP encoding handled inline in useMultiplayer.ts - dedicated module not yet extracted |
+| **2** | LAN Discovery (mDNS) | ⏳ Not implemented | Requires Electron/Tauri for desktop build                                             |
+| **3** | Nostr Discovery      | ❌ Removed         | Infrastructure removed - lobby codes used instead                                     |
+| **4** | Peer Relay           | ❌ Removed         | Infrastructure removed - STUN servers handle most NAT cases                           |
 
 > **Note**: Phase 3 (NostrMatchmaking.ts) and Phase 4 (PeerRelay.ts) infrastructure files were removed.
 > The architecture diagrams below show the original design vision; current implementation uses lobby codes via Nostr relays in useMultiplayer.ts.
@@ -30,50 +30,49 @@ A groundbreaking multiplayer architecture that requires **zero servers** to oper
 
 ### ✅ What's COMPLETE (Infrastructure Layer)
 
-| Component | File | Status |
-|-----------|------|--------|
-| **Connection Codes** | `ConnectionCode.ts` | ✅ SDP encoding/decoding |
-| **Nostr Relays** | `NostrRelays.ts` | ✅ Health-checked relay list |
-| **Game Message Protocol** | `types.ts` | ✅ 16 message types |
-| **Checksum System** | `ChecksumSystem.ts` | ✅ State verification + Merkle tree |
-| **Merkle Tree** | `MerkleTree.ts` | ✅ O(log n) divergence detection |
-| **Desync Detection** | `DesyncDetection.ts` | ✅ Debugging tools |
+| Component                 | File                 | Status                              |
+| ------------------------- | -------------------- | ----------------------------------- |
+| **Nostr Relays**          | `NostrRelays.ts`     | ✅ Health-checked relay list        |
+| **Game Message Protocol** | `types.ts`           | ✅ 16 message types                 |
+| **Checksum System**       | `ChecksumSystem.ts`  | ✅ State verification + Merkle tree |
+| **Merkle Tree**           | `MerkleTree.ts`      | ✅ O(log n) divergence detection    |
+| **Desync Detection**      | `DesyncDetection.ts` | ✅ Debugging tools                  |
 
 ### ❌ What's REMOVED (Phase 3/4 Infrastructure)
 
-| Component | Former File | Notes |
-|-----------|-------------|-------|
+| Component             | Former File           | Notes                                                    |
+| --------------------- | --------------------- | -------------------------------------------------------- |
 | **Nostr Matchmaking** | `NostrMatchmaking.ts` | Removed - lobby codes via useMultiplayer.ts used instead |
-| **Peer Relay** | `PeerRelay.ts` | Removed - STUN servers handle NAT traversal |
+| **Peer Relay**        | `PeerRelay.ts`        | Removed - STUN servers handle NAT traversal              |
 
 ### ✅ What's COMPLETE (Game Integration)
 
-| Component | File | Status |
-|-----------|------|--------|
-| **Lockstep Game Loop** | `Game.ts` | ✅ `hasAllCommandsForTick()` barrier waits for all players |
-| **Input Broadcasting** | `Game.ts` | ✅ `issueCommand()` sends via `sendMultiplayerMessage()` |
-| **Input Buffering** | `Game.ts` | ✅ Adaptive `currentCommandDelay` based on latency |
-| **Heartbeat System** | `Game.ts` | ✅ `sendHeartbeatForTick()` keeps lockstep flowing |
-| **Command Authorization** | `Game.ts` | ✅ Validates player ownership of entities |
-| **Reconnection** | `multiplayerStore.ts`, `Game.ts` | ✅ Auto-reconnect with exponential backoff + sync request |
-| **Multi-Peer Support** | `multiplayerStore.ts` | ✅ Full mesh topology for up to 8 players |
-| **Latency Measurement** | `multiplayerStore.ts` | ✅ Ping/pong with RTT, jitter, packet loss tracking |
+| Component                 | File                             | Status                                                     |
+| ------------------------- | -------------------------------- | ---------------------------------------------------------- |
+| **Lockstep Game Loop**    | `Game.ts`                        | ✅ `hasAllCommandsForTick()` barrier waits for all players |
+| **Input Broadcasting**    | `Game.ts`                        | ✅ `issueCommand()` sends via `sendMultiplayerMessage()`   |
+| **Input Buffering**       | `Game.ts`                        | ✅ Adaptive `currentCommandDelay` based on latency         |
+| **Heartbeat System**      | `Game.ts`                        | ✅ `sendHeartbeatForTick()` keeps lockstep flowing         |
+| **Command Authorization** | `Game.ts`                        | ✅ Validates player ownership of entities                  |
+| **Reconnection**          | `multiplayerStore.ts`, `Game.ts` | ✅ Auto-reconnect with exponential backoff + sync request  |
+| **Multi-Peer Support**    | `multiplayerStore.ts`            | ✅ Full mesh topology for up to 8 players                  |
+| **Latency Measurement**   | `multiplayerStore.ts`            | ✅ Ping/pong with RTT, jitter, packet loss tracking        |
 
 ### ⚠️ What's INCOMPLETE
 
-| Component | Gap |
-|-----------|-----|
-| **LAN Discovery (mDNS)** | Requires Electron/Tauri for desktop build |
-| **ConnectionCode.ts** | Implementation file missing (only documented in networking.md) |
+| Component                | Gap                                                                                                                   |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| **LAN Discovery (mDNS)** | Requires Electron/Tauri for desktop build                                                                             |
+| **ConnectionCode.ts**    | SDP encoding/decoding implementation not yet created - connection codes currently handled inline in useMultiplayer.ts |
 
 ### ✅ Serverless Architecture (No Backend Required)
 
-| Feature | Implementation |
-|---------|----------------|
-| **Signaling** | Connection Codes + Nostr relays |
-| **Lobby Storage** | Nostr events (ephemeral) |
-| **Lobby Discovery** | Nostr subscriptions |
-| **Player Identity** | Ed25519 keypairs (nostr-tools) |
+| Feature             | Implementation                  |
+| ------------------- | ------------------------------- |
+| **Signaling**       | Connection Codes + Nostr relays |
+| **Lobby Storage**   | Nostr events (ephemeral)        |
+| **Lobby Discovery** | Nostr subscriptions             |
+| **Player Identity** | Ed25519 keypairs (nostr-tools)  |
 
 ---
 
@@ -219,25 +218,25 @@ ABCD  ←  4-character alphanumeric code
 ```typescript
 // src/engine/network/p2p/ConnectionCode.ts
 
-import pako from 'pako';  // ~30KB, pure JS compression
+import pako from 'pako'; // ~30KB, pure JS compression
 
 /**
  * Connection code alphabet - Crockford's Base32
  * Avoids confusing characters (no I/L/O/U)
  */
-const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';  // 32 chars
+const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // 32 chars
 
 /**
  * Data encoded in a connection code
  */
 interface ConnectionCodeData {
-  v: 1;                      // Version
-  sdp: string;               // SDP offer/answer
-  ice: string[];             // ICE candidates
-  ts: number;                // Timestamp (for expiry check)
-  type: 'offer' | 'answer';  // SDP type
-  mode?: '1v1' | '2v2';      // Game mode
-  map?: string;              // Map ID
+  v: 1; // Version
+  sdp: string; // SDP offer/answer
+  ice: string[]; // ICE candidates
+  ts: number; // Timestamp (for expiry check)
+  type: 'offer' | 'answer'; // SDP type
+  mode?: '1v1' | '2v2'; // Game mode
+  map?: string; // Map ID
 }
 
 /**
@@ -247,7 +246,6 @@ export async function generateConnectionCode(
   peerConnection: RTCPeerConnection,
   options?: { mode?: string; map?: string }
 ): Promise<string> {
-
   // 1. Create offer
   const offer = await peerConnection.createOffer();
   await peerConnection.setLocalDescription(offer);
@@ -259,7 +257,7 @@ export async function generateConnectionCode(
   const payload: ConnectionCodeData = {
     v: 1,
     sdp: offer.sdp!,
-    ice: iceCandidates.map(c => c.candidate),
+    ice: iceCandidates.map((c) => c.candidate),
     ts: Date.now(),
     mode: options?.mode as '1v1' | '2v2',
     map: options?.map,
@@ -309,10 +307,7 @@ export function parseConnectionCode(code: string): ConnectionCodeData | null {
 /**
  * Connect to a peer using their connection code
  */
-export async function connectWithCode(
-  code: string
-): Promise<RTCPeerConnection | null> {
-
+export async function connectWithCode(code: string): Promise<RTCPeerConnection | null> {
   const data = parseConnectionCode(code);
   if (!data) return null;
 
@@ -471,15 +466,15 @@ Nostr handles the WebRTC signaling automatically. One code, no back-and-forth.
 
 ### Why Nostr?
 
-| Feature | Benefit |
-|---------|---------|
-| **No accounts** | Generate keypair = instant identity |
-| **100+ public relays** | Free, globally distributed, redundant |
-| **WebSocket-based** | Real-time, instant message delivery |
-| **Cannot be shut down** | No central point of failure |
-| **Battle-tested** | Millions of users, handles massive load |
-| **Tiny package** | `nostr-tools` is ~30KB |
-| **Perfect for signaling** | Designed for real-time event exchange |
+| Feature                   | Benefit                                 |
+| ------------------------- | --------------------------------------- |
+| **No accounts**           | Generate keypair = instant identity     |
+| **100+ public relays**    | Free, globally distributed, redundant   |
+| **WebSocket-based**       | Real-time, instant message delivery     |
+| **Cannot be shut down**   | No central point of failure             |
+| **Battle-tested**         | Millions of users, handles massive load |
+| **Tiny package**          | `nostr-tools` is ~30KB                  |
+| **Perfect for signaling** | Designed for real-time event exchange   |
 
 ### Nostr Relay Configuration
 
@@ -493,11 +488,11 @@ Uses a curated list of public relays with health-check filtering:
  * Prioritized by reliability and speed
  */
 const PUBLIC_RELAYS = [
-  'wss://relay.damus.io',        // Very reliable
-  'wss://nos.lol',               // Very reliable
-  'wss://relay.primal.net',      // Reliable
-  'wss://nostr.mom',             // Reliable
-  'wss://relay.nostr.band',      // Usually reliable
+  'wss://relay.damus.io', // Very reliable
+  'wss://nos.lol', // Very reliable
+  'wss://relay.primal.net', // Reliable
+  'wss://nostr.mom', // Reliable
+  'wss://relay.nostr.band', // Usually reliable
   'wss://nostr-pub.wellorder.net',
   'wss://nostr.oxtr.dev',
   'wss://relay.nostr.net',
@@ -523,20 +518,17 @@ export async function getRelays(count: number = 6): Promise<string[]> {
 /**
  * Check if a relay is reachable via WebSocket
  */
-export async function checkRelayHealth(
-  relayUrl: string,
-  timeout: number = 3000
-): Promise<boolean>;
+export async function checkRelayHealth(relayUrl: string, timeout: number = 3000): Promise<boolean>;
 ```
 
 ### Why Health-Check Filtering?
 
-| Benefit | Description |
-|---------|-------------|
+| Benefit                 | Description                                           |
+| ----------------------- | ----------------------------------------------------- |
 | **Consistent ordering** | Host and guest use same relays for reliable signaling |
-| **Self-healing** | Automatically avoids offline relays |
-| **Fast startup** | 2-second timeout ensures quick connection |
-| **Fallback safety** | Uses full list if health checks fail |
+| **Self-healing**        | Automatically avoids offline relays                   |
+| **Fast startup**        | 2-second timeout ensures quick connection             |
+| **Fallback safety**     | Uses full list if health checks fail                  |
 
 ### Technical Implementation
 
@@ -558,28 +550,28 @@ import {
  * Using ephemeral range (20000-29999) so relays don't persist forever
  */
 const EVENT_KINDS = {
-  GAME_SEEK: 20420,      // "I'm looking for a game"
-  GAME_OFFER: 20421,     // "Here's my WebRTC offer"
-  GAME_ANSWER: 20422,    // "Here's my WebRTC answer"
-  GAME_CANCEL: 20423,    // "I'm no longer looking"
+  GAME_SEEK: 20420, // "I'm looking for a game"
+  GAME_OFFER: 20421, // "Here's my WebRTC offer"
+  GAME_ANSWER: 20422, // "Here's my WebRTC answer"
+  GAME_CANCEL: 20423, // "I'm no longer looking"
 };
 
 /**
  * Game seek event structure
  */
 interface GameSeekContent {
-  version: string;           // Game version for compatibility
+  version: string; // Game version for compatibility
   mode: '1v1' | '2v2' | 'ffa';
-  skill?: number;            // Optional skill rating
-  regions?: string[];        // Preferred regions
+  skill?: number; // Optional skill rating
+  regions?: string[]; // Preferred regions
 }
 
 /**
  * WebRTC offer/answer event structure
  */
 interface RTCSignalContent {
-  sdp: string;               // Compressed SDP
-  ice: string[];             // ICE candidates
+  sdp: string; // Compressed SDP
+  ice: string[]; // ICE candidates
   mode: string;
   map?: string;
 }
@@ -619,23 +611,25 @@ export class NostrMatchmaking {
     iceCandidates: string[];
     map?: string;
   }): Promise<void> {
-
     // 1. Publish "seeking game" event
-    const seekEvent = finalizeEvent({
-      kind: EVENT_KINDS.GAME_SEEK,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [
-        ['d', 'voidstrike'],                    // Identifier
-        ['mode', options.mode],                  // Game mode
-        ['version', GAME_VERSION],               // Version compatibility
-        ...(options.skill ? [['skill', String(options.skill)]] : []),
-      ],
-      content: JSON.stringify({
-        version: GAME_VERSION,
-        mode: options.mode,
-        skill: options.skill,
-      } satisfies GameSeekContent),
-    }, this.secretKey);
+    const seekEvent = finalizeEvent(
+      {
+        kind: EVENT_KINDS.GAME_SEEK,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ['d', 'voidstrike'], // Identifier
+          ['mode', options.mode], // Game mode
+          ['version', GAME_VERSION], // Version compatibility
+          ...(options.skill ? [['skill', String(options.skill)]] : []),
+        ],
+        content: JSON.stringify({
+          version: GAME_VERSION,
+          mode: options.mode,
+          skill: options.skill,
+        } satisfies GameSeekContent),
+      },
+      this.secretKey
+    );
 
     await this.pool.publish(this.relays, seekEvent);
     console.log('[Nostr] Published game seek event');
@@ -665,7 +659,7 @@ export class NostrMatchmaking {
       [
         {
           kinds: [EVENT_KINDS.GAME_OFFER],
-          '#p': [this.publicKey],  // Offers directed at us
+          '#p': [this.publicKey], // Offers directed at us
           since: Math.floor(Date.now() / 1000) - 60,
         },
       ],
@@ -686,7 +680,6 @@ export class NostrMatchmaking {
     iceCandidates: string[],
     options?: { mode?: string; map?: string }
   ): Promise<void> {
-
     const content: RTCSignalContent = {
       sdp: compressSDP(sdp),
       ice: iceCandidates,
@@ -694,14 +687,17 @@ export class NostrMatchmaking {
       map: options?.map,
     };
 
-    const event = finalizeEvent({
-      kind: EVENT_KINDS.GAME_OFFER,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [
-        ['p', targetPubkey],  // Direct to specific player
-      ],
-      content: JSON.stringify(content),
-    }, this.secretKey);
+    const event = finalizeEvent(
+      {
+        kind: EVENT_KINDS.GAME_OFFER,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          ['p', targetPubkey], // Direct to specific player
+        ],
+        content: JSON.stringify(content),
+      },
+      this.secretKey
+    );
 
     await this.pool.publish(this.relays, event);
     console.log('[Nostr] Sent offer to', targetPubkey.slice(0, 8));
@@ -710,26 +706,22 @@ export class NostrMatchmaking {
   /**
    * Send WebRTC answer to complete handshake
    */
-  async sendAnswer(
-    targetPubkey: string,
-    sdp: string,
-    iceCandidates: string[]
-  ): Promise<void> {
-
+  async sendAnswer(targetPubkey: string, sdp: string, iceCandidates: string[]): Promise<void> {
     const content: RTCSignalContent = {
       sdp: compressSDP(sdp),
       ice: iceCandidates,
       mode: '1v1',
     };
 
-    const event = finalizeEvent({
-      kind: EVENT_KINDS.GAME_ANSWER,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [
-        ['p', targetPubkey],
-      ],
-      content: JSON.stringify(content),
-    }, this.secretKey);
+    const event = finalizeEvent(
+      {
+        kind: EVENT_KINDS.GAME_ANSWER,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [['p', targetPubkey]],
+        content: JSON.stringify(content),
+      },
+      this.secretKey
+    );
 
     await this.pool.publish(this.relays, event);
     console.log('[Nostr] Sent answer to', targetPubkey.slice(0, 8));
@@ -758,12 +750,15 @@ export class NostrMatchmaking {
    */
   async cancelSeek(): Promise<void> {
     // Publish cancel event
-    const event = finalizeEvent({
-      kind: EVENT_KINDS.GAME_CANCEL,
-      created_at: Math.floor(Date.now() / 1000),
-      tags: [['d', 'voidstrike']],
-      content: '',
-    }, this.secretKey);
+    const event = finalizeEvent(
+      {
+        kind: EVENT_KINDS.GAME_CANCEL,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [['d', 'voidstrike']],
+        content: '',
+      },
+      this.secretKey
+    );
 
     await this.pool.publish(this.relays, event);
 
@@ -817,7 +812,6 @@ export class NostrMatchmaking {
         skill: content.skill,
         timestamp: event.created_at,
       });
-
     } catch (e) {
       console.error('[Nostr] Failed to parse seek event:', e);
     }
@@ -875,8 +869,8 @@ function compressSDP(sdp: string): string {
   // Remove unnecessary lines and compress
   const cleaned = sdp
     .split('\r\n')
-    .filter(line => !line.startsWith('a=extmap'))  // Remove extension maps
-    .filter(line => !line.startsWith('a=rtcp-fb')) // Remove RTCP feedback
+    .filter((line) => !line.startsWith('a=extmap')) // Remove extension maps
+    .filter((line) => !line.startsWith('a=rtcp-fb')) // Remove RTCP feedback
     .join('\r\n');
 
   return btoa(pako.deflate(cleaned, { to: 'string' }));
@@ -1006,11 +1000,11 @@ When both players are behind **symmetric NAT** (strict corporate firewalls, some
  */
 interface RelayMessage {
   type: 'relay-request' | 'relay-response' | 'relay-data' | 'relay-ping';
-  from: string;        // Original sender's ID
-  to: string;          // Final destination's ID
-  via?: string[];      // Route taken (for debugging)
-  payload: string;     // Encrypted data (only readable by destination)
-  nonce?: string;      // For encryption
+  from: string; // Original sender's ID
+  to: string; // Final destination's ID
+  via?: string[]; // Route taken (for debugging)
+  payload: string; // Encrypted data (only readable by destination)
+  nonce?: string; // For encryption
 }
 
 /**
@@ -1019,7 +1013,7 @@ interface RelayMessage {
 export class PeerRelayNetwork extends EventEmitter {
   private localId: string;
   private directPeers: Map<string, RTCDataChannel> = new Map();
-  private relayRoutes: Map<string, string[]> = new Map();  // destination -> [route]
+  private relayRoutes: Map<string, string[]> = new Map(); // destination -> [route]
   private knownPeers: Set<string> = new Set();
   private keyPair: CryptoKeyPair;
   private peerPublicKeys: Map<string, CryptoKey> = new Map();
@@ -1031,11 +1025,9 @@ export class PeerRelayNetwork extends EventEmitter {
 
   async initialize(): Promise<void> {
     // Generate keypair for E2E encryption
-    this.keyPair = await crypto.subtle.generateKey(
-      { name: 'ECDH', namedCurve: 'P-256' },
-      true,
-      ['deriveBits']
-    );
+    this.keyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, [
+      'deriveBits',
+    ]);
   }
 
   /**
@@ -1140,7 +1132,7 @@ export class PeerRelayNetwork extends EventEmitter {
       }
     }
 
-    return [];  // No route found
+    return []; // No route found
   }
 
   /**
@@ -1197,10 +1189,12 @@ export class PeerRelayNetwork extends EventEmitter {
       }
 
       // Send request
-      channel.send(JSON.stringify({
-        type: 'peer-list-request',
-        from: this.localId,
-      }));
+      channel.send(
+        JSON.stringify({
+          type: 'peer-list-request',
+          from: this.localId,
+        })
+      );
 
       // Wait for response (with timeout)
       const timeout = setTimeout(() => resolve([]), 3000);
@@ -1235,13 +1229,9 @@ export class PeerRelayNetwork extends EventEmitter {
     );
 
     // Import as AES key
-    const aesKey = await crypto.subtle.importKey(
-      'raw',
-      sharedBits,
-      { name: 'AES-GCM' },
-      false,
-      ['encrypt']
-    );
+    const aesKey = await crypto.subtle.importKey('raw', sharedBits, { name: 'AES-GCM' }, false, [
+      'encrypt',
+    ]);
 
     // Encrypt
     const iv = crypto.getRandomValues(new Uint8Array(12));
@@ -1276,25 +1266,17 @@ export class PeerRelayNetwork extends EventEmitter {
     );
 
     // Import as AES key
-    const aesKey = await crypto.subtle.importKey(
-      'raw',
-      sharedBits,
-      { name: 'AES-GCM' },
-      false,
-      ['decrypt']
-    );
+    const aesKey = await crypto.subtle.importKey('raw', sharedBits, { name: 'AES-GCM' }, false, [
+      'decrypt',
+    ]);
 
     // Decode
-    const combined = Uint8Array.from(atob(encrypted), c => c.charCodeAt(0));
+    const combined = Uint8Array.from(atob(encrypted), (c) => c.charCodeAt(0));
     const iv = combined.slice(0, 12);
     const ciphertext = combined.slice(12);
 
     // Decrypt
-    const decrypted = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      aesKey,
-      ciphertext
-    );
+    const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, aesKey, ciphertext);
 
     return new TextDecoder().decode(decrypted);
   }
@@ -1414,15 +1396,15 @@ When a connection drops during gameplay, the system automatically attempts to re
 
 ### Key Implementation Details
 
-| Component | File | Function |
-|-----------|------|----------|
-| Connection detection | `multiplayerStore.ts` | `closeHandler` in `setDataChannel()` |
-| Reconnection logic | `multiplayerStore.ts` | `attemptReconnect()` with exponential backoff |
-| Lobby re-join | `useMultiplayer.ts` | `reconnect()` callback |
-| Sync trigger | `Game.ts` | `setupReconnectionHandler()` sets callback |
-| Sync request | `Game.ts` | `requestSync()` sends sync-request message |
-| Sync response | `Game.ts` | `handleSyncRequest()` sends command history |
-| Command replay | `Game.ts` | `handleSyncResponse()` queues/processes commands |
+| Component            | File                  | Function                                         |
+| -------------------- | --------------------- | ------------------------------------------------ |
+| Connection detection | `multiplayerStore.ts` | `closeHandler` in `setDataChannel()`             |
+| Reconnection logic   | `multiplayerStore.ts` | `attemptReconnect()` with exponential backoff    |
+| Lobby re-join        | `useMultiplayer.ts`   | `reconnect()` callback                           |
+| Sync trigger         | `Game.ts`             | `setupReconnectionHandler()` sets callback       |
+| Sync request         | `Game.ts`             | `requestSync()` sends sync-request message       |
+| Sync response        | `Game.ts`             | `handleSyncRequest()` sends command history      |
+| Command replay       | `Game.ts`             | `handleSyncResponse()` queues/processes commands |
 
 ### Reconnection Configuration
 
@@ -1441,6 +1423,7 @@ const delay = Math.pow(2, attempt) * 1000;
 ## Implementation Phases (Updated)
 
 ### Phase 1: Connection Codes
+
 **Status**: Complete
 **Reliability**: 100%
 **Dependencies**: `pako` (compression, ~30KB)
@@ -1461,6 +1444,7 @@ Note: Primary connection flow uses Nostr-based short codes. ConnectionCode.ts
 provides fallback/offline capability.
 
 ### Phase 2: LAN Discovery (mDNS)
+
 **Status**: Requires Electron/Tauri
 **Reliability**: 100%
 **Dependencies**: Native platform (not browser)
@@ -1474,12 +1458,14 @@ Tasks:
 ```
 
 ### Phase 3: Nostr Discovery
+
 **Status**: ❌ Removed
 **Former Implementation**: `src/engine/network/p2p/NostrMatchmaking.ts` (deleted)
 
 The standalone NostrMatchmaking class was removed. Lobby-based matchmaking is now handled directly in `src/hooks/useMultiplayer.ts` using 4-character codes published to Nostr relays.
 
 ### Phase 4: Peer Relay
+
 **Status**: ❌ Removed
 **Former Implementation**: `src/engine/network/p2p/PeerRelay.ts` (deleted)
 
@@ -1492,9 +1478,9 @@ The peer relay system for routing through other players was planned but removed.
 ```json
 {
   "dependencies": {
-    "pako": "^2.1.0",         // Compression for connection codes (~30KB)
-    "nostr-tools": "^2.1.0",  // Nostr protocol (~30KB)
-    "qrcode": "^1.5.3"        // Optional: QR code generation (~50KB)
+    "pako": "^2.1.0", // Compression for connection codes (~30KB)
+    "nostr-tools": "^2.1.0", // Nostr protocol (~30KB)
+    "qrcode": "^1.5.3" // Optional: QR code generation (~50KB)
   }
 }
 ```
@@ -1506,30 +1492,35 @@ The peer relay system for routing through other players was planned but removed.
 ## Why This Architecture Is Revolutionary
 
 ### 1. Zero Infrastructure Cost
+
 - No servers to maintain
 - No database to host
 - No bandwidth to pay for
 - Scales infinitely with player base
 
 ### 2. Cannot Be Shut Down
+
 - No central point of failure
 - Nostr relays are globally distributed
 - Game works even if original developers disappear
 - Community can run their own relays
 
 ### 3. Better Than Traditional Servers
+
 - **Lower latency**: Direct P2P vs through server
 - **More reliable**: No server downtime
 - **More private**: No data collected
 - **Fairer**: No server-side advantage
 
 ### 4. Production-Ready Components
+
 - WebRTC: Industry standard, used by billions
 - Nostr: Battle-tested by millions of users
 - STUN: Free public servers, extremely reliable
 - Encryption: Web Crypto API, browser-native
 
 ### 5. Graceful Degradation
+
 - Nostr down? Use connection codes
 - Direct connection fails? Use peer relay
 - All fails? Still works on LAN
@@ -1586,8 +1577,8 @@ Merkle tree data is included in checksum network messages:
 
 ```typescript
 interface NetworkMerkleTree {
-  rootHash: number;           // Quick check - if match, no divergence
-  categoryHashes: Record<string, number>;    // units, buildings, resources
+  rootHash: number; // Quick check - if match, no divergence
+  categoryHashes: Record<string, number>; // units, buildings, resources
   groupHashes: Record<string, Record<string, number>>; // per-player hashes
   tick: number;
   entityCount: number;
@@ -1599,7 +1590,7 @@ interface NetworkMerkleTree {
 ```typescript
 // Get divergent entities (O(log n))
 const divergence = checksumSystem.findDivergentEntities(remoteMerkleTree);
-console.log(divergence.entityIds);  // [42, 156] - exact divergent entity IDs
+console.log(divergence.entityIds); // [42, 156] - exact divergent entity IDs
 console.log(divergence.comparisons); // 9 - number of hash comparisons made
 
 // Get divergent categories (quick check)

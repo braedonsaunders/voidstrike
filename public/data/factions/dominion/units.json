@@ -87,6 +87,9 @@
     "isBiological": true,
     "canAttackGround": true,
     "canAttackAir": true,
+    "targetPriority": 70,
+    "category": "infantry",
+    "armorType": "medium",
     "audio": {
       "voiceGroupId": "breacher",
       "weaponSound": "attack_grenade",
@@ -116,6 +119,9 @@
     "isBiological": true,
     "canAttackGround": true,
     "canAttackAir": true,
+    "targetPriority": 55,
+    "category": "infantry",
+    "armorType": "light",
     "audio": {
       "voiceGroupId": "vanguard",
       "weaponSound": "attack_gatling",
@@ -147,6 +153,9 @@
     "cloakEnergyCost": 1,
     "canAttackGround": true,
     "canAttackAir": true,
+    "targetPriority": 80,
+    "category": "infantry",
+    "armorType": "light",
     "audio": {
       "voiceGroupId": "operative",
       "weaponSound": "attack_sniper",
@@ -211,6 +220,9 @@
     "defaultMode": "scorcher",
     "canAttackGround": true,
     "canAttackAir": false,
+    "targetPriority": 72,
+    "category": "vehicle",
+    "armorType": "light",
     "audio": {
       "voiceGroupId": "scorcher",
       "weaponSound": "attack_flamethrower",
@@ -307,6 +319,9 @@
     "isMechanical": true,
     "canAttackGround": true,
     "canAttackAir": true,
+    "targetPriority": 90,
+    "category": "vehicle",
+    "armorType": "massive",
     "audio": {
       "voiceGroupId": "colossus",
       "weaponSound": "attack_laser_battery",
@@ -342,6 +357,9 @@
     "healEnergyCost": 1,
     "canAttackGround": false,
     "canAttackAir": false,
+    "targetPriority": 30,
+    "category": "support",
+    "armorType": "light",
     "audio": {
       "voiceGroupId": "lifter",
       "deathSound": "unit_death_mech"
@@ -405,6 +423,9 @@
     "defaultMode": "fighter",
     "canAttackGround": false,
     "canAttackAir": true,
+    "targetPriority": 75,
+    "category": "aircraft",
+    "armorType": "light",
     "audio": {
       "voiceGroupId": "valkyrie",
       "weaponSound": "attack_missile",
@@ -437,6 +458,9 @@
     "cloakEnergyCost": 1,
     "canAttackGround": true,
     "canAttackAir": true,
+    "targetPriority": 78,
+    "category": "aircraft",
+    "armorType": "light",
     "audio": {
       "voiceGroupId": "specter",
       "weaponSound": "attack_laser",
@@ -504,6 +528,9 @@
     "detectionRange": 11,
     "canAttackGround": false,
     "canAttackAir": false,
+    "targetPriority": 25,
+    "category": "support",
+    "armorType": "light",
     "audio": {
       "voiceGroupId": "overseer",
       "deathSound": "unit_death_mech"

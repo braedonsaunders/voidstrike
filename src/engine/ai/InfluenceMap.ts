@@ -17,6 +17,77 @@ import { Building } from '../components/Building';
 import { distance } from '@/utils/math';
 import { debugAI } from '@/utils/debugLogger';
 
+/**
+ * Binary MinHeap for O(log n) priority queue operations in A* pathfinding
+ */
+class MinHeap<T> {
+  private heap: T[] = [];
+  private compareFn: (a: T, b: T) => number;
+
+  constructor(compareFn: (a: T, b: T) => number) {
+    this.compareFn = compareFn;
+  }
+
+  get length(): number {
+    return this.heap.length;
+  }
+
+  push(item: T): void {
+    this.heap.push(item);
+    this.bubbleUp(this.heap.length - 1);
+  }
+
+  pop(): T | undefined {
+    if (this.heap.length === 0) return undefined;
+    if (this.heap.length === 1) return this.heap.pop();
+
+    const result = this.heap[0];
+    this.heap[0] = this.heap.pop()!;
+    this.bubbleDown(0);
+    return result;
+  }
+
+  find(predicate: (item: T) => boolean): T | undefined {
+    return this.heap.find(predicate);
+  }
+
+  updateItem(item: T): void {
+    const index = this.heap.indexOf(item);
+    if (index === -1) return;
+    this.bubbleUp(index);
+    this.bubbleDown(index);
+  }
+
+  private bubbleUp(index: number): void {
+    while (index > 0) {
+      const parentIndex = Math.floor((index - 1) / 2);
+      if (this.compareFn(this.heap[index], this.heap[parentIndex]) >= 0) break;
+      [this.heap[index], this.heap[parentIndex]] = [this.heap[parentIndex], this.heap[index]];
+      index = parentIndex;
+    }
+  }
+
+  private bubbleDown(index: number): void {
+    const length = this.heap.length;
+    while (true) {
+      const leftChild = 2 * index + 1;
+      const rightChild = 2 * index + 2;
+      let smallest = index;
+
+      if (leftChild < length && this.compareFn(this.heap[leftChild], this.heap[smallest]) < 0) {
+        smallest = leftChild;
+      }
+      if (rightChild < length && this.compareFn(this.heap[rightChild], this.heap[smallest]) < 0) {
+        smallest = rightChild;
+      }
+
+      if (smallest === index) break;
+      [this.heap[index], this.heap[smallest]] = [this.heap[smallest], this.heap[index]];
+      index = smallest;
+    }
+  }
+}
+
 // Influence value type: positive = friendly, negative = enemy
 export type InfluenceValue = number;
 
@@ -465,33 +536,38 @@ export class InfluenceMap {
     const endCol = Math.floor(endX / this.cellSize);
     const endRow = Math.floor(endY / this.cellSize);
 
-    // Simple A* with threat cost
-    const openSet: Array<{
+    // A* with threat cost using binary heap for O(log n) operations
+    interface AStarNode {
       col: number;
       row: number;
       g: number;
       f: number;
       parent: number | null;
-    }> = [];
+    }
+
+    const openSet = new MinHeap<AStarNode>((a, b) => a.f - b.f);
+    const openSetMap = new Map<number, AStarNode>(); // For O(1) lookup by index
     const closedSet = new Set<number>();
     const cameFrom = new Map<number, number>();
 
     const startIndex = startRow * this.cols + startCol;
     const endIndex = endRow * this.cols + endCol;
 
-    openSet.push({
+    const startNode: AStarNode = {
       col: startCol,
       row: startRow,
       g: 0,
       f: this.heuristic(startCol, startRow, endCol, endRow),
       parent: null,
-    });
+    };
+    openSet.push(startNode);
+    openSetMap.set(startIndex, startNode);
 
     while (openSet.length > 0) {
-      // Find lowest f score
-      openSet.sort((a, b) => a.f - b.f);
-      const current = openSet.shift()!;
+      // Pop lowest f score node - O(log n)
+      const current = openSet.pop()!;
       const currentIndex = current.row * this.cols + current.col;
+      openSetMap.delete(currentIndex);
 
       if (currentIndex === endIndex) {
         // Reconstruct path
@@ -528,21 +604,24 @@ export class InfluenceMap {
 
         const tentativeG = current.g + totalCost;
 
-        const existing = openSet.find((n) => n.col === nCol && n.row === nRow);
+        const existing = openSetMap.get(nIndex);
         if (existing) {
           if (tentativeG < existing.g) {
             existing.g = tentativeG;
             existing.f = tentativeG + this.heuristic(nCol, nRow, endCol, endRow);
+            openSet.updateItem(existing);
             cameFrom.set(nIndex, currentIndex);
           }
         } else {
-          openSet.push({
+          const newNode: AStarNode = {
             col: nCol,
             row: nRow,
             g: tentativeG,
             f: tentativeG + this.heuristic(nCol, nRow, endCol, endRow),
             parent: currentIndex,
-          });
+          };
+          openSet.push(newNode);
+          openSetMap.set(nIndex, newNode);
           cameFrom.set(nIndex, currentIndex);
         }
       }

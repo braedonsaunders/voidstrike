@@ -291,13 +291,24 @@ export class Game extends GameCore {
       const hasSignature = command.signature !== undefined && command.signature !== '';
 
       if (!hasSignature) {
-        // Allow unsigned commands during initial connection or if peer has no key yet
-        // Log a warning but still process the command
+        // Reject unsigned commands in production to prevent command injection attacks
+        if (process.env.NODE_ENV === 'production') {
+          console.error(
+            `[Game] SECURITY: Rejected unsigned command. ` +
+              `Player: ${command.playerId}, Type: ${command.type}, Tick: ${command.tick}`
+          );
+          this.eventBus.emit('security:unsignedCommand', {
+            playerId: command.playerId,
+            commandType: command.type,
+            tick: command.tick,
+            peerId: sourcePeerId,
+          });
+          return;
+        }
+        // Allow unsigned commands only in development for testing
         debugNetworking.warn(
-          `[Game] Command from ${command.playerId} has no signature - allowing for compatibility`
+          `[Game] Command from ${command.playerId} has no signature - allowing in dev mode only`
         );
-        // Queue the command (signature verification is best-effort during transition)
-        debugNetworking.log('[Game] Queuing command for tick', command.tick);
         this.queueCommandWithReceipt(command);
         return;
       }
