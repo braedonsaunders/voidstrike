@@ -33,6 +33,7 @@ import {
   vec3,
   vec4,
   float,
+  int,
   Fn,
   mix,
   smoothstep,
@@ -42,6 +43,11 @@ import {
   min,
   max,
   texture,
+  normalize,
+  exp,
+  Loop,
+  If,
+  Break,
 } from 'three/tsl';
 
 // WebGPU post-processing nodes from addons
@@ -707,13 +713,11 @@ export function createFogOfWarPass(
   const uCoolShift = uniform(new THREE.Color(0.85, 0.9, 1.0));
 
   // Volumetric fog parameters (for high/ultra quality)
-  const uVolFogDensity = uniform(0.015); // Base fog density
-  const uVolFogHeightFalloff = uniform(0.08); // Height-based density falloff
-  const uVolMaxDistance = uniform(80.0); // Max raymarch distance
+  const uVolFogDensity = uniform(0.02); // Base fog density
+  const uVolFogHeightFalloff = uniform(0.05); // Height-based density falloff
+  const uVolMaxDistance = uniform(100.0); // Max raymarch distance
   const uVolSteps = uniform(32); // Raymarch steps (set by quality)
-  const uVolScattering = uniform(0.8); // Light scattering intensity
-  const uVolLightDir = uniform(new THREE.Vector3(0.3, 0.8, 0.4).normalize());
-  const uVolFogColor = uniform(new THREE.Color(0.15, 0.18, 0.25)); // Dark blue-gray
+  const uVolFogColor = uniform(new THREE.Color(0.12, 0.14, 0.2)); // Dark blue-gray
 
   // Map configuration
   const uMapDimensions = uniform(new THREE.Vector2(256, 256));
@@ -902,7 +906,7 @@ export function createFogOfWarPass(
     // Start with scene color for visible areas
     const finalColor = sceneColor.toVar();
 
-    // Apply explored effect (desaturation + darkening) - same for all quality levels
+    // Apply explored effect (desaturation + darkening)
     const exploredAmount = isExplored.mul(float(1.0).sub(isVisible));
     finalColor.assign(mix(finalColor, exploredColor, exploredAmount.mul(heightFactor)));
 
@@ -912,6 +916,61 @@ export function createFogOfWarPass(
     // Add rim glow at visibility edges
     const rimContribution = uRimColor.mul(rimGlow).mul(isVisible);
     finalColor.addAssign(rimContribution);
+
+    // ============================================
+    // VOLUMETRIC FOG (high/ultra quality only)
+    // ============================================
+    // For quality >= 2, add raymarched volumetric fog depth
+    const useVolumetric = uQuality.greaterThanEqual(2);
+
+    // Camera position from world matrix
+    const cameraPos = uCameraWorldMatrix.mul(vec4(0, 0, 0, 1)).xyz;
+    const pixelWorldPos = vec3(worldX, worldY, worldZ);
+    const rayDir = normalize(pixelWorldPos.sub(cameraPos));
+
+    // Distance to surface
+    const surfaceDistance = length(pixelWorldPos.sub(cameraPos));
+    const maxDist = min(surfaceDistance, uVolMaxDistance);
+    const stepSize = maxDist.div(uVolSteps);
+
+    // Base fog density from visibility (sampled ONCE at surface - no loop sampling)
+    // Unexplored = full fog, explored = partial, visible = none
+    const baseDensity = isUnexplored.add(exploredAmount.mul(0.4)).mul(uVolFogDensity);
+
+    // Volumetric accumulation
+    const volTransmittance = float(1.0).toVar();
+    const volScatter = vec3(0.0).toVar();
+
+    // Raymarch loop - ONLY simple math operations (no fbm3, no texture sampling)
+    const idx = int(0).toVar();
+    Loop(64, () => {
+      If(idx.greaterThanEqual(uVolSteps), () => {
+        Break();
+      });
+
+      // Position along ray
+      const t = float(idx).add(0.5).mul(stepSize);
+      const pos = cameraPos.add(rayDir.mul(t));
+
+      // Height-based density falloff (simple exp - no complex functions)
+      const heightFactor2 = exp(pos.y.negate().mul(uVolFogHeightFalloff));
+      const localDensity = baseDensity.mul(heightFactor2);
+
+      // Simple in-scattering (no phase function complexity)
+      volScatter.addAssign(uVolFogColor.mul(localDensity).mul(stepSize).mul(volTransmittance));
+
+      // Beer-Lambert absorption
+      volTransmittance.mulAssign(exp(localDensity.mul(stepSize).negate()));
+
+      idx.addAssign(1);
+    });
+
+    // Combine volumetric with scene
+    const volFogAmount = float(1.0).sub(volTransmittance);
+    const volResult = mix(finalColor, uVolFogColor.add(volScatter), volFogAmount);
+
+    // Apply volumetric only for high/ultra quality
+    finalColor.assign(useVolumetric.select(volResult, finalColor));
 
     // DEBUG: Show world position as color to verify reconstruction
     // Red = X position, Blue = Z position (normalized to map dimensions)
@@ -956,8 +1015,6 @@ export function createFogOfWarPass(
     volFogHeightFalloff: uVolFogHeightFalloff,
     volMaxDistance: uVolMaxDistance,
     volSteps: uVolSteps,
-    volScattering: uVolScattering,
-    volLightDir: uVolLightDir,
     volFogColor: uVolFogColor,
   };
 
@@ -1002,8 +1059,7 @@ export function createFogOfWarPass(
       uQuality.value = qualityIndex >= 0 ? qualityIndex : 2;
 
       // Set volumetric raymarch steps based on quality
-      // low/medium: doesn't use volumetric (but set anyway for consistency)
-      // high: 32 steps, ultra: 48 steps
+      // high: 32 steps, ultra: 48 steps (low/medium don't use volumetric)
       const volStepsMap: Record<string, number> = {
         low: 16,
         medium: 24,
