@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any -- TSL shader nodes use polymorphic types */
 /**
  * TSL Water Material
  *
@@ -35,7 +34,6 @@ import {
   cos,
   attribute,
   time,
-  type ShaderNodeObject,
 } from 'three/tsl';
 import { MeshPhysicalNodeMaterial } from 'three/webgpu';
 import type { WaterQuality } from '@/rendering/water/UnifiedWaterMesh';
