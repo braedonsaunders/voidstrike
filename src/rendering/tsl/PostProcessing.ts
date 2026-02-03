@@ -477,7 +477,6 @@ export class RenderPipeline {
             radius: this.config.aoRadius,
             intensity: this.config.aoIntensity,
             samples: 32, // Higher samples = less visible dithering pattern
-            useTemporalFiltering: this.config.taaEnabled, // Smooth AO over frames when TAA is on
           },
           scenePassNormal
         );
