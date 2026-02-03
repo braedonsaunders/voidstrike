@@ -51,37 +51,6 @@ export async function waitForDefinitions(): Promise<void> {
   await DefinitionRegistry.waitForInitialization();
 }
 
-// Store the initialization promise so it can be awaited by callers
-let initializationPromise: Promise<void> | null = null;
-
-/**
- * @deprecated Use initializeDefinitions() instead. This is kept for backwards compatibility.
- * Will internally call initializeDefinitions() to load from JSON.
- *
- * @returns Promise that resolves when definitions are loaded.
- *          Callers should await this before accessing definitions.
- */
-export function bootstrapDefinitions(): Promise<void> {
-  if (DefinitionRegistry.isInitialized()) {
-    return Promise.resolve();
-  }
-
-  // Return existing promise if initialization is already in progress
-  if (initializationPromise) {
-    return initializationPromise;
-  }
-
-  debugInitialization.log('[Bootstrap] bootstrapDefinitions() called - starting async JSON load');
-  initializationPromise = initializeDefinitions()
-    .catch((err) => {
-      console.error('[Bootstrap] Failed to load definitions from JSON:', err);
-      initializationPromise = null;
-      throw err;
-    });
-
-  return initializationPromise;
-}
-
 // ==================== BACKWARDS COMPATIBILITY EXPORTS ====================
 // These getters provide backwards-compatible access to definitions.
 // They pull from the DefinitionRegistry which loads from JSON.

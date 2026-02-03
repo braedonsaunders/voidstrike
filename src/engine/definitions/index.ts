@@ -6,11 +6,11 @@
  *
  * Usage:
  *
- * 1. JSON Loading (recommended for new games):
+ * 1. Initialize from JSON (call once at app startup):
  *    await initializeDefinitions('/data/game.json');
  *
- * 2. TypeScript Bootstrapping (backwards compatibility):
- *    bootstrapDefinitions();
+ * 2. Wait if initialization is in progress:
+ *    await waitForDefinitions();
  *
  * 3. Accessing Definitions:
  *    const unit = DefinitionRegistry.getUnit('trooper');
@@ -22,7 +22,6 @@ export { DefinitionRegistry, DefinitionRegistryClass } from './DefinitionRegistr
 
 // Bootstrap functions
 export {
-  bootstrapDefinitions,
   initializeDefinitions,
   definitionsReady,
   waitForDefinitions,
