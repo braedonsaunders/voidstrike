@@ -31,6 +31,7 @@ import type { AICoordinator, AIPlayer, EnemyRelation } from './AICoordinator';
 import { isEnemy } from '../../combat/TargetAcquisition';
 import type { ThreatAnalysis } from '../../ai/InfluenceMap';
 import type { FormationType } from '../../ai/FormationControl';
+import { deterministicMagnitude } from '@/utils/FixedPoint';
 
 // Threat assessment constants
 const THREAT_WINDOW_TICKS = 200; // ~10 seconds at 20 ticks/sec
@@ -145,7 +146,7 @@ export class AITacticsManager {
         relation.basePosition = enemyBase;
         const dx = enemyBase.x - myBase.x;
         const dy = enemyBase.y - myBase.y;
-        relation.baseDistance = Math.sqrt(dx * dx + dy * dy);
+        relation.baseDistance = deterministicMagnitude(dx, dy);
       }
 
       // Decay grudge damage over time
@@ -639,7 +640,7 @@ export class AITacticsManager {
 
       const dx = transform.x - rallyPoint.x;
       const dy = transform.y - rallyPoint.y;
-      if (Math.sqrt(dx * dx + dy * dy) > 15) {
+      if (deterministicMagnitude(dx, dy) > 15) {
         const command: GameCommand = {
           tick: this.game.getCurrentTick(),
           playerId: ai.playerId,
@@ -1059,7 +1060,7 @@ export class AITacticsManager {
 
       const dx = transform.x - position.x;
       const dy = transform.y - position.y;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const distance = deterministicMagnitude(dx, dy);
 
       if (distance > THREAT_SEARCH_RADIUS) continue;
 
@@ -1392,7 +1393,7 @@ export class AITacticsManager {
       // Direction to base
       const dx = basePos.x - currentX;
       const dy = basePos.y - currentY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+      const dist = deterministicMagnitude(dx, dy);
 
       if (dist < stepSize) {
         path.push(basePos);
@@ -1454,7 +1455,7 @@ export class AITacticsManager {
       if (isOrphanedUnit) {
         const dx = transform.x - rallyPoint.x;
         const dy = transform.y - rallyPoint.y;
-        const distanceToRally = Math.sqrt(dx * dx + dy * dy);
+        const distanceToRally = deterministicMagnitude(dx, dy);
 
         // Only recover units that are far from base (likely stuck at enemy position)
         if (distanceToRally > 40) {

@@ -19,6 +19,7 @@ import { Velocity } from '../../components/Velocity';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { SpatialEntityData, SpatialUnitState, stateToEnum } from '../../core/SpatialGrid';
 import { collisionConfig } from '@/data/collisionConfig';
+import { deterministicMagnitude, deterministicNormalizeWithMagnitude } from '@/utils/FixedPoint';
 import {
   COHESION_RADIUS,
   COHESION_STRENGTH,
@@ -102,9 +103,16 @@ export class FlockingBehavior {
     // Pre-allocate neighbor data buffer
     for (let i = 0; i < 128; i++) {
       this._neighborDataBuffer.push({
-        id: 0, x: 0, y: 0, radius: 0,
-        isFlying: false, state: SpatialUnitState.Idle, playerId: 0,
-        collisionRadius: 0, isWorker: false, maxSpeed: 0,
+        id: 0,
+        x: 0,
+        y: 0,
+        radius: 0,
+        isFlying: false,
+        state: SpatialUnitState.Idle,
+        playerId: 0,
+        collisionRadius: 0,
+        isWorker: false,
+        maxSpeed: 0,
       });
     }
   }
@@ -160,11 +168,7 @@ export class FlockingBehavior {
     }
 
     // Moving: very weak separation, allow clumping during movement
-    if (
-      unit.state === 'moving' ||
-      unit.state === 'attackmoving' ||
-      unit.state === 'patrolling'
-    ) {
+    if (unit.state === 'moving' || unit.state === 'attackmoving' || unit.state === 'patrolling') {
       return collisionConfig.separationStrengthMoving;
     }
 
@@ -196,7 +200,7 @@ export class FlockingBehavior {
 
     // PERF: Check cache first - reuse result if calculated recently
     const cached = this.separationCache.get(selfId);
-    if (cached && (this.currentTick - cached.tick) < SEPARATION_THROTTLE_TICKS) {
+    if (cached && this.currentTick - cached.tick < SEPARATION_THROTTLE_TICKS) {
       out.x = cached.x;
       out.y = cached.y;
       return;
@@ -208,7 +212,8 @@ export class FlockingBehavior {
     // PERF OPTIMIZATION: Use queryRadiusWithData to get inline entity data
     // This eliminates entity.get() lookups in the hot path
     // Query radius based on unit's collision radius and config multiplier
-    const selfDesiredSpacing = selfUnit.collisionRadius * collisionConfig.separationQueryRadiusMultiplier;
+    const selfDesiredSpacing =
+      selfUnit.collisionRadius * collisionConfig.separationQueryRadiusMultiplier;
     const queryRadius = selfDesiredSpacing * 2; // Query wider to catch all potential neighbors
     const nearbyData = unitGrid.queryRadiusWithData(
       selfTransform.x,
@@ -240,12 +245,14 @@ export class FlockingBehavior {
 
       // PERF: Use squared distance for threshold check, only sqrt when needed
       if (distanceSq < separationDistSq && distanceSq > 0.0001) {
-        const distance = Math.sqrt(distanceSq);
+        const {
+          nx: normalizedDx,
+          ny: normalizedDy,
+          magnitude: distance,
+        } = deterministicNormalizeWithMagnitude(dx, dy);
         // Inverse square falloff - much stronger when close, still effective at range
         const normalizedDist = distance / separationDist;
         const strength = baseStrength * (1 - normalizedDist) * (1 - normalizedDist);
-        const normalizedDx = dx / distance;
-        const normalizedDy = dy / distance;
 
         forceX += normalizedDx * strength;
         forceY += normalizedDy * strength;
@@ -257,7 +264,7 @@ export class FlockingBehavior {
     const maxForceSq = maxForce * maxForce;
     const magnitudeSq = forceX * forceX + forceY * forceY;
     if (magnitudeSq > maxForceSq) {
-      const magnitude = Math.sqrt(magnitudeSq);
+      const magnitude = deterministicMagnitude(forceX, forceY);
       const scale = maxForce / magnitude;
       forceX *= scale;
       forceY *= scale;
@@ -294,7 +301,7 @@ export class FlockingBehavior {
 
     // PERF: Check cache first - reuse result if calculated recently
     const cached = this.cohesionCache.get(selfId);
-    if (cached && (this.currentTick - cached.tick) < COHESION_THROTTLE_TICKS) {
+    if (cached && this.currentTick - cached.tick < COHESION_THROTTLE_TICKS) {
       out.x = cached.x;
       out.y = cached.y;
       return;
@@ -337,10 +344,10 @@ export class FlockingBehavior {
     const centerX = sumX / count;
     const centerY = sumY / count;
 
-    // Direction to center of mass
+    // Direction to center of mass (deterministic)
     const dx = centerX - selfTransform.x;
     const dy = centerY - selfTransform.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const { nx: dirX, ny: dirY, magnitude: dist } = deterministicNormalizeWithMagnitude(dx, dy);
 
     if (dist < 0.1) {
       this.cohesionCache.set(selfId, { x: 0, y: 0, tick: this.currentTick });
@@ -348,8 +355,8 @@ export class FlockingBehavior {
     }
 
     // Weak cohesion force toward center
-    const forceX = (dx / dist) * COHESION_STRENGTH;
-    const forceY = (dy / dist) * COHESION_STRENGTH;
+    const forceX = dirX * COHESION_STRENGTH;
+    const forceY = dirY * COHESION_STRENGTH;
 
     // PERF: Cache the result
     this.cohesionCache.set(selfId, { x: forceX, y: forceY, tick: this.currentTick });
@@ -384,7 +391,7 @@ export class FlockingBehavior {
 
     // PERF: Check cache first - reuse result if calculated recently
     const cached = this.alignmentCache.get(selfId);
-    if (cached && (this.currentTick - cached.tick) < ALIGNMENT_THROTTLE_TICKS) {
+    if (cached && this.currentTick - cached.tick < ALIGNMENT_THROTTLE_TICKS) {
       out.x = cached.x;
       out.y = cached.y;
       return;
@@ -430,10 +437,14 @@ export class FlockingBehavior {
       return;
     }
 
-    // Average heading
+    // Average heading (deterministic)
     const avgVx = sumVx / count;
     const avgVy = sumVy / count;
-    const avgMag = Math.sqrt(avgVx * avgVx + avgVy * avgVy);
+    const {
+      nx: avgNx,
+      ny: avgNy,
+      magnitude: avgMag,
+    } = deterministicNormalizeWithMagnitude(avgVx, avgVy);
 
     if (avgMag < 0.1) {
       this.alignmentCache.set(selfId, { x: 0, y: 0, tick: this.currentTick });
@@ -441,8 +452,8 @@ export class FlockingBehavior {
     }
 
     // Alignment force toward average heading
-    const forceX = (avgVx / avgMag) * ALIGNMENT_STRENGTH;
-    const forceY = (avgVy / avgMag) * ALIGNMENT_STRENGTH;
+    const forceX = avgNx * ALIGNMENT_STRENGTH;
+    const forceY = avgNy * ALIGNMENT_STRENGTH;
 
     // PERF: Cache the result
     this.alignmentCache.set(selfId, { x: forceX, y: forceY, tick: this.currentTick });
@@ -473,7 +484,7 @@ export class FlockingBehavior {
 
     // PERF: Check cache first - reuse result if calculated recently
     const cached = this.physicsPushCache.get(selfId);
-    if (cached && (this.currentTick - cached.tick) < PHYSICS_PUSH_THROTTLE_TICKS) {
+    if (cached && this.currentTick - cached.tick < PHYSICS_PUSH_THROTTLE_TICKS) {
       out.x = cached.x;
       out.y = cached.y;
       return;
@@ -492,9 +503,12 @@ export class FlockingBehavior {
     let forceY = 0;
 
     // Priority: determine if self is "heavy" (moving with purpose) or "light" (idle)
-    const selfIsMoving = selfUnit.state === 'moving' || selfUnit.state === 'attackmoving' ||
-                         selfUnit.state === 'patrolling' || selfUnit.state === 'gathering' ||
-                         selfUnit.state === 'building';
+    const selfIsMoving =
+      selfUnit.state === 'moving' ||
+      selfUnit.state === 'attackmoving' ||
+      selfUnit.state === 'patrolling' ||
+      selfUnit.state === 'gathering' ||
+      selfUnit.state === 'building';
 
     for (let i = 0; i < nearbyData.length; i++) {
       const other = nearbyData[i];
@@ -513,17 +527,15 @@ export class FlockingBehavior {
       const pushDist = minDist + collisionConfig.physicsPushRadius;
 
       if (distSq < pushDist * pushDist && distSq > 0.0001) {
-        const dist = Math.sqrt(distSq);
-
-        // Normalize direction (away from other unit)
-        const nx = dx / dist;
-        const ny = dy / dist;
+        // Normalize direction (away from other unit) - deterministic
+        const { nx, ny, magnitude: dist } = deterministicNormalizeWithMagnitude(dx, dy);
 
         // Priority: moving units push idle units more than vice versa
         // Idle units yield to moving units by receiving stronger push
-        const otherIsMoving = other.state === SpatialUnitState.Moving ||
-                              other.state === SpatialUnitState.AttackMoving ||
-                              other.state === SpatialUnitState.Gathering;
+        const otherIsMoving =
+          other.state === SpatialUnitState.Moving ||
+          other.state === SpatialUnitState.AttackMoving ||
+          other.state === SpatialUnitState.Gathering;
 
         // Priority multiplier: if I'm idle and they're moving, I get pushed more (yield)
         // If I'm moving and they're idle, I push them but they don't push me much
@@ -545,7 +557,9 @@ export class FlockingBehavior {
         } else {
           // Normal push with falloff
           const t = (dist - minDist) / collisionConfig.physicsPushRadius;
-          pushStrength = collisionConfig.physicsPushStrength * Math.pow(1 - t, collisionConfig.physicsPushFalloff);
+          pushStrength =
+            collisionConfig.physicsPushStrength *
+            Math.pow(1 - t, collisionConfig.physicsPushFalloff);
         }
 
         // Apply priority multiplier
@@ -603,23 +617,25 @@ export class FlockingBehavior {
     let smoothedVx = vx * VELOCITY_SMOOTHING_FACTOR + avgVx * (1 - VELOCITY_SMOOTHING_FACTOR);
     let smoothedVy = vy * VELOCITY_SMOOTHING_FACTOR + avgVy * (1 - VELOCITY_SMOOTHING_FACTOR);
 
-    // Direction commitment: resist sudden direction changes
-    const prevMag = Math.sqrt(prevVx * prevVx + prevVy * prevVy);
-    const currMag = Math.sqrt(smoothedVx * smoothedVx + smoothedVy * smoothedVy);
+    // Direction commitment: resist sudden direction changes (deterministic)
+    const {
+      nx: prevDirX,
+      ny: prevDirY,
+      magnitude: prevMag,
+    } = deterministicNormalizeWithMagnitude(prevVx, prevVy);
+    const {
+      nx: currDirX,
+      ny: currDirY,
+      magnitude: currMag,
+    } = deterministicNormalizeWithMagnitude(smoothedVx, smoothedVy);
 
     if (prevMag > 0.1 && currMag > 0.1) {
-      // Normalize directions
-      const prevDirX = prevVx / prevMag;
-      const prevDirY = prevVy / prevMag;
-      const currDirX = smoothedVx / currMag;
-      const currDirY = smoothedVy / currMag;
-
       // Calculate dot product (1 = same direction, -1 = opposite)
       const dot = prevDirX * currDirX + prevDirY * currDirY;
 
       // If direction change is significant, blend toward previous direction
       if (dot < DIRECTION_COMMIT_THRESHOLD) {
-        const blendFactor = DIRECTION_COMMIT_STRENGTH * (1 - dot) / 2;
+        const blendFactor = (DIRECTION_COMMIT_STRENGTH * (1 - dot)) / 2;
         smoothedVx = smoothedVx * (1 - blendFactor) + prevVx * blendFactor;
         smoothedVy = smoothedVy * (1 - blendFactor) + prevVy * blendFactor;
       }
@@ -682,22 +698,24 @@ export class FlockingBehavior {
       if (state.framesStuck >= collisionConfig.stuckDetectionFrames) {
         const dx = unit.targetX !== null ? unit.targetX - transform.x : 0;
         const dy = unit.targetY !== null ? unit.targetY - transform.y : 0;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const {
+          nx: towardX,
+          ny: towardY,
+          magnitude: dist,
+        } = deterministicNormalizeWithMagnitude(dx, dy);
 
         if (dist > 0.1) {
           // Use deterministic random to pick tangential direction
           const seed = entityId * 12345 + this.currentTick;
-          const tangentSign = (seed % 2 === 0) ? 1 : -1;
+          const tangentSign = seed % 2 === 0 ? 1 : -1;
 
           // Perpendicular (tangential) direction to target
-          const perpX = -dy / dist;
-          const perpY = dx / dist;
+          const perpX = -towardY;
+          const perpY = towardX;
 
           // Blend between tangential escape and toward-target based on tangentialBias
           // High tangentialBias = more sideways movement to escape obstacles
           const bias = collisionConfig.stuckTangentialBias;
-          const towardX = dx / dist;
-          const towardY = dy / dist;
 
           // Nudge direction: blend tangential and toward-target
           const nudgeX = perpX * tangentSign * bias + towardX * (1 - bias);
@@ -738,11 +756,7 @@ export class FlockingBehavior {
     );
 
     // Query once and cache
-    const nearbyIds = unitGrid.queryRadius(
-      transform.x,
-      transform.y,
-      maxRadius
-    );
+    const nearbyIds = unitGrid.queryRadius(transform.x, transform.y, maxRadius);
 
     // Store in cache (copy the array to avoid reference issues)
     const cached = this.batchedNeighborCache.get(entityId);
@@ -755,7 +769,7 @@ export class FlockingBehavior {
     } else {
       this.batchedNeighborCache.set(entityId, {
         ids: [...nearbyIds],
-        tick: this.currentTick
+        tick: this.currentTick,
       });
     }
   }

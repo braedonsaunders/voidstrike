@@ -19,6 +19,7 @@ import {
   getFormation,
 } from '@/data/formations/formations';
 import { MAGIC_BOX_MARGIN, FORMATION_BUFFER_SIZE } from '@/data/movement.config';
+import { integerSqrt } from '@/utils/FixedPoint';
 import {
   RecastNavigation,
   getRecastNavigation,
@@ -549,7 +550,9 @@ export class FormationMovement {
     }
 
     const spacing = 1.5;
-    const cols = Math.ceil(Math.sqrt(effectiveCount));
+    // Use deterministic integer sqrt for cross-platform consistency
+    const sqrtFloor = integerSqrt(effectiveCount);
+    const cols = sqrtFloor * sqrtFloor === effectiveCount ? sqrtFloor : sqrtFloor + 1;
     const rows = Math.ceil(effectiveCount / cols);
     const offsetX = ((cols - 1) * spacing) / 2;
     const offsetY = ((rows - 1) * spacing) / 2;

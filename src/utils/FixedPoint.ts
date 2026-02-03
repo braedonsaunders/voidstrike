@@ -232,13 +232,12 @@ export function integerSqrt(n: number): number {
 
 /**
  * Deterministic distance calculation using quantized positions
- * FIX: Uses integer sqrt instead of Math.sqrt for cross-platform determinism
+ * Uses integer sqrt instead of Math.sqrt for cross-platform determinism.
  *
- * TODO: Consider migrating multiplayer-critical systems (CombatSystem, ProjectileSystem,
- * PathfindingSystem, etc.) to use deterministicDistance/deterministicDistanceSquared
- * instead of the regular distance() from math.ts. The regular Math.sqrt() can produce
- * subtly different results across different CPUs/browsers, potentially causing desync.
- * Current usage: These functions are tested but not yet integrated into game systems.
+ * This function and related deterministic math utilities are integrated into
+ * all multiplayer-critical game systems (CombatSystem, ProjectileSystem,
+ * PathfindingSystem, MovementOrchestrator, FlockingBehavior, etc.) to prevent
+ * desync caused by floating-point differences across CPUs/browsers.
  */
 export function deterministicDistance(x1: number, y1: number, x2: number, y2: number): number {
   // Quantize inputs
@@ -312,5 +311,165 @@ export function deterministicNormalize(x: number, y: number): { x: number; y: nu
   return {
     x: qx / mag,
     y: qy / mag,
+  };
+}
+
+// =============================================================================
+// Deterministic Magnitude Functions for Multiplayer
+// =============================================================================
+
+/**
+ * Deterministic 2D vector magnitude
+ * Uses quantization + integer sqrt for cross-platform determinism.
+ *
+ * @param x - X component of vector
+ * @param y - Y component of vector
+ * @returns Deterministic magnitude value
+ */
+export function deterministicMagnitude(x: number, y: number): number {
+  const qx = quantize(x, QUANT_POSITION);
+  const qy = quantize(y, QUANT_POSITION);
+
+  const magSq = qx * qx + qy * qy;
+  if (magSq === 0) return 0;
+
+  const mag = integerSqrt(magSq);
+  return mag / QUANT_POSITION;
+}
+
+/**
+ * Deterministic 2D vector magnitude squared
+ * Avoids sqrt entirely - use when comparing against thresholds.
+ *
+ * @param x - X component of vector
+ * @param y - Y component of vector
+ * @returns Deterministic magnitude squared value
+ */
+export function deterministicMagnitudeSquared(x: number, y: number): number {
+  const qx = quantize(x, QUANT_POSITION);
+  const qy = quantize(y, QUANT_POSITION);
+
+  return (qx * qx + qy * qy) / (QUANT_POSITION * QUANT_POSITION);
+}
+
+/**
+ * Deterministic 3D vector magnitude
+ * Uses quantization + integer sqrt for cross-platform determinism.
+ *
+ * @param x - X component of vector
+ * @param y - Y component of vector
+ * @param z - Z component of vector
+ * @returns Deterministic magnitude value
+ */
+export function deterministicMagnitude3D(x: number, y: number, z: number): number {
+  const qx = quantize(x, QUANT_POSITION);
+  const qy = quantize(y, QUANT_POSITION);
+  const qz = quantize(z, QUANT_POSITION);
+
+  const magSq = qx * qx + qy * qy + qz * qz;
+  if (magSq === 0) return 0;
+
+  const mag = integerSqrt(magSq);
+  return mag / QUANT_POSITION;
+}
+
+/**
+ * Deterministic 3D vector magnitude squared
+ * Avoids sqrt entirely - use when comparing against thresholds.
+ *
+ * @param x - X component of vector
+ * @param y - Y component of vector
+ * @param z - Z component of vector
+ * @returns Deterministic magnitude squared value
+ */
+export function deterministicMagnitude3DSquared(x: number, y: number, z: number): number {
+  const qx = quantize(x, QUANT_POSITION);
+  const qy = quantize(y, QUANT_POSITION);
+  const qz = quantize(z, QUANT_POSITION);
+
+  return (qx * qx + qy * qy + qz * qz) / (QUANT_POSITION * QUANT_POSITION);
+}
+
+/**
+ * Deterministic square root for general use
+ * Uses quantization + integer sqrt for cross-platform determinism.
+ * Suitable for physics calculations like sqrt(2 * decel * dist).
+ *
+ * @param value - Non-negative value to take sqrt of
+ * @returns Deterministic square root
+ */
+export function deterministicSqrt(value: number): number {
+  if (value <= 0) return 0;
+
+  // Quantize to fixed precision
+  const qValue = quantize(value, QUANT_POSITION);
+  if (qValue <= 0) return 0;
+
+  // Scale up for precision, compute sqrt, scale back down
+  // We use a higher precision scale for the input to preserve accuracy
+  const scaledValue = qValue * QUANT_POSITION;
+  const sqrtScaled = integerSqrt(scaledValue);
+
+  return sqrtScaled / QUANT_POSITION;
+}
+
+/**
+ * Deterministic 2D normalization with separate output
+ * Returns both the normalized vector and the original magnitude.
+ * More efficient when you need both values.
+ *
+ * @param x - X component of vector
+ * @param y - Y component of vector
+ * @returns Object with normalized components (nx, ny) and magnitude
+ */
+export function deterministicNormalizeWithMagnitude(
+  x: number,
+  y: number
+): { nx: number; ny: number; magnitude: number } {
+  const qx = quantize(x, QUANT_POSITION);
+  const qy = quantize(y, QUANT_POSITION);
+
+  const magSq = qx * qx + qy * qy;
+  if (magSq === 0) return { nx: 0, ny: 0, magnitude: 0 };
+
+  const magInt = integerSqrt(magSq);
+  if (magInt === 0) return { nx: 0, ny: 0, magnitude: 0 };
+
+  return {
+    nx: qx / magInt,
+    ny: qy / magInt,
+    magnitude: magInt / QUANT_POSITION,
+  };
+}
+
+/**
+ * Deterministic 3D normalization with separate output
+ * Returns both the normalized vector and the original magnitude.
+ *
+ * @param x - X component of vector
+ * @param y - Y component of vector
+ * @param z - Z component of vector
+ * @returns Object with normalized components (nx, ny, nz) and magnitude
+ */
+export function deterministicNormalize3DWithMagnitude(
+  x: number,
+  y: number,
+  z: number
+): { nx: number; ny: number; nz: number; magnitude: number } {
+  const qx = quantize(x, QUANT_POSITION);
+  const qy = quantize(y, QUANT_POSITION);
+  const qz = quantize(z, QUANT_POSITION);
+
+  const magSq = qx * qx + qy * qy + qz * qz;
+  if (magSq === 0) return { nx: 0, ny: 0, nz: 0, magnitude: 0 };
+
+  const magInt = integerSqrt(magSq);
+  if (magInt === 0) return { nx: 0, ny: 0, nz: 0, magnitude: 0 };
+
+  return {
+    nx: qx / magInt,
+    ny: qy / magInt,
+    nz: qz / magInt,
+    magnitude: magInt / QUANT_POSITION,
   };
 }

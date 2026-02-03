@@ -24,7 +24,12 @@ import { World } from '../../ecs/World';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { RecastNavigation, getRecastNavigation } from '../../pathfinding/RecastNavigation';
 import { debugPerformance, debugPathfinding, debugResources } from '@/utils/debugLogger';
-import { snapValue, QUANT_POSITION } from '@/utils/FixedPoint';
+import {
+  snapValue,
+  QUANT_POSITION,
+  deterministicMagnitude,
+  deterministicNormalizeWithMagnitude,
+} from '@/utils/FixedPoint';
 import { WasmBoids, getWasmBoids } from '../../wasm/WasmBoids';
 import { CROWD_MAX_AGENTS } from '@/data/pathfinding.config';
 import { stateToEnum } from '../../core/SpatialGrid';
@@ -626,7 +631,7 @@ export class MovementOrchestrator {
 
     const dx = targetX - transform.x;
     const dy = targetY - transform.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const distance = deterministicMagnitude(dx, dy);
 
     // Check arrival
     if (distance < this.arrivalThreshold) {
@@ -700,13 +705,17 @@ export class MovementOrchestrator {
       const sepMagSq = tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y;
 
       if (sepMagSq > collisionConfig.idleSeparationThreshold) {
-        const sepMag = Math.sqrt(sepMagSq);
+        const {
+          nx: sepNx,
+          ny: sepNy,
+          magnitude: sepMag,
+        } = deterministicNormalizeWithMagnitude(tempSeparation.x, tempSeparation.y);
         const idleRepelSpeed = Math.min(
           unit.maxSpeed * collisionConfig.idleRepelSpeedMultiplier,
           sepMag * collisionConfig.separationStrengthIdle * 0.5
         );
-        velocity.x = (tempSeparation.x / sepMag) * idleRepelSpeed;
-        velocity.y = (tempSeparation.y / sepMag) * idleRepelSpeed;
+        velocity.x = sepNx * idleRepelSpeed;
+        velocity.y = sepNy * idleRepelSpeed;
 
         // Update rotation
         const targetRotation = Math.atan2(-velocity.y, velocity.x);
@@ -807,28 +816,30 @@ export class MovementOrchestrator {
       );
       const edgeDx = transform.x - clampedX;
       const edgeDy = transform.y - clampedY;
-      effectiveDistance = Math.max(
-        0,
-        Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius
-      );
+      const edgeDist = deterministicMagnitude(edgeDx, edgeDy);
+      effectiveDistance = Math.max(0, edgeDist - attackerRadius);
 
       const standOffDistance = unit.attackRange * ATTACK_STANDOFF_MULTIPLIER;
       const minSafeDistance = attackerRadius + 0.5;
 
-      if (effectiveDistance > minSafeDistance) {
-        const dirX = edgeDx / effectiveDistance;
-        const dirY = edgeDy / effectiveDistance;
+      if (effectiveDistance > minSafeDistance && edgeDist > 0.01) {
+        const dirX = edgeDx / edgeDist;
+        const dirY = edgeDy / edgeDist;
         attackTargetX = clampedX + dirX * standOffDistance;
         attackTargetY = clampedY + dirY * standOffDistance;
       } else {
         needsToEscape = true;
         const awayDx = transform.x - targetTransform.x;
         const awayDy = transform.y - targetTransform.y;
-        const awayDist = Math.sqrt(awayDx * awayDx + awayDy * awayDy);
+        const {
+          nx: awayNx,
+          ny: awayNy,
+          magnitude: awayDist,
+        } = deterministicNormalizeWithMagnitude(awayDx, awayDy);
         if (awayDist > 0.1) {
           const escapeDistance = Math.max(halfW, halfH) + standOffDistance + 0.5;
-          attackTargetX = targetTransform.x + (awayDx / awayDist) * escapeDistance;
-          attackTargetY = targetTransform.y + (awayDy / awayDist) * escapeDistance;
+          attackTargetX = targetTransform.x + awayNx * escapeDistance;
+          attackTargetY = targetTransform.y + awayNy * escapeDistance;
         } else {
           attackTargetX = targetTransform.x + halfW + standOffDistance + 0.5;
           attackTargetY = targetTransform.y;
@@ -864,13 +875,15 @@ export class MovementOrchestrator {
       );
 
       const combatMoveSpeed = unit.maxSpeed * collisionConfig.combatSpreadSpeedMultiplier;
-      const sepMag = Math.sqrt(
-        tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y
-      );
+      const {
+        nx: sepNx,
+        ny: sepNy,
+        magnitude: sepMag,
+      } = deterministicNormalizeWithMagnitude(tempSeparation.x, tempSeparation.y);
 
       if (sepMag > collisionConfig.combatSeparationThreshold) {
-        velocity.x = (tempSeparation.x / sepMag) * combatMoveSpeed;
-        velocity.y = (tempSeparation.y / sepMag) * combatMoveSpeed;
+        velocity.x = sepNx * combatMoveSpeed;
+        velocity.y = sepNy * combatMoveSpeed;
 
         // For naval units, save position before movement for potential revert
         const isNaval = unit.movementDomain === 'water' && !unit.isFlying;
@@ -1068,9 +1081,7 @@ export class MovementOrchestrator {
             fallbackVy += tempBuildingAvoid.y;
 
             // Reduce speed when building avoidance is active to prevent overshooting
-            const avoidMag = Math.sqrt(
-              tempBuildingAvoid.x * tempBuildingAvoid.x + tempBuildingAvoid.y * tempBuildingAvoid.y
-            );
+            const avoidMag = deterministicMagnitude(tempBuildingAvoid.x, tempBuildingAvoid.y);
             if (avoidMag > 0.5) {
               // Strong avoidance active - reduce speed to allow steering to take effect
               const speedReduction = Math.max(0.3, 1.0 - avoidMag * 0.3);
@@ -1086,10 +1097,7 @@ export class MovementOrchestrator {
         // Add arrival spreading
         const distToFinalTarget =
           unit.targetX !== null && unit.targetY !== null
-            ? Math.sqrt(
-                (unit.targetX - transform.x) * (unit.targetX - transform.x) +
-                  (unit.targetY - transform.y) * (unit.targetY - transform.y)
-              )
+            ? deterministicMagnitude(unit.targetX - transform.x, unit.targetY - transform.y)
             : distance;
 
         if (distToFinalTarget < collisionConfig.arrivalSpreadRadius) {
@@ -1188,10 +1196,7 @@ export class MovementOrchestrator {
 
       const distToFinalTarget =
         unit.targetX !== null && unit.targetY !== null
-          ? Math.sqrt(
-              (unit.targetX - transform.x) * (unit.targetX - transform.x) +
-                (unit.targetY - transform.y) * (unit.targetY - transform.y)
-            )
+          ? deterministicMagnitude(unit.targetX - transform.x, unit.targetY - transform.y)
           : distance;
 
       if (!unit.isFlying) {
@@ -1301,9 +1306,7 @@ export class MovementOrchestrator {
         finalVx,
         finalVy
       );
-      const avoidMag = Math.sqrt(
-        tempBuildingAvoid.x * tempBuildingAvoid.x + tempBuildingAvoid.y * tempBuildingAvoid.y
-      );
+      const avoidMag = deterministicMagnitude(tempBuildingAvoid.x, tempBuildingAvoid.y);
       // Only apply if strong avoidance is detected (unit is close to building)
       // This prevents oscillation while still catching penetration cases
       if (avoidMag > 1.5) {
@@ -1332,7 +1335,7 @@ export class MovementOrchestrator {
     finalVy = smoothed.vy;
 
     // Stuck detection
-    const currentVelMag = Math.sqrt(finalVx * finalVx + finalVy * finalVy);
+    const currentVelMag = deterministicMagnitude(finalVx, finalVy);
     if (distance > this.arrivalThreshold) {
       this.flocking.handleStuckDetection(
         entityId,

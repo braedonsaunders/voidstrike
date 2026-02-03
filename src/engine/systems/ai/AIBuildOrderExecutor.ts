@@ -33,6 +33,7 @@ import { AIEconomyManager } from './AIEconomyManager';
 import { type MacroAction, type AIStateSnapshot, evaluateRule } from '@/data/ai/aiConfig';
 import type { BuildOrderStep } from '@/data/ai/buildOrders';
 import { getCounterRecommendation, analyzeThreatGaps } from '../AIMicroSystem';
+import { deterministicMagnitude } from '@/utils/FixedPoint';
 import { distance } from '@/utils/math';
 
 // Build order index for when we've finished the build order
@@ -553,9 +554,7 @@ export class AIBuildOrderExecutor {
       const chokePoints = positionalAnalysis.getChokePoints();
       for (const choke of chokePoints) {
         // Only consider chokes within reasonable range of base
-        const distToBase = Math.sqrt(
-          Math.pow(choke.x - basePos.x, 2) + Math.pow(choke.y - basePos.y, 2)
-        );
+        const distToBase = deterministicMagnitude(choke.x - basePos.x, choke.y - basePos.y);
         if (distToBase > 40) continue;
 
         // Try positions near the choke point
@@ -1384,7 +1383,7 @@ export class AIBuildOrderExecutor {
 
         // Penalize if too close to existing bases
         for (const base of existingBases) {
-          const dist = Math.sqrt(Math.pow(loc.x - base.x, 2) + Math.pow(loc.y - base.y, 2));
+          const dist = deterministicMagnitude(loc.x - base.x, loc.y - base.y);
           if (dist < 30) {
             score -= 1000; // Disqualify
           } else if (dist < 50) {
@@ -1394,9 +1393,7 @@ export class AIBuildOrderExecutor {
 
         // Penalize if close to enemy bases
         for (const enemyBase of enemyBases) {
-          const dist = Math.sqrt(
-            Math.pow(loc.x - enemyBase.x, 2) + Math.pow(loc.y - enemyBase.y, 2)
-          );
+          const dist = deterministicMagnitude(loc.x - enemyBase.x, loc.y - enemyBase.y);
           if (dist < 25) {
             score -= 500;
           } else if (dist < 40) {
@@ -1407,9 +1404,7 @@ export class AIBuildOrderExecutor {
         // Prefer closer expansions (shorter travel distance for workers)
         const distToMain =
           existingBases.length > 0
-            ? Math.sqrt(
-                Math.pow(loc.x - existingBases[0].x, 2) + Math.pow(loc.y - existingBases[0].y, 2)
-              )
+            ? deterministicMagnitude(loc.x - existingBases[0].x, loc.y - existingBases[0].y)
             : 0;
         score -= distToMain * 0.5;
 
@@ -1474,7 +1469,7 @@ export class AIBuildOrderExecutor {
       for (const base of existingBases) {
         const dx = transform.x - base.x;
         const dy = transform.y - base.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+        const dist = deterministicMagnitude(dx, dy);
         distanceToNearestBase = Math.min(distanceToNearestBase, dist);
       }
 
@@ -1485,7 +1480,7 @@ export class AIBuildOrderExecutor {
       for (const enemyBase of enemyBases) {
         const dx = transform.x - enemyBase.x;
         const dy = transform.y - enemyBase.y;
-        if (Math.sqrt(dx * dx + dy * dy) < 25) {
+        if (deterministicMagnitude(dx, dy) < 25) {
           tooCloseToEnemy = true;
           break;
         }
@@ -1503,7 +1498,7 @@ export class AIBuildOrderExecutor {
 
         const dx = otherTransform.x - transform.x;
         const dy = otherTransform.y - transform.y;
-        if (Math.sqrt(dx * dx + dy * dy) < 15) {
+        if (deterministicMagnitude(dx, dy) < 15) {
           mineralCount++;
         }
       }
