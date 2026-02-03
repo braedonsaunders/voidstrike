@@ -319,19 +319,6 @@ export function createMineralLine(
   return minerals;
 }
 
-// Legacy helper with direction parameter (backwards compatibility)
-export function createMineralLineOld(
-  baseX: number,
-  baseY: number,
-  direction: 'horizontal' | 'vertical' = 'horizontal',
-  amount: number = 1500
-): ResourceNode[] {
-  // Convert old API to new: assume base is ~10 units away in the direction
-  const offsetX = direction === 'horizontal' ? -10 : 0;
-  const offsetY = direction === 'vertical' ? -10 : 0;
-  return createMineralLine(baseX, baseY, baseX + offsetX, baseY + offsetY, amount);
-}
-
 // Helper to create plasma geysers (typically 2 per base)
 // Places geysers at the ends of the mineral arc, forming a continuous crescent
 // mineralCenterX/Y: center of the mineral arc

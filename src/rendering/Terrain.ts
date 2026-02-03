@@ -203,18 +203,10 @@ function _voronoiNoise(x: number, y: number, frequency: number = 4): number {
   return Math.sqrt(minDist);
 }
 
-// Legacy noise functions for compatibility
+// Simple deterministic noise for color variation
 function noise2D(x: number, y: number, seed: number = 0): number {
   const n = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
   return n - Math.floor(n);
-}
-
-function _smoothNoise(x: number, y: number, scale: number, seed: number = 0): number {
-  return fbmNoise(x / scale + seed * 0.1, y / scale + seed * 0.1, 3, 2.0, 0.5) * 0.5 + 0.5;
-}
-
-function _fractalNoise(x: number, y: number, octaves: number, persistence: number, seed: number = 0): number {
-  return fbmNoise(x * 0.1 + seed * 0.01, y * 0.1 + seed * 0.01, octaves, 2.0, persistence) * 0.5 + 0.5;
 }
 
 // PERF: Terrain chunk size for frustum culling
