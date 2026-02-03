@@ -205,25 +205,26 @@ export class TSLWaterMaterial {
       const colorWave = sin(wavePhase).mul(0.03).add(1.0);
       const variedColor = baseColor.mul(colorWave);
 
-      // Fresnel effect for edge highlighting
+      // Fresnel effect for edge highlighting - very subtle
       const viewDir = normalize(cameraPosition.sub(worldPos));
       const fresnel = float(1.0).sub(clamp(dot(viewDir, worldNormal), 0.0, 1.0));
-      const fresnelFactor = pow(fresnel, this.uFresnelPower);
+      // Higher power (8) = even narrower effect, only at extreme grazing angles
+      const fresnelFactor = pow(fresnel, float(8.0)).mul(this.uReflectionStrength);
 
-      // Specular highlight from sun
+      // Specular highlight from sun - reduced intensity
       const reflectDir = normalize(
         this.uSunDirection
           .negate()
           .add(worldNormal.mul(dot(worldNormal, this.uSunDirection).mul(2.0)))
       );
-      const specular = pow(clamp(dot(viewDir, reflectDir), 0.0, 1.0), float(32.0));
-      const specularColor = vec3(1.0, 1.0, 0.95).mul(specular).mul(0.5);
+      const specular = pow(clamp(dot(viewDir, reflectDir), 0.0, 1.0), float(64.0));
+      // Much dimmer specular - subtle glint, not white-out
+      const specularColor = vec3(0.8, 0.85, 0.9).mul(specular).mul(0.15);
 
-      // Combine: base color + fresnel rim + specular
-      // Rim color is a subtle sky reflection, not bright white
-      const rimColor = vec3(0.5, 0.65, 0.75); // Muted sky blue rim
-      const withFresnel = mix(variedColor, rimColor, fresnelFactor.mul(this.uReflectionStrength));
-      const finalColor = add(withFresnel, specularColor);
+      // Combine: base color + subtle fresnel brightening + specular glint
+      // Instead of mixing with bright rim, just brighten the water color slightly
+      const brightenedColor = variedColor.mul(float(1.0).add(fresnelFactor.mul(0.3)));
+      const finalColor = add(brightenedColor, specularColor);
 
       return vec4(finalColor, this.uOpacity);
     })();
@@ -327,6 +328,12 @@ export class TSLWaterMaterial {
     material.side = THREE.DoubleSide;
     material.depthWrite = true;
     material.depthTest = true;
+
+    // Polygon offset pushes water slightly back in depth to reduce z-fighting
+    // with terrain at similar elevations
+    material.polygonOffset = true;
+    material.polygonOffsetFactor = 1;
+    material.polygonOffsetUnits = 1;
 
     return material;
   }
