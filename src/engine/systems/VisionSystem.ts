@@ -15,7 +15,6 @@ import { debugPathfinding } from '@/utils/debugLogger';
 // Industry-standard fog of war optimizations
 import { VisionOptimizer } from './vision/VisionOptimizer';
 import { LineOfSight, type HeightProvider } from './vision/LineOfSight';
-import { SDFVisionRenderer } from './vision/SDFVisionRenderer';
 
 // Vision states for fog of war
 export type VisionState = 'unexplored' | 'explored' | 'visible';
@@ -112,10 +111,6 @@ export class VisionSystem extends System {
   private useLOSBlocking: boolean = true; // Enable by default
   private heightProvider: HeightProvider | null = null;
 
-  // Phase 3: SDF-based edge rendering
-  private sdfRenderer: SDFVisionRenderer | null = null;
-  private useSDF: boolean = true; // Enable by default
-
   // Track entity cell positions for boundary detection
   private entityCellPositions: Map<number, { cellX: number; cellY: number }> = new Map();
 
@@ -159,18 +154,6 @@ export class VisionSystem extends System {
         losBlockingThreshold: 1.0, // 1 world unit height difference blocks LOS
       });
       debugPathfinding.log('[VisionSystem] Phase 2: LOS blocking enabled');
-    }
-
-    // Phase 3: SDF renderer for smooth edges
-    if (this.useSDF) {
-      this.sdfRenderer = new SDFVisionRenderer({
-        gridWidth,
-        gridHeight,
-        cellSize: this.cellSize,
-        maxDistance: 8, // 8 cells max SDF propagation
-        edgeSoftness: 0.3,
-      });
-      debugPathfinding.log('[VisionSystem] Phase 3: SDF edge rendering enabled');
     }
   }
 
@@ -423,16 +406,6 @@ export class VisionSystem extends System {
       }
     }
 
-    if (this.sdfRenderer) {
-      this.sdfRenderer.reinitialize({
-        gridWidth,
-        gridHeight,
-        cellSize: this.cellSize,
-        maxDistance: 8,
-        edgeSoftness: 0.3,
-      });
-    }
-
     this.entityCellPositions.clear();
   }
 
@@ -563,14 +536,6 @@ export class VisionSystem extends System {
   }
 
   /**
-   * Enable/disable SDF edge rendering (Phase 3)
-   */
-  public setSDFRenderingEnabled(enabled: boolean): void {
-    this.useSDF = enabled;
-    debugPathfinding.log(`[VisionSystem] SDF rendering ${enabled ? 'enabled' : 'disabled'}`);
-  }
-
-  /**
    * Get the vision optimizer instance (for debugging/stats)
    */
   public getVisionOptimizer(): VisionOptimizer | null {
@@ -585,24 +550,15 @@ export class VisionSystem extends System {
   }
 
   /**
-   * Get the SDF renderer instance
-   */
-  public getSDFRenderer(): SDFVisionRenderer | null {
-    return this.sdfRenderer;
-  }
-
-  /**
    * Check if optimizations are enabled
    */
   public getOptimizationStatus(): {
     referenceCountingEnabled: boolean;
     losBlockingEnabled: boolean;
-    sdfRenderingEnabled: boolean;
   } {
     return {
       referenceCountingEnabled: this.useOptimizedVision,
       losBlockingEnabled: this.useLOSBlocking,
-      sdfRenderingEnabled: this.useSDF,
     };
   }
 
@@ -645,10 +601,6 @@ export class VisionSystem extends System {
     if (this.lineOfSight) {
       this.lineOfSight.dispose();
       this.lineOfSight = null;
-    }
-    if (this.sdfRenderer) {
-      this.sdfRenderer.dispose();
-      this.sdfRenderer = null;
     }
     this.entityCellPositions.clear();
   }
