@@ -42,7 +42,7 @@ export interface ResearchDefinition {
   description: string;
   faction: string;
   mineralCost: number;
-  vespeneCost: number;
+  plasmaCost: number;
   researchTime: number; // seconds
   effects: UpgradeEffect[];
   requirements?: string[]; // building IDs or upgrade IDs required
@@ -82,9 +82,9 @@ export interface WallUpgradeDefinition {
   id: WallUpgradeType;
   name: string;
   description: string;
-  researchCost: { minerals: number; vespene: number };
+  researchCost: { minerals: number; plasma: number };
   researchTime: number;
-  applyCost: { minerals: number; vespene: number };
+  applyCost: { minerals: number; plasma: number };
   applyTime: number;
   researchBuilding: string;
 }

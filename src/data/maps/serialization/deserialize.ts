@@ -156,7 +156,7 @@ export function jsonToMapData(json: MapJson): MapData {
         type: m.type,
         amount: m.amount,
       })),
-      vespene: e.vespene.map((v): ResourceNode => ({
+      plasma: e.plasma.map((v): ResourceNode => ({
         x: v.x,
         y: v.y,
         type: v.type,

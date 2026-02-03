@@ -329,7 +329,7 @@ export class AIEconomyManager {
   }
 
   /**
-   * Find idle workers and send them to gather minerals or vespene.
+   * Find idle workers and send them to gather minerals or plasma.
    * Uses WorkerDistribution primitive for optimal saturation management.
    */
   public assignIdleWorkersToGather(ai: AIPlayer): void {
@@ -416,7 +416,7 @@ export class AIEconomyManager {
 
     for (const resEntity of resources) {
       const resource = resEntity.get<Resource>('Resource');
-      if (!resource || resource.resourceType !== 'vespene') continue;
+      if (!resource || resource.resourceType !== 'plasma') continue;
       if (resource.extractorEntityId !== null) {
         extractorToResource.set(resource.extractorEntityId, { entity: resEntity, resource });
       }
@@ -432,8 +432,8 @@ export class AIEconomyManager {
       if (building.buildingId !== config.roles.gasExtractor) continue;
       if (!building.isComplete()) continue;
 
-      const vespeneData = extractorToResource.get(entity.id);
-      if (!vespeneData) continue;
+      const plasmaData = extractorToResource.get(entity.id);
+      if (!plasmaData) continue;
 
       // Find nearest base
       let nearestBase: { entityId: number; distance: number } | null = null;
@@ -451,8 +451,8 @@ export class AIEconomyManager {
         if (baseResources) {
           baseResources.refineries.push({
             entityId: entity.id,
-            resourceEntityId: vespeneData.entity.id,
-            currentWorkers: vespeneData.resource.getCurrentGatherers(),
+            resourceEntityId: plasmaData.entity.id,
+            currentWorkers: plasmaData.resource.getCurrentGatherers(),
           });
         }
       }
@@ -484,7 +484,7 @@ export class AIEconomyManager {
       // Workers returning with resources (in 'gathering' state but carrying resources)
       // can be reassigned if a higher priority task is available
       const isReturningWithResources = unit.state === 'gathering' &&
-                                       (unit.carryingMinerals > 0 || unit.carryingVespene > 0);
+                                       (unit.carryingMinerals > 0 || unit.carryingPlasma > 0);
 
       if (isIdle || isMovingNoTarget || isReturningWithResources) {
         idleWorkers.push({
@@ -630,12 +630,12 @@ export class AIEconomyManager {
     }
   }
 
-  // === Vespene Geyser Finding ===
+  // === Plasma Geyser Finding ===
 
   /**
-   * Find a vespene geyser near any AI base that doesn't have a refinery yet.
+   * Find a plasma geyser near any AI base that doesn't have a refinery yet.
    */
-  public findAvailableVespeneGeyser(ai: AIPlayer, _basePos: { x: number; y: number }): { x: number; y: number } | null {
+  public findAvailablePlasmaGeyser(ai: AIPlayer, _basePos: { x: number; y: number }): { x: number; y: number } | null {
     const config = ai.config!;
     const baseTypes = config.roles.baseTypes;
 
@@ -663,7 +663,7 @@ export class AIEconomyManager {
       const transform = entity.get<Transform>('Transform');
 
       if (!resource || !transform) continue;
-      if (resource.resourceType !== 'vespene') continue;
+      if (resource.resourceType !== 'plasma') continue;
       if (resource.hasRefinery()) continue;
 
       for (const basePos of basePositions) {
@@ -684,9 +684,9 @@ export class AIEconomyManager {
   }
 
   /**
-   * Count the number of available vespene geysers near AI bases.
+   * Count the number of available plasma geysers near AI bases.
    */
-  public countAvailableVespeneGeysers(ai: AIPlayer): number {
+  public countAvailablePlasmaGeysers(ai: AIPlayer): number {
     const config = ai.config!;
     const baseTypes = config.roles.baseTypes;
 
@@ -714,7 +714,7 @@ export class AIEconomyManager {
       const transform = entity.get<Transform>('Transform');
 
       if (!resource || !transform) continue;
-      if (resource.resourceType !== 'vespene') continue;
+      if (resource.resourceType !== 'plasma') continue;
       if (resource.hasRefinery()) continue;
 
       for (const basePos of basePositions) {

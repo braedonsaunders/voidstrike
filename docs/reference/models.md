@@ -796,7 +796,7 @@ PBR materials, isometric view, white background
 
 **Dimensions:** 3m × 3m footprint, 3m tall
 
-**Description:** Vespene gas extraction and processing facility.
+**Description:** Plasma gas extraction and processing facility.
 
 **AI Prompt:**
 ```
@@ -1351,12 +1351,12 @@ PBR materials with emission, white background
 
 ---
 
-### 2. Vespene Geyser
-**File:** `/public/models/resources/vespene.glb`
+### 2. Plasma Geyser
+**File:** `/public/models/resources/plasma.glb`
 
 **Dimensions:** 3m × 3m footprint, 1.5m tall (without plume)
 
-**Description:** Green gas geyser vent for vespene extraction.
+**Description:** Green gas geyser vent for plasma extraction.
 
 **AI Prompt:**
 ```
@@ -1836,7 +1836,7 @@ The AssetManager will automatically use custom models when available, falling ba
 
 ### Resources (2 total) - 2 complete
 - [x] Minerals `minerals.glb`
-- [x] Vespene Geyser `vespene.glb`
+- [x] Plasma Geyser `plasma.glb`
 
 ### Projectiles (3 total) - 0 complete
 - [ ] Bullet

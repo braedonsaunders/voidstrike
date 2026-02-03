@@ -117,7 +117,7 @@ export class DefinitionValidator {
     this.requireString(u.name, `${path}.name`);
     this.requireString(u.faction, `${path}.faction`);
     this.requireNumber(u.mineralCost, `${path}.mineralCost`, 0);
-    this.requireNumber(u.vespeneCost, `${path}.vespeneCost`, 0);
+    this.requireNumber(u.plasmaCost, `${path}.plasmaCost`, 0);
     this.requireNumber(u.buildTime, `${path}.buildTime`, 0);
     this.requireNumber(u.supplyCost, `${path}.supplyCost`, 0);
     this.requireNumber(u.speed, `${path}.speed`, 0);
@@ -235,7 +235,7 @@ export class DefinitionValidator {
     this.requireString(b.name, `${path}.name`);
     this.requireString(b.faction, `${path}.faction`);
     this.requireNumber(b.mineralCost, `${path}.mineralCost`, 0);
-    this.requireNumber(b.vespeneCost, `${path}.vespeneCost`, 0);
+    this.requireNumber(b.plasmaCost, `${path}.plasmaCost`, 0);
     this.requireNumber(b.buildTime, `${path}.buildTime`, 0);
     this.requireNumber(b.width, `${path}.width`, 1);
     this.requireNumber(b.height, `${path}.height`, 1);
@@ -296,7 +296,7 @@ export class DefinitionValidator {
     this.requireString(r.description, `${path}.description`);
     this.requireString(r.faction, `${path}.faction`);
     this.requireNumber(r.mineralCost, `${path}.mineralCost`, 0);
-    this.requireNumber(r.vespeneCost, `${path}.vespeneCost`, 0);
+    this.requireNumber(r.plasmaCost, `${path}.plasmaCost`, 0);
     this.requireNumber(r.researchTime, `${path}.researchTime`, 0);
 
     // Effects array

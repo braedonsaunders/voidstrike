@@ -375,9 +375,9 @@ export class AudioSystem extends System {
       AudioManager.play('alert_not_enough_minerals');
     });
 
-    this.game.eventBus.on('alert:notEnoughVespene', () => {
+    this.game.eventBus.on('alert:notEnoughPlasma', () => {
       if (this.isSpectator()) return;
-      AudioManager.play('alert_not_enough_vespene');
+      AudioManager.play('alert_not_enough_plasma');
     });
 
     this.game.eventBus.on('alert:mineralsDepleted', (data: { playerId?: string }) => {

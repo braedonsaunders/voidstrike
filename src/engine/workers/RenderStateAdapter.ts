@@ -121,7 +121,7 @@ class UnitAdapter {
   public isMining: boolean;
   public isRepairing: boolean;
   public carryingMinerals: number;
-  public carryingVespene: number;
+  public carryingPlasma: number;
   public gatherTargetId: number | null;
   // Movement/targeting for waypoint visualization
   public targetX: number | null;
@@ -145,7 +145,7 @@ class UnitAdapter {
     this.isMining = data.isMining;
     this.isRepairing = data.isRepairing;
     this.carryingMinerals = data.carryingMinerals;
-    this.carryingVespene = data.carryingVespene;
+    this.carryingPlasma = data.carryingPlasma;
     this.gatherTargetId = data.gatherTargetId;
     this.targetX = data.targetX;
     this.targetY = data.targetY;
@@ -167,7 +167,7 @@ class UnitAdapter {
     this.isMining = data.isMining;
     this.isRepairing = data.isRepairing;
     this.carryingMinerals = data.carryingMinerals;
-    this.carryingVespene = data.carryingVespene;
+    this.carryingPlasma = data.carryingPlasma;
     this.gatherTargetId = data.gatherTargetId;
     this.targetX = data.targetX;
     this.targetY = data.targetY;

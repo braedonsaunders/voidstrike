@@ -480,7 +480,7 @@ export class ScoutingMemory {
                             unitType.maxCount * (1 - unitType.confidence) * 0.5;
 
       armySupply += def.supplyCost * estimatedCount;
-      armyValue += (def.mineralCost + def.vespeneCost * 1.5) * estimatedCount;
+      armyValue += (def.mineralCost + def.plasmaCost * 1.5) * estimatedCount;
     }
 
     intel.estimatedArmySupply = Math.round(armySupply);

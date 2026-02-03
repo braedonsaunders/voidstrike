@@ -166,7 +166,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     cooldownTicks: 60, // Faster retry
   },
 
-  // Second extractor at main base - most bases have 2 vespene geysers
+  // Second extractor at main base - most bases have 2 plasma geysers
   {
     id: 'extractor_second',
     name: 'Second Extractor',
@@ -210,7 +210,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'extractor' },
       { type: 'buildingCount', operator: '==', value: 0, targetId: 'forge' },
-      { type: 'vespene', operator: '>=', value: 75 }, // Lowered
+      { type: 'plasma', operator: '>=', value: 75 }, // Lowered
       { type: 'minerals', operator: '>=', value: 100 }, // Lowered
     ],
     action: { type: 'build', targetId: 'forge' },
@@ -227,7 +227,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
       { type: 'buildingCount', operator: '==', value: 0, targetId: 'hangar' },
-      { type: 'vespene', operator: '>=', value: 75 }, // Lowered
+      { type: 'plasma', operator: '>=', value: 75 }, // Lowered
       { type: 'minerals', operator: '>=', value: 100 }, // Lowered
     ],
     action: { type: 'build', targetId: 'hangar' },
@@ -243,7 +243,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 68,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
-      { type: 'vespene', operator: '>=', value: 50 },
+      { type: 'plasma', operator: '>=', value: 50 },
       { type: 'minerals', operator: '>=', value: 50 },
     ],
     action: { type: 'build', targetId: 'research_module' },
@@ -282,7 +282,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 58,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
-      { type: 'vespene', operator: '>=', value: 300 },
+      { type: 'plasma', operator: '>=', value: 300 },
       { type: 'minerals', operator: '>=', value: 400 },
       { type: 'armySupply', operator: '>=', value: 20 }, // Need army to protect
     ],
@@ -297,7 +297,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 55,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
-      { type: 'vespene', operator: '>=', value: 150 }, // Lowered
+      { type: 'plasma', operator: '>=', value: 150 }, // Lowered
       { type: 'minerals', operator: '>=', value: 250 }, // Lowered
     ],
     action: { type: 'train', targetId: 'colossus' },
@@ -312,7 +312,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 52,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
-      { type: 'vespene', operator: '>=', value: 100 }, // Lowered
+      { type: 'plasma', operator: '>=', value: 100 }, // Lowered
       { type: 'minerals', operator: '>=', value: 150 }, // Lowered
     ],
     action: { type: 'train', targetId: 'devastator' },
@@ -328,7 +328,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 50,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
-      { type: 'vespene', operator: '>=', value: 50 }, // Lowered
+      { type: 'plasma', operator: '>=', value: 50 }, // Lowered
       { type: 'minerals', operator: '>=', value: 100 }, // Lowered
     ],
     action: { type: 'train', targetId: 'valkyrie' },
@@ -343,7 +343,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 48,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
-      { type: 'vespene', operator: '>=', value: 75 }, // Lowered
+      { type: 'plasma', operator: '>=', value: 75 }, // Lowered
       { type: 'minerals', operator: '>=', value: 100 }, // Lowered
     ],
     action: { type: 'train', targetId: 'specter' },
@@ -359,7 +359,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 46,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
-      { type: 'vespene', operator: '>=', value: 25 },
+      { type: 'plasma', operator: '>=', value: 25 },
       { type: 'minerals', operator: '>=', value: 75 },
     ],
     action: { type: 'train', targetId: 'scorcher' },
@@ -374,7 +374,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 44,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
-      { type: 'vespene', operator: '>=', value: 25 },
+      { type: 'plasma', operator: '>=', value: 25 },
       { type: 'minerals', operator: '>=', value: 50 },
     ],
     action: { type: 'train', targetId: 'breacher' },
@@ -389,7 +389,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 42,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
-      { type: 'vespene', operator: '>=', value: 50 },
+      { type: 'plasma', operator: '>=', value: 50 },
       { type: 'minerals', operator: '>=', value: 75 },
     ],
     action: { type: 'train', targetId: 'vanguard' },
@@ -406,7 +406,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
       { type: 'minerals', operator: '>=', value: 150 },
-      { type: 'vespene', operator: '>=', value: 50 },
+      { type: 'plasma', operator: '>=', value: 50 },
       { type: 'supplyRatio', operator: '<', value: 0.9 },
     ],
     action: {
@@ -429,7 +429,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
       { type: 'minerals', operator: '>=', value: 150 },
-      { type: 'vespene', operator: '>=', value: 75 },
+      { type: 'plasma', operator: '>=', value: 75 },
       { type: 'supplyRatio', operator: '<', value: 0.9 },
     ],
     action: {
@@ -689,7 +689,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
         maxPerBase: 1,
         maxTotal: 3,
         requires: ['infantry_bay', 'extractor'],
-        minVespene: 100,
+        minPlasma: 100,
       },
       {
         buildingId: 'hangar',
@@ -698,7 +698,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
         maxPerBase: 1,
         maxTotal: 2,
         requires: ['forge'],
-        minVespene: 100,
+        minPlasma: 100,
       },
     ],
     researchModulePriority: ['forge', 'infantry_bay', 'hangar'],

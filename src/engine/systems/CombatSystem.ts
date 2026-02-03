@@ -731,7 +731,7 @@ export class CombatSystem extends System {
         health.current = 0;
         buildingComp.state = 'destroyed';
 
-        // PERF: If this is an extractor, restore the vespene geyser visibility
+        // PERF: If this is an extractor, restore the plasma geyser visibility
         // Uses O(1) reverse lookup via linkedResourceId instead of O(n) scan
         if (buildingComp.buildingId === 'extractor') {
           if (buildingComp.linkedResourceId !== null) {
@@ -740,7 +740,7 @@ export class CombatSystem extends System {
               const resource = resourceEntity.get<Resource>('Resource');
               if (resource) {
                 resource.extractorEntityId = null;
-                debugCombat.log(`CombatSystem: Extractor destroyed, vespene geyser ${buildingComp.linkedResourceId} restored`);
+                debugCombat.log(`CombatSystem: Extractor destroyed, plasma geyser ${buildingComp.linkedResourceId} restored`);
               }
             }
           }

@@ -98,7 +98,7 @@ export class WorkerGame extends GameCore {
   // Player resources cache
   private playerResources: Map<
     string,
-    { minerals: number; vespene: number; supply: number; maxSupply: number }
+    { minerals: number; plasma: number; supply: number; maxSupply: number }
   > = new Map();
 
   // Player team assignments (0 = FFA, 1-4 = team alliance)
@@ -129,7 +129,7 @@ export class WorkerGame extends GameCore {
     // Initialize player resources
     this.playerResources.set(config.playerId, {
       minerals: 50,
-      vespene: 0,
+      plasma: 0,
       supply: 0,
       maxSupply: 0,
     });
@@ -585,7 +585,7 @@ export class WorkerGame extends GameCore {
     for (const [playerId, supply] of playerSupply) {
       const current = this.playerResources.get(playerId) ?? {
         minerals: 50,
-        vespene: 0,
+        plasma: 0,
         supply: 0,
         maxSupply: 0,
       };
@@ -699,7 +699,7 @@ export class WorkerGame extends GameCore {
         lastAttackTime: unit.lastAttackTime,
         isWorker: unit.isWorker,
         carryingMinerals: unit.carryingMinerals,
-        carryingVespene: unit.carryingVespene,
+        carryingPlasma: unit.carryingPlasma,
         isMining: unit.isMining,
         gatherTargetId: unit.gatherTargetId,
         currentMode: unit.currentMode,
@@ -986,7 +986,7 @@ export class WorkerGame extends GameCore {
           .add(new Transform(resourceDef.x, resourceDef.y, 0))
           .add(
             new Resource(
-              resourceDef.type === 'mineral' ? 'minerals' : 'vespene',
+              resourceDef.type === 'mineral' ? 'minerals' : 'plasma',
               resourceDef.amount ?? (resourceDef.type === 'mineral' ? 1500 : 2500)
             )
           );
@@ -1020,7 +1020,7 @@ export class WorkerGame extends GameCore {
 
       this.playerResources.set(slot.id, {
         minerals: 50,
-        vespene: 0,
+        plasma: 0,
         supply: 0,
         maxSupply: 11,
       });
@@ -1046,7 +1046,7 @@ export class WorkerGame extends GameCore {
     if (activeSlots.length === 0 && spawns.length > 0) {
       this.playerResources.set(this.config.playerId, {
         minerals: 50,
-        vespene: 0,
+        plasma: 0,
         supply: 0,
         maxSupply: 11,
       });
@@ -1073,7 +1073,7 @@ export class WorkerGame extends GameCore {
       name: 'Headquarters',
       faction: 'dominion',
       mineralCost: 400,
-      vespeneCost: 0,
+      plasmaCost: 0,
       buildTime: 0,
       width: 5,
       height: 5,
@@ -1133,7 +1133,7 @@ export class WorkerGame extends GameCore {
       name: 'Fabricator',
       faction: 'dominion',
       mineralCost: 50,
-      vespeneCost: 0,
+      plasmaCost: 0,
       buildTime: 17,
       supplyCost: 1,
       speed: 2.8,

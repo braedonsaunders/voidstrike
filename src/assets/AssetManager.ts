@@ -787,7 +787,7 @@ export const Materials = {
       emissive: 0x4080ff,
       emissiveIntensity: 0.8,
     }),
-    vespene: new THREE.MeshStandardMaterial({
+    plasma: new THREE.MeshStandardMaterial({
       color: 0x40ff80,
       roughness: 0.2,
       metalness: 0.3,
@@ -945,7 +945,7 @@ export class AssetManager {
   /**
    * Get or generate a resource mesh
    */
-  static getResourceMesh(resourceType: 'minerals' | 'vespene'): THREE.Object3D {
+  static getResourceMesh(resourceType: 'minerals' | 'plasma'): THREE.Object3D {
     // Check for custom model first
     if (customAssets.has(resourceType)) {
       const original = customAssets.get(resourceType)!;
@@ -1607,7 +1607,7 @@ export class AssetManager {
 
     // Resources
     this.getResourceMesh('minerals');
-    this.getResourceMesh('vespene');
+    this.getResourceMesh('plasma');
 
     // Projectiles
     ['bullet', 'missile', 'laser'].forEach(id => {
@@ -2015,7 +2015,7 @@ export class ProceduralGenerator {
   /**
    * Generate resource meshes
    */
-  static generateResource(type: 'minerals' | 'vespene'): THREE.Group {
+  static generateResource(type: 'minerals' | 'plasma'): THREE.Group {
     const group = new THREE.Group();
 
     if (type === 'minerals') {
@@ -2039,7 +2039,7 @@ export class ProceduralGenerator {
         group.add(mesh);
       }
     } else {
-      // Green vespene geyser
+      // Green plasma geyser
       const baseGeo = new THREE.CylinderGeometry(1.2, 1.5, 0.5, 8);
       const base = new THREE.Mesh(baseGeo, Materials.dominion.armor);
       base.position.y = 0.25;
@@ -2049,7 +2049,7 @@ export class ProceduralGenerator {
 
       // Gas plume
       const plumeGeo = new THREE.ConeGeometry(0.5, 2, 8);
-      const plume = new THREE.Mesh(plumeGeo, Materials.resources.vespene);
+      const plume = new THREE.Mesh(plumeGeo, Materials.resources.plasma);
       plume.position.y = 1.5;
       plume.castShadow = true;
       group.add(plume);

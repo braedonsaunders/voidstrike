@@ -26,7 +26,7 @@ export interface WallLineState {
   endX: number;
   endY: number;
   positions: Array<{ x: number; y: number }>;
-  totalCost: { minerals: number; vespene: number };
+  totalCost: { minerals: number; plasma: number };
 }
 
 // Command targeting mode for move/attack/patrol
@@ -38,7 +38,7 @@ export interface GameState {
 
   // Resources
   minerals: number;
-  vespene: number;
+  plasma: number;
   supply: number;
   maxSupply: number;
 
@@ -88,8 +88,8 @@ export interface GameState {
   clearSelection: () => void;
   setControlGroup: (key: number, ids: number[]) => void;
   getControlGroup: (key: number) => number[];
-  addResources: (minerals: number, vespene: number) => void;
-  setResources: (minerals: number, vespene: number) => void;
+  addResources: (minerals: number, plasma: number) => void;
+  setResources: (minerals: number, plasma: number) => void;
   addSupply: (amount: number) => void;
   addMaxSupply: (amount: number) => void;
   setGameTime: (time: number) => void;
@@ -129,13 +129,13 @@ const initialWallLine: WallLineState = {
   endX: 0,
   endY: 0,
   positions: [],
-  totalCost: { minerals: 0, vespene: 0 },
+  totalCost: { minerals: 0, plasma: 0 },
 };
 
 const initialState = {
   isGameReady: false,
   minerals: 50,
-  vespene: 0,
+  plasma: 0,
   supply: 0,
   maxSupply: 0, // Will be set from buildings when game starts
   selectedUnits: [],
@@ -195,16 +195,16 @@ export const useGameStore = create<GameState>((set, get) => ({
     return get().controlGroups.get(key) || [];
   },
 
-  addResources: (minerals, vespene) =>
+  addResources: (minerals, plasma) =>
     set((state) => ({
       minerals: Math.max(0, state.minerals + minerals),
-      vespene: Math.max(0, state.vespene + vespene),
+      plasma: Math.max(0, state.plasma + plasma),
     })),
 
-  setResources: (minerals, vespene) =>
+  setResources: (minerals, plasma) =>
     set(() => ({
       minerals: Math.max(0, minerals),
-      vespene: Math.max(0, vespene),
+      plasma: Math.max(0, plasma),
     })),
 
   addSupply: (amount) =>
@@ -280,7 +280,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         endX: x,
         endY: y,
         positions: [{ x: Math.round(x), y: Math.round(y) }],
-        totalCost: { minerals: 25, vespene: 0 }, // Cost of one segment
+        totalCost: { minerals: 25, plasma: 0 }, // Cost of one segment
       },
     })),
 

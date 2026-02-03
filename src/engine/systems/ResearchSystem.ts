@@ -52,9 +52,9 @@ export class ResearchSystem extends System {
       this.game.eventBus.emit('warning:lowMinerals', {});
       return;
     }
-    if (this.game.statePort.getVespene() < upgrade.vespeneCost) {
-      this.game.eventBus.emit('alert:notEnoughVespene', {});
-      this.game.eventBus.emit('warning:lowVespene', {});
+    if (this.game.statePort.getPlasma() < upgrade.plasmaCost) {
+      this.game.eventBus.emit('alert:notEnoughPlasma', {});
+      this.game.eventBus.emit('warning:lowPlasma', {});
       return;
     }
 
@@ -82,7 +82,7 @@ export class ResearchSystem extends System {
       }
 
       // Deduct resources
-      this.game.statePort.addResources(-upgrade.mineralCost, -upgrade.vespeneCost);
+      this.game.statePort.addResources(-upgrade.mineralCost, -upgrade.plasmaCost);
 
       // Add to production queue
       building.addToProductionQueue('upgrade', upgradeId, upgrade.researchTime);

@@ -1059,8 +1059,8 @@ export class TSLGameOverlayManager {
         r = 80;
         g = 180;
         b = 255;
-      } else if (resource.resourceType === 'vespene') {
-        // Green for vespene gas
+      } else if (resource.resourceType === 'plasma') {
+        // Green for plasma gas
         r = 80;
         g = 255;
         b = 120;

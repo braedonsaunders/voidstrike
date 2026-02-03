@@ -129,7 +129,7 @@ interface CommandButton {
   action: () => void;
   isDisabled?: boolean;
   tooltip?: string;
-  cost?: { minerals: number; vespene: number; supply?: number };
+  cost?: { minerals: number; plasma: number; supply?: number };
 }
 
 type MenuMode = 'main' | 'build_basic' | 'build_advanced' | 'build_walls';
@@ -149,7 +149,7 @@ function CommandCardInner() {
   // PERF: Use selector functions to minimize re-renders from Zustand
   const selectedUnits = useGameStore((state) => state.selectedUnits);
   const minerals = useGameStore((state) => state.minerals);
-  const vespene = useGameStore((state) => state.vespene);
+  const plasma = useGameStore((state) => state.plasma);
   const supply = useGameStore((state) => state.supply);
   const maxSupply = useGameStore((state) => state.maxSupply);
   const isBuilding = useGameStore((state) => state.isBuilding);
@@ -389,7 +389,7 @@ function CommandCardInner() {
               },
               isDisabled: !canUse,
               tooltip: (def.description ?? def.name) + ((abilityState.currentCooldown ?? 0) > 0 ? ` (CD: ${Math.ceil(abilityState.currentCooldown ?? 0)}s)` : ''),
-              cost: (energyCost ?? 0) > 0 ? { minerals: 0, vespene: 0, supply: energyCost ?? 0 } : undefined,
+              cost: (energyCost ?? 0) > 0 ? { minerals: 0, plasma: 0, supply: energyCost ?? 0 } : undefined,
             });
           }
         }
@@ -502,7 +502,7 @@ function CommandCardInner() {
           const requirementsMet = reqCheck.met;
           const reqText = reqCheck.missing.length > 0 ? `Requires: ${reqCheck.missing.join(', ')}` : '';
 
-          const canAfford = minerals >= def.mineralCost && vespene >= def.vespeneCost;
+          const canAfford = minerals >= def.mineralCost && plasma >= def.plasmaCost;
 
           // Build tooltip with description and requirements
           let tooltip = def.description || `Build ${def.name}`;
@@ -532,7 +532,7 @@ function CommandCardInner() {
             },
             isDisabled: !canAfford || !requirementsMet,
             tooltip,
-            cost: { minerals: def.mineralCost, vespene: def.vespeneCost },
+            cost: { minerals: def.mineralCost, plasma: def.plasmaCost },
           });
         });
       }
@@ -624,7 +624,7 @@ function CommandCardInner() {
                 });
               },
               tooltip: 'Reinforce wall: +400 HP, +2 armor',
-              cost: { minerals: 25, vespene: 0 },
+              cost: { minerals: 25, plasma: 0 },
             });
           }
 
@@ -641,7 +641,7 @@ function CommandCardInner() {
                 });
               },
               tooltip: 'Add shield: +200 regenerating shield',
-              cost: { minerals: 50, vespene: 25 },
+              cost: { minerals: 50, plasma: 25 },
             });
           }
 
@@ -658,7 +658,7 @@ function CommandCardInner() {
                 });
               },
               tooltip: 'Add auto-turret: 5 damage, 6 range',
-              cost: { minerals: 40, vespene: 25 },
+              cost: { minerals: 40, plasma: 25 },
             });
           }
         }
@@ -675,7 +675,7 @@ function CommandCardInner() {
           const unitDef = UNIT_DEFINITIONS[unitId];
           if (!unitDef) return;
 
-          const canAfford = minerals >= unitDef.mineralCost && vespene >= unitDef.vespeneCost;
+          const canAfford = minerals >= unitDef.mineralCost && plasma >= unitDef.plasmaCost;
           const hasSupply = supply + unitDef.supplyCost <= maxSupply;
           const attackTypeText = getAttackTypeText(unitDef);
 
@@ -695,7 +695,7 @@ function CommandCardInner() {
             },
             isDisabled: !canAfford,
             tooltip: (unitDef.description || `Train ${unitDef.name}`) + ` [${attackTypeText}]` + (!hasSupply ? ' (Need more supply)' : ''),
-            cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
+            cost: { minerals: unitDef.mineralCost, plasma: unitDef.plasmaCost, supply: unitDef.supplyCost },
           });
         });
       }
@@ -707,7 +707,7 @@ function CommandCardInner() {
           const unitDef = UNIT_DEFINITIONS[unitId];
           if (!unitDef) return;
 
-          const canAfford = minerals >= unitDef.mineralCost && vespene >= unitDef.vespeneCost;
+          const canAfford = minerals >= unitDef.mineralCost && plasma >= unitDef.plasmaCost;
           const hasSupply = supply + unitDef.supplyCost <= maxSupply;
           const canTrain = hasTechLab && canAfford;
           const attackTypeText = getAttackTypeText(unitDef);
@@ -738,7 +738,7 @@ function CommandCardInner() {
             },
             isDisabled: !canTrain,
             tooltip: tooltipText,
-            cost: { minerals: unitDef.mineralCost, vespene: unitDef.vespeneCost, supply: unitDef.supplyCost },
+            cost: { minerals: unitDef.mineralCost, plasma: unitDef.plasmaCost, supply: unitDef.supplyCost },
           });
         });
 
@@ -746,7 +746,7 @@ function CommandCardInner() {
         if (building.canHaveAddon && !(building.hasAddon?.() ?? false)) {
           const moduleDef = BUILDING_DEFINITIONS['research_module'];
           if (moduleDef) {
-            const canAffordModule = minerals >= moduleDef.mineralCost && vespene >= moduleDef.vespeneCost;
+            const canAffordModule = minerals >= moduleDef.mineralCost && plasma >= moduleDef.plasmaCost;
             const localPlayer = getLocalPlayerId();
             buttons.push({
               id: 'build_research_module',
@@ -766,14 +766,14 @@ function CommandCardInner() {
               },
               isDisabled: !canAffordModule,
               tooltip: moduleDef.description || 'Addon that unlocks advanced units and research.',
-              cost: { minerals: moduleDef.mineralCost, vespene: moduleDef.vespeneCost },
+              cost: { minerals: moduleDef.mineralCost, plasma: moduleDef.plasmaCost },
             });
           }
 
           // Build Production Module (Reactor) addon button
           const reactorDef = BUILDING_DEFINITIONS['production_module'];
           if (reactorDef) {
-            const canAffordReactor = minerals >= reactorDef.mineralCost && vespene >= reactorDef.vespeneCost;
+            const canAffordReactor = minerals >= reactorDef.mineralCost && plasma >= reactorDef.plasmaCost;
             const localPlayer = getLocalPlayerId();
             buttons.push({
               id: 'build_production_module',
@@ -792,7 +792,7 @@ function CommandCardInner() {
               },
               isDisabled: !canAffordReactor,
               tooltip: reactorDef.description || 'Addon that enables double production of basic units.',
-              cost: { minerals: reactorDef.mineralCost, vespene: reactorDef.vespeneCost },
+              cost: { minerals: reactorDef.mineralCost, plasma: reactorDef.plasmaCost },
             });
           }
         }
@@ -840,9 +840,9 @@ function CommandCardInner() {
                 upgradeId,
               });
             },
-            isDisabled: minerals < upgrade.mineralCost || vespene < upgrade.vespeneCost || !reqMet || isResearching,
+            isDisabled: minerals < upgrade.mineralCost || plasma < upgrade.plasmaCost || !reqMet || isResearching,
             tooltip: upgrade.description + (isResearching ? ' (In progress)' : ''),
-            cost: { minerals: upgrade.mineralCost, vespene: upgrade.vespeneCost },
+            cost: { minerals: upgrade.mineralCost, plasma: upgrade.plasmaCost },
           });
         });
 
@@ -856,7 +856,7 @@ function CommandCardInner() {
             const upgradeDef = BUILDING_DEFINITIONS[upgradeBuildingId];
             if (!upgradeDef) return;
 
-            const canAfford = minerals >= upgradeDef.mineralCost && vespene >= upgradeDef.vespeneCost;
+            const canAfford = minerals >= upgradeDef.mineralCost && plasma >= upgradeDef.plasmaCost;
 
             // Create shortcut from first letter of last word (O for Orbital, P for Planetary)
             const words = upgradeDef.name.split(' ');
@@ -874,7 +874,7 @@ function CommandCardInner() {
               },
               isDisabled: !canAfford || isUpgrading,
               tooltip: (upgradeDef.description || `Upgrade to ${upgradeDef.name}`) + (isUpgrading ? ' (Upgrading...)' : ''),
-              cost: { minerals: upgradeDef.mineralCost, vespene: upgradeDef.vespeneCost },
+              cost: { minerals: upgradeDef.mineralCost, plasma: upgradeDef.plasmaCost },
             });
           });
         }
@@ -984,14 +984,14 @@ function CommandCardInner() {
             },
             isDisabled: !canUse,
             tooltip: (def.description ?? def.name) + ((abilityState.currentCooldown ?? 0) > 0 ? ` (CD: ${Math.ceil(abilityState.currentCooldown ?? 0)}s)` : ''),
-            cost: (energyCost ?? 0) > 0 ? { minerals: 0, vespene: 0, supply: energyCost ?? 0 } : undefined,
+            cost: (energyCost ?? 0) > 0 ? { minerals: 0, plasma: 0, supply: energyCost ?? 0 } : undefined,
           });
         }
       }
     }
 
     setCommands(buttons.slice(0, 12)); // Max 4x3 grid
-  }, [selectedUnits, minerals, vespene, supply, maxSupply, menuMode, buildingStateVersion]);
+  }, [selectedUnits, minerals, plasma, supply, maxSupply, menuMode, buildingStateVersion]);
 
   // Handle ESC to go back in menus and building shortcuts
   useEffect(() => {
@@ -1073,12 +1073,12 @@ function CommandCardInner() {
     // Check which resource is insufficient and emit appropriate alert
     if (cmd.cost.minerals > 0 && minerals < cmd.cost.minerals) {
       bridge.eventBus.emit('alert:notEnoughMinerals', {});
-    } else if (cmd.cost.vespene > 0 && vespene < cmd.cost.vespene) {
-      bridge.eventBus.emit('alert:notEnoughVespene', {});
+    } else if (cmd.cost.plasma > 0 && plasma < cmd.cost.plasma) {
+      bridge.eventBus.emit('alert:notEnoughPlasma', {});
     } else if (cmd.cost.supply && cmd.cost.supply > 0 && supply + cmd.cost.supply > maxSupply) {
       bridge.eventBus.emit('alert:supplyBlocked', {});
     }
-  }, [minerals, vespene, supply, maxSupply]);
+  }, [minerals, plasma, supply, maxSupply]);
 
   if (commands.length === 0) {
     return (
@@ -1179,10 +1179,10 @@ function CommandCardInner() {
                   <span>💎</span>
                   {hoveredCommand.cost.minerals}
                 </span>
-                {hoveredCommand.cost.vespene > 0 && (
-                  <span className={`flex items-center gap-1 ${vespene < hoveredCommand.cost.vespene ? 'text-red-400' : 'text-green-300'}`}>
+                {hoveredCommand.cost.plasma > 0 && (
+                  <span className={`flex items-center gap-1 ${plasma < hoveredCommand.cost.plasma ? 'text-red-400' : 'text-green-300'}`}>
                     <span>💚</span>
-                    {hoveredCommand.cost.vespene}
+                    {hoveredCommand.cost.plasma}
                   </span>
                 )}
                 {hoveredCommand.cost.supply && hoveredCommand.cost.supply > 0 && (

@@ -64,7 +64,7 @@ export interface TerrainJson {
 export interface ResourceNodeJson {
   x: number;
   y: number;
-  type: 'minerals' | 'vespene';
+  type: 'minerals' | 'plasma';
   amount: number;
 }
 
@@ -86,7 +86,7 @@ export interface ExpansionJson {
   x: number;
   y: number;
   minerals: ResourceNodeJson[];
-  vespene: ResourceNodeJson[];
+  plasma: ResourceNodeJson[];
   isMain?: boolean;
   isNatural?: boolean;
 }

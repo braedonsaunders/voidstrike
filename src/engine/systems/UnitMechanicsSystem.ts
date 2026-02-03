@@ -393,7 +393,7 @@ export class UnitMechanicsSystem extends System {
     this.game.eventBus.emit('resources:add', {
       playerId: data.playerId,
       minerals: 75,
-      vespene: 0,
+      plasma: 0,
     });
 
     // Destroy the bunker

@@ -122,7 +122,7 @@ export function mapDataToJson(map: MapData): MapJson {
         type: m.type,
         amount: m.amount,
       })),
-      vespene: e.vespene.map((v): ResourceNodeJson => ({
+      plasma: e.plasma.map((v): ResourceNodeJson => ({
         x: v.x,
         y: v.y,
         type: v.type,

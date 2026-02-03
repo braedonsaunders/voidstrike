@@ -3,9 +3,9 @@
     "id": "reinforced",
     "name": "Reinforced Plating",
     "description": "Upgrades wall segment with reinforced armor plating, doubling health and increasing armor.",
-    "researchCost": { "minerals": 100, "vespene": 50 },
+    "researchCost": { "minerals": 100, "plasma": 50 },
     "researchTime": 30,
-    "applyCost": { "minerals": 25, "vespene": 0 },
+    "applyCost": { "minerals": 25, "plasma": 0 },
     "applyTime": 5,
     "researchBuilding": "tech_center"
   },
@@ -13,9 +13,9 @@
     "id": "shielded",
     "name": "Shield Generator",
     "description": "Adds a regenerating energy shield to the wall segment.",
-    "researchCost": { "minerals": 150, "vespene": 100 },
+    "researchCost": { "minerals": 150, "plasma": 100 },
     "researchTime": 45,
-    "applyCost": { "minerals": 50, "vespene": 25 },
+    "applyCost": { "minerals": 50, "plasma": 25 },
     "applyTime": 8,
     "researchBuilding": "tech_center"
   },
@@ -23,9 +23,9 @@
     "id": "weapon",
     "name": "Mounted Turret",
     "description": "Adds an auto-turret to the wall segment for automated defense.",
-    "researchCost": { "minerals": 100, "vespene": 75 },
+    "researchCost": { "minerals": 100, "plasma": 75 },
     "researchTime": 40,
-    "applyCost": { "minerals": 75, "vespene": 25 },
+    "applyCost": { "minerals": 75, "plasma": 25 },
     "applyTime": 10,
     "researchBuilding": "tech_center"
   },
@@ -33,9 +33,9 @@
     "id": "repair_drone",
     "name": "Repair Drone",
     "description": "Deploys a repair drone that automatically repairs nearby wall segments.",
-    "researchCost": { "minerals": 150, "vespene": 75 },
+    "researchCost": { "minerals": 150, "plasma": 75 },
     "researchTime": 50,
-    "applyCost": { "minerals": 50, "vespene": 50 },
+    "applyCost": { "minerals": 50, "plasma": 50 },
     "applyTime": 12,
     "researchBuilding": "tech_center"
   }

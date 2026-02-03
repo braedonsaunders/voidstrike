@@ -9,7 +9,7 @@ import { useGameSetupStore, GameSetupState } from '@/store/gameSetupStore';
 export const ResourcePanel = memo(function ResourcePanel() {
   // Use selectors to minimize re-renders - only re-render when these specific values change
   const minerals = useGameStore((state: GameState) => state.minerals);
-  const vespene = useGameStore((state: GameState) => state.vespene);
+  const plasma = useGameStore((state: GameState) => state.plasma);
   const supply = useGameStore((state: GameState) => state.supply);
   const maxSupply = useGameStore((state: GameState) => state.maxSupply);
   const gameTime = useGameStore((state: GameState) => state.gameTime);
@@ -80,10 +80,10 @@ export const ResourcePanel = memo(function ResourcePanel() {
             <span className="font-mono text-blue-300 font-semibold">{minerals}</span>
           </div>
 
-          {/* Vespene */}
+          {/* Plasma */}
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-3 bg-green-500 rounded-full" />
-            <span className="font-mono text-green-400 font-semibold">{vespene}</span>
+            <span className="font-mono text-green-400 font-semibold">{plasma}</span>
           </div>
 
           {/* Supply */}

@@ -27,9 +27,9 @@ export interface WallUpgradeDefinition {
   id: WallUpgradeType;
   name: string;
   description: string;
-  researchCost: { minerals: number; vespene: number };
+  researchCost: { minerals: number; plasma: number };
   researchTime: number;
-  applyCost: { minerals: number; vespene: number };
+  applyCost: { minerals: number; plasma: number };
   applyTime: number;
   researchBuilding: string;
 }
@@ -184,18 +184,18 @@ export function calculateWallLine(
 export function calculateWallLineCost(
   positions: Array<{ x: number; y: number }>,
   buildingType: string = 'wall_segment'
-): { minerals: number; vespene: number } {
+): { minerals: number; plasma: number } {
   if (!DefinitionRegistry.isInitialized()) {
     console.warn('[calculateWallLineCost] Definitions not initialized');
-    return { minerals: 0, vespene: 0 };
+    return { minerals: 0, plasma: 0 };
   }
 
   const def = DefinitionRegistry.getBuilding(buildingType);
-  if (!def) return { minerals: 0, vespene: 0 };
+  if (!def) return { minerals: 0, plasma: 0 };
 
   return {
     minerals: def.mineralCost * positions.length,
-    vespene: def.vespeneCost * positions.length,
+    plasma: def.plasmaCost * positions.length,
   };
 }
 

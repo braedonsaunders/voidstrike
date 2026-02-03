@@ -487,7 +487,7 @@ export class WorkerBridge {
     }>
   ): void {
     // Convert expansions to flat resource array
-    const resources: Array<{ type: 'mineral' | 'vespene'; x: number; y: number; amount?: number }> =
+    const resources: Array<{ type: 'mineral' | 'plasma'; x: number; y: number; amount?: number }> =
       [];
     for (const expansion of mapData.expansions) {
       for (const mineral of expansion.minerals) {
@@ -498,9 +498,9 @@ export class WorkerBridge {
           amount: mineral.amount,
         });
       }
-      for (const gas of expansion.vespene) {
+      for (const gas of expansion.plasma) {
         resources.push({
-          type: 'vespene',
+          type: 'plasma',
           x: gas.x,
           y: gas.y,
           amount: gas.amount,
@@ -635,7 +635,7 @@ export class WorkerBridge {
    */
   public getPlayerResources(
     playerId: string
-  ): { minerals: number; vespene: number; supply: number; maxSupply: number } | undefined {
+  ): { minerals: number; plasma: number; supply: number; maxSupply: number } | undefined {
     return this._renderState?.playerResources.get(playerId);
   }
 

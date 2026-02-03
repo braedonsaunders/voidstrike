@@ -177,7 +177,7 @@ export class WallPlacementPreview {
    * Finish drawing wall line (mouse up)
    * Returns the positions and cost
    */
-  public finishLine(): { positions: Array<{ x: number; y: number; valid: boolean }>; cost: { minerals: number; vespene: number } } {
+  public finishLine(): { positions: Array<{ x: number; y: number; valid: boolean }>; cost: { minerals: number; plasma: number } } {
     this.isDrawing = false;
 
     const positions = [...this.wallPositions];
@@ -215,7 +215,7 @@ export class WallPlacementPreview {
   /**
    * Get current total cost
    */
-  public getCurrentCost(): { minerals: number; vespene: number } {
+  public getCurrentCost(): { minerals: number; plasma: number } {
     const validPositions = this.wallPositions.filter(p => p.valid);
     return calculateWallLineCost(validPositions, this.currentBuildingType);
   }

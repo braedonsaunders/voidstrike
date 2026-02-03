@@ -22,10 +22,10 @@ describe('Resource Configuration', () => {
       expect(RESOURCE_TYPES.minerals.requiresBuilding).toBe(false);
     });
 
-    it('defines vespene resource', () => {
-      expect(RESOURCE_TYPES.vespene).toBeDefined();
-      expect(RESOURCE_TYPES.vespene.name).toBe('Vespene Gas');
-      expect(RESOURCE_TYPES.vespene.requiresBuilding).toBe(true);
+    it('defines plasma resource', () => {
+      expect(RESOURCE_TYPES.plasma).toBeDefined();
+      expect(RESOURCE_TYPES.plasma.name).toBe('Plasma Gas');
+      expect(RESOURCE_TYPES.plasma.requiresBuilding).toBe(true);
     });
 
     it('all resources have required properties', () => {
@@ -53,18 +53,18 @@ describe('Resource Configuration', () => {
       expect(minerals.defaultSourceAmount).toBe(1500);
     });
 
-    it('vespene has correct gather properties', () => {
-      const vespene = RESOURCE_TYPES.vespene;
-      expect(vespene.gatherRate).toBe(4);
-      expect(vespene.carryCapacity).toBe(4);
-      expect(vespene.optimalWorkersPerSource).toBe(3);
-      expect(vespene.buildingType).toBe('extractor');
-      expect(vespene.defaultSourceAmount).toBe(2000);
+    it('plasma has correct gather properties', () => {
+      const plasma = RESOURCE_TYPES.plasma;
+      expect(plasma.gatherRate).toBe(4);
+      expect(plasma.carryCapacity).toBe(4);
+      expect(plasma.optimalWorkersPerSource).toBe(3);
+      expect(plasma.buildingType).toBe('extractor');
+      expect(plasma.defaultSourceAmount).toBe(2000);
     });
 
     it('uses appropriate UI colors', () => {
       expect(RESOURCE_TYPES.minerals.color).toBe('#60a0ff'); // Blue
-      expect(RESOURCE_TYPES.vespene.color).toBe('#40ff80'); // Green
+      expect(RESOURCE_TYPES.plasma.color).toBe('#40ff80'); // Green
     });
   });
 
@@ -96,19 +96,19 @@ describe('Resource Configuration', () => {
     it('defines standard game mode', () => {
       expect(STARTING_RESOURCES.standard).toBeDefined();
       expect(STARTING_RESOURCES.standard.minerals).toBe(50);
-      expect(STARTING_RESOURCES.standard.vespene).toBe(0);
+      expect(STARTING_RESOURCES.standard.plasma).toBe(0);
     });
 
     it('defines quick game mode', () => {
       expect(STARTING_RESOURCES.quick).toBeDefined();
       expect(STARTING_RESOURCES.quick.minerals).toBe(200);
-      expect(STARTING_RESOURCES.quick.vespene).toBe(100);
+      expect(STARTING_RESOURCES.quick.plasma).toBe(100);
     });
 
     it('defines rich game mode', () => {
       expect(STARTING_RESOURCES.rich).toBeDefined();
       expect(STARTING_RESOURCES.rich.minerals).toBe(1000);
-      expect(STARTING_RESOURCES.rich.vespene).toBe(500);
+      expect(STARTING_RESOURCES.rich.plasma).toBe(500);
     });
   });
 
@@ -116,7 +116,7 @@ describe('Resource Configuration', () => {
     it('returns all resource IDs', () => {
       const ids = getResourceTypeIds();
       expect(ids).toContain('minerals');
-      expect(ids).toContain('vespene');
+      expect(ids).toContain('plasma');
     });
 
     it('returns array of strings', () => {
@@ -148,10 +148,10 @@ describe('Resource Configuration', () => {
   });
 
   describe('getSecondaryResourceTypes', () => {
-    it('returns vespene as secondary resource', () => {
+    it('returns plasma as secondary resource', () => {
       const secondary = getSecondaryResourceTypes();
       expect(secondary.length).toBe(1);
-      expect(secondary[0].id).toBe('vespene');
+      expect(secondary[0].id).toBe('plasma');
     });
 
     it('excludes primary resource', () => {
@@ -194,8 +194,8 @@ describe('Resource Configuration', () => {
       expect(rate).toBe(0);
     });
 
-    it('works for vespene with different base rate', () => {
-      const rate = getEffectiveGatherRate('vespene', 2);
+    it('works for plasma with different base rate', () => {
+      const rate = getEffectiveGatherRate('plasma', 2);
       expect(rate).toBe(8); // 2 workers * 4 gather rate
     });
   });
@@ -205,8 +205,8 @@ describe('Resource Configuration', () => {
       expect(requiresBuilding('minerals')).toBe(false);
     });
 
-    it('returns true for vespene', () => {
-      expect(requiresBuilding('vespene')).toBe(true);
+    it('returns true for plasma', () => {
+      expect(requiresBuilding('plasma')).toBe(true);
     });
 
     it('returns false for unknown resource', () => {
@@ -219,8 +219,8 @@ describe('Resource Configuration', () => {
       expect(getRequiredBuilding('minerals')).toBeUndefined();
     });
 
-    it('returns extractor for vespene', () => {
-      expect(getRequiredBuilding('vespene')).toBe('extractor');
+    it('returns extractor for plasma', () => {
+      expect(getRequiredBuilding('plasma')).toBe('extractor');
     });
 
     it('returns undefined for unknown resource', () => {
@@ -232,7 +232,7 @@ describe('Resource Configuration', () => {
     it('creates bag with all resources set to 0', () => {
       const bag = createEmptyResourceBag();
       expect(bag.minerals).toBe(0);
-      expect(bag.vespene).toBe(0);
+      expect(bag.plasma).toBe(0);
     });
 
     it('includes all registered resources', () => {
@@ -248,25 +248,25 @@ describe('Resource Configuration', () => {
     it('creates standard bag by default', () => {
       const bag = createStartingResourceBag();
       expect(bag.minerals).toBe(50);
-      expect(bag.vespene).toBe(0);
+      expect(bag.plasma).toBe(0);
     });
 
     it('creates quick game bag', () => {
       const bag = createStartingResourceBag('quick');
       expect(bag.minerals).toBe(200);
-      expect(bag.vespene).toBe(100);
+      expect(bag.plasma).toBe(100);
     });
 
     it('creates rich game bag', () => {
       const bag = createStartingResourceBag('rich');
       expect(bag.minerals).toBe(1000);
-      expect(bag.vespene).toBe(500);
+      expect(bag.plasma).toBe(500);
     });
 
     it('falls back to standard for unknown mode', () => {
       const bag = createStartingResourceBag('unknown_mode');
       expect(bag.minerals).toBe(50);
-      expect(bag.vespene).toBe(0);
+      expect(bag.plasma).toBe(0);
     });
 
     it('includes all resources even if not in starting config', () => {
@@ -279,15 +279,15 @@ describe('Resource Configuration', () => {
   });
 
   describe('gather rate balance', () => {
-    it('minerals gather faster than vespene', () => {
+    it('minerals gather faster than plasma', () => {
       const mineralRate = RESOURCE_TYPES.minerals.gatherRate;
-      const vespeneRate = RESOURCE_TYPES.vespene.gatherRate;
-      expect(mineralRate).toBeGreaterThan(vespeneRate);
+      const plasmaRate = RESOURCE_TYPES.plasma.gatherRate;
+      expect(mineralRate).toBeGreaterThan(plasmaRate);
     });
 
     it('gather time is consistent', () => {
       expect(RESOURCE_TYPES.minerals.gatherTime).toBeCloseTo(
-        RESOURCE_TYPES.vespene.gatherTime
+        RESOURCE_TYPES.plasma.gatherTime
       );
     });
   });
@@ -295,7 +295,7 @@ describe('Resource Configuration', () => {
   describe('saturation calculations', () => {
     it('optimal workers matches expected values', () => {
       expect(RESOURCE_TYPES.minerals.optimalWorkersPerSource).toBe(2);
-      expect(RESOURCE_TYPES.vespene.optimalWorkersPerSource).toBe(3);
+      expect(RESOURCE_TYPES.plasma.optimalWorkersPerSource).toBe(3);
     });
 
     it('max workers per source is reasonable', () => {

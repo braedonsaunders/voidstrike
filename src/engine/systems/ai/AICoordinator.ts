@@ -179,7 +179,7 @@ export interface AIPlayer {
 
   // Economy
   minerals: number;
-  vespene: number;
+  plasma: number;
   supply: number;
   maxSupply: number;
   workerCount: number;
@@ -535,7 +535,7 @@ export class AICoordinator extends System {
       personalityWeights: PERSONALITY_WEIGHTS[actualPersonality],
 
       minerals: 50,
-      vespene: 0,
+      plasma: 0,
       supply: 6,
       maxSupply: factionConfig.economy.supplyPerMainBase,
       workerCount: 6,
@@ -616,7 +616,7 @@ export class AICoordinator extends System {
     return ai.config.difficultyConfig[ai.difficulty].miningSpeedMultiplier;
   }
 
-  public creditResources(playerId: string, minerals: number, vespene: number): void {
+  public creditResources(playerId: string, minerals: number, plasma: number): void {
     const ai = this.aiPlayers.get(playerId);
     if (!ai) {
       // Debug: this would mean resources are being credited to an unregistered player
@@ -627,11 +627,11 @@ export class AICoordinator extends System {
     }
 
     ai.minerals += minerals;
-    ai.vespene += vespene;
+    ai.plasma += plasma;
 
     // Log periodically
     if (this.game.getCurrentTick() % 100 === 0) {
-      debugAI.log(`[AICoordinator] ${playerId} received: +${minerals} minerals, +${vespene} gas (total: ${Math.floor(ai.minerals)}M, ${Math.floor(ai.vespene)}G)`);
+      debugAI.log(`[AICoordinator] ${playerId} received: +${minerals} minerals, +${plasma} gas (total: ${Math.floor(ai.minerals)}M, ${Math.floor(ai.plasma)}G)`);
     }
   }
 
@@ -675,7 +675,7 @@ export class AICoordinator extends System {
       currentTick,
 
       minerals: ai.minerals,
-      vespene: ai.vespene,
+      plasma: ai.plasma,
       supply: ai.supply,
       maxSupply: ai.maxSupply,
 
@@ -953,7 +953,7 @@ export class AICoordinator extends System {
 
       // Periodic status log
       if (currentTick % 200 === 0) {
-        debugAI.log(`[AICoordinator] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, vespene=${Math.floor(ai.vespene)}, supply=${ai.supply}/${ai.maxSupply}, buildOrderStep=${ai.buildOrderIndex}/${ai.buildOrder.length}, state=${ai.state}`);
+        debugAI.log(`[AICoordinator] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, plasma=${Math.floor(ai.plasma)}, supply=${ai.supply}/${ai.maxSupply}, buildOrderStep=${ai.buildOrderIndex}/${ai.buildOrder.length}, state=${ai.state}`);
       }
 
       this.updateMaxSupply(ai);

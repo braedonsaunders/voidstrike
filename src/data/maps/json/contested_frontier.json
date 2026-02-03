@@ -252534,17 +252534,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 56.5,
           "y": 36.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 43.5,
           "y": 36.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -252605,17 +252605,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 186.5,
           "y": 36.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 173.5,
           "y": 36.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -252676,17 +252676,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 316.5,
           "y": 36.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 303.5,
           "y": 36.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -252747,17 +252747,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 43.5,
           "y": 283.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 56.5,
           "y": 283.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -252818,17 +252818,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 173.5,
           "y": 283.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 186.5,
           "y": 283.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -252889,17 +252889,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 303.5,
           "y": 283.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 316.5,
           "y": 283.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -252960,17 +252960,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 63.5,
           "y": 96.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 76.5,
           "y": 96.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -253031,17 +253031,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 173.5,
           "y": 96.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 186.5,
           "y": 96.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -253102,17 +253102,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 283.5,
           "y": 96.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 296.5,
           "y": 96.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -253173,17 +253173,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 76.5,
           "y": 223.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 63.5,
           "y": 223.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -253244,17 +253244,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 186.5,
           "y": 223.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 173.5,
           "y": 223.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -253315,17 +253315,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 296.5,
           "y": 223.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 283.5,
           "y": 223.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -253386,17 +253386,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 26.5,
           "y": 153.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 26.5,
           "y": 166.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -253457,17 +253457,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 333.5,
           "y": 166.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 333.5,
           "y": 153.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -253528,17 +253528,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 93.5,
           "y": 138.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 106.5,
           "y": 138.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -253599,17 +253599,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 253.5,
           "y": 138.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 266.5,
           "y": 138.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -253670,17 +253670,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 106.5,
           "y": 181.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 93.5,
           "y": 181.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],
@@ -253741,17 +253741,17 @@
           "amount": 900
         }
       ],
-      "vespene": [
+      "plasma": [
         {
           "x": 266.5,
           "y": 181.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         },
         {
           "x": 253.5,
           "y": 181.5,
-          "type": "vespene",
+          "type": "plasma",
           "amount": 2250
         }
       ],

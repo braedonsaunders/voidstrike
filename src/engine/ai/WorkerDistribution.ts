@@ -216,9 +216,9 @@ export class WorkerDistribution {
             } else {
               mineralWorkers++; // Target not found, count as mineral
             }
-          } else if (workerUnit.state === 'gathering' || workerUnit.carryingMinerals > 0 || workerUnit.carryingVespene > 0) {
+          } else if (workerUnit.state === 'gathering' || workerUnit.carryingMinerals > 0 || workerUnit.carryingPlasma > 0) {
             // Gathering but no target - probably returning
-            if (workerUnit.carryingVespene > 0) {
+            if (workerUnit.carryingPlasma > 0) {
               gasWorkers++;
             } else {
               mineralWorkers++;

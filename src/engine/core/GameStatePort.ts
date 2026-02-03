@@ -10,7 +10,7 @@ export interface GameStatePort {
   getSelectedUnits(): number[];
   getControlGroup(groupNumber: number): number[];
   getMinerals(): number;
-  getVespene(): number;
+  getPlasma(): number;
   getSupply(): number;
   getMaxSupply(): number;
 
@@ -21,8 +21,8 @@ export interface GameStatePort {
   // === WRITES ===
   selectUnits(entityIds: number[]): void;
   setControlGroup(groupNumber: number, entityIds: number[]): void;
-  addResources(minerals: number, vespene: number): void;
-  setResources(minerals: number, vespene: number): void;
+  addResources(minerals: number, plasma: number): void;
+  setResources(minerals: number, plasma: number): void;
   addSupply(delta: number): void;
   addMaxSupply(delta: number): void;
 }

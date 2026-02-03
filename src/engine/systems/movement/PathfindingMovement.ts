@@ -369,7 +369,7 @@ export class PathfindingMovement {
 
     const isCarryingResources =
       selfUnit.isWorker &&
-      (selfUnit.carryingMinerals > 0 || selfUnit.carryingVespene > 0);
+      (selfUnit.carryingMinerals > 0 || selfUnit.carryingPlasma > 0);
 
     let gatheringExtractorId: number | null = null;
     if (
@@ -382,7 +382,7 @@ export class PathfindingMovement {
         const resource = resourceEntity.get<Resource>('Resource');
         if (
           resource &&
-          resource.resourceType === 'vespene' &&
+          resource.resourceType === 'plasma' &&
           resource.extractorEntityId !== null
         ) {
           gatheringExtractorId = resource.extractorEntityId;
@@ -551,7 +551,7 @@ export class PathfindingMovement {
 
     const isCarryingResources =
       unit.isWorker &&
-      (unit.carryingMinerals > 0 || unit.carryingVespene > 0);
+      (unit.carryingMinerals > 0 || unit.carryingPlasma > 0);
 
     for (const buildingId of nearbyBuildingIds) {
       if (unit.constructingBuildingId === buildingId) continue;

@@ -535,7 +535,7 @@ function generateExpansions(bases: BaseLocation[]): Expansion[] {
       x: base.x,
       y: base.y,
       minerals: resources.minerals,
-      vespene: resources.vespene,
+      plasma: resources.plasma,
       isMain: base.type === 'main',
       isNatural: base.type === 'natural',
     };

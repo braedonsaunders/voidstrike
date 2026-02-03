@@ -83,7 +83,7 @@ async function loadAssetConfig(): Promise<void> {
       }
     }
 
-    // Register resource models (minerals, vespene)
+    // Register resource models (minerals, plasma)
     if (config.resources) {
       for (const [assetId, assetConfig] of Object.entries(config.resources)) {
         const editorId = `resource_${assetId}`;

@@ -3,7 +3,7 @@
  *
  * This system monitors the simulation-based AI economy and provides
  * debugging/metrics information. It tracks:
- * - Income rate (minerals/vespene per minute)
+ * - Income rate (minerals/plasma per minute)
  * - Worker efficiency
  * - Saturation levels
  * - Resource flow
@@ -18,9 +18,9 @@ interface AIEconomyMetrics {
   playerId: string;
   // Income tracking
   mineralsPerMinute: number;
-  vespenePerMinute: number;
+  plasmaPerMinute: number;
   totalMineralsGathered: number;
-  totalVespeneGathered: number;
+  totalPlasmaGathered: number;
   // Worker stats
   workerCount: number;
   gatheringWorkers: number;
@@ -30,16 +30,16 @@ interface AIEconomyMetrics {
   depletedPatchesNearBases: number;
   // Current resources
   currentMinerals: number;
-  currentVespene: number;
+  currentPlasma: number;
 }
 
 interface IncomeTracker {
   mineralsGathered: number;
-  vespeneGathered: number;
+  plasmaGathered: number;
   lastResetTick: number;
   // Rolling window for per-minute calculation
   recentMinerals: number[];
-  recentVespene: number[];
+  recentPlasma: number[];
 }
 
 export class AIEconomySystem extends System {
@@ -61,7 +61,7 @@ export class AIEconomySystem extends System {
     this.game.eventBus.on('resource:delivered', (data: {
       playerId: string | undefined;
       minerals: number;
-      vespene: number;
+      plasma: number;
     }) => {
       if (!data.playerId) return;
 
@@ -76,14 +76,14 @@ export class AIEconomySystem extends System {
       }
 
       tracker.mineralsGathered += data.minerals;
-      tracker.vespeneGathered += data.vespene;
+      tracker.plasmaGathered += data.plasma;
       tracker.recentMinerals.push(data.minerals);
-      tracker.recentVespene.push(data.vespene);
+      tracker.recentPlasma.push(data.plasma);
 
       // Keep rolling window to ~60 seconds of data (1200 ticks at 20 ticks/sec)
       if (tracker.recentMinerals.length > 100) {
         tracker.recentMinerals.shift();
-        tracker.recentVespene.shift();
+        tracker.recentPlasma.shift();
       }
     });
   }
@@ -91,10 +91,10 @@ export class AIEconomySystem extends System {
   private createTracker(): IncomeTracker {
     return {
       mineralsGathered: 0,
-      vespeneGathered: 0,
+      plasmaGathered: 0,
       lastResetTick: this.game.getCurrentTick(),
       recentMinerals: [],
-      recentVespene: [],
+      recentPlasma: [],
     };
   }
 
@@ -122,10 +122,10 @@ export class AIEconomySystem extends System {
         debugAI.log(
           `[AIEconomy] ${playerId}: ` +
           `${metrics.mineralsPerMinute.toFixed(0)} M/min, ` +
-          `${metrics.vespenePerMinute.toFixed(0)} G/min, ` +
+          `${metrics.plasmaPerMinute.toFixed(0)} G/min, ` +
           `workers: ${metrics.workerCount}, ` +
           `income/worker: ${metrics.incomePerWorker.toFixed(1)}, ` +
-          `current: ${metrics.currentMinerals.toFixed(0)}M/${metrics.currentVespene.toFixed(0)}G`
+          `current: ${metrics.currentMinerals.toFixed(0)}M/${metrics.currentPlasma.toFixed(0)}G`
         );
       }
     }
@@ -142,33 +142,33 @@ export class AIEconomySystem extends System {
 
     // Calculate per-minute rates from recent window
     const recentMineralsSum = tracker.recentMinerals.reduce((a, b) => a + b, 0);
-    const recentVespeneSum = tracker.recentVespene.reduce((a, b) => a + b, 0);
+    const recentPlasmaSum = tracker.recentPlasma.reduce((a, b) => a + b, 0);
 
     // Estimate ticks covered by recent window (~5 seconds per entry on average)
     const recentWindowTicks = tracker.recentMinerals.length * 50;
     const recentWindowMinutes = recentWindowTicks / (20 * 60);
 
     const mineralsPerMinute = recentWindowMinutes > 0 ? recentMineralsSum / recentWindowMinutes : 0;
-    const vespenePerMinute = recentWindowMinutes > 0 ? recentVespeneSum / recentWindowMinutes : 0;
+    const plasmaPerMinute = recentWindowMinutes > 0 ? recentPlasmaSum / recentWindowMinutes : 0;
 
     // Get worker count from AI system (we need to expose this or estimate)
     // For now, estimate based on income rate
     const estimatedWorkers = mineralsPerMinute > 0 ? Math.round(mineralsPerMinute / 40) : 0;
-    const incomePerWorker = estimatedWorkers > 0 ? (mineralsPerMinute + vespenePerMinute) / estimatedWorkers : 0;
+    const incomePerWorker = estimatedWorkers > 0 ? (mineralsPerMinute + plasmaPerMinute) / estimatedWorkers : 0;
 
     return {
       playerId,
       mineralsPerMinute,
-      vespenePerMinute,
+      plasmaPerMinute,
       totalMineralsGathered: tracker.mineralsGathered,
-      totalVespeneGathered: tracker.vespeneGathered,
+      totalPlasmaGathered: tracker.plasmaGathered,
       workerCount: estimatedWorkers,
       gatheringWorkers: estimatedWorkers,
       incomePerWorker,
       workerReplacementPriority: 0, // Would need access to AI state
       depletedPatchesNearBases: 0, // Would need access to AI state
       currentMinerals: 0, // Would need access to AI state
-      currentVespene: 0, // Would need access to AI state
+      currentPlasma: 0, // Would need access to AI state
     };
   }
 

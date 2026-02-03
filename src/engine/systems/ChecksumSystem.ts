@@ -123,7 +123,7 @@ export interface GameStateSnapshot {
   checksum: number;
   timestamp: number;
   entities: EntityStateSnapshot[];
-  playerResources: Map<string, { minerals: number; vespene: number; supply: number; maxSupply: number }>;
+  playerResources: Map<string, { minerals: number; plasma: number; supply: number; maxSupply: number }>;
 }
 
 export interface DesyncReport {
@@ -871,7 +871,7 @@ export class ChecksumSystem extends System {
    */
   private createStateSnapshot(tick: number): GameStateSnapshot {
     const entities: EntityStateSnapshot[] = [];
-    const playerResources = new Map<string, { minerals: number; vespene: number; supply: number; maxSupply: number }>();
+    const playerResources = new Map<string, { minerals: number; plasma: number; supply: number; maxSupply: number }>();
 
     // Snapshot units
     const units = this.world.getEntitiesWith('Unit', 'Transform', 'Health', 'Selectable');

@@ -3,8 +3,8 @@ import {
   Resource,
   OPTIMAL_WORKERS_PER_MINERAL,
   MAX_WORKERS_PER_MINERAL,
-  OPTIMAL_WORKERS_PER_VESPENE,
-  MAX_WORKERS_PER_VESPENE,
+  OPTIMAL_WORKERS_PER_PLASMA,
+  MAX_WORKERS_PER_PLASMA,
 } from '@/engine/components/Resource';
 
 describe('Resource Component', () => {
@@ -20,10 +20,10 @@ describe('Resource Component', () => {
       expect(resource.gatherTime).toBe(2);
     });
 
-    it('creates vespene resource', () => {
-      const resource = new Resource('vespene', 2000, 3, 4, 3);
+    it('creates plasma resource', () => {
+      const resource = new Resource('plasma', 2000, 3, 4, 3);
 
-      expect(resource.resourceType).toBe('vespene');
+      expect(resource.resourceType).toBe('plasma');
       expect(resource.amount).toBe(2000);
       expect(resource.maxGatherers).toBe(3);
       expect(resource.gatherRate).toBe(4);
@@ -37,7 +37,7 @@ describe('Resource Component', () => {
     });
 
     it('initializes extractor as null', () => {
-      const resource = new Resource('vespene', 2000);
+      const resource = new Resource('plasma', 2000);
 
       expect(resource.extractorEntityId).toBe(null);
     });
@@ -64,21 +64,21 @@ describe('Resource Component', () => {
       expect(resource.canGather()).toBe(false);
     });
 
-    it('prevents gathering from vespene without extractor', () => {
-      const resource = new Resource('vespene', 2000);
+    it('prevents gathering from plasma without extractor', () => {
+      const resource = new Resource('plasma', 2000);
 
       expect(resource.canGather()).toBe(false);
     });
 
-    it('allows gathering from vespene with extractor', () => {
-      const resource = new Resource('vespene', 2000, 3);
+    it('allows gathering from plasma with extractor', () => {
+      const resource = new Resource('plasma', 2000, 3);
       resource.extractorEntityId = 42;
 
       expect(resource.canGather()).toBe(true);
     });
 
     it('checks extractor completion status', () => {
-      const resource = new Resource('vespene', 2000, 3);
+      const resource = new Resource('plasma', 2000, 3);
       resource.extractorEntityId = 42;
 
       // Extractor not complete
@@ -93,20 +93,20 @@ describe('Resource Component', () => {
 
   describe('hasExtractor', () => {
     it('returns false when no extractor', () => {
-      const resource = new Resource('vespene', 2000);
+      const resource = new Resource('plasma', 2000);
 
       expect(resource.hasExtractor()).toBe(false);
     });
 
     it('returns true when extractor exists', () => {
-      const resource = new Resource('vespene', 2000);
+      const resource = new Resource('plasma', 2000);
       resource.extractorEntityId = 42;
 
       expect(resource.hasExtractor()).toBe(true);
     });
 
     it('checks extractor completion status', () => {
-      const resource = new Resource('vespene', 2000);
+      const resource = new Resource('plasma', 2000);
       resource.extractorEntityId = 42;
       resource.setExtractorCompleteChecker(() => false);
 
@@ -116,7 +116,7 @@ describe('Resource Component', () => {
 
   describe('hasRefinery (alias)', () => {
     it('works as alias for hasExtractor', () => {
-      const resource = new Resource('vespene', 2000);
+      const resource = new Resource('plasma', 2000);
       resource.extractorEntityId = 42;
 
       expect(resource.hasRefinery()).toBe(resource.hasExtractor());
@@ -257,10 +257,10 @@ describe('Resource Component', () => {
         expect(resource.getOptimalWorkers()).toBe(2);
       });
 
-      it('returns optimal for vespene', () => {
-        const resource = new Resource('vespene', 2000);
+      it('returns optimal for plasma', () => {
+        const resource = new Resource('plasma', 2000);
 
-        expect(resource.getOptimalWorkers()).toBe(OPTIMAL_WORKERS_PER_VESPENE);
+        expect(resource.getOptimalWorkers()).toBe(OPTIMAL_WORKERS_PER_PLASMA);
         expect(resource.getOptimalWorkers()).toBe(3);
       });
     });
@@ -273,10 +273,10 @@ describe('Resource Component', () => {
         expect(resource.getMaxUsefulWorkers()).toBe(3);
       });
 
-      it('returns max for vespene', () => {
-        const resource = new Resource('vespene', 2000);
+      it('returns max for plasma', () => {
+        const resource = new Resource('plasma', 2000);
 
-        expect(resource.getMaxUsefulWorkers()).toBe(MAX_WORKERS_PER_VESPENE);
+        expect(resource.getMaxUsefulWorkers()).toBe(MAX_WORKERS_PER_PLASMA);
         expect(resource.getMaxUsefulWorkers()).toBe(3);
       });
     });
@@ -334,8 +334,8 @@ describe('Resource Component', () => {
     it('exports correct worker constants', () => {
       expect(OPTIMAL_WORKERS_PER_MINERAL).toBe(2);
       expect(MAX_WORKERS_PER_MINERAL).toBe(3);
-      expect(OPTIMAL_WORKERS_PER_VESPENE).toBe(3);
-      expect(MAX_WORKERS_PER_VESPENE).toBe(3);
+      expect(OPTIMAL_WORKERS_PER_PLASMA).toBe(3);
+      expect(MAX_WORKERS_PER_PLASMA).toBe(3);
     });
   });
 

@@ -46,7 +46,7 @@ export interface UnitDefinition {
   description?: string;
   faction: string;
   mineralCost: number;
-  vespeneCost: number;
+  plasmaCost: number;
   buildTime: number; // seconds
   supplyCost: number;
   speed: number;
@@ -177,7 +177,7 @@ export class Unit extends Component {
   // Worker
   public isWorker: boolean;
   public carryingMinerals: number;
-  public carryingVespene: number;
+  public carryingPlasma: number;
   public gatherTargetId: number | null;
   public miningTimer: number; // Time remaining until mining completes (seconds)
   public isMining: boolean; // Currently in mining animation
@@ -302,7 +302,7 @@ export class Unit extends Component {
 
     this.isWorker = definition.isWorker ?? false;
     this.carryingMinerals = 0;
-    this.carryingVespene = 0;
+    this.carryingPlasma = 0;
     this.gatherTargetId = null;
     this.miningTimer = 0;
     this.isMining = false;
@@ -568,7 +568,7 @@ export class Unit extends Component {
           this.pathIndex = 0;
           this.gatherTargetId = null;
           this.carryingMinerals = 0;
-          this.carryingVespene = 0;
+          this.carryingPlasma = 0;
           this.isHelperWorker = false; // Queued builds are intentional, not auto-help
         }
         break;
@@ -828,7 +828,7 @@ export class Unit extends Component {
     this.pathIndex = 0;
     this.gatherTargetId = null;
     this.carryingMinerals = 0;
-    this.carryingVespene = 0;
+    this.carryingPlasma = 0;
   }
 
   // Assign this worker to an existing construction site

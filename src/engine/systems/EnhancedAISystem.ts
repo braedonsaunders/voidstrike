@@ -90,7 +90,7 @@ export class EnhancedAISystem extends System {
   /**
    * Credit resources to an AI player (simulation-based economy).
    */
-  public creditResources(playerId: string, minerals: number, vespene: number): void {
-    this.coordinator.creditResources(playerId, minerals, vespene);
+  public creditResources(playerId: string, minerals: number, plasma: number): void {
+    this.coordinator.creditResources(playerId, minerals, plasma);
   }
 }

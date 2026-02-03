@@ -40,7 +40,7 @@ interface SelectedEntityInfo {
   sightRange?: number;
   damageType?: string;
   // Resource stats
-  resourceType?: 'minerals' | 'vespene';
+  resourceType?: 'minerals' | 'plasma';
   resourceAmount?: number;
   resourceMaxAmount?: number;
   currentGatherers?: number;
@@ -150,8 +150,8 @@ export const SelectionPanel = memo(function SelectionPanel() {
             isComplete,
           });
         } else if (resource) {
-          // Resource (mineral patch or vespene geyser)
-          const resourceName = resource.resourceType === 'minerals' ? 'Mineral Field' : 'Vespene Geyser';
+          // Resource (mineral patch or plasma geyser)
+          const resourceName = resource.resourceType === 'minerals' ? 'Mineral Field' : 'Plasma Geyser';
           const currentGatherers = resource.getCurrentGatherers?.() ?? 0;
           info.push({
             id: entityId,
@@ -159,7 +159,7 @@ export const SelectionPanel = memo(function SelectionPanel() {
             type: 'resource',
             health: resource.amount,
             maxHealth: resource.maxAmount,
-            resourceType: resource.resourceType as 'minerals' | 'vespene',
+            resourceType: resource.resourceType as 'minerals' | 'plasma',
             resourceAmount: resource.amount,
             resourceMaxAmount: resource.maxAmount,
             currentGatherers,

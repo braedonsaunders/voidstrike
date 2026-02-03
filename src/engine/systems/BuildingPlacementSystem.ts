@@ -123,7 +123,7 @@ export class BuildingPlacementSystem extends System {
     // Calculate total cost
     const totalCost = {
       minerals: definition.mineralCost * validPositions.length,
-      vespene: definition.vespeneCost * validPositions.length,
+      plasma: definition.plasmaCost * validPositions.length,
     };
 
     // Check AI status FIRST before checking local player
@@ -134,7 +134,7 @@ export class BuildingPlacementSystem extends System {
 
     // Check resources based on player type
     if (isPlayerAI && aiPlayer) {
-      if (aiPlayer.minerals < totalCost.minerals || aiPlayer.vespene < totalCost.vespene) {
+      if (aiPlayer.minerals < totalCost.minerals || aiPlayer.plasma < totalCost.plasma) {
         return;
       }
     } else if (isPlayerLocal) {
@@ -143,9 +143,9 @@ export class BuildingPlacementSystem extends System {
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (this.game.statePort.getVespene() < totalCost.vespene) {
-        this.game.eventBus.emit('alert:notEnoughVespene', {});
-        this.game.eventBus.emit('warning:lowVespene', {});
+      if (this.game.statePort.getPlasma() < totalCost.plasma) {
+        this.game.eventBus.emit('alert:notEnoughPlasma', {});
+        this.game.eventBus.emit('warning:lowPlasma', {});
         return;
       }
     }
@@ -174,9 +174,9 @@ export class BuildingPlacementSystem extends System {
     // Deduct resources based on player type
     if (isPlayerAI && aiPlayer) {
       aiPlayer.minerals -= totalCost.minerals;
-      aiPlayer.vespene -= totalCost.vespene;
+      aiPlayer.plasma -= totalCost.plasma;
     } else if (isPlayerLocal) {
-      this.game.statePort.addResources(-totalCost.minerals, -totalCost.vespene);
+      this.game.statePort.addResources(-totalCost.minerals, -totalCost.plasma);
     }
 
     // Generate unique wall line ID for this placement
@@ -346,7 +346,7 @@ export class BuildingPlacementSystem extends System {
     unit.targetY = buildingTransform.y;
     unit.gatherTargetId = null;
     unit.carryingMinerals = 0;
-    unit.carryingVespene = 0;
+    unit.carryingPlasma = 0;
 
     debugBuildingPlacement.log(`BuildingPlacementSystem: Worker ${workerId} assigned to resume construction of ${building.name} at ${Math.round(building.buildProgress * 100)}%`);
   }
@@ -403,13 +403,13 @@ export class BuildingPlacementSystem extends System {
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (this.game.statePort.getVespene() < definition.vespeneCost) {
-        this.game.eventBus.emit('alert:notEnoughVespene', {});
-        this.game.eventBus.emit('warning:lowVespene', {});
+      if (this.game.statePort.getPlasma() < definition.plasmaCost) {
+        this.game.eventBus.emit('alert:notEnoughPlasma', {});
+        this.game.eventBus.emit('warning:lowPlasma', {});
         return;
       }
     } else if (isPlayerAI && aiPlayer) {
-      if (aiPlayer.minerals < definition.mineralCost || aiPlayer.vespene < definition.vespeneCost) {
+      if (aiPlayer.minerals < definition.mineralCost || aiPlayer.plasma < definition.plasmaCost) {
         debugBuildingPlacement.log(`AI ${playerId} lacks resources for ${buildingType}`);
         return;
       }
@@ -424,19 +424,19 @@ export class BuildingPlacementSystem extends System {
       }
     }
 
-    // Special handling for extractors: must be placed on vespene geysers
-    let vespeneGeyserEntity: Entity | null = null;
+    // Special handling for extractors: must be placed on plasma geysers
+    let plasmaGeyserEntity: Entity | null = null;
     if (buildingType === 'extractor') {
-      vespeneGeyserEntity = this.findVespeneGeyserAt(snappedX, snappedY);
-      if (!vespeneGeyserEntity) {
-        this.game.eventBus.emit('ui:error', { message: 'Extractor must be placed on a Vespene Geyser', playerId });
+      plasmaGeyserEntity = this.findPlasmaGeyserAt(snappedX, snappedY);
+      if (!plasmaGeyserEntity) {
+        this.game.eventBus.emit('ui:error', { message: 'Extractor must be placed on a Plasma Geyser', playerId });
         return;
       }
-      const resource = vespeneGeyserEntity.get<Resource>('Resource')!;
+      const resource = plasmaGeyserEntity.get<Resource>('Resource')!;
       // Check if ANY extractor exists (complete or under construction) - not just complete ones
       // This prevents duplicate extractor placement attempts while one is being built
       if (resource.extractorEntityId !== null) {
-        this.game.eventBus.emit('ui:error', { message: 'Vespene Geyser already has an Extractor', playerId });
+        this.game.eventBus.emit('ui:error', { message: 'Plasma Geyser already has an Extractor', playerId });
         return;
       }
     }
@@ -450,7 +450,7 @@ export class BuildingPlacementSystem extends System {
     }
 
     // Check placement validity using center position (exclude builder from collision)
-    // Skip collision check for extractors since they go on vespene geysers
+    // Skip collision check for extractors since they go on plasma geysers
     if (buildingType !== 'extractor' && !this.isValidPlacement(snappedX, snappedY, definition.width, definition.height, worker.entity.id)) {
       this.game.eventBus.emit('ui:error', { message: 'Cannot build here - area blocked', playerId });
       return;
@@ -458,10 +458,10 @@ export class BuildingPlacementSystem extends System {
 
     // Deduct resources (local player via store, AI via AI state)
     if (isPlayerLocal) {
-      this.game.statePort.addResources(-definition.mineralCost, -definition.vespeneCost);
+      this.game.statePort.addResources(-definition.mineralCost, -definition.plasmaCost);
     } else if (isPlayerAI && aiPlayer) {
       aiPlayer.minerals -= definition.mineralCost;
-      aiPlayer.vespene -= definition.vespeneCost;
+      aiPlayer.plasma -= definition.plasmaCost;
     }
 
     // Create the building entity at the snapped center position
@@ -479,14 +479,14 @@ export class BuildingPlacementSystem extends System {
     // Building starts in 'waiting_for_worker' state (from constructor)
     // Construction will start when worker arrives at site
 
-    // Associate extractor with vespene geyser
-    if (vespeneGeyserEntity) {
-      const resource = vespeneGeyserEntity.get<Resource>('Resource')!;
+    // Associate extractor with plasma geyser
+    if (plasmaGeyserEntity) {
+      const resource = plasmaGeyserEntity.get<Resource>('Resource')!;
       resource.extractorEntityId = buildingEntity.id;
       // PERF: Store reverse lookup for O(1) access when extractor is destroyed
       const buildingComp = buildingEntity.get<Building>('Building')!;
-      buildingComp.linkedResourceId = vespeneGeyserEntity.id;
-      debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor ${buildingEntity.id} associated with vespene geyser ${vespeneGeyserEntity.id}`);
+      buildingComp.linkedResourceId = plasmaGeyserEntity.id;
+      debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor ${buildingEntity.id} associated with plasma geyser ${plasmaGeyserEntity.id}`);
     }
 
     // Push any units out of the building footprint
@@ -506,7 +506,7 @@ export class BuildingPlacementSystem extends System {
       width: definition.width,
       height: definition.height,
       workerId: worker.entity.id,
-      vespeneGeyserId: vespeneGeyserEntity?.id,
+      plasmaGeyserId: plasmaGeyserEntity?.id,
     });
 
     debugBuildingPlacement.log(`BuildingPlacementSystem: ${definition.name} placed at (${snappedX}, ${snappedY}), SCV ${worker.entity.id} assigned`);
@@ -618,15 +618,15 @@ export class BuildingPlacementSystem extends System {
   }
 
   /**
-   * Find a vespene geyser at or near the given position
+   * Find a plasma geyser at or near the given position
    */
-  private findVespeneGeyserAt(x: number, y: number): Entity | null {
+  private findPlasmaGeyserAt(x: number, y: number): Entity | null {
     const resources = this.world.getEntitiesWith('Resource', 'Transform');
     const searchRadius = 3; // Allow some tolerance for click position
 
     for (const entity of resources) {
       const resource = entity.get<Resource>('Resource')!;
-      if (resource.resourceType !== 'vespene') continue;
+      if (resource.resourceType !== 'plasma') continue;
 
       const transform = entity.get<Transform>('Transform')!;
       const dx = Math.abs(transform.x - x);
@@ -820,8 +820,8 @@ export class BuildingPlacementSystem extends System {
 
     // Check resources (local player via game store, AI via AI state)
     if (isPlayerAI && aiPlayer) {
-      if (aiPlayer.minerals < addonDef.mineralCost || aiPlayer.vespene < addonDef.vespeneCost) {
-        debugBuildingPlacement.log(`BuildingPlacementSystem: AI ${playerId} lacks resources for addon ${addonType} (need ${addonDef.mineralCost}M/${addonDef.vespeneCost}G, have ${Math.floor(aiPlayer.minerals)}M/${Math.floor(aiPlayer.vespene)}G)`);
+      if (aiPlayer.minerals < addonDef.mineralCost || aiPlayer.plasma < addonDef.plasmaCost) {
+        debugBuildingPlacement.log(`BuildingPlacementSystem: AI ${playerId} lacks resources for addon ${addonType} (need ${addonDef.mineralCost}M/${addonDef.plasmaCost}G, have ${Math.floor(aiPlayer.minerals)}M/${Math.floor(aiPlayer.plasma)}G)`);
         return;
       }
     } else if (isPlayerLocal) {
@@ -830,9 +830,9 @@ export class BuildingPlacementSystem extends System {
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (this.game.statePort.getVespene() < addonDef.vespeneCost) {
-        this.game.eventBus.emit('alert:notEnoughVespene', {});
-        this.game.eventBus.emit('warning:lowVespene', {});
+      if (this.game.statePort.getPlasma() < addonDef.plasmaCost) {
+        this.game.eventBus.emit('alert:notEnoughPlasma', {});
+        this.game.eventBus.emit('warning:lowPlasma', {});
         return;
       }
     }
@@ -849,10 +849,10 @@ export class BuildingPlacementSystem extends System {
 
     // Deduct resources (local player via store, AI via AI state)
     if (isPlayerLocal) {
-      this.game.statePort.addResources(-addonDef.mineralCost, -addonDef.vespeneCost);
+      this.game.statePort.addResources(-addonDef.mineralCost, -addonDef.plasmaCost);
     } else if (isPlayerAI && aiPlayer) {
       aiPlayer.minerals -= addonDef.mineralCost;
-      aiPlayer.vespene -= addonDef.vespeneCost;
+      aiPlayer.plasma -= addonDef.plasmaCost;
     }
 
     // Create the addon entity - starts in 'constructing' state (no worker needed)
@@ -1798,15 +1798,15 @@ export class BuildingPlacementSystem extends System {
         if (aiPlayer) {
           // Refund to AI player
           aiPlayer.minerals += definition.mineralCost;
-          aiPlayer.vespene += definition.vespeneCost;
-          debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene to AI ${selectable.playerId} for cancelled ${building.name}`);
+          aiPlayer.plasma += definition.plasmaCost;
+          debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.plasmaCost} plasma to AI ${selectable.playerId} for cancelled ${building.name}`);
         } else if (isLocalPlayer(selectable.playerId)) {
           // Refund to local human player
-          this.game.statePort.addResources(definition.mineralCost, definition.vespeneCost);
-          debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.vespeneCost} vespene for cancelled ${building.name}`);
+          this.game.statePort.addResources(definition.mineralCost, definition.plasmaCost);
+          debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.plasmaCost} plasma for cancelled ${building.name}`);
         }
 
-        // PERF: If this is an extractor/refinery, restore the vespene geyser visibility
+        // PERF: If this is an extractor/refinery, restore the plasma geyser visibility
         // Uses O(1) reverse lookup via linkedResourceId instead of O(n) scan
         if (building.buildingId === 'extractor' || building.buildingId === 'refinery') {
           if (building.linkedResourceId !== null) {
@@ -1815,7 +1815,7 @@ export class BuildingPlacementSystem extends System {
               const resource = resourceEntity.get<Resource>('Resource');
               if (resource) {
                 resource.extractorEntityId = null;
-                debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor cancelled, vespene geyser ${building.linkedResourceId} restored`);
+                debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor cancelled, plasma geyser ${building.linkedResourceId} restored`);
               }
             }
           }

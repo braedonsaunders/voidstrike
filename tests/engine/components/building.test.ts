@@ -7,7 +7,7 @@ function createBasicDefinition(overrides: Partial<BuildingDefinition> = {}): Bui
     name: 'Test Building',
     faction: 'terran',
     mineralCost: 100,
-    vespeneCost: 0,
+    plasmaCost: 0,
     buildTime: 30,
     width: 3,
     height: 3,

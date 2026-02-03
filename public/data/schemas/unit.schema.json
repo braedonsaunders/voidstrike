@@ -15,7 +15,7 @@
         "name",
         "faction",
         "mineralCost",
-        "vespeneCost",
+        "plasmaCost",
         "buildTime",
         "supplyCost",
         "speed",
@@ -49,10 +49,10 @@
           "minimum": 0,
           "description": "Mineral cost to produce"
         },
-        "vespeneCost": {
+        "plasmaCost": {
           "type": "integer",
           "minimum": 0,
-          "description": "Vespene cost to produce"
+          "description": "Plasma cost to produce"
         },
         "buildTime": {
           "type": "number",

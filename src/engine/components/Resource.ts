@@ -1,14 +1,14 @@
 import { Component } from '../ecs/Component';
 
-export type ResourceType = 'minerals' | 'vespene';
+export type ResourceType = 'minerals' | 'plasma';
 
 // Optimal worker counts per resource
 // Minerals: 2 workers per patch is optimal, 3 is max (diminishing returns)
-// Vespene: 3 workers per geyser is optimal and max
+// Plasma: 3 workers per geyser is optimal and max
 export const OPTIMAL_WORKERS_PER_MINERAL = 2;
 export const MAX_WORKERS_PER_MINERAL = 3;
-export const OPTIMAL_WORKERS_PER_VESPENE = 3;
-export const MAX_WORKERS_PER_VESPENE = 3;
+export const OPTIMAL_WORKERS_PER_PLASMA = 3;
+export const MAX_WORKERS_PER_PLASMA = 3;
 
 export class Resource extends Component {
   public readonly type = 'Resource';
@@ -21,7 +21,7 @@ export class Resource extends Component {
   public currentGatherers: Set<number>; // Entity IDs of workers currently gathering
   public maxGatherers: number;
 
-  // For vespene: the extractor entity ID (null if no extractor built)
+  // For plasma: the extractor entity ID (null if no extractor built)
   public extractorEntityId: number | null = null;
   // Callback to check if extractor is complete (set by game systems)
   private _extractorCompleteChecker: ((entityId: number) => boolean) | null = null;
@@ -53,8 +53,8 @@ export class Resource extends Component {
   }
 
   public canGather(): boolean {
-    // Vespene requires a completed extractor
-    if (this.resourceType === 'vespene') {
+    // Plasma requires a completed extractor
+    if (this.resourceType === 'plasma') {
       if (this.extractorEntityId === null) return false;
       // Check if extractor is complete
       if (this._extractorCompleteChecker && !this._extractorCompleteChecker(this.extractorEntityId)) {
@@ -113,7 +113,7 @@ export class Resource extends Component {
   public getOptimalWorkers(): number {
     return this.resourceType === 'minerals'
       ? OPTIMAL_WORKERS_PER_MINERAL
-      : OPTIMAL_WORKERS_PER_VESPENE;
+      : OPTIMAL_WORKERS_PER_PLASMA;
   }
 
   /**
@@ -123,7 +123,7 @@ export class Resource extends Component {
   public getMaxUsefulWorkers(): number {
     return this.resourceType === 'minerals'
       ? MAX_WORKERS_PER_MINERAL
-      : MAX_WORKERS_PER_VESPENE;
+      : MAX_WORKERS_PER_PLASMA;
   }
 
   /**

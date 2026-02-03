@@ -24,7 +24,7 @@ export interface ResearchDefinition {
   description: string;
   faction: string;
   mineralCost: number;
-  vespeneCost: number;
+  plasmaCost: number;
   researchTime: number; // seconds
   effects: UpgradeEffect[];
   requirements?: string[]; // building IDs or upgrade IDs required

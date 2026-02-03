@@ -84,7 +84,7 @@ For multiplayer, we use deterministic lockstep:
 
 ### Primary Resources
 1. **Minerals** - Basic resource, abundant
-2. **Vespene** - Advanced resource, limited
+2. **Plasma** - Advanced resource, limited
 
 ### Economy Flow
 ```
@@ -97,7 +97,7 @@ Each resource node displays worker assignment status with floating labels showin
 | Resource Type | Optimal Workers | Max Useful Workers | Label Color |
 |--------------|-----------------|-------------------|-------------|
 | **Minerals** | 2 per patch | 3 per patch | Green when saturated, Yellow when under |
-| **Vespene** | 3 per geyser | 3 per geyser | Green when saturated, Yellow when under |
+| **Plasma** | 3 per geyser | 3 per geyser | Green when saturated, Yellow when under |
 
 - **Green (X/Y)**: Optimal saturation reached - maximum efficiency
 - **Yellow (X/Y)**: Undersaturated - workers needed for optimal income
@@ -407,7 +407,7 @@ Each map now includes:
 ### Expansion Types (Standard Resource Amounts)
 - **Standard Bases** (Main/Natural/Third) - 8 mineral patches: 6× 1500 + 2× 900 (close patches) = 10,800 total minerals
 - **Gold Bases** - 8 mineral patches: 8× 900 = 7,200 total minerals (higher mining rate per patch)
-- **Gas Geysers** - All geysers contain 2,250 vespene gas
+- **Gas Geysers** - All geysers contain 2,250 plasma gas
 
 Base Protection Levels:
 - **Main Base** - Starting location, protected by cliffs with single ramp

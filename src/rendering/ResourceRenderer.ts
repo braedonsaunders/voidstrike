@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { IWorldProvider, IEntity } from '@/engine/ecs/IWorldProvider';
 import { Transform } from '@/engine/components/Transform';
-import { Resource, OPTIMAL_WORKERS_PER_MINERAL, OPTIMAL_WORKERS_PER_VESPENE } from '@/engine/components/Resource';
+import { Resource, OPTIMAL_WORKERS_PER_MINERAL, OPTIMAL_WORKERS_PER_PLASMA } from '@/engine/components/Resource';
 import { Unit } from '@/engine/components/Unit';
 import { Selectable } from '@/engine/components/Selectable';
 import { Terrain } from './Terrain';
@@ -126,15 +126,15 @@ interface MineralLineLabel {
   lastOptimalCount: number;
 }
 
-// Track vespene geyser labels (one label per geyser with extractor)
-interface VespeneLabel {
+// Track plasma geyser labels (one label per geyser with extractor)
+interface PlasmaLabel {
   sprite: THREE.Sprite;
   entityId: number;
   lastWorkerCount: number;
   lastOptimalCount: number;
 }
 
-// Max instances per resource type - must exceed max minerals/vespene on largest maps
+// Max instances per resource type - must exceed max minerals/plasma on largest maps
 // 4-player maps: ~17 expansions × 8 minerals = 136 minerals
 // 8-player maps could have even more, so we use 200 for headroom
 const MAX_RESOURCES_PER_TYPE = 200;
@@ -156,8 +156,8 @@ export class ResourceRenderer {
   // Mineral line labels (one per mineral line, not per patch)
   private mineralLineLabels: MineralLineLabel[] = [];
 
-  // Vespene labels (one per geyser with extractor)
-  private vespeneLabels: Map<number, VespeneLabel> = new Map();
+  // Plasma labels (one per geyser with extractor)
+  private plasmaLabels: Map<number, PlasmaLabel> = new Map();
 
   // PERF: Instanced selection ring for all resources (saves ~180 draw calls)
   private selectionGeometry: THREE.RingGeometry;
@@ -251,7 +251,7 @@ export class ResourceRenderer {
     if (!group) {
       // Get the base mesh from AssetManager at the requested LOD level
       const baseMesh = AssetManager.getModelAtLOD(resourceType, lodLevel)
-        ?? AssetManager.getResourceMesh(resourceType as 'minerals' | 'vespene');
+        ?? AssetManager.getResourceMesh(resourceType as 'minerals' | 'plasma');
 
       // Update world matrices to get accurate transforms
       baseMesh.updateMatrixWorld(true);
@@ -701,8 +701,8 @@ export class ResourceRenderer {
         continue;
       }
 
-      // Skip vespene geysers that have a refinery built on them
-      if (resource.resourceType === 'vespene' && resource.hasRefinery()) {
+      // Skip plasma geysers that have a refinery built on them
+      if (resource.resourceType === 'plasma' && resource.hasRefinery()) {
         continue;
       }
 
@@ -809,69 +809,69 @@ export class ResourceRenderer {
       }
     }
 
-    // Update vespene geyser labels
+    // Update plasma geyser labels
     for (const entity of entities) {
       const resource = entity.get<Resource>('Resource');
       const transform = entity.get<Transform>('Transform');
       if (!resource || !transform) continue;
-      if (resource.resourceType !== 'vespene') continue;
+      if (resource.resourceType !== 'plasma') continue;
       if (!resource.hasExtractor()) continue;
 
-      // Get or create vespene label
-      let vespeneLabel = this.vespeneLabels.get(entity.id);
-      if (!vespeneLabel) {
+      // Get or create plasma label
+      let plasmaLabel = this.plasmaLabels.get(entity.id);
+      if (!plasmaLabel) {
         const sprite = this.createWorkerLabel();
         this.scene.add(sprite);
-        vespeneLabel = {
+        plasmaLabel = {
           sprite,
           entityId: entity.id,
           lastWorkerCount: -1,
           lastOptimalCount: -1,
         };
-        this.vespeneLabels.set(entity.id, vespeneLabel);
+        this.plasmaLabels.set(entity.id, plasmaLabel);
       }
 
       // PERF: Count workers using cached lookup (no Set allocation)
       const currentWorkers = this.getWorkerCountForResource(entity.id);
-      const optimalWorkers = OPTIMAL_WORKERS_PER_VESPENE;
+      const optimalWorkers = OPTIMAL_WORKERS_PER_PLASMA;
 
       // Position label above the extractor
       const terrainHeight = this.terrain?.getHeightAt(transform.x, transform.y) ?? 0;
-      vespeneLabel.sprite.position.set(transform.x, terrainHeight + 3.5, transform.y);
+      plasmaLabel.sprite.position.set(transform.x, terrainHeight + 3.5, transform.y);
 
       // Always show for extractors (even with 0 workers)
-      vespeneLabel.sprite.visible = true;
+      plasmaLabel.sprite.visible = true;
 
       // Update texture only if count changed
-      if (currentWorkers !== vespeneLabel.lastWorkerCount || optimalWorkers !== vespeneLabel.lastOptimalCount) {
-        this.updateWorkerLabel(vespeneLabel.sprite, currentWorkers, optimalWorkers);
-        vespeneLabel.lastWorkerCount = currentWorkers;
-        vespeneLabel.lastOptimalCount = optimalWorkers;
+      if (currentWorkers !== plasmaLabel.lastWorkerCount || optimalWorkers !== plasmaLabel.lastOptimalCount) {
+        this.updateWorkerLabel(plasmaLabel.sprite, currentWorkers, optimalWorkers);
+        plasmaLabel.lastWorkerCount = currentWorkers;
+        plasmaLabel.lastOptimalCount = optimalWorkers;
       }
     }
 
-    // Clean up vespene labels for destroyed extractors
-    for (const [entityId, label] of this.vespeneLabels) {
+    // Clean up plasma labels for destroyed extractors
+    for (const [entityId, label] of this.plasmaLabels) {
       const entity = this.world.getEntity(entityId);
       const resource = entity?.get<Resource>('Resource');
       if (!entity || !resource || !resource.hasExtractor()) {
         this.scene.remove(label.sprite);
         this.disposeWorkerLabel(label.sprite);
-        this.vespeneLabels.delete(entityId);
+        this.plasmaLabels.delete(entityId);
       }
     }
 
     // Debug log once per session
     if (!this._debugLoggedThisSession && debugMineralEntities > 0) {
       const mineralGroup = this.instancedGroups.get('minerals');
-      const vespeneGroup = this.instancedGroups.get('vespene');
+      const plasmaGroup = this.instancedGroups.get('plasma');
       debugMesh.log(`[ResourceRenderer] === MINERAL DEBUG (one-time) ===`);
       debugMesh.log(`  Entities: ${debugMineralEntities} total, ${debugMineralSkippedDepleted} depleted, ${debugMineralAdded} added to instance`);
       if (mineralGroup) {
         debugMesh.log(`  Minerals instanced: count=${mineralGroup.mesh.count}, baseScale=${mineralGroup.baseScale.toFixed(3)}, yOffset=${mineralGroup.yOffset.toFixed(2)}`);
       }
-      if (vespeneGroup) {
-        debugMesh.log(`  Vespene instanced: count=${vespeneGroup.mesh.count}, baseScale=${vespeneGroup.baseScale.toFixed(3)}, yOffset=${vespeneGroup.yOffset.toFixed(2)}`);
+      if (plasmaGroup) {
+        debugMesh.log(`  Plasma instanced: count=${plasmaGroup.mesh.count}, baseScale=${plasmaGroup.baseScale.toFixed(3)}, yOffset=${plasmaGroup.yOffset.toFixed(2)}`);
       }
       debugMesh.log(`  First ${debugMineralPositions.length} mineral positions: ${debugMineralPositions.join(', ')}`);
       debugMesh.log(`[ResourceRenderer] === END DEBUG ===`);
@@ -949,12 +949,12 @@ export class ResourceRenderer {
     }
     this.mineralLineLabels = [];
 
-    // Clean up vespene labels (CPU-side sprites, safe to dispose immediately)
-    for (const label of this.vespeneLabels.values()) {
+    // Clean up plasma labels (CPU-side sprites, safe to dispose immediately)
+    for (const label of this.plasmaLabels.values()) {
       this.scene.remove(label.sprite);
       this.disposeWorkerLabel(label.sprite);
     }
-    this.vespeneLabels.clear();
+    this.plasmaLabels.clear();
 
     // Schedule shared selection geometry for delayed disposal
     scheduleGeometryDisposal(this.selectionGeometry, this.selectionMaterial);
