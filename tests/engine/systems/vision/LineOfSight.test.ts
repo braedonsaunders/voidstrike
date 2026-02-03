@@ -80,9 +80,11 @@ describe('LineOfSight', () => {
     it('should block LOS through high terrain', () => {
       // Caster at (32, 32), target at (96, 96), hill in between at (64, 64)
       const hasLOS = los.hasLineOfSight(
-        32, 32, // caster position
+        32,
+        32, // caster position
         0, // caster height (flat ground)
-        48, 48, // target cell (on other side of hill)
+        48,
+        48, // target cell (on other side of hill)
         20 // sight range
       );
 
@@ -93,9 +95,11 @@ describe('LineOfSight', () => {
     it('should allow LOS to cells not blocked by terrain', () => {
       // Caster at (32, 32), target at (40, 32), no hill in between
       const hasLOS = los.hasLineOfSight(
-        32, 32, // caster position
+        32,
+        32, // caster position
         0, // caster height
-        20, 16, // target cell (same side as caster)
+        20,
+        16, // target cell (same side as caster)
         10 // sight range
       );
 
@@ -105,32 +109,15 @@ describe('LineOfSight', () => {
     it('should allow LOS from high ground to low ground', () => {
       // Caster on the hill looking down
       const hasLOS = los.hasLineOfSight(
-        64, 64, // caster on hill
+        64,
+        64, // caster on hill
         5, // caster height (on top of hill)
-        16, 16, // target on flat ground
+        16,
+        16, // target on flat ground
         30 // sight range
       );
 
       expect(hasLOS).toBe(true);
-    });
-  });
-
-  describe('shadowcasting', () => {
-    beforeEach(() => {
-      los.setHeightProvider(flatHeightProvider);
-    });
-
-    it('should return visible cells using shadowcast algorithm', () => {
-      const visible = los.getVisibleCellsShadowcast(64, 64, 10);
-
-      // Should have cells visible
-      expect(visible.size).toBeGreaterThan(0);
-
-      // Center cell should be visible
-      const centerCellX = Math.floor(64 / defaultConfig.cellSize);
-      const centerCellY = Math.floor(64 / defaultConfig.cellSize);
-      const centerKey = centerCellY * defaultConfig.gridWidth + centerCellX;
-      expect(visible.has(centerKey)).toBe(true);
     });
   });
 

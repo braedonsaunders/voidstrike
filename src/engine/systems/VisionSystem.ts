@@ -15,7 +15,6 @@ import { debugPathfinding } from '@/utils/debugLogger';
 // Industry-standard fog of war optimizations
 import { VisionOptimizer } from './vision/VisionOptimizer';
 import { LineOfSight, type HeightProvider } from './vision/LineOfSight';
-import { SDFVisionRenderer } from './vision/SDFVisionRenderer';
 
 // Vision states for fog of war
 export type VisionState = 'unexplored' | 'explored' | 'visible';
@@ -112,10 +111,6 @@ export class VisionSystem extends System {
   private useLOSBlocking: boolean = true; // Enable by default
   private heightProvider: HeightProvider | null = null;
 
-  // Phase 3: SDF-based edge rendering
-  private sdfRenderer: SDFVisionRenderer | null = null;
-  private useSDF: boolean = true; // Enable by default
-
   // Track entity cell positions for boundary detection
   private entityCellPositions: Map<number, { cellX: number; cellY: number }> = new Map();
 
@@ -159,18 +154,6 @@ export class VisionSystem extends System {
         losBlockingThreshold: 1.0, // 1 world unit height difference blocks LOS
       });
       debugPathfinding.log('[VisionSystem] Phase 2: LOS blocking enabled');
-    }
-
-    // Phase 3: SDF renderer for smooth edges
-    if (this.useSDF) {
-      this.sdfRenderer = new SDFVisionRenderer({
-        gridWidth,
-        gridHeight,
-        cellSize: this.cellSize,
-        maxDistance: 8, // 8 cells max SDF propagation
-        edgeSoftness: 0.3,
-      });
-      debugPathfinding.log('[VisionSystem] Phase 3: SDF edge rendering enabled');
     }
   }
 
@@ -423,16 +406,6 @@ export class VisionSystem extends System {
       }
     }
 
-    if (this.sdfRenderer) {
-      this.sdfRenderer.reinitialize({
-        gridWidth,
-        gridHeight,
-        cellSize: this.cellSize,
-        maxDistance: 8,
-        edgeSoftness: 0.3,
-      });
-    }
-
     this.entityCellPositions.clear();
   }
 
@@ -543,12 +516,14 @@ export class VisionSystem extends System {
 
   /**
    * Enable/disable reference counting optimization (Phase 1)
+   * Note: Legacy fallback has been removed. Disabling will log a warning but optimizer remains active.
    */
   public setOptimizedVisionEnabled(enabled: boolean): void {
     this.useOptimizedVision = enabled;
-    if (!enabled && this.visionOptimizer) {
-      this.visionOptimizer.dispose();
-      this.visionOptimizer = null;
+    if (!enabled) {
+      debugPathfinding.warn(
+        '[VisionSystem] Legacy vision fallback removed. Optimizer will remain active.'
+      );
     } else if (enabled && !this.visionOptimizer) {
       this.initializeOptimizations();
     }
@@ -560,14 +535,6 @@ export class VisionSystem extends System {
   public setLOSBlockingEnabled(enabled: boolean): void {
     this.useLOSBlocking = enabled;
     debugPathfinding.log(`[VisionSystem] LOS blocking ${enabled ? 'enabled' : 'disabled'}`);
-  }
-
-  /**
-   * Enable/disable SDF edge rendering (Phase 3)
-   */
-  public setSDFRenderingEnabled(enabled: boolean): void {
-    this.useSDF = enabled;
-    debugPathfinding.log(`[VisionSystem] SDF rendering ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**
@@ -585,24 +552,15 @@ export class VisionSystem extends System {
   }
 
   /**
-   * Get the SDF renderer instance
-   */
-  public getSDFRenderer(): SDFVisionRenderer | null {
-    return this.sdfRenderer;
-  }
-
-  /**
    * Check if optimizations are enabled
    */
   public getOptimizationStatus(): {
     referenceCountingEnabled: boolean;
     losBlockingEnabled: boolean;
-    sdfRenderingEnabled: boolean;
   } {
     return {
       referenceCountingEnabled: this.useOptimizedVision,
       losBlockingEnabled: this.useLOSBlocking,
-      sdfRenderingEnabled: this.useSDF,
     };
   }
 
@@ -645,10 +603,6 @@ export class VisionSystem extends System {
     if (this.lineOfSight) {
       this.lineOfSight.dispose();
       this.lineOfSight = null;
-    }
-    if (this.sdfRenderer) {
-      this.sdfRenderer.dispose();
-      this.sdfRenderer = null;
     }
     this.entityCellPositions.clear();
   }
@@ -986,15 +940,13 @@ export class VisionSystem extends System {
    * 3. Incremental updates: Skip if no casters moved between cells
    */
   private updateVisionMainThread(): void {
-    const currentTick = this.game.getCurrentTick();
-
-    // Use VisionOptimizer if available (reference counting optimization)
-    if (this.visionOptimizer) {
-      this.updateVisionOptimized(currentTick);
-    } else {
-      // Fallback to legacy implementation
-      this.updateVisionLegacy(currentTick);
+    if (!this.visionOptimizer) {
+      debugPathfinding.warn('[VisionSystem] VisionOptimizer not available, skipping vision update');
+      return;
     }
+
+    const currentTick = this.game.getCurrentTick();
+    this.updateVisionOptimized(currentTick);
 
     // Increment version for dirty checking by renderers
     this.visionVersion++;
@@ -1194,151 +1146,10 @@ export class VisionSystem extends System {
   }
 
   /**
-   * Legacy vision computation (fallback when optimizer not available)
-   */
-  private updateVisionLegacy(currentTick: number): void {
-    const gridWidth = this.visionMap.width;
-
-    for (const playerId of this.knownPlayers) {
-      const currentVisible = this.visionMap.currentlyVisible.get(playerId);
-      const visionGrid = this.visionMap.playerVision.get(playerId);
-
-      if (!currentVisible || !visionGrid) continue;
-
-      // Mark previously visible cells as 'explored'
-      for (const cellKey of currentVisible) {
-        const x = cellKey % gridWidth;
-        const y = Math.floor(cellKey / gridWidth);
-        if (visionGrid[y] && visionGrid[y][x] === 'visible') {
-          visionGrid[y][x] = 'explored';
-        }
-      }
-      currentVisible.clear();
-    }
-
-    // Update vision from all units
-    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
-    for (const entity of units) {
-      this.updateEntityVision(entity);
-    }
-
-    // Update vision from all buildings
-    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
-    for (const entity of buildings) {
-      this.updateBuildingVision(entity);
-    }
-
-    // Update watch towers
-    this.updateWatchTowers(units);
-
-    // Process temporary reveals
-    this.processTemporaryReveals(currentTick);
-  }
-
-  /**
-   * Process temporary vision reveals - apply active ones and expire old ones
-   */
-  private processTemporaryReveals(currentTick: number): void {
-    // Remove expired reveals and process active ones
-    let i = 0;
-    while (i < this.temporaryReveals.length) {
-      const reveal = this.temporaryReveals[i];
-
-      if (reveal.expirationTick <= currentTick) {
-        // Expired - remove it (swap with last for O(1) removal)
-        this.temporaryReveals[i] = this.temporaryReveals[this.temporaryReveals.length - 1];
-        this.temporaryReveals.pop();
-        // Don't increment i, check the swapped element
-      } else {
-        // Still active - apply the reveal
-        this.revealArea(reveal.playerId, reveal.position.x, reveal.position.y, reveal.radius);
-
-        // Detect cloaked units if this reveal can detect them
-        if (reveal.detectsCloaked) {
-          this.detectCloakedUnitsInArea(reveal.playerId, reveal.position, reveal.radius);
-        }
-
-        i++;
-      }
-    }
-  }
-
-  /**
    * Get the current vision version for dirty checking
    */
   public getVisionVersion(): number {
     return this.visionVersion;
-  }
-
-  /**
-   * Update watch tower control and vision (main thread fallback)
-   */
-  private updateWatchTowers(_units: Entity[]): void {
-    // Reset all tower controlling players
-    for (const tower of this.watchTowers) {
-      tower.controllingPlayers.clear();
-      tower.isActive = false;
-    }
-
-    const captureRadiusSq = this.WATCH_TOWER_CAPTURE_RADIUS * this.WATCH_TOWER_CAPTURE_RADIUS;
-
-    for (const tower of this.watchTowers) {
-      const nearbyUnitIds = this.world.unitGrid.queryRadius(
-        tower.x,
-        tower.y,
-        this.WATCH_TOWER_CAPTURE_RADIUS
-      );
-
-      for (const unitId of nearbyUnitIds) {
-        const entity = this.world.getEntity(unitId);
-        if (!entity) continue;
-
-        const transform = entity.get<Transform>('Transform');
-        const selectable = entity.get<Selectable>('Selectable');
-        if (!transform || !selectable) continue;
-
-        const dx = transform.x - tower.x;
-        const dy = transform.y - tower.y;
-        const distSq = dx * dx + dy * dy;
-
-        if (distSq <= captureRadiusSq) {
-          tower.controllingPlayers.add(selectable.playerId);
-          tower.isActive = true;
-        }
-      }
-    }
-
-    // Grant vision to controlling players
-    for (const tower of this.watchTowers) {
-      if (tower.isActive) {
-        for (const playerId of tower.controllingPlayers) {
-          this.revealArea(playerId, tower.x, tower.y, tower.radius); // tower.y is depth (Z)
-        }
-      }
-    }
-  }
-
-  private updateEntityVision(entity: Entity): void {
-    const transform = entity.get<Transform>('Transform');
-    const unit = entity.get<Unit>('Unit');
-    const selectable = entity.get<Selectable>('Selectable');
-
-    if (!transform || !unit || !selectable) return;
-
-    this.revealArea(selectable.playerId, transform.x, transform.y, unit.sightRange);
-  }
-
-  private updateBuildingVision(entity: Entity): void {
-    const transform = entity.get<Transform>('Transform');
-    const building = entity.get<Building>('Building');
-    const selectable = entity.get<Selectable>('Selectable');
-
-    if (!transform || !building || !selectable) return;
-
-    // Only provide vision if building is operational
-    if (!building.isOperational()) return;
-
-    this.revealArea(selectable.playerId, transform.x, transform.y, building.sightRange);
   }
 
   private revealArea(playerId: string, worldX: number, worldY: number, range: number): void {
