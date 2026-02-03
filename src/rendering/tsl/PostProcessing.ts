@@ -471,9 +471,7 @@ export class RenderPipeline {
         );
         outputNode = scenePassColor.mul(mix(float(1.0), aoValue, this.uAOIntensity));
       } else {
-        // Full-res AO - temporarily disabled normal pass to test if MRT normals
-        // are causing InstancedMesh artifacts. Passing null forces depth-based
-        // normal reconstruction.
+        // Full-res AO with scene normals for accurate occlusion
         const result = createGTAOPass(
           scenePassDepth,
           this.camera,
@@ -481,7 +479,7 @@ export class RenderPipeline {
             radius: this.config.aoRadius,
             intensity: this.config.aoIntensity,
           },
-          null // TODO: Fix InstancedMesh normal issue then restore scenePassNormal
+          scenePassNormal
         );
         if (result) {
           this.aoPass = result.pass;

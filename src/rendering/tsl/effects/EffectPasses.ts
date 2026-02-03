@@ -202,6 +202,11 @@ export function createGTAOPass(
     // The ao() function accepts null for normalNode even though types say otherwise
     const aoPass = ao(scenePassDepth, scenePassNormal ?? (null as any), camera);
     aoPass.radius.value = config.radius;
+    // Set thickness to help with depth discontinuity artifacts on InstancedMesh
+    // Higher thickness = more tolerance for depth differences = fewer edge artifacts
+    if (aoPass.thickness) {
+      aoPass.thickness.value = 0.5;
+    }
     const aoValueNode = aoPass.getTextureNode().r;
 
     return { pass: aoPass, aoValueNode };
