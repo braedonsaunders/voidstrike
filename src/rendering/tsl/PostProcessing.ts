@@ -423,6 +423,9 @@ export class RenderPipeline {
             velocity: customVelocity,
           })
         );
+        // Set texture types for proper precision
+        const normalTexture = scenePass.getTexture('normal');
+        if (normalTexture) normalTexture.type = THREE.HalfFloatType; // Higher precision for normals
         const metalRoughTexture = scenePass.getTexture('metalrough');
         if (metalRoughTexture) metalRoughTexture.type = THREE.UnsignedByteType;
       } else {
