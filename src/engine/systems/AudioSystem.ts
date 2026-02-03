@@ -4,7 +4,7 @@ import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { AudioManager } from '@/audio/AudioManager';
 import { MusicPlayer } from '@/audio/MusicPlayer';
-import { useGameSetupStore, isLocalPlayer } from '@/store/gameSetupStore';
+import { useGameSetupStore } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { VOICE_COOLDOWN_CONFIG } from '@/data/audio.config';
@@ -234,7 +234,7 @@ export class AudioSystem extends System {
     // Command events
     this.game.eventBus.on('command:move', (data: { entityIds: number[]; playerId?: string }) => {
       if (this.isSpectator()) return;
-      if (!data.playerId || !isLocalPlayer(data.playerId)) return;
+      if (data.playerId !== this.game.config.playerId) return;
 
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_move');
@@ -248,7 +248,7 @@ export class AudioSystem extends System {
 
     this.game.eventBus.on('command:attack', (data: { entityIds: number[]; playerId?: string }) => {
       if (this.isSpectator()) return;
-      if (!data.playerId || !isLocalPlayer(data.playerId)) return;
+      if (data.playerId !== this.game.config.playerId) return;
 
       if (data.entityIds.length > 0) {
         AudioManager.play('unit_attack');
@@ -329,7 +329,7 @@ export class AudioSystem extends System {
           }
         }
 
-        if (data.playerId && isLocalPlayer(data.playerId)) {
+        if (data.playerId === this.game.config.playerId) {
           AudioManager.play('alert_unit_lost');
         }
       }
@@ -341,7 +341,7 @@ export class AudioSystem extends System {
         const pos = new THREE.Vector3(data.x, 0, data.y);
         AudioManager.playAt('explosion_building', pos);
 
-        if (data.playerId && isLocalPlayer(data.playerId)) {
+        if (data.playerId === this.game.config.playerId) {
           AudioManager.play('alert_building_lost');
         }
       }
@@ -351,7 +351,7 @@ export class AudioSystem extends System {
     this.game.eventBus.on(
       'alert:underAttack',
       (data: { x: number; y: number; playerId?: string }) => {
-        if (data.playerId && isLocalPlayer(data.playerId)) {
+        if (data.playerId === this.game.config.playerId) {
           AudioManager.play('alert_under_attack');
         }
       }
@@ -373,14 +373,14 @@ export class AudioSystem extends System {
     });
 
     this.game.eventBus.on('alert:mineralsDepleted', (data: { playerId?: string }) => {
-      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
+      if (data?.playerId && data.playerId !== this.game.config.playerId) return;
       if (this.isSpectator()) return;
       AudioManager.play('alert_minerals_depleted');
     });
 
     // Production events
     this.game.eventBus.on('production:started', (data: { playerId?: string }) => {
-      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
+      if (data?.playerId && data.playerId !== this.game.config.playerId) return;
       if (this.isSpectator()) return;
       AudioManager.play('production_start');
     });
@@ -388,7 +388,7 @@ export class AudioSystem extends System {
     this.game.eventBus.on(
       'production:complete',
       (data: { unitType?: string; playerId?: string }) => {
-        if (data?.playerId && !isLocalPlayer(data.playerId)) return;
+        if (data?.playerId && data.playerId !== this.game.config.playerId) return;
         if (this.isSpectator()) return;
 
         AudioManager.play('unit_ready');
@@ -401,32 +401,32 @@ export class AudioSystem extends System {
 
     // Building events
     this.game.eventBus.on('building:place', (data: { playerId?: string }) => {
-      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
+      if (data?.playerId && data.playerId !== this.game.config.playerId) return;
       if (this.isSpectator()) return;
       AudioManager.play('building_place');
     });
 
     this.game.eventBus.on('building:complete', (data: { playerId?: string }) => {
-      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
+      if (data?.playerId && data.playerId !== this.game.config.playerId) return;
       if (this.isSpectator()) return;
       AudioManager.play('alert_building_complete');
     });
 
     // Research events
     this.game.eventBus.on('research:started', (data: { playerId?: string }) => {
-      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
+      if (data?.playerId && data.playerId !== this.game.config.playerId) return;
       if (this.isSpectator()) return;
       AudioManager.play('production_start');
     });
 
     this.game.eventBus.on('research:complete', (data: { playerId?: string }) => {
-      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
+      if (data?.playerId && data.playerId !== this.game.config.playerId) return;
       if (this.isSpectator()) return;
       AudioManager.play('alert_research_complete');
     });
 
     this.game.eventBus.on('upgrade:complete', (data: { playerId?: string }) => {
-      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
+      if (data?.playerId && data.playerId !== this.game.config.playerId) return;
       if (this.isSpectator()) return;
       AudioManager.play('alert_upgrade_complete');
     });

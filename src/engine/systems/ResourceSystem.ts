@@ -8,7 +8,6 @@ import { Selectable } from '../components/Selectable';
 import type { IGameInstance } from '../core/IGameInstance';
 import { World } from '../ecs/World';
 import { debugResources } from '@/utils/debugLogger';
-import { isLocalPlayer } from '@/store/gameSetupStore';
 import { EnhancedAISystem } from './EnhancedAISystem';
 import { distance } from '@/utils/math';
 import { validateEntityAlive } from '@/utils/EntityValidator';
@@ -652,17 +651,8 @@ export class ResourceSystem extends System {
           // Credit AI player - this is the ONLY way AI gets resources (simulation-based)
           aiSystem!.creditResources(workerOwner, minerals, plasma);
         } else {
-          // Try to credit local human player
-          // Note: isLocalPlayer uses Zustand which may not work in Web Worker context
-          // In worker mode, we use statePort which handles the communication to main thread
-          try {
-            if (isLocalPlayer(workerOwner)) {
-              // Credit local human player via game store
-              this.game.statePort.addResources(minerals, plasma);
-            }
-          } catch {
-            // In Web Worker context, Zustand stores may not be available
-            // Fall back to using statePort for any non-AI player
+          // Credit local human player via game store
+          if (workerOwner === this.game.config.playerId) {
             this.game.statePort.addResources(minerals, plasma);
           }
         }

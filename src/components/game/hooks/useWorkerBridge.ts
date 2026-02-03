@@ -175,7 +175,7 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
       eventBusRef.current = bridge.eventBus;
 
       // Create main thread event handler for audio/effects
-      const eventHandler = new MainThreadEventHandler(bridge);
+      const eventHandler = new MainThreadEventHandler(bridge, localPlayerId ?? 'player1');
       eventHandlerRef.current = eventHandler;
 
       // Initialize the worker

@@ -7,7 +7,7 @@ import { Wall } from '../components/Wall';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { WALL_UPGRADE_DEFINITIONS, WallUpgradeType } from '@/data/buildings/walls';
-import { isLocalPlayer, getLocalPlayerId } from '@/store/gameSetupStore';
+import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { EnhancedAISystem } from './EnhancedAISystem';
 
 /**
@@ -366,7 +366,7 @@ export class WallSystem extends System {
     const aiSystem = this.getAISystem();
     const aiPlayer = aiSystem?.getAIPlayer(playerId);
     const isPlayerAI = aiPlayer !== undefined;
-    const isPlayerLocal = !isPlayerAI && isLocalPlayer(playerId);
+    const isPlayerLocal = !isPlayerAI && playerId === this.game.config.playerId;
 
     // Check if research is complete
     if (!this.game.statePort.hasResearch(playerId, `wall_${upgradeType}`)) {

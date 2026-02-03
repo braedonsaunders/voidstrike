@@ -15,7 +15,6 @@ import * as THREE from 'three';
 import { AudioManager } from '@/audio/AudioManager';
 import { MusicPlayer } from '@/audio/MusicPlayer';
 import { useUIStore } from '@/store/uiStore';
-import { isLocalPlayer } from '@/store/gameSetupStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { VOICE_COOLDOWN_CONFIG } from '@/data/audio.config';
 import { SeededRandom } from '@/utils/math';
@@ -41,6 +40,7 @@ import type { WorkerBridge } from './WorkerBridge';
 
 export class MainThreadEventHandler {
   private bridge: WorkerBridge;
+  private localPlayerId: string;
   private battleEffectsCallback: ((event: GameEvent) => void) | null = null;
 
   // Audio state
@@ -59,8 +59,9 @@ export class MainThreadEventHandler {
   // Reusable vector for 3D audio positions
   private tempVec3 = new THREE.Vector3();
 
-  constructor(bridge: WorkerBridge) {
+  constructor(bridge: WorkerBridge, localPlayerId: string = 'player1') {
     this.bridge = bridge;
+    this.localPlayerId = localPlayerId;
     this.audioRng = new SeededRandom(Date.now());
     this.setupEventListeners();
   }
@@ -201,7 +202,7 @@ export class MainThreadEventHandler {
 
   private handleUnitTrained(event: UnitTrainedEvent): void {
     // Only play for local player
-    if (!isLocalPlayer(event.playerId)) return;
+    if (event.playerId !== this.localPlayerId) return;
 
     // Play ready voice line
     this.playVoiceLine(event.unitType, 'ready');
@@ -218,7 +219,7 @@ export class MainThreadEventHandler {
 
   private handleBuildingComplete(event: BuildingCompleteEvent): void {
     // Only play for local player
-    if (!isLocalPlayer(event.playerId)) return;
+    if (event.playerId !== this.localPlayerId) return;
 
     // Play completion sound
     AudioManager.play('building_complete', 0.6);
@@ -231,7 +232,7 @@ export class MainThreadEventHandler {
 
   private handleUpgradeComplete(event: UpgradeCompleteEvent): void {
     // Only play for local player
-    if (!isLocalPlayer(event.playerId)) return;
+    if (event.playerId !== this.localPlayerId) return;
 
     AudioManager.play('upgrade_complete', 0.6);
     AudioManager.play('announcement_upgrade_complete', 0.7);
@@ -246,7 +247,7 @@ export class MainThreadEventHandler {
 
   private handleSelectionChanged(event: SelectionChangedEvent): void {
     // Only play for local player
-    if (!isLocalPlayer(event.playerId)) return;
+    if (event.playerId !== this.localPlayerId) return;
 
     if (event.entityIds.length === 0) return;
 
@@ -258,7 +259,7 @@ export class MainThreadEventHandler {
 
   private handleAlert(event: AlertEvent): void {
     // Only play for local player
-    if (!isLocalPlayer(event.playerId)) return;
+    if (event.playerId !== this.localPlayerId) return;
 
     const uiState = useUIStore.getState();
     if (!uiState.alertsEnabled) return;
