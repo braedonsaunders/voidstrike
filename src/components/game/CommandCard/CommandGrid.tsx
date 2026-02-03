@@ -26,7 +26,7 @@ function CommandGridInner({
   plasma,
   supply,
   maxSupply,
-  hoveredCmd,
+  hoveredCmd: _hoveredCmd,
   setHoveredCmd,
 }: CommandGridProps) {
   // Handle clicks on disabled buttons to play resource alerts
