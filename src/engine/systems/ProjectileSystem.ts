@@ -13,6 +13,7 @@ import { getDamageMultiplier } from '@/data/combat/combat';
 import { debugCombat as debugProjectile } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { AssetManager } from '@/assets/AssetManager';
+import { validateEntityAlive } from '@/utils/EntityValidator';
 
 /**
  * ProjectileSystem - Handles projectile movement and damage application on impact
@@ -109,10 +110,16 @@ export class ProjectileSystem extends System {
     projectile: Projectile,
     transform: Transform
   ): void {
-    // Update target position if target entity still exists
+    // Update target position if target entity still exists and is not destroyed
     if (projectile.targetEntityId !== null) {
       const targetEntity = this.world.getEntity(projectile.targetEntityId);
-      if (targetEntity) {
+      if (
+        validateEntityAlive(
+          targetEntity,
+          projectile.targetEntityId,
+          'ProjectileSystem:updateHoming'
+        )
+      ) {
         const targetTransform = targetEntity.get<Transform>('Transform');
         const targetHealth = targetEntity.get<Health>('Health');
         const targetUnit = targetEntity.get<Unit>('Unit');
@@ -258,7 +265,13 @@ export class ProjectileSystem extends System {
     // NOTE: projectile.damage already has multiplier applied from CombatSystem
     if (projectile.targetEntityId !== null) {
       const targetEntity = this.world.getEntity(projectile.targetEntityId);
-      if (targetEntity) {
+      if (
+        validateEntityAlive(
+          targetEntity,
+          projectile.targetEntityId,
+          'ProjectileSystem:applyImpactDamage'
+        )
+      ) {
         const targetHealth = targetEntity.get<Health>('Health');
         const targetTransform = targetEntity.get<Transform>('Transform');
         const targetSelectable = targetEntity.get<Selectable>('Selectable');
@@ -358,7 +371,8 @@ export class ProjectileSystem extends System {
       if (entityId === projectile.targetEntityId) continue;
 
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'ProjectileSystem:applySplashDamage:units'))
+        continue;
 
       const transform = entity.get<Transform>('Transform');
       const health = entity.get<Health>('Health');
@@ -434,7 +448,8 @@ export class ProjectileSystem extends System {
       if (entityId === projectile.targetEntityId) continue;
 
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'ProjectileSystem:applySplashDamage:buildings'))
+        continue;
 
       const transform = entity.get<Transform>('Transform');
       const health = entity.get<Health>('Health');

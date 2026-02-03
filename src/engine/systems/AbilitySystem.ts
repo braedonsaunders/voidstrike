@@ -7,6 +7,7 @@ import { Ability, AbilityDefinition } from '../components/Ability';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { distance } from '@/utils/math';
+import { validateEntityAlive } from '@/utils/EntityValidator';
 
 interface AbilityCommand {
   entityIds: number[];
@@ -48,7 +49,7 @@ export class AbilitySystem extends System {
   private handleAbilityCommand(command: AbilityCommand): void {
     for (const entityId of command.entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'AbilitySystem:handleAbilityCommand')) continue;
 
       const ability = entity.get<Ability>('Ability');
       if (!ability) continue;
@@ -85,11 +86,19 @@ export class AbilitySystem extends System {
       case 'ally':
         if (command.targetEntityId === undefined) return false;
         const target = this.world.getEntity(command.targetEntityId);
-        if (!target) return false;
+        if (
+          !validateEntityAlive(
+            target,
+            command.targetEntityId,
+            'AbilitySystem:validateTarget:target'
+          )
+        )
+          return false;
 
         // Check range
         const casterEntity = this.world.getEntity(caster.id);
-        if (!casterEntity) return false;
+        if (!validateEntityAlive(casterEntity, caster.id, 'AbilitySystem:validateTarget:caster'))
+          return false;
 
         const casterTransform = casterEntity.get<Transform>('Transform');
         const targetTransform = target.get<Transform>('Transform');
@@ -119,7 +128,7 @@ export class AbilitySystem extends System {
     command: AbilityCommand
   ): void {
     const casterEntity = this.world.getEntity(caster.id);
-    if (!casterEntity) return;
+    if (!validateEntityAlive(casterEntity, caster.id, 'AbilitySystem:executeAbility')) return;
 
     const casterTransform = casterEntity.get<Transform>('Transform');
     const casterSelectable = casterEntity.get<Selectable>('Selectable');
@@ -228,7 +237,7 @@ export class AbilitySystem extends System {
 
   private executeCombatStim(caster: { id: number }): void {
     const entity = this.world.getEntity(caster.id);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, caster.id, 'AbilitySystem:executeCombatStim')) return;
 
     const health = entity.get<Health>('Health');
     const unit = entity.get<Unit>('Unit');
@@ -263,7 +272,7 @@ export class AbilitySystem extends System {
 
   private executeBombardmentMode(caster: { id: number }): void {
     const entity = this.world.getEntity(caster.id);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, caster.id, 'AbilitySystem:executeBombardmentMode')) return;
 
     const unit = entity.get<Unit>('Unit');
     if (!unit) return;
@@ -277,7 +286,7 @@ export class AbilitySystem extends System {
 
   private executeSnipe(caster: { id: number }, targetId: number, damage: number): void {
     const target = this.world.getEntity(targetId);
-    if (!target) return;
+    if (!validateEntityAlive(target, targetId, 'AbilitySystem:executeSnipe:target')) return;
 
     const targetHealth = target.get<Health>('Health');
     if (!targetHealth) return;
@@ -286,7 +295,10 @@ export class AbilitySystem extends System {
     targetHealth.takeDamage(damage, this.game.getGameTime());
 
     const casterEntity = this.world.getEntity(caster.id);
-    const casterTransform = casterEntity?.get<Transform>('Transform');
+    // Caster may have been destroyed between ability use and execution
+    const casterTransform = casterEntity?.isDestroyed()
+      ? undefined
+      : casterEntity?.get<Transform>('Transform');
     const targetTransform = target.get<Transform>('Transform');
 
     this.game.eventBus.emit('combat:attack', {
@@ -370,10 +382,13 @@ export class AbilitySystem extends System {
 
   private executeNovaCannon(caster: { id: number }, targetId: number, damage: number): void {
     const target = this.world.getEntity(targetId);
-    if (!target) return;
+    if (!validateEntityAlive(target, targetId, 'AbilitySystem:executeNovaCannon:target')) return;
 
     const casterEntity = this.world.getEntity(caster.id);
-    const casterTransform = casterEntity?.get<Transform>('Transform');
+    // Caster may have been destroyed - still proceed with channel but skip position info
+    const casterTransform = casterEntity?.isDestroyed()
+      ? undefined
+      : casterEntity?.get<Transform>('Transform');
     const targetTransform = target.get<Transform>('Transform');
 
     // Nova Cannon has a 3 second channel time
@@ -409,7 +424,7 @@ export class AbilitySystem extends System {
 
   private executeTacticalJump(caster: { id: number }, position: { x: number; y: number }): void {
     const entity = this.world.getEntity(caster.id);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, caster.id, 'AbilitySystem:executeTacticalJump')) return;
 
     const transform = entity.get<Transform>('Transform');
     if (!transform) return;
@@ -432,10 +447,13 @@ export class AbilitySystem extends System {
 
   private executePowerCannon(caster: { id: number }, targetId: number, damage: number): void {
     const target = this.world.getEntity(targetId);
-    if (!target) return;
+    if (!validateEntityAlive(target, targetId, 'AbilitySystem:executePowerCannon:target')) return;
 
     const casterEntity = this.world.getEntity(caster.id);
-    const casterTransform = casterEntity?.get<Transform>('Transform');
+    // Caster may have been destroyed - still proceed but skip position info
+    const casterTransform = casterEntity?.isDestroyed()
+      ? undefined
+      : casterEntity?.get<Transform>('Transform');
     const targetTransform = target.get<Transform>('Transform');
     const targetHealth = target.get<Health>('Health');
 
@@ -502,7 +520,7 @@ export class AbilitySystem extends System {
 
   private executeSupplyDrop(targetId: number): void {
     const target = this.world.getEntity(targetId);
-    if (!target) return;
+    if (!validateEntityAlive(target, targetId, 'AbilitySystem:executeSupplyDrop')) return;
 
     const building = target.get<Building>('Building');
     if (!building || building.buildingId !== 'supply_cache') return;
@@ -527,7 +545,7 @@ export class AbilitySystem extends System {
 
   private applyConcussiveShells(targetId: number): void {
     const target = this.world.getEntity(targetId);
-    if (!target) return;
+    if (!validateEntityAlive(target, targetId, 'AbilitySystem:applyConcussiveShells')) return;
 
     const unit = target.get<Unit>('Unit');
     if (!unit) return;
@@ -549,7 +567,7 @@ export class AbilitySystem extends System {
 
   private applyCombatShield(caster: { id: number }): void {
     const entity = this.world.getEntity(caster.id);
-    if (!entity) return;
+    if (!validateEntityAlive(entity, caster.id, 'AbilitySystem:applyCombatShield')) return;
 
     const health = entity.get<Health>('Health');
     if (!health) return;
@@ -643,7 +661,9 @@ export class AbilitySystem extends System {
     if (targetId === undefined || damage === undefined) return;
 
     const currentTarget = this.world.getEntity(targetId);
-    if (!currentTarget) return;
+    // Target may have been destroyed during the channel time
+    if (!validateEntityAlive(currentTarget, targetId, 'AbilitySystem:executeNovaCannonImpact'))
+      return;
 
     const targetHealth = currentTarget.get<Health>('Health');
     if (!targetHealth) return;

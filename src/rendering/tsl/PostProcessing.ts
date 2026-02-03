@@ -163,7 +163,6 @@ export interface PostProcessingConfig {
   antiAliasingMode: AntiAliasingMode;
   fxaaEnabled: boolean;
   taaEnabled: boolean;
-  taaHistoryBlendRate: number;
   taaSharpeningEnabled: boolean;
   taaSharpeningIntensity: number;
   upscalingMode: UpscalingMode;
@@ -214,7 +213,6 @@ const DEFAULT_CONFIG: PostProcessingConfig = {
   antiAliasingMode: 'fxaa',
   fxaaEnabled: true,
   taaEnabled: false,
-  taaHistoryBlendRate: 0.1,
   taaSharpeningEnabled: true,
   taaSharpeningIntensity: 0.5,
   upscalingMode: 'off',
