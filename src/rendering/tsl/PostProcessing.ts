@@ -277,6 +277,11 @@ export class RenderPipeline {
   private quarterWidth = 960;
   private quarterHeight = 540;
   private displayWidth = 1920;
+
+  // Fog of war map dimensions (stored for rebuild)
+  private fogOfWarMapWidth = 0;
+  private fogOfWarMapHeight = 0;
+  private fogOfWarCellSize = 2;
   private displayHeight = 1080;
   private renderWidth = 1920;
   private renderHeight = 1080;
@@ -561,6 +566,14 @@ export class RenderPipeline {
           rimIntensity: this.config.fogOfWarRimIntensity,
           heightInfluence: this.config.fogOfWarHeightInfluence,
         });
+        // Restore map dimensions after rebuild (critical for correct positioning)
+        if (this.fogOfWarMapWidth > 0 && this.fogOfWarMapHeight > 0) {
+          this.fogOfWarPass.setMapDimensions(
+            this.fogOfWarMapWidth,
+            this.fogOfWarMapHeight,
+            this.fogOfWarCellSize
+          );
+        }
         outputNode = this.fogOfWarPass.node;
       }
     }
@@ -862,6 +875,11 @@ export class RenderPipeline {
    * @param cellSize Optional cell size for vision grid (default: 2)
    */
   setFogOfWarMapDimensions(width: number, height: number, cellSize: number = 2): void {
+    // Store dimensions so they can be restored after rebuild
+    this.fogOfWarMapWidth = width;
+    this.fogOfWarMapHeight = height;
+    this.fogOfWarCellSize = cellSize;
+
     if (this.fogOfWarPass) {
       this.fogOfWarPass.setMapDimensions(width, height, cellSize);
     }
