@@ -155,6 +155,8 @@ export class CullingService {
     this.entityBuffer.freeSlot(entityId);
     this.visibilityMap.delete(entityId);
     this.lodMap.delete(entityId);
+    // Clean up LOD hysteresis tracking in compute
+    this.cullingCompute.removeEntityLODTracking(entityId);
   }
 
   /**
@@ -363,9 +365,10 @@ export class CullingService {
    * Get all visible entities of a category
    */
   *getVisibleEntities(category?: EntityCategory): IterableIterator<EntitySlot> {
-    const slots = category !== undefined
-      ? this.entityBuffer.getSlotsByCategory(category)
-      : this.entityBuffer.getAllocatedSlots();
+    const slots =
+      category !== undefined
+        ? this.entityBuffer.getSlotsByCategory(category)
+        : this.entityBuffer.getAllocatedSlots();
 
     for (const slot of slots) {
       if (this.visibilityMap.get(slot.entityId)) {
