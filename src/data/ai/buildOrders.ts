@@ -42,130 +42,13 @@ export interface BuildOrder {
 }
 
 export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'insane';
-export type BuildOrderStyle = 'economic' | 'aggressive' | 'defensive' | 'balanced' | 'rush' | 'turtle';
-
-// ==================== AI BEHAVIOR CONFIG ====================
-
-export interface AIBehaviorConfig {
-  // Timing (in game ticks, 20 ticks = 1 second)
-  ticksBetweenActions: number;
-  scoutCooldown: number;
-  harassCooldown: number;
-  expansionCooldown: number;
-  attackCooldown: number;
-
-  // Economy
-  targetWorkerCount: number;
-  maxWorkersPerBase: number;
-  expandAtWorkers: number;
-
-  // Army
-  attackArmySupplyThreshold: number;
-  defendArmyRatio: number; // Ratio of army to keep for defense
-  harassArmyRatio: number;
-
-  // Resource bonuses (for difficulty scaling)
-  resourceMultiplier: number;
-  buildSpeedMultiplier: number;
-
-  // Intelligence
-  scoutsEnabled: boolean;
-  counterUnitsEnabled: boolean;
-  microEnabled: boolean;
-}
-
-export const AI_DIFFICULTY_CONFIG: Record<AIDifficulty, AIBehaviorConfig> = {
-  easy: {
-    ticksBetweenActions: 40, // Slower reactions
-    scoutCooldown: 2000,
-    harassCooldown: 3000,
-    expansionCooldown: 4000,
-    attackCooldown: 3000,
-    targetWorkerCount: 16,
-    maxWorkersPerBase: 16,
-    expandAtWorkers: 20,
-    attackArmySupplyThreshold: 30,
-    defendArmyRatio: 0.5,
-    harassArmyRatio: 0,
-    resourceMultiplier: 1.0,
-    buildSpeedMultiplier: 1.0,
-    scoutsEnabled: false,
-    counterUnitsEnabled: false,
-    microEnabled: false,
-  },
-  medium: {
-    ticksBetweenActions: 30,
-    scoutCooldown: 1500,
-    harassCooldown: 2000,
-    expansionCooldown: 3000,
-    attackCooldown: 2000,
-    targetWorkerCount: 22,
-    maxWorkersPerBase: 22,
-    expandAtWorkers: 18,
-    attackArmySupplyThreshold: 25,
-    defendArmyRatio: 0.4,
-    harassArmyRatio: 0.1,
-    resourceMultiplier: 1.0,
-    buildSpeedMultiplier: 1.0,
-    scoutsEnabled: true,
-    counterUnitsEnabled: false,
-    microEnabled: false,
-  },
-  hard: {
-    ticksBetweenActions: 20,
-    scoutCooldown: 1000,
-    harassCooldown: 1500,
-    expansionCooldown: 2000,
-    attackCooldown: 1500,
-    targetWorkerCount: 30,
-    maxWorkersPerBase: 24,
-    expandAtWorkers: 16,
-    attackArmySupplyThreshold: 20,
-    defendArmyRatio: 0.3,
-    harassArmyRatio: 0.15,
-    resourceMultiplier: 1.0,
-    buildSpeedMultiplier: 1.0,
-    scoutsEnabled: true,
-    counterUnitsEnabled: true,
-    microEnabled: true,
-  },
-  very_hard: {
-    ticksBetweenActions: 15,
-    scoutCooldown: 800,
-    harassCooldown: 1000,
-    expansionCooldown: 1500,
-    attackCooldown: 1000,
-    targetWorkerCount: 40,
-    maxWorkersPerBase: 24,
-    expandAtWorkers: 14,
-    attackArmySupplyThreshold: 15,
-    defendArmyRatio: 0.25,
-    harassArmyRatio: 0.2,
-    resourceMultiplier: 1.2, // Slight resource bonus
-    buildSpeedMultiplier: 1.1,
-    scoutsEnabled: true,
-    counterUnitsEnabled: true,
-    microEnabled: true,
-  },
-  insane: {
-    ticksBetweenActions: 10, // Very fast reactions
-    scoutCooldown: 500,
-    harassCooldown: 800,
-    expansionCooldown: 1000,
-    attackCooldown: 800,
-    targetWorkerCount: 50,
-    maxWorkersPerBase: 24,
-    expandAtWorkers: 12,
-    attackArmySupplyThreshold: 10,
-    defendArmyRatio: 0.2,
-    harassArmyRatio: 0.25,
-    resourceMultiplier: 1.5, // Significant resource bonus
-    buildSpeedMultiplier: 1.3,
-    scoutsEnabled: true,
-    counterUnitsEnabled: true,
-    microEnabled: true,
-  },
-};
+export type BuildOrderStyle =
+  | 'economic'
+  | 'aggressive'
+  | 'defensive'
+  | 'balanced'
+  | 'rush'
+  | 'turtle';
 
 // ==================== FACTION BUILD ORDERS ====================
 
@@ -297,7 +180,10 @@ export interface UnitCompositionWeights {
   [unitId: string]: number;
 }
 
-export const FACTION_UNIT_COMPOSITIONS: Record<string, Record<AIDifficulty, UnitCompositionWeights>> = {
+export const FACTION_UNIT_COMPOSITIONS: Record<
+  string,
+  Record<AIDifficulty, UnitCompositionWeights>
+> = {
   dominion: {
     easy: {
       trooper: 1.0,
@@ -367,16 +253,12 @@ export function getRandomBuildOrder(
 }
 
 /**
- * Get AI behavior config for a difficulty level.
- */
-export function getAIConfig(difficulty: AIDifficulty): AIBehaviorConfig {
-  return AI_DIFFICULTY_CONFIG[difficulty];
-}
-
-/**
  * Get unit composition weights for a faction and difficulty.
  */
-export function getUnitComposition(faction: string, difficulty: AIDifficulty): UnitCompositionWeights {
+export function getUnitComposition(
+  faction: string,
+  difficulty: AIDifficulty
+): UnitCompositionWeights {
   return FACTION_UNIT_COMPOSITIONS[faction]?.[difficulty] ?? {};
 }
 
@@ -392,7 +274,7 @@ export function selectUnitToBuild(
   const weights = getUnitComposition(faction, difficulty);
 
   // Filter to only available units
-  const available = availableUnits.filter(u => weights[u] !== undefined);
+  const available = availableUnits.filter((u) => weights[u] !== undefined);
   if (available.length === 0) return availableUnits[0] ?? null;
 
   // Weighted random selection

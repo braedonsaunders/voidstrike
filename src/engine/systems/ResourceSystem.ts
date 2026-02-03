@@ -5,7 +5,7 @@ import { Unit } from '../components/Unit';
 import { Resource } from '../components/Resource';
 import { Building } from '../components/Building';
 import { Selectable } from '../components/Selectable';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { World } from '../ecs/World';
 import { debugResources } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
@@ -30,7 +30,7 @@ export class ResourceSystem extends System {
   // Cache reference to AI system for mining speed bonuses and resource crediting
   private aiSystem: EnhancedAISystem | null = null;
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
@@ -131,7 +131,12 @@ export class ResourceSystem extends System {
     if (!targetTransform) return;
 
     // For minerals, find all nearby mineral patches for worker splitting
-    let mineralPatches: Array<{ entity: Entity; resource: Resource; transform: Transform; gathererCount: number }> = [];
+    let mineralPatches: Array<{
+      entity: Entity;
+      resource: Resource;
+      transform: Transform;
+      gathererCount: number;
+    }> = [];
     if (resource.resourceType === 'minerals') {
       mineralPatches = this.findNearbyMineralPatches(targetTransform.x, targetTransform.y, 15);
     }
@@ -186,7 +191,9 @@ export class ResourceSystem extends System {
 
         // Debug: log gather command for all workers
         const selectable = entity.get<Selectable>('Selectable');
-        debugResources.log(`[ResourceSystem] ${selectable?.playerId} worker ${entityId} assigned to gather resource ${assignedTargetId}, moving to (${assignedTransform.x.toFixed(1)}, ${assignedTransform.y.toFixed(1)}), targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, state=${unit.state}`);
+        debugResources.log(
+          `[ResourceSystem] ${selectable?.playerId} worker ${entityId} assigned to gather resource ${assignedTargetId}, moving to (${assignedTransform.x.toFixed(1)}, ${assignedTransform.y.toFixed(1)}), targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, state=${unit.state}`
+        );
       }
     }
   }
@@ -224,7 +231,12 @@ export class ResourceSystem extends System {
     y: number,
     range: number
   ): Array<{ entity: Entity; resource: Resource; transform: Transform; gathererCount: number }> {
-    const patches: Array<{ entity: Entity; resource: Resource; transform: Transform; gathererCount: number }> = [];
+    const patches: Array<{
+      entity: Entity;
+      resource: Resource;
+      transform: Transform;
+      gathererCount: number;
+    }> = [];
     // PERF: Use cached resources instead of querying every time
     const resources = this.getCachedResources();
 
@@ -254,14 +266,19 @@ export class ResourceSystem extends System {
    * Prefers patches with 0-1 workers, then closest with fewest workers
    */
   private findBestMineralPatch(
-    patches: Array<{ entity: Entity; resource: Resource; transform: Transform; gathererCount: number }>,
+    patches: Array<{
+      entity: Entity;
+      resource: Resource;
+      transform: Transform;
+      gathererCount: number;
+    }>,
     workerTransform: Transform
   ): { entity: Entity; resource: Resource; transform: Transform; gathererCount: number } | null {
     if (patches.length === 0) return null;
 
     // Sort by: 1) gatherer count (fewer first), 2) distance (closer first)
     const sortedPatches = patches
-      .filter(p => !p.resource.isDepleted())
+      .filter((p) => !p.resource.isDepleted())
       .sort((a, b) => {
         // Strongly prefer patches with < 2 workers (optimal saturation)
         const aOptimal = a.gathererCount < 2 ? 0 : 1;
@@ -405,7 +422,9 @@ export class ResourceSystem extends System {
             // Auto-assign to new resource
             unit.gatherTargetId = newResource.entityId;
             unit.moveToPosition(newResource.x, newResource.y);
-            debugResources.log(`[ResourceSystem] Worker ${entity.id} auto-reassigned from depleted resource to ${newResource.entityId}`);
+            debugResources.log(
+              `[ResourceSystem] Worker ${entity.id} auto-reassigned from depleted resource to ${newResource.entityId}`
+            );
           } else {
             // No resources available - go idle
             unit.gatherTargetId = null;
@@ -423,7 +442,9 @@ export class ResourceSystem extends System {
         // Debug: log distance for all workers periodically
         // DETERMINISM: Use tick-based sampling instead of Math.random() to avoid multiplayer desync
         if (this.game.getCurrentTick() % 100 === 0 && entity.id % 5 === 0) {
-          debugResources.log(`[ResourceSystem] ${workerId} worker ${entity.id}: distance=${dist.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}, targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, state=${unit.state}`);
+          debugResources.log(
+            `[ResourceSystem] ${workerId} worker ${entity.id}: distance=${dist.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}, targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, state=${unit.state}`
+          );
         }
 
         // Plasma extractors are 2x2 buildings - workers need larger gathering distance
@@ -462,7 +483,12 @@ export class ResourceSystem extends System {
           if (resource.resourceType === 'plasma') {
             const dx = transform.x - resourceTransform.x;
             const dy = transform.y - resourceTransform.y;
-            const dist = distance(transform.x, transform.y, resourceTransform.x, resourceTransform.y);
+            const dist = distance(
+              transform.x,
+              transform.y,
+              resourceTransform.x,
+              resourceTransform.y
+            );
             if (dist > 0.1) {
               // Target a point 2 units from center (just outside 2x2 extractor)
               const targetX = resourceTransform.x + (dx / dist) * 2;
@@ -507,11 +533,7 @@ export class ResourceSystem extends System {
     }
   }
 
-  private handleResourceReturn(
-    workerEntity: Entity,
-    transform: Transform,
-    unit: Unit
-  ): void {
+  private handleResourceReturn(workerEntity: Entity, transform: Transform, unit: Unit): void {
     // PERF: Use cached bases instead of querying every worker return
     const bases = this.getCachedBases();
     let nearestBase: { transform: Transform; building: Building; entityId: number } | null = null;
@@ -522,13 +544,23 @@ export class ResourceSystem extends System {
     const workerOwner = workerSelectable?.playerId;
 
     const resourceDropOffBuildings = [
-      'headquarters', 'orbital_station', 'bastion',
+      'headquarters',
+      'orbital_station',
+      'bastion',
       'nexus',
-      'hatchery', 'lair', 'hive'
+      'hatchery',
+      'lair',
+      'hive',
     ];
 
     // Track all valid bases for debugging
-    const validBases: Array<{ entityId: number; buildingId: string; distance: number; x: number; y: number }> = [];
+    const validBases: Array<{
+      entityId: number;
+      buildingId: string;
+      distance: number;
+      x: number;
+      y: number;
+    }> = [];
 
     for (const baseEntity of bases) {
       const building = baseEntity.get<Building>('Building');
@@ -552,7 +584,7 @@ export class ResourceSystem extends System {
         buildingId: building.buildingId,
         distance: dist,
         x: baseTransform.x,
-        y: baseTransform.y
+        y: baseTransform.y,
       });
 
       if (dist < nearestDistance) {
@@ -568,9 +600,19 @@ export class ResourceSystem extends System {
     }
 
     // Debug: Log base selection when multiple bases exist (periodic sampling)
-    if (validBases.length > 1 && this.game.getCurrentTick() % 100 === 0 && workerEntity.id % 10 === 0) {
-      const basesInfo = validBases.map(b => `${b.buildingId}@(${b.x.toFixed(0)},${b.y.toFixed(0)})=${b.distance.toFixed(1)}`).join(', ');
-      debugResources.log(`[ResourceSystem] Worker ${workerEntity.id} at (${transform.x.toFixed(0)},${transform.y.toFixed(0)}) choosing nearest base: ${nearestBase.building.buildingId}@(${nearestBase.transform.x.toFixed(0)},${nearestBase.transform.y.toFixed(0)}) dist=${nearestDistance.toFixed(1)}. All bases: [${basesInfo}]`);
+    if (
+      validBases.length > 1 &&
+      this.game.getCurrentTick() % 100 === 0 &&
+      workerEntity.id % 10 === 0
+    ) {
+      const basesInfo = validBases
+        .map(
+          (b) => `${b.buildingId}@(${b.x.toFixed(0)},${b.y.toFixed(0)})=${b.distance.toFixed(1)}`
+        )
+        .join(', ');
+      debugResources.log(
+        `[ResourceSystem] Worker ${workerEntity.id} at (${transform.x.toFixed(0)},${transform.y.toFixed(0)}) choosing nearest base: ${nearestBase.building.buildingId}@(${nearestBase.transform.x.toFixed(0)},${nearestBase.transform.y.toFixed(0)}) dist=${nearestDistance.toFixed(1)}. All bases: [${basesInfo}]`
+      );
     }
 
     // Calculate drop-off range based on building size
@@ -630,44 +672,66 @@ export class ResourceSystem extends System {
           if (resourceTransform && resource && !resource.isDepleted()) {
             // Rebalancing: check if we should switch to a less saturated patch
             if (resource.resourceType === 'minerals' && resource.getCurrentGatherers() >= 2) {
-              const nearbyPatches = this.findNearbyMineralPatches(resourceTransform.x, resourceTransform.y, 15);
-              const betterPatch = nearbyPatches.find(p =>
-                p.entity.id !== resourceEntity.id &&
-                !p.resource.isDepleted() &&
-                p.gathererCount < resource.getCurrentGatherers()
+              const nearbyPatches = this.findNearbyMineralPatches(
+                resourceTransform.x,
+                resourceTransform.y,
+                15
+              );
+              const betterPatch = nearbyPatches.find(
+                (p) =>
+                  p.entity.id !== resourceEntity.id &&
+                  !p.resource.isDepleted() &&
+                  p.gathererCount < resource.getCurrentGatherers()
               );
 
               if (betterPatch) {
                 // Switch to less saturated patch
                 unit.gatherTargetId = betterPatch.entity.id;
                 unit.moveToPosition(betterPatch.transform.x, betterPatch.transform.y);
-                debugResources.log(`[ResourceSystem] Worker ${workerEntity.id} switching to less saturated patch ${betterPatch.entity.id}`);
+                debugResources.log(
+                  `[ResourceSystem] Worker ${workerEntity.id} switching to less saturated patch ${betterPatch.entity.id}`
+                );
                 return;
               }
             }
 
             unit.moveToPosition(resourceTransform.x, resourceTransform.y);
-            debugResources.log(`[ResourceSystem] Worker ${workerEntity.id} dropped off, returning to gather at (${resourceTransform.x.toFixed(1)}, ${resourceTransform.y.toFixed(1)}), targetX=${unit.targetX?.toFixed(1)}`);
+            debugResources.log(
+              `[ResourceSystem] Worker ${workerEntity.id} dropped off, returning to gather at (${resourceTransform.x.toFixed(1)}, ${resourceTransform.y.toFixed(1)}), targetX=${unit.targetX?.toFixed(1)}`
+            );
             // State already 'gathering'
             return;
           } else {
-            debugResources.warn(`[ResourceSystem] Worker ${workerEntity.id} resource invalid after drop-off: transform=${!!resourceTransform}, resource=${!!resource}, depleted=${resource?.isDepleted()}`);
+            debugResources.warn(
+              `[ResourceSystem] Worker ${workerEntity.id} resource invalid after drop-off: transform=${!!resourceTransform}, resource=${!!resource}, depleted=${resource?.isDepleted()}`
+            );
           }
         } else {
-          debugResources.warn(`[ResourceSystem] Worker ${workerEntity.id} gatherTargetId ${unit.gatherTargetId} entity not found after drop-off`);
+          debugResources.warn(
+            `[ResourceSystem] Worker ${workerEntity.id} gatherTargetId ${unit.gatherTargetId} entity not found after drop-off`
+          );
         }
       } else {
-        debugResources.warn(`[ResourceSystem] Worker ${workerEntity.id} has no gatherTargetId after drop-off`);
+        debugResources.warn(
+          `[ResourceSystem] Worker ${workerEntity.id} has no gatherTargetId after drop-off`
+        );
       }
 
-      debugResources.log(`[ResourceSystem] Worker ${workerEntity.id} becoming idle after drop-off (no valid gather target)`);
+      debugResources.log(
+        `[ResourceSystem] Worker ${workerEntity.id} becoming idle after drop-off (no valid gather target)`
+      );
       unit.state = 'idle';
     } else {
       // Move toward the edge of the base building (not the center)
       // Target must be OUTSIDE the building avoidance zone (halfWidth + 1.0) to prevent oscillation
       const dx = transform.x - nearestBase.transform.x;
       const dy = transform.y - nearestBase.transform.y;
-      const dist = distance(transform.x, transform.y, nearestBase.transform.x, nearestBase.transform.y);
+      const dist = distance(
+        transform.x,
+        transform.y,
+        nearestBase.transform.x,
+        nearestBase.transform.y
+      );
 
       if (dist > 0.1) {
         // Target a point outside the avoidance zone, in direction toward worker
@@ -679,7 +743,10 @@ export class ResourceSystem extends System {
         unit.moveToPosition(targetX, targetY);
       } else {
         // Worker is at center somehow, just move away slightly
-        unit.moveToPosition(nearestBase.transform.x + buildingHalfWidth + 2, nearestBase.transform.y);
+        unit.moveToPosition(
+          nearestBase.transform.x + buildingHalfWidth + 2,
+          nearestBase.transform.y
+        );
       }
     }
   }
@@ -702,9 +769,13 @@ export class ResourceSystem extends System {
     let nearestDistance = Infinity;
 
     const resourceDropOffBuildings = [
-      'headquarters', 'orbital_station', 'bastion',
+      'headquarters',
+      'orbital_station',
+      'bastion',
       'nexus',
-      'hatchery', 'lair', 'hive'
+      'hatchery',
+      'lair',
+      'hive',
     ];
 
     for (const baseEntity of bases) {
@@ -741,13 +812,21 @@ export class ResourceSystem extends System {
     const buildingHalfWidth = (nearestBase.building.width || 5) / 2;
     const dx = transform.x - nearestBase.transform.x;
     const dy = transform.y - nearestBase.transform.y;
-    const dist = distance(transform.x, transform.y, nearestBase.transform.x, nearestBase.transform.y);
+    const dist = distance(
+      transform.x,
+      transform.y,
+      nearestBase.transform.x,
+      nearestBase.transform.y
+    );
 
     if (dist > 0.1) {
       const dirX = dx / dist;
       const dirY = dy / dist;
       const edgeDistance = buildingHalfWidth + 2.0; // Outside avoidance zone
-      unit.moveToPosition(nearestBase.transform.x + dirX * edgeDistance, nearestBase.transform.y + dirY * edgeDistance);
+      unit.moveToPosition(
+        nearestBase.transform.x + dirX * edgeDistance,
+        nearestBase.transform.y + dirY * edgeDistance
+      );
     } else {
       unit.moveToPosition(nearestBase.transform.x + buildingHalfWidth + 2, nearestBase.transform.y);
     }

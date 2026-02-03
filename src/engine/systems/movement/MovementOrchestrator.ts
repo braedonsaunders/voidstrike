@@ -19,7 +19,7 @@ import { Transform } from '../../components/Transform';
 import { Unit } from '../../components/Unit';
 import { Velocity } from '../../components/Velocity';
 import { Selectable } from '../../components/Selectable';
-import type { Game } from '../../core/Game';
+import type { IGameInstance } from '../../core/IGameInstance';
 import { World } from '../../ecs/World';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { RecastNavigation, getRecastNavigation } from '../../pathfinding/RecastNavigation';
@@ -60,7 +60,7 @@ export class MovementOrchestrator {
   private formation: FormationMovement;
 
   // Core references
-  private game: Game;
+  private game: IGameInstance;
   private world: World;
   private recast: RecastNavigation;
 
@@ -96,12 +96,13 @@ export class MovementOrchestrator {
   private readonly GRID_UPDATE_THRESHOLD_SQ = 0.25;
 
   // PERF: Cached entity data to avoid repeated lookups in single frame
-  private frameEntityCache: Map<number, { transform: Transform; unit: Unit; velocity: Velocity }> = new Map();
+  private frameEntityCache: Map<number, { transform: Transform; unit: Unit; velocity: Velocity }> =
+    new Map();
 
   // Current tick for caching
   private currentTick: number = 0;
 
-  constructor(game: Game, world: World) {
+  constructor(game: IGameInstance, world: World) {
     this.game = game;
     this.world = world;
     this.recast = getRecastNavigation();
@@ -160,7 +161,10 @@ export class MovementOrchestrator {
     this.game.eventBus.on('command:move', this.formation.handleMoveCommand.bind(this.formation));
     this.game.eventBus.on('command:attackMove', this.handleAttackMoveCommand.bind(this));
     this.game.eventBus.on('command:patrol', this.handlePatrolCommand.bind(this));
-    this.game.eventBus.on('command:formation', this.formation.handleFormationCommand.bind(this.formation));
+    this.game.eventBus.on(
+      'command:formation',
+      this.formation.handleFormationCommand.bind(this.formation)
+    );
 
     // Clean up tracking data when units die to prevent memory leaks
     this.game.eventBus.on('unit:died', (data: { entityId: number }) => {
@@ -215,11 +219,11 @@ export class MovementOrchestrator {
         );
         this.wasmBoids.setCohesionParams(
           8.0, // COHESION_RADIUS
-          0.1  // COHESION_STRENGTH
+          0.1 // COHESION_STRENGTH
         );
         this.wasmBoids.setAlignmentParams(
           4.0, // ALIGNMENT_RADIUS
-          0.3  // ALIGNMENT_STRENGTH
+          0.3 // ALIGNMENT_STRENGTH
         );
 
         debugPathfinding.log('[MovementOrchestrator] WASM SIMD boids enabled');
@@ -306,7 +310,12 @@ export class MovementOrchestrator {
         unit.setAttackMoveTarget(validatedTarget.x, validatedTarget.y);
         unit.path = [];
         unit.pathIndex = 0;
-        this.pathfinding.requestPathWithCooldown(entityId, validatedTarget.x, validatedTarget.y, true);
+        this.pathfinding.requestPathWithCooldown(
+          entityId,
+          validatedTarget.x,
+          validatedTarget.y,
+          true
+        );
       }
     }
   }
@@ -344,12 +353,7 @@ export class MovementOrchestrator {
           targetY: validatedTarget.y,
         });
       } else {
-        unit.setPatrol(
-          transform.x,
-          transform.y,
-          validatedTarget.x,
-          validatedTarget.y
-        );
+        unit.setPatrol(transform.x, transform.y, validatedTarget.x, validatedTarget.y);
         this.pathfinding.requestPathWithCooldown(
           entityId,
           validatedTarget.x,
@@ -394,7 +398,8 @@ export class MovementOrchestrator {
     }
 
     // WASM SIMD boids: batch process when we have enough units
-    const useWasmThisFrame = this.useWasmBoids &&
+    const useWasmThisFrame =
+      this.useWasmBoids &&
       this.wasmBoids !== null &&
       entities.length >= MovementOrchestrator.WASM_UNIT_THRESHOLD;
 
@@ -511,7 +516,9 @@ export class MovementOrchestrator {
     // Debug gathering workers
     if (unit.state === 'gathering' && this.currentTick % 100 === 0 && entity.id % 5 === 0) {
       const selectable = entity.get<Selectable>('Selectable');
-      debugResources.log(`[MovementOrchestrator] ${selectable?.playerId} gathering worker ${entity.id}: targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, pos=(${transform.x.toFixed(1)}, ${transform.y.toFixed(1)}), speed=${unit.currentSpeed.toFixed(2)}, maxSpeed=${unit.maxSpeed}`);
+      debugResources.log(
+        `[MovementOrchestrator] ${selectable?.playerId} gathering worker ${entity.id}: targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, pos=(${transform.x.toFixed(1)}, ${transform.y.toFixed(1)}), speed=${unit.currentSpeed.toFixed(2)}, maxSpeed=${unit.maxSpeed}`
+      );
     }
 
     // Get current target
@@ -570,9 +577,7 @@ export class MovementOrchestrator {
         const directDistanceSq = directDx * directDx + directDy * directDy;
 
         const needsPath =
-          unit.state === 'moving' ||
-          unit.state === 'gathering' ||
-          unit.state === 'building';
+          unit.state === 'moving' || unit.state === 'gathering' || unit.state === 'building';
         if (directDistanceSq > 9 && needsPath) {
           this.pathfinding.requestPathWithCooldown(entity.id, unit.targetX, unit.targetY);
         }
@@ -581,7 +586,14 @@ export class MovementOrchestrator {
 
     // Handle attacking state
     if (unit.state === 'attacking' && unit.targetEntityId !== null) {
-      const result = this.processAttackingUnit(entity.id, transform, unit, velocity, dt, useWasmThisFrame);
+      const result = this.processAttackingUnit(
+        entity.id,
+        transform,
+        unit,
+        velocity,
+        dt,
+        useWasmThisFrame
+      );
       if (result.handled) {
         targetX = result.targetX;
         targetY = result.targetY;
@@ -622,8 +634,16 @@ export class MovementOrchestrator {
 
     // Calculate and apply velocity
     this.calculateAndApplyVelocity(
-      entity.id, transform, unit, velocity, dt,
-      targetX, targetY, dx, dy, distance,
+      entity.id,
+      transform,
+      unit,
+      velocity,
+      dt,
+      targetX,
+      targetY,
+      dx,
+      dy,
+      distance,
       useWasmThisFrame
     );
   }
@@ -661,13 +681,17 @@ export class MovementOrchestrator {
 
       // PERF: Skip truly idle units except at reduced frequency
       const isTrulyIdle = currentIdleTicks >= TRULY_IDLE_THRESHOLD_TICKS;
-      if (isTrulyIdle && (this.currentTick % TRULY_IDLE_PROCESS_INTERVAL !== 0)) {
+      if (isTrulyIdle && this.currentTick % TRULY_IDLE_PROCESS_INTERVAL !== 0) {
         velocity.zero();
         return;
       }
 
       this.flocking.calculateSeparationForce(
-        entityId, transform, unit, tempSeparation, Infinity,
+        entityId,
+        transform,
+        unit,
+        tempSeparation,
+        Infinity,
         this.world.unitGrid as unknown as FlockingSpatialGrid
       );
       const sepMagSq = tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y;
@@ -746,7 +770,8 @@ export class MovementOrchestrator {
     }
 
     const targetTransform = targetEntity.get<Transform>('Transform');
-    const targetBuilding = targetEntity.get<import('../../components/Building').Building>('Building');
+    const targetBuilding =
+      targetEntity.get<import('../../components/Building').Building>('Building');
     const targetUnit = targetEntity.get<Unit>('Unit');
     if (!targetTransform) {
       return { handled: false, skipMovement: false, targetX: null, targetY: null };
@@ -772,7 +797,10 @@ export class MovementOrchestrator {
       );
       const edgeDx = transform.x - clampedX;
       const edgeDy = transform.y - clampedY;
-      effectiveDistance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
+      effectiveDistance = Math.max(
+        0,
+        Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius
+      );
 
       const standOffDistance = unit.attackRange * ATTACK_STANDOFF_MULTIPLIER;
       const minSafeDistance = attackerRadius + 0.5;
@@ -798,7 +826,9 @@ export class MovementOrchestrator {
       }
     } else {
       const centerDistance = transform.distanceTo(targetTransform);
-      const targetRadius = targetUnit ? AssetManager.getCachedVisualRadius(targetUnit.unitId, targetUnit.collisionRadius) : 0.5;
+      const targetRadius = targetUnit
+        ? AssetManager.getCachedVisualRadius(targetUnit.unitId, targetUnit.collisionRadius)
+        : 0.5;
       effectiveDistance = Math.max(0, centerDistance - attackerRadius - targetRadius);
     }
 
@@ -815,12 +845,18 @@ export class MovementOrchestrator {
       );
 
       this.flocking.calculateSeparationForce(
-        entityId, transform, unit, tempSeparation, 0,
+        entityId,
+        transform,
+        unit,
+        tempSeparation,
+        0,
         this.world.unitGrid as unknown as FlockingSpatialGrid
       );
 
       const combatMoveSpeed = unit.maxSpeed * collisionConfig.combatSpreadSpeedMultiplier;
-      const sepMag = Math.sqrt(tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y);
+      const sepMag = Math.sqrt(
+        tempSeparation.x * tempSeparation.x + tempSeparation.y * tempSeparation.y
+      );
 
       if (sepMag > collisionConfig.combatSeparationThreshold) {
         velocity.x = (tempSeparation.x / sepMag) * combatMoveSpeed;
@@ -957,7 +993,11 @@ export class MovementOrchestrator {
   ): void {
     // Calculate speed
     let targetSpeed = unit.maxSpeed;
-    const terrainSpeedMod = this.pathfinding.getTerrainSpeedModifier(transform.x, transform.y, unit.isFlying);
+    const terrainSpeedMod = this.pathfinding.getTerrainSpeedModifier(
+      transform.x,
+      transform.y,
+      unit.isFlying
+    );
     targetSpeed *= terrainSpeedMod;
 
     if (distance < this.decelerationThreshold) {
@@ -995,8 +1035,8 @@ export class MovementOrchestrator {
           if (distance > 2 && unit.path.length > 0) {
             debugPathfinding.warn(
               `[MovementOrchestrator] Crowd returned zero velocity for entity ${entityId}. ` +
-              `Pos: (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)}), ` +
-              `Target: (${targetX.toFixed(1)}, ${targetY.toFixed(1)}), Distance: ${distance.toFixed(1)}`
+                `Pos: (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)}), ` +
+                `Target: (${targetX.toFixed(1)}, ${targetY.toFixed(1)}), Distance: ${distance.toFixed(1)}`
             );
           }
           if (distance > 0.01) {
@@ -1019,8 +1059,7 @@ export class MovementOrchestrator {
 
             // Reduce speed when building avoidance is active to prevent overshooting
             const avoidMag = Math.sqrt(
-              tempBuildingAvoid.x * tempBuildingAvoid.x +
-              tempBuildingAvoid.y * tempBuildingAvoid.y
+              tempBuildingAvoid.x * tempBuildingAvoid.x + tempBuildingAvoid.y * tempBuildingAvoid.y
             );
             if (avoidMag > 0.5) {
               // Strong avoidance active - reduce speed to allow steering to take effect
@@ -1035,12 +1074,13 @@ export class MovementOrchestrator {
         }
 
         // Add arrival spreading
-        const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
-          ? Math.sqrt(
-              (unit.targetX - transform.x) * (unit.targetX - transform.x) +
-              (unit.targetY - transform.y) * (unit.targetY - transform.y)
-            )
-          : distance;
+        const distToFinalTarget =
+          unit.targetX !== null && unit.targetY !== null
+            ? Math.sqrt(
+                (unit.targetX - transform.x) * (unit.targetX - transform.x) +
+                  (unit.targetY - transform.y) * (unit.targetY - transform.y)
+              )
+            : distance;
 
         if (distToFinalTarget < collisionConfig.arrivalSpreadRadius) {
           if (useWasmThisFrame) {
@@ -1049,17 +1089,35 @@ export class MovementOrchestrator {
               tempSeparation.x = wasmForces.separationX;
               tempSeparation.y = wasmForces.separationY;
             } else {
-              this.flocking.calculateSeparationForce(entityId, transform, unit, tempSeparation, distToFinalTarget, unitGrid);
+              this.flocking.calculateSeparationForce(
+                entityId,
+                transform,
+                unit,
+                tempSeparation,
+                distToFinalTarget,
+                unitGrid
+              );
             }
           } else {
-            this.flocking.calculateSeparationForce(entityId, transform, unit, tempSeparation, distToFinalTarget, unitGrid);
+            this.flocking.calculateSeparationForce(
+              entityId,
+              transform,
+              unit,
+              tempSeparation,
+              distToFinalTarget,
+              unitGrid
+            );
           }
           finalVx += tempSeparation.x * collisionConfig.arrivalSpreadStrength;
           finalVy += tempSeparation.y * collisionConfig.arrivalSpreadStrength;
         }
 
         // Add cohesion and alignment
-        if (unit.state === 'moving' || unit.state === 'attackmoving' || unit.state === 'patrolling') {
+        if (
+          unit.state === 'moving' ||
+          unit.state === 'attackmoving' ||
+          unit.state === 'patrolling'
+        ) {
           if (useWasmThisFrame) {
             const wasmForces = this.wasmBoids!.getForces(entityId);
             if (wasmForces) {
@@ -1068,12 +1126,34 @@ export class MovementOrchestrator {
               tempAlignment.x = wasmForces.alignmentX;
               tempAlignment.y = wasmForces.alignmentY;
             } else {
-              this.flocking.calculateCohesionForce(entityId, transform, unit, tempCohesion, unitGrid);
-              this.flocking.calculateAlignmentForce(entityId, transform, unit, velocity, tempAlignment, unitGrid, entityCache);
+              this.flocking.calculateCohesionForce(
+                entityId,
+                transform,
+                unit,
+                tempCohesion,
+                unitGrid
+              );
+              this.flocking.calculateAlignmentForce(
+                entityId,
+                transform,
+                unit,
+                velocity,
+                tempAlignment,
+                unitGrid,
+                entityCache
+              );
             }
           } else {
             this.flocking.calculateCohesionForce(entityId, transform, unit, tempCohesion, unitGrid);
-            this.flocking.calculateAlignmentForce(entityId, transform, unit, velocity, tempAlignment, unitGrid, entityCache);
+            this.flocking.calculateAlignmentForce(
+              entityId,
+              transform,
+              unit,
+              velocity,
+              tempAlignment,
+              unitGrid,
+              entityCache
+            );
           }
           finalVx += tempCohesion.x;
           finalVy += tempCohesion.y;
@@ -1096,12 +1176,13 @@ export class MovementOrchestrator {
         prefVy = (dy / distance) * unit.currentSpeed;
       }
 
-      const distToFinalTarget = unit.targetX !== null && unit.targetY !== null
-        ? Math.sqrt(
-            (unit.targetX - transform.x) * (unit.targetX - transform.x) +
-            (unit.targetY - transform.y) * (unit.targetY - transform.y)
-          )
-        : distance;
+      const distToFinalTarget =
+        unit.targetX !== null && unit.targetY !== null
+          ? Math.sqrt(
+              (unit.targetX - transform.x) * (unit.targetX - transform.x) +
+                (unit.targetY - transform.y) * (unit.targetY - transform.y)
+            )
+          : distance;
 
       if (!unit.isFlying) {
         if (useWasmThisFrame) {
@@ -1115,21 +1196,55 @@ export class MovementOrchestrator {
             tempAlignment.y = wasmForces.alignmentY;
           } else {
             this.flocking.preBatchNeighbors(entityId, transform, unit, unitGrid);
-            this.flocking.calculateSeparationForce(entityId, transform, unit, tempSeparation, distToFinalTarget, unitGrid);
+            this.flocking.calculateSeparationForce(
+              entityId,
+              transform,
+              unit,
+              tempSeparation,
+              distToFinalTarget,
+              unitGrid
+            );
             this.flocking.calculateCohesionForce(entityId, transform, unit, tempCohesion, unitGrid);
-            this.flocking.calculateAlignmentForce(entityId, transform, unit, velocity, tempAlignment, unitGrid, entityCache);
+            this.flocking.calculateAlignmentForce(
+              entityId,
+              transform,
+              unit,
+              velocity,
+              tempAlignment,
+              unitGrid,
+              entityCache
+            );
           }
         } else {
           this.flocking.preBatchNeighbors(entityId, transform, unit, unitGrid);
-          this.flocking.calculateSeparationForce(entityId, transform, unit, tempSeparation, distToFinalTarget, unitGrid);
+          this.flocking.calculateSeparationForce(
+            entityId,
+            transform,
+            unit,
+            tempSeparation,
+            distToFinalTarget,
+            unitGrid
+          );
           this.flocking.calculateCohesionForce(entityId, transform, unit, tempCohesion, unitGrid);
-          this.flocking.calculateAlignmentForce(entityId, transform, unit, velocity, tempAlignment, unitGrid, entityCache);
+          this.flocking.calculateAlignmentForce(
+            entityId,
+            transform,
+            unit,
+            velocity,
+            tempAlignment,
+            unitGrid,
+            entityCache
+          );
         }
 
         finalVx = prefVx + tempSeparation.x;
         finalVy = prefVy + tempSeparation.y;
 
-        if (unit.state === 'moving' || unit.state === 'attackmoving' || unit.state === 'patrolling') {
+        if (
+          unit.state === 'moving' ||
+          unit.state === 'attackmoving' ||
+          unit.state === 'patrolling'
+        ) {
           finalVx += tempCohesion.x;
           finalVy += tempCohesion.y;
           finalVx += tempAlignment.x;
@@ -1137,7 +1252,14 @@ export class MovementOrchestrator {
         }
       } else {
         // Flying units
-        this.flocking.calculateSeparationForce(entityId, transform, unit, tempSeparation, distToFinalTarget, unitGrid);
+        this.flocking.calculateSeparationForce(
+          entityId,
+          transform,
+          unit,
+          tempSeparation,
+          distToFinalTarget,
+          unitGrid
+        );
         finalVx = prefVx + tempSeparation.x * collisionConfig.flyingSeparationMultiplier;
         finalVy = prefVy + tempSeparation.y * collisionConfig.flyingSeparationMultiplier;
       }
@@ -1148,16 +1270,29 @@ export class MovementOrchestrator {
     // 2. Emergency-only for crowd agents (safety net when NavMesh fails)
     if (!USE_RECAST_CROWD || unit.isFlying || !this.pathfinding.isAgentRegistered(entityId)) {
       // Full building avoidance for non-crowd paths
-      this.pathfinding.calculateBuildingAvoidanceForce(entityId, transform, unit, tempBuildingAvoid, finalVx, finalVy);
+      this.pathfinding.calculateBuildingAvoidanceForce(
+        entityId,
+        transform,
+        unit,
+        tempBuildingAvoid,
+        finalVx,
+        finalVy
+      );
       finalVx += tempBuildingAvoid.x;
       finalVy += tempBuildingAvoid.y;
     } else {
       // Emergency building avoidance for crowd agents - only when very close to building
       // This is a safety net for when NavMesh obstacles fail to register properly
-      this.pathfinding.calculateBuildingAvoidanceForce(entityId, transform, unit, tempBuildingAvoid, finalVx, finalVy);
+      this.pathfinding.calculateBuildingAvoidanceForce(
+        entityId,
+        transform,
+        unit,
+        tempBuildingAvoid,
+        finalVx,
+        finalVy
+      );
       const avoidMag = Math.sqrt(
-        tempBuildingAvoid.x * tempBuildingAvoid.x +
-        tempBuildingAvoid.y * tempBuildingAvoid.y
+        tempBuildingAvoid.x * tempBuildingAvoid.x + tempBuildingAvoid.y * tempBuildingAvoid.y
       );
       // Only apply if strong avoidance is detected (unit is close to building)
       // This prevents oscillation while still catching penetration cases
@@ -1176,14 +1311,27 @@ export class MovementOrchestrator {
     }
 
     // Velocity smoothing
-    const smoothed = this.flocking.smoothVelocity(entityId, finalVx, finalVy, velocity.x, velocity.y);
+    const smoothed = this.flocking.smoothVelocity(
+      entityId,
+      finalVx,
+      finalVy,
+      velocity.x,
+      velocity.y
+    );
     finalVx = smoothed.vx;
     finalVy = smoothed.vy;
 
     // Stuck detection
     const currentVelMag = Math.sqrt(finalVx * finalVx + finalVy * finalVy);
     if (distance > this.arrivalThreshold) {
-      this.flocking.handleStuckDetection(entityId, transform, unit, currentVelMag, distance, tempStuckNudge);
+      this.flocking.handleStuckDetection(
+        entityId,
+        transform,
+        unit,
+        currentVelMag,
+        distance,
+        tempStuckNudge
+      );
       finalVx += tempStuckNudge.x;
       finalVy += tempStuckNudge.y;
     }
@@ -1256,13 +1404,20 @@ export class MovementOrchestrator {
             velocity.y = 0;
           } else {
             // No valid position known - find nearest water (expensive, but rare)
-            const nearestWater = this.recast.findNearestPointForDomain(transform.x, transform.y, 'water');
+            const nearestWater = this.recast.findNearestPointForDomain(
+              transform.x,
+              transform.y,
+              'water'
+            );
             if (nearestWater) {
               transform.x = nearestWater.x;
               transform.y = nearestWater.y;
               velocity.x = 0;
               velocity.y = 0;
-              this.lastValidNavalWaterPosition.set(entityId, { x: nearestWater.x, y: nearestWater.y });
+              this.lastValidNavalWaterPosition.set(entityId, {
+                x: nearestWater.x,
+                y: nearestWater.y,
+              });
             }
           }
         }

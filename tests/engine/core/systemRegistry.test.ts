@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SystemRegistry, SystemDefinition } from '@/engine/core/SystemRegistry';
 import { System } from '@/engine/ecs/System';
-import { Game } from '@/engine/core/Game';
+import type { IGameInstance } from '@/engine/core/IGameInstance';
 
 // Mock system class for testing
 class MockSystem extends System {
   public readonly name: string;
 
-  constructor(game: Game, name: string) {
+  constructor(game: IGameInstance, name: string) {
     super(game);
     this.name = name;
   }
@@ -21,12 +21,12 @@ class MockSystem extends System {
 function createDef(
   name: string,
   dependencies: string[] = [],
-  condition?: (game: Game) => boolean
+  condition?: (game: IGameInstance) => boolean
 ): SystemDefinition {
   return {
     name,
     dependencies,
-    factory: (game: Game) => new MockSystem(game, name),
+    factory: (game: IGameInstance) => new MockSystem(game, name),
     condition,
   };
 }
@@ -56,11 +56,7 @@ describe('SystemRegistry', () => {
 
   describe('registerAll', () => {
     it('registers multiple definitions', () => {
-      registry.registerAll([
-        createDef('SystemA'),
-        createDef('SystemB'),
-        createDef('SystemC'),
-      ]);
+      registry.registerAll([createDef('SystemA'), createDef('SystemB'), createDef('SystemC')]);
 
       const names = registry.getSystemNames();
       expect(names).toContain('SystemA');
@@ -71,10 +67,7 @@ describe('SystemRegistry', () => {
 
   describe('validate', () => {
     it('returns empty array for valid definitions', () => {
-      registry.registerAll([
-        createDef('SystemA'),
-        createDef('SystemB', ['SystemA']),
-      ]);
+      registry.registerAll([createDef('SystemA'), createDef('SystemB', ['SystemA'])]);
 
       const errors = registry.validate();
 
@@ -92,10 +85,7 @@ describe('SystemRegistry', () => {
     });
 
     it('detects circular dependencies', () => {
-      registry.registerAll([
-        createDef('SystemA', ['SystemB']),
-        createDef('SystemB', ['SystemA']),
-      ]);
+      registry.registerAll([createDef('SystemA', ['SystemB']), createDef('SystemB', ['SystemA'])]);
 
       const errors = registry.validate();
 
@@ -119,10 +109,7 @@ describe('SystemRegistry', () => {
 
   describe('getExecutionOrder', () => {
     it('returns systems with no dependencies first', () => {
-      registry.registerAll([
-        createDef('SystemB', ['SystemA']),
-        createDef('SystemA'),
-      ]);
+      registry.registerAll([createDef('SystemB', ['SystemA']), createDef('SystemA')]);
 
       const order = registry.getExecutionOrder();
 
@@ -178,11 +165,7 @@ describe('SystemRegistry', () => {
 
     it('produces deterministic order for systems at same level', () => {
       // Multiple systems with no dependencies should be sorted alphabetically
-      registry.registerAll([
-        createDef('Zebra'),
-        createDef('Alpha'),
-        createDef('Middle'),
-      ]);
+      registry.registerAll([createDef('Zebra'), createDef('Alpha'), createDef('Middle')]);
 
       const order1 = registry.getExecutionOrder();
       const order2 = registry.getExecutionOrder();
@@ -192,10 +175,7 @@ describe('SystemRegistry', () => {
     });
 
     it('throws on circular dependency', () => {
-      registry.registerAll([
-        createDef('SystemA', ['SystemB']),
-        createDef('SystemB', ['SystemA']),
-      ]);
+      registry.registerAll([createDef('SystemA', ['SystemB']), createDef('SystemB', ['SystemA'])]);
 
       expect(() => registry.getExecutionOrder()).toThrow('Circular dependency');
     });
@@ -210,7 +190,7 @@ describe('SystemRegistry', () => {
       ]);
 
       // Mock game
-      const mockGame = {} as Game;
+      const mockGame = {} as IGameInstance;
       const systems = registry.createSystems(mockGame);
 
       expect(systems.length).toBe(3);
@@ -226,7 +206,7 @@ describe('SystemRegistry', () => {
         createDef('SystemC', ['SystemB']),
       ]);
 
-      const mockGame = {} as Game;
+      const mockGame = {} as IGameInstance;
       const systems = registry.createSystems(mockGame);
 
       expect(systems[0].priority).toBe(0);
@@ -241,22 +221,22 @@ describe('SystemRegistry', () => {
         createDef('AnotherSystem'),
       ]);
 
-      const mockGame = {} as Game;
+      const mockGame = {} as IGameInstance;
       const systems = registry.createSystems(mockGame);
 
       expect(systems.length).toBe(2);
-      expect(systems.map(s => s.name)).not.toContain('ConditionalSystem');
+      expect(systems.map((s) => s.name)).not.toContain('ConditionalSystem');
     });
 
     it('throws on name mismatch between definition and system', () => {
       const badDef: SystemDefinition = {
         name: 'DefinedName',
         dependencies: [],
-        factory: (game: Game) => new MockSystem(game, 'DifferentName'),
+        factory: (game: IGameInstance) => new MockSystem(game, 'DifferentName'),
       };
 
       registry.register(badDef);
-      const mockGame = {} as Game;
+      const mockGame = {} as IGameInstance;
 
       expect(() => registry.createSystems(mockGame)).toThrow('System name mismatch');
     });
@@ -264,7 +244,7 @@ describe('SystemRegistry', () => {
     it('throws on validation errors', () => {
       registry.register(createDef('SystemA', ['NonExistent']));
 
-      const mockGame = {} as Game;
+      const mockGame = {} as IGameInstance;
 
       expect(() => registry.createSystems(mockGame)).toThrow('System dependency errors');
     });
@@ -289,11 +269,7 @@ describe('SystemRegistry', () => {
 
   describe('getSystemNames', () => {
     it('returns all registered names', () => {
-      registry.registerAll([
-        createDef('SystemA'),
-        createDef('SystemB'),
-        createDef('SystemC'),
-      ]);
+      registry.registerAll([createDef('SystemA'), createDef('SystemB'), createDef('SystemC')]);
 
       const names = registry.getSystemNames();
 
@@ -310,10 +286,7 @@ describe('SystemRegistry', () => {
 
   describe('clear', () => {
     it('removes all registered definitions', () => {
-      registry.registerAll([
-        createDef('SystemA'),
-        createDef('SystemB'),
-      ]);
+      registry.registerAll([createDef('SystemA'), createDef('SystemB')]);
 
       registry.clear();
 

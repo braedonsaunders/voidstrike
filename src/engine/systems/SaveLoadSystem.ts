@@ -1,5 +1,5 @@
 import { System } from '../ecs/System';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
@@ -56,7 +56,7 @@ export class SaveLoadSystem extends System {
   private lastAutoSave: number = 0;
   private autoSaveEnabled: boolean = true;
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
@@ -402,7 +402,11 @@ export class SaveLoadSystem extends System {
           shield: number;
           maxShield: number;
         };
-        const health = new Health(h.max, h.armor, h.armorType as 'light' | 'armored' | 'massive' | 'structure');
+        const health = new Health(
+          h.max,
+          h.armor,
+          h.armorType as 'light' | 'armored' | 'massive' | 'structure'
+        );
         health.current = h.current;
         health.shield = h.shield;
         health.maxShield = h.maxShield;

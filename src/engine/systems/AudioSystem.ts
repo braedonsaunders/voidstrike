@@ -1,5 +1,5 @@
 import { System } from '../ecs/System';
-import { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { AudioManager } from '@/audio/AudioManager';
@@ -44,7 +44,7 @@ export class AudioSystem extends System {
   };
   private voiceCooldowns: Record<string, number> = VOICE_COOLDOWN_CONFIG;
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
   }
 
@@ -261,109 +261,101 @@ export class AudioSystem extends System {
     });
 
     // Combat events - data-driven weapon sounds
-    this.game.eventBus.on('combat:attack', (data: {
-      attackerId: number;
-      targetId: number;
-      damage: number;
-    }) => {
-      const attacker = this.world.getEntity(data.attackerId);
-      if (attacker) {
-        const transform = attacker.get<Transform>('Transform');
-        const unit = attacker.get<Unit>('Unit');
-        if (transform && unit) {
-          const pos = new THREE.Vector3(transform.x, 0, transform.y);
-
-          // Get weapon sound from unit definition (data-driven)
-          const weaponSound = this.getWeaponSound(unit.unitId);
-          if (weaponSound) {
-            AudioManager.playAt(weaponSound, pos);
-          }
-        }
-      }
-    });
-
-    this.game.eventBus.on('combat:hit', (data: {
-      targetId?: number;
-      damage?: number;
-      position?: { x: number; y: number };
-    }) => {
-      if (data.position) {
-        const pos = new THREE.Vector3(data.position.x, 0, data.position.y);
-        AudioManager.playAt('hit_impact', pos);
-      } else if (data.targetId !== undefined) {
-        const target = this.world.getEntity(data.targetId);
-        if (target) {
-          const transform = target.get<Transform>('Transform');
-          if (transform) {
+    this.game.eventBus.on(
+      'combat:attack',
+      (data: { attackerId: number; targetId: number; damage: number }) => {
+        const attacker = this.world.getEntity(data.attackerId);
+        if (attacker) {
+          const transform = attacker.get<Transform>('Transform');
+          const unit = attacker.get<Unit>('Unit');
+          if (transform && unit) {
             const pos = new THREE.Vector3(transform.x, 0, transform.y);
-            AudioManager.playAt('hit_impact', pos);
+
+            // Get weapon sound from unit definition (data-driven)
+            const weaponSound = this.getWeaponSound(unit.unitId);
+            if (weaponSound) {
+              AudioManager.playAt(weaponSound, pos);
+            }
           }
         }
       }
-    });
+    );
 
-    this.game.eventBus.on('combat:splash', (data: {
-      position: { x: number; y: number };
-      damage: number;
-    }) => {
-      const pos = new THREE.Vector3(data.position.x, 0, data.position.y);
-      const explosionSound = data.damage >= 30 ? 'explosion_medium' : 'explosion_small';
-      AudioManager.playAt(explosionSound, pos);
-    });
+    this.game.eventBus.on(
+      'combat:hit',
+      (data: { targetId?: number; damage?: number; position?: { x: number; y: number } }) => {
+        if (data.position) {
+          const pos = new THREE.Vector3(data.position.x, 0, data.position.y);
+          AudioManager.playAt('hit_impact', pos);
+        } else if (data.targetId !== undefined) {
+          const target = this.world.getEntity(data.targetId);
+          if (target) {
+            const transform = target.get<Transform>('Transform');
+            if (transform) {
+              const pos = new THREE.Vector3(transform.x, 0, transform.y);
+              AudioManager.playAt('hit_impact', pos);
+            }
+          }
+        }
+      }
+    );
+
+    this.game.eventBus.on(
+      'combat:splash',
+      (data: { position: { x: number; y: number }; damage: number }) => {
+        const pos = new THREE.Vector3(data.position.x, 0, data.position.y);
+        const explosionSound = data.damage >= 30 ? 'explosion_medium' : 'explosion_small';
+        AudioManager.playAt(explosionSound, pos);
+      }
+    );
 
     // Unit/building destroyed - data-driven death sounds
-    this.game.eventBus.on('unit:destroyed', (data: {
-      entityId: number;
-      x: number;
-      y: number;
-      unitId?: string;
-      playerId?: string;
-    }) => {
-      const pos = new THREE.Vector3(data.x, 0, data.y);
+    this.game.eventBus.on(
+      'unit:destroyed',
+      (data: { entityId: number; x: number; y: number; unitId?: string; playerId?: string }) => {
+        const pos = new THREE.Vector3(data.x, 0, data.y);
 
-      // Get death sound from unit definition (data-driven)
-      if (data.unitId) {
-        const deathSound = this.getDeathSound(data.unitId);
-        if (deathSound) {
-          AudioManager.playAt(deathSound, pos);
+        // Get death sound from unit definition (data-driven)
+        if (data.unitId) {
+          const deathSound = this.getDeathSound(data.unitId);
+          if (deathSound) {
+            AudioManager.playAt(deathSound, pos);
 
-          // Add explosion for mech deaths
-          const def = this.getUnitDefinition(data.unitId);
-          if (def?.isMechanical) {
-            AudioManager.playAt('explosion_small', pos);
+            // Add explosion for mech deaths
+            const def = this.getUnitDefinition(data.unitId);
+            if (def?.isMechanical) {
+              AudioManager.playAt('explosion_small', pos);
+            }
           }
         }
-      }
 
-      if (data.playerId && isLocalPlayer(data.playerId)) {
-        AudioManager.play('alert_unit_lost');
+        if (data.playerId && isLocalPlayer(data.playerId)) {
+          AudioManager.play('alert_unit_lost');
+        }
       }
-    });
+    );
 
-    this.game.eventBus.on('building:destroyed', (data: {
-      entityId: number;
-      x: number;
-      y: number;
-      playerId?: string;
-    }) => {
-      const pos = new THREE.Vector3(data.x, 0, data.y);
-      AudioManager.playAt('explosion_building', pos);
+    this.game.eventBus.on(
+      'building:destroyed',
+      (data: { entityId: number; x: number; y: number; playerId?: string }) => {
+        const pos = new THREE.Vector3(data.x, 0, data.y);
+        AudioManager.playAt('explosion_building', pos);
 
-      if (data.playerId && isLocalPlayer(data.playerId)) {
-        AudioManager.play('alert_building_lost');
+        if (data.playerId && isLocalPlayer(data.playerId)) {
+          AudioManager.play('alert_building_lost');
+        }
       }
-    });
+    );
 
     // Alert events
-    this.game.eventBus.on('alert:underAttack', (data: {
-      x: number;
-      y: number;
-      playerId?: string;
-    }) => {
-      if (data.playerId && isLocalPlayer(data.playerId)) {
-        AudioManager.play('alert_under_attack');
+    this.game.eventBus.on(
+      'alert:underAttack',
+      (data: { x: number; y: number; playerId?: string }) => {
+        if (data.playerId && isLocalPlayer(data.playerId)) {
+          AudioManager.play('alert_under_attack');
+        }
       }
-    });
+    );
 
     this.game.eventBus.on('alert:supplyBlocked', () => {
       if (this.isSpectator()) return;
@@ -393,16 +385,19 @@ export class AudioSystem extends System {
       AudioManager.play('production_start');
     });
 
-    this.game.eventBus.on('production:complete', (data: { unitType?: string; playerId?: string }) => {
-      if (data?.playerId && !isLocalPlayer(data.playerId)) return;
-      if (this.isSpectator()) return;
+    this.game.eventBus.on(
+      'production:complete',
+      (data: { unitType?: string; playerId?: string }) => {
+        if (data?.playerId && !isLocalPlayer(data.playerId)) return;
+        if (this.isSpectator()) return;
 
-      AudioManager.play('unit_ready');
+        AudioManager.play('unit_ready');
 
-      if (data && data.unitType) {
-        this.playVoice(data.unitType, 'ready');
+        if (data && data.unitType) {
+          this.playVoice(data.unitType, 'ready');
+        }
       }
-    });
+    );
 
     // Building events
     this.game.eventBus.on('building:place', (data: { playerId?: string }) => {

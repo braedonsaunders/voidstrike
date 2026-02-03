@@ -51,7 +51,11 @@ import { Editor3DCanvas } from './Editor3DCanvas';
 import { EditorPanels } from './panels';
 import { EditorHeader, type MapListItem } from './EditorHeader';
 import { EditorToolbar } from './EditorToolbar';
-import { EditorContextMenu, buildContextMenuActions, type ContextMenuAction } from './EditorContextMenu';
+import {
+  EditorContextMenu,
+  buildContextMenuActions,
+  type ContextMenuAction,
+} from './EditorContextMenu';
 import { EditorStatusBar } from './EditorStatusBar';
 import { EditorMiniMap } from './EditorMiniMap';
 
@@ -114,7 +118,11 @@ export function EditorCore({
 
   // Cursor tracking for status bar
   const [cursorPosition, setCursorPosition] = useState<{ x: number; y: number } | null>(null);
-  const [cursorWorldPosition, setCursorWorldPosition] = useState<{ x: number; y: number; z: number } | null>(null);
+  const [cursorWorldPosition, setCursorWorldPosition] = useState<{
+    x: number;
+    y: number;
+    z: number;
+  } | null>(null);
   const [hoveredObject, setHoveredObject] = useState<EditorObject | null>(null);
 
   // Context menu state
@@ -242,9 +250,12 @@ export function EditorCore({
   }, [toggleMusic, musicEnabled]);
 
   // Handle import
-  const handleImport = useCallback((data: EditorMapData) => {
-    loadMap(data);
-  }, [loadMap]);
+  const handleImport = useCallback(
+    (data: EditorMapData) => {
+      loadMap(data);
+    },
+    [loadMap]
+  );
 
   // Handle export
   const handleExportJson = useCallback(() => {
@@ -279,23 +290,29 @@ export function EditorCore({
   }, [state.mapData, onPlay]);
 
   // Handle AI-generated map
-  const handleAIMapGenerated = useCallback((mapData: MapData) => {
-    // Convert MapData to EditorMapData and load into editor
-    const editorMapData = mapDataToEditorFormat(mapData);
-    loadMap(editorMapData);
-  }, [loadMap]);
+  const handleAIMapGenerated = useCallback(
+    (mapData: MapData) => {
+      // Convert MapData to EditorMapData and load into editor
+      const editorMapData = mapDataToEditorFormat(mapData);
+      loadMap(editorMapData);
+    },
+    [loadMap]
+  );
 
   // Handle update objects (for border decorations, etc.)
-  const handleUpdateObjects = useCallback((objects: EditorObject[]) => {
-    editorState.replaceObjects(objects);
-  }, [editorState]);
+  const handleUpdateObjects = useCallback(
+    (objects: EditorObject[]) => {
+      editorState.replaceObjects(objects);
+    },
+    [editorState]
+  );
 
   // Handle validate
   const handleValidate = useCallback(async () => {
     if (!state.mapData) return;
 
     // Set validating state
-    setValidationResult(prev => ({ ...prev, isValidating: true }));
+    setValidationResult((prev) => ({ ...prev, isValidating: true }));
 
     try {
       if (dataProvider?.validateMap) {
@@ -305,14 +322,14 @@ export function EditorCore({
         setValidationResult({
           valid: result.valid,
           isValidating: false,
-          issues: result.issues.map(issue => ({
+          issues: result.issues.map((issue) => ({
             severity: issue.type,
             message: issue.message,
-            type: (issue as any).issueType,
-            affectedNodes: (issue as any).affectedNodes,
-            suggestedFix: (issue as any).suggestedFix,
+            type: (issue as unknown as { issueType?: string }).issueType,
+            affectedNodes: (issue as unknown as { affectedNodes?: unknown[] }).affectedNodes,
+            suggestedFix: (issue as unknown as { suggestedFix?: string }).suggestedFix,
           })),
-          stats: (result as any).stats,
+          stats: (result as unknown as { stats?: unknown }).stats,
           timestamp: Date.now(),
         });
       }
@@ -332,12 +349,16 @@ export function EditorCore({
   const handleAutoFix = useCallback(async () => {
     if (!state.mapData || !dataProvider) return;
 
-    setValidationResult(prev => ({ ...prev, isValidating: true }));
+    setValidationResult((prev) => ({ ...prev, isValidating: true }));
 
     try {
       // Check if provider has autoFix method
-      if ((dataProvider as any).autoFixMap) {
-        const fixedData = await (dataProvider as any).autoFixMap(state.mapData);
+      if (
+        (dataProvider as unknown as { autoFixMap?: (data: unknown) => Promise<unknown> }).autoFixMap
+      ) {
+        const fixedData = await (
+          dataProvider as unknown as { autoFixMap?: (data: unknown) => Promise<unknown> }
+        ).autoFixMap(state.mapData);
         if (fixedData) {
           loadMap(fixedData);
           // Re-validate after fix
@@ -346,7 +367,7 @@ export function EditorCore({
       }
     } catch (error) {
       debugInitialization.error('Auto-fix failed:', error);
-      setValidationResult(prev => ({
+      setValidationResult((prev) => ({
         ...prev,
         isValidating: false,
         issues: [...prev.issues, { severity: 'error', message: 'Auto-fix failed unexpectedly' }],
@@ -364,18 +385,21 @@ export function EditorCore({
   }, [state.isDirty, onCancel]);
 
   // Handle context menu open
-  const handleContextMenu = useCallback((
-    e: { clientX: number; clientY: number },
-    gridPos: { x: number; y: number } | null,
-    objectAtPosition: EditorObject | null
-  ) => {
-    setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
-      gridPos,
-      objectAtPosition,
-    });
-  }, []);
+  const handleContextMenu = useCallback(
+    (
+      e: { clientX: number; clientY: number },
+      gridPos: { x: number; y: number } | null,
+      objectAtPosition: EditorObject | null
+    ) => {
+      setContextMenu({
+        x: e.clientX,
+        y: e.clientY,
+        gridPos,
+        objectAtPosition,
+      });
+    },
+    []
+  );
 
   // Handle mini-map navigation
   const handleMiniMapNavigate = useCallback((x: number, y: number) => {
@@ -414,7 +438,8 @@ export function EditorCore({
   const handlePasteTerrain = useCallback(() => {
     if (!copiedTerrain || !cursorPosition || !state.mapData) return;
 
-    const updates: Array<{ x: number; y: number; cell: Partial<EditorMapData['terrain'][0][0]> }> = [];
+    const updates: Array<{ x: number; y: number; cell: Partial<EditorMapData['terrain'][0][0]> }> =
+      [];
 
     for (const { dx, dy, cell } of copiedTerrain.cells) {
       const x = cursorPosition.x + dx;
@@ -431,36 +456,40 @@ export function EditorCore({
   }, [copiedTerrain, cursorPosition, state.mapData, editorState]);
 
   // Add object at position
-  const handleAddObjectAtPosition = useCallback((typeId: string, x: number, y: number) => {
-    const objType = config.objectTypes.find((t) => t.id === typeId);
-    if (!objType) return;
+  const handleAddObjectAtPosition = useCallback(
+    (typeId: string, x: number, y: number) => {
+      const objType = config.objectTypes.find((t) => t.id === typeId);
+      if (!objType) return;
 
-    const defaultProperties: Record<string, unknown> = {};
-    if (objType.properties) {
-      for (const prop of objType.properties) {
-        if (prop.defaultValue !== undefined) {
-          defaultProperties[prop.key] = prop.defaultValue;
+      const defaultProperties: Record<string, unknown> = {};
+      if (objType.properties) {
+        for (const prop of objType.properties) {
+          if (prop.defaultValue !== undefined) {
+            defaultProperties[prop.key] = prop.defaultValue;
+          }
         }
       }
-    }
 
-    editorState.addObject({
-      type: typeId,
-      x,
-      y,
-      radius: objType.defaultRadius,
-      properties: defaultProperties,
-    });
-  }, [config.objectTypes, editorState]);
+      editorState.addObject({
+        type: typeId,
+        x,
+        y,
+        radius: objType.defaultRadius,
+        properties: defaultProperties,
+      });
+    },
+    [config.objectTypes, editorState]
+  );
 
   // Build context menu actions
   const contextMenuActions = useMemo((): ContextMenuAction[] => {
     if (!contextMenu) return [];
 
     // Get cell at context menu position
-    const cellAtPosition = contextMenu.gridPos && state.mapData
-      ? state.mapData.terrain[contextMenu.gridPos.y]?.[contextMenu.gridPos.x]
-      : null;
+    const cellAtPosition =
+      contextMenu.gridPos && state.mapData
+        ? state.mapData.terrain[contextMenu.gridPos.y]?.[contextMenu.gridPos.x]
+        : null;
 
     return buildContextMenuActions({
       gridPos: contextMenu.gridPos,
@@ -484,7 +513,17 @@ export function EditorCore({
       canUndo: editorState.canUndo,
       canRedo: editorState.canRedo,
     });
-  }, [contextMenu, state.selectedObjects, state.mapData, config, editorState, handleCopyTerrain, handlePasteTerrain, handleAddObjectAtPosition, copiedTerrain]);
+  }, [
+    contextMenu,
+    state.selectedObjects,
+    state.mapData,
+    config,
+    editorState,
+    handleCopyTerrain,
+    handlePasteTerrain,
+    handleAddObjectAtPosition,
+    copiedTerrain,
+  ]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -509,14 +548,26 @@ export function EditorCore({
         return;
       }
 
-      // Undo/Redo
+      // Undo/Redo/Undo Preview
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         if (e.shiftKey) {
-          editorState.redo();
+          // Ctrl+Shift+Z = Toggle undo preview
+          editorState.toggleUndoPreview();
         } else {
+          // Ctrl+Z = Undo (clear preview first if active)
+          if (editorState.isUndoPreviewActive) {
+            editorState.clearUndoPreview();
+          }
           editorState.undo();
         }
+        return;
+      }
+
+      // Redo (Ctrl+Y as alternative since Ctrl+Shift+Z is now undo preview)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        editorState.redo();
         return;
       }
 
@@ -552,10 +603,14 @@ export function EditorCore({
         return;
       }
 
-      // Escape - clear selection / close context menu
+      // Escape - clear undo preview / clear selection / close context menu
       if (e.key === 'Escape') {
-        setContextMenu(null);
-        editorState.clearSelection();
+        if (editorState.isUndoPreviewActive) {
+          editorState.clearUndoPreview();
+        } else {
+          setContextMenu(null);
+          editorState.clearSelection();
+        }
         return;
       }
 
@@ -579,7 +634,16 @@ export function EditorCore({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [config, editorState, state.selectedObjects, state.brushSize, handleExportJson, handleCopyTerrain, handlePasteTerrain]);
+  }, [
+    config,
+    editorState,
+    state.selectedObjects,
+    state.brushSize,
+    handleExportJson,
+    handleCopyTerrain,
+    handlePasteTerrain,
+    editorState.isUndoPreviewActive,
+  ]);
 
   // Theme CSS variables
   const themeStyle = useMemo(
@@ -648,6 +712,9 @@ export function EditorCore({
             onElevationSelect={editorState.setSelectedElevation}
             onSymmetryChange={editorState.setSymmetryMode}
             onSnapChange={editorState.setSnapMode}
+            canUndo={editorState.canUndo}
+            isUndoPreviewActive={editorState.isUndoPreviewActive}
+            onToggleUndoPreview={editorState.toggleUndoPreview}
           />
 
           {/* 3D Canvas */}
@@ -671,7 +738,16 @@ export function EditorCore({
               onObjectHover={setHoveredObject}
               onContextMenu={handleContextMenu}
               onViewportChange={setViewportBounds}
-              onNavigateRef={(fn) => { canvasNavigateRef.current = fn; }}
+              onNavigateRef={(fn) => {
+                canvasNavigateRef.current = fn;
+              }}
+              undoPreview={editorState.undoPreview}
+              isUndoPreviewActive={editorState.isUndoPreviewActive}
+              onUndoPreviewDismiss={editorState.clearUndoPreview}
+              onUndoPreviewConfirm={() => {
+                editorState.clearUndoPreview();
+                editorState.undo();
+              }}
             />
 
             {/* Mini-map (bottom-right) */}
@@ -692,6 +768,8 @@ export function EditorCore({
               cursorPosition={cursorPosition}
               cursorWorldPosition={cursorWorldPosition}
               hoveredObject={hoveredObject}
+              isUndoPreviewActive={editorState.isUndoPreviewActive}
+              undoPreview={editorState.undoPreview}
             />
           </div>
         </div>

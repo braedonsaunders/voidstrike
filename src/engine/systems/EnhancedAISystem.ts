@@ -15,7 +15,7 @@
 
 import { System } from '../ecs/System';
 import { World } from '../ecs/World';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { AICoordinator, type AIPlayer, type AIState, type AIDifficulty } from './ai/AICoordinator';
 import type { AIPersonality } from '@/data/ai/aiConfig';
 
@@ -28,7 +28,7 @@ export class EnhancedAISystem extends System {
 
   private coordinator: AICoordinator;
 
-  constructor(game: Game, difficulty: AIDifficulty = 'medium') {
+  constructor(game: IGameInstance, difficulty: AIDifficulty = 'medium') {
     super(game);
     this.coordinator = new AICoordinator(game, difficulty);
   }

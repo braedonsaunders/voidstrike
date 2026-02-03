@@ -1,5 +1,5 @@
 import { System } from '../ecs/System';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
@@ -36,7 +36,7 @@ export class AbilitySystem extends System {
   // Queue for delayed ability effects (replaces setTimeout)
   private pendingEffects: DelayedAbilityEffect[] = [];
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
@@ -190,11 +190,7 @@ export class AbilitySystem extends System {
 
       case 'power_cannon':
         if (command.targetEntityId) {
-          this.executePowerCannon(
-            casterEntity,
-            command.targetEntityId,
-            definition.damage || 300
-          );
+          this.executePowerCannon(casterEntity, command.targetEntityId, definition.damage || 300);
         }
         break;
 
@@ -279,11 +275,7 @@ export class AbilitySystem extends System {
     });
   }
 
-  private executeSnipe(
-    caster: { id: number },
-    targetId: number,
-    damage: number
-  ): void {
+  private executeSnipe(caster: { id: number }, targetId: number, damage: number): void {
     const target = this.world.getEntity(targetId);
     if (!target) return;
 
@@ -306,10 +298,7 @@ export class AbilitySystem extends System {
     });
   }
 
-  private executeEMP(
-    position: { x: number; y: number },
-    radius: number
-  ): void {
+  private executeEMP(position: { x: number; y: number }, radius: number): void {
     // Find all units in range and drain their energy/shields
     const entities = this.world.getEntitiesWith('Transform', 'Health');
 
@@ -363,11 +352,7 @@ export class AbilitySystem extends System {
     });
   }
 
-  private executeNuke(
-    position: { x: number; y: number },
-    damage: number,
-    radius: number
-  ): void {
+  private executeNuke(position: { x: number; y: number }, damage: number, radius: number): void {
     // Delayed nuclear strike
     this.game.eventBus.emit('ability:nuke_incoming', {
       position,
@@ -383,11 +368,7 @@ export class AbilitySystem extends System {
     });
   }
 
-  private executeNovaCannon(
-    caster: { id: number },
-    targetId: number,
-    damage: number
-  ): void {
+  private executeNovaCannon(caster: { id: number }, targetId: number, damage: number): void {
     const target = this.world.getEntity(targetId);
     if (!target) return;
 
@@ -426,10 +407,7 @@ export class AbilitySystem extends System {
     });
   }
 
-  private executeTacticalJump(
-    caster: { id: number },
-    position: { x: number; y: number }
-  ): void {
+  private executeTacticalJump(caster: { id: number }, position: { x: number; y: number }): void {
     const entity = this.world.getEntity(caster.id);
     if (!entity) return;
 
@@ -452,11 +430,7 @@ export class AbilitySystem extends System {
     });
   }
 
-  private executePowerCannon(
-    caster: { id: number },
-    targetId: number,
-    damage: number
-  ): void {
+  private executePowerCannon(caster: { id: number }, targetId: number, damage: number): void {
     const target = this.world.getEntity(targetId);
     if (!target) return;
 
@@ -706,7 +680,12 @@ export class AbilitySystem extends System {
 
       // Auto-heal for lifters
       if (unit.canHeal && ability.canUseAbility('heal')) {
-        const target = this.findHealTarget(healer.id, transform, selectable.playerId, unit.healRange);
+        const target = this.findHealTarget(
+          healer.id,
+          transform,
+          selectable.playerId,
+          unit.healRange
+        );
         if (target !== null) {
           // Emit heal command
           this.game.eventBus.emit('command:heal', {

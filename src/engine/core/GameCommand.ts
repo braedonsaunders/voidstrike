@@ -109,6 +109,10 @@ export interface GameCommand {
   // Input modifiers
   /** Whether shift was held (for command queuing) */
   queue?: boolean;
+
+  // Security
+  /** Cryptographic signature for multiplayer command verification */
+  signature?: string;
 }
 
 /**

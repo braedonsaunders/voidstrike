@@ -11,7 +11,7 @@
  *   Output: { type: 'microResult', decisions, tick }
  */
 
-import { distance } from '@/utils/math';
+import { distance, SeededRandom } from '@/utils/math';
 
 // Debug flag for worker logging (workers can't access UI store)
 const _DEBUG = false;
@@ -102,6 +102,7 @@ interface EvaluateMicroMessage {
   mapWidth: number;
   mapHeight: number;
   tick: number;
+  seed: number;
 }
 
 type WorkerMessage = InitMessage | EvaluateMicroMessage;
@@ -132,6 +133,7 @@ let threatWeights = THREAT_WEIGHTS;
 let focusFireThreshold = 0.3;
 let kiteDistanceMultiplier = 0.6;
 let initialized = false;
+let rng: SeededRandom | null = null;
 
 /**
  * Initialize worker configuration
@@ -270,15 +272,16 @@ function calculateKitePosition(
   kiteFromX: number,
   kiteFromY: number,
   mapWidth: number,
-  mapHeight: number
+  mapHeight: number,
+  seededRng: SeededRandom
 ): { x: number; y: number } {
   const dx = unit.x - kiteFromX;
   const dy = unit.y - kiteFromY;
   const dist = distance(unit.x, unit.y, kiteFromX, kiteFromY);
 
   if (dist < 0.1) {
-    // Random direction if too close
-    const angle = Math.random() * Math.PI * 2;
+    // Deterministic random direction if too close
+    const angle = seededRng.next() * Math.PI * 2;
     return {
       x: Math.max(
         2,
@@ -432,7 +435,8 @@ function evaluateMicro(
   enemyBuildings: BuildingSnapshot[],
   friendlyBasePosition: { x: number; y: number } | null,
   mapWidth: number,
-  mapHeight: number
+  mapHeight: number,
+  seededRng: SeededRandom
 ): MicroDecision[] {
   const decisions: MicroDecision[] = [];
 
@@ -485,7 +489,8 @@ function evaluateMicro(
         kite.kiteFromX,
         kite.kiteFromY,
         mapWidth,
-        mapHeight
+        mapHeight,
+        seededRng
       );
       decisions.push({
         unitId: unit.id,
@@ -536,6 +541,13 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
         init({});
       }
 
+      // Initialize or reseed the RNG for deterministic behavior
+      if (!rng) {
+        rng = new SeededRandom(message.seed);
+      } else {
+        rng.reseed(message.seed);
+      }
+
       const decisions = evaluateMicro(
         message.aiPlayerId,
         message.aiUnits,
@@ -543,7 +555,8 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
         message.enemyBuildings,
         message.friendlyBasePosition,
         message.mapWidth,
-        message.mapHeight
+        message.mapHeight,
+        rng
       );
 
       self.postMessage({

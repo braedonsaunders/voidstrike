@@ -73,9 +73,6 @@ export function useGameInput({
   eventBusRef,
   isGameInitialized,
   placementPreviewRef,
-  wallPlacementPreviewRef: _wallPlacementPreviewRef,
-  overlayManagerRef: _overlayManagerRef,
-  lastControlGroupTap: _lastControlGroupTap,
 }: UseGameInputProps): UseGameInputReturn {
   // Track if we've initialized
   const initializedRef = useRef(false);
@@ -122,7 +119,8 @@ export function useGameInput({
     inputManager.initialize(container, {
       camera: cameraRef.current,
       game: gameRef.current,
-      worldProvider: worldProviderRef?.current ?? (gameRef.current?.world as unknown as IWorldProvider),
+      worldProvider:
+        worldProviderRef?.current ?? (gameRef.current?.world as unknown as IWorldProvider),
       eventBus: gameRef.current?.eventBus,
       getLocalPlayerId,
     });
@@ -151,7 +149,8 @@ export function useGameInput({
     inputManager.updateDependencies({
       camera: cameraRef.current,
       game: gameRef.current,
-      worldProvider: worldProviderRef?.current ?? (gameRef.current?.world as unknown as IWorldProvider),
+      worldProvider:
+        worldProviderRef?.current ?? (gameRef.current?.world as unknown as IWorldProvider),
       eventBus: gameRef.current?.eventBus,
     });
   }, [cameraRef, gameRef, worldProviderRef, isGameInitialized]);

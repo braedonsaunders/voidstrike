@@ -1,7 +1,7 @@
 import { System } from '../ecs/System';
 import { Building } from '../components/Building';
 import { Selectable } from '../components/Selectable';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { RESEARCH_DEFINITIONS, ResearchDefinition } from '@/data/research/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { debugProduction } from '@/utils/debugLogger';
@@ -10,7 +10,7 @@ export class ResearchSystem extends System {
   public readonly name = 'ResearchSystem';
   // Priority is set by SystemRegistry based on dependencies (runs after ProductionSystem)
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
@@ -20,10 +20,7 @@ export class ResearchSystem extends System {
     this.game.eventBus.on('research:complete', this.handleResearchComplete.bind(this));
   }
 
-  private handleResearchCommand(command: {
-    entityIds: number[];
-    upgradeId: string;
-  }): void {
+  private handleResearchCommand(command: { entityIds: number[]; upgradeId: string }): void {
     const { entityIds, upgradeId } = command;
     const upgrade = RESEARCH_DEFINITIONS[upgradeId];
 
@@ -73,9 +70,7 @@ export class ResearchSystem extends System {
       if (!this.canBuildingResearch(building.buildingId, upgradeId)) continue;
 
       // Check if building is already researching
-      const isResearching = building.productionQueue.some(
-        (item) => item.type === 'upgrade'
-      );
+      const isResearching = building.productionQueue.some((item) => item.type === 'upgrade');
       if (isResearching) {
         this.game.eventBus.emit('ui:error', { message: 'Already researching' });
         continue;
@@ -96,10 +91,7 @@ export class ResearchSystem extends System {
     }
   }
 
-  private handleResearchComplete(event: {
-    buildingId: number;
-    upgradeId: string;
-  }): void {
+  private handleResearchComplete(event: { buildingId: number; upgradeId: string }): void {
     const { buildingId, upgradeId } = event;
     const upgrade = RESEARCH_DEFINITIONS[upgradeId];
 
@@ -139,9 +131,7 @@ export class ResearchSystem extends System {
           const building = entity.get<Building>('Building')!;
           const selectable = entity.get<Selectable>('Selectable')!;
           return (
-            building.buildingId === req &&
-            building.isComplete() &&
-            selectable.playerId === playerId
+            building.buildingId === req && building.isComplete() && selectable.playerId === playerId
           );
         });
 
@@ -159,15 +149,28 @@ export class ResearchSystem extends System {
     // Map building types to what they can research
     const researchMap: Record<string, string[]> = {
       tech_center: [
-        'infantry_weapons_1', 'infantry_weapons_2', 'infantry_weapons_3',
-        'infantry_armor_1', 'infantry_armor_2', 'infantry_armor_3',
-        'auto_tracking', 'building_armor',
+        'infantry_weapons_1',
+        'infantry_weapons_2',
+        'infantry_weapons_3',
+        'infantry_armor_1',
+        'infantry_armor_2',
+        'infantry_armor_3',
+        'auto_tracking',
+        'building_armor',
       ],
       arsenal: [
-        'vehicle_weapons_1', 'vehicle_weapons_2', 'vehicle_weapons_3',
-        'vehicle_armor_1', 'vehicle_armor_2', 'vehicle_armor_3',
-        'ship_weapons_1', 'ship_weapons_2', 'ship_weapons_3',
-        'ship_armor_1', 'ship_armor_2', 'ship_armor_3',
+        'vehicle_weapons_1',
+        'vehicle_weapons_2',
+        'vehicle_weapons_3',
+        'vehicle_armor_1',
+        'vehicle_armor_2',
+        'vehicle_armor_3',
+        'ship_weapons_1',
+        'ship_weapons_2',
+        'ship_weapons_3',
+        'ship_armor_1',
+        'ship_armor_2',
+        'ship_armor_3',
       ],
       power_core: ['nova_cannon', 'dreadnought_weapon_refit'],
       infantry_bay: ['combat_stim', 'combat_shield', 'concussive_shells'],

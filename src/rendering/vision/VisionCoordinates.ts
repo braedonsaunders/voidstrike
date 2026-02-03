@@ -108,7 +108,7 @@ export function worldToVisionUV(
 ): { u: number; v: number } {
   return {
     u: worldX / mapWidth,
-    v: worldY / mapHeight,  // worldY (depth), NOT worldZ (altitude)
+    v: worldY / mapHeight, // worldY (depth), NOT worldZ (altitude)
   };
 }
 
@@ -122,19 +122,4 @@ export function isValidGridCell(
   gridHeight: number
 ): boolean {
   return cellX >= 0 && cellX < gridWidth && cellY >= 0 && cellY < gridHeight;
-}
-
-/**
- * Calculate squared distance between two points (for range checks)
- * Uses X and Y coordinates (depth), ignoring Z (altitude)
- */
-export function distanceSquared2D(
-  x1: number,
-  y1: number,
-  x2: number,
-  y2: number
-): number {
-  const dx = x1 - x2;
-  const dy = y1 - y2;
-  return dx * dx + dy * dy;
 }

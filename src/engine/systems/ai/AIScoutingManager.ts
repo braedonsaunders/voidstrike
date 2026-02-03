@@ -20,17 +20,22 @@ import { Unit } from '../../components/Unit';
 import { Building } from '../../components/Building';
 import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
-import type { Game } from '../../core/Game';
+import type { IGameInstance } from '../../core/IGameInstance';
 import type { GameCommand } from '../../core/GameCommand';
 import { debugAI } from '@/utils/debugLogger';
 import type { AICoordinator, AIPlayer } from './AICoordinator';
-import type { InferredStrategy, ScoutedBuilding, ScoutedUnitType, StrategicInference } from '../../ai/ScoutingMemory';
+import type {
+  InferredStrategy,
+  ScoutedBuilding,
+  ScoutedUnitType,
+  StrategicInference,
+} from '../../ai/ScoutingMemory';
 
 export class AIScoutingManager {
-  private game: Game;
+  private game: IGameInstance;
   private coordinator: AICoordinator;
 
-  constructor(game: Game, coordinator: AICoordinator) {
+  constructor(game: IGameInstance, coordinator: AICoordinator) {
     this.game = game;
     this.coordinator = coordinator;
   }
@@ -158,7 +163,9 @@ export class AIScoutingManager {
     // Mark target area as scouted (will be updated more accurately when unit arrives)
     this.markScouted(ai, scoutTarget.x, scoutTarget.y);
 
-    debugAI.log(`[AIScouting] ${ai.playerId}: Scouting location (${scoutTarget.x.toFixed(0)}, ${scoutTarget.y.toFixed(0)})`);
+    debugAI.log(
+      `[AIScouting] ${ai.playerId}: Scouting location (${scoutTarget.x.toFixed(0)}, ${scoutTarget.y.toFixed(0)})`
+    );
 
     // Return to building state
     ai.state = 'building';
@@ -245,10 +252,10 @@ export class AIScoutingManager {
       for (const intel of scoutingMemory.getAllIntel()) {
         debugAI.log(
           `[AIScouting] ${ai.playerId}: Enemy ${intel.playerId} strategy: ` +
-          `${intel.strategy.strategy} (${intel.strategy.confidence}), ` +
-          `tech level: ${intel.tech.techLevel}, ` +
-          `army supply: ${intel.estimatedArmySupply}, ` +
-          `workers: ${intel.estimatedWorkers}`
+            `${intel.strategy.strategy} (${intel.strategy.confidence}), ` +
+            `tech level: ${intel.tech.techLevel}, ` +
+            `army supply: ${intel.estimatedArmySupply}, ` +
+            `workers: ${intel.estimatedWorkers}`
         );
       }
     }
@@ -313,7 +320,10 @@ export class AIScoutingManager {
   /**
    * Get enemy intel summary for a specific enemy player.
    */
-  public getEnemyIntelSummary(ai: AIPlayer, enemyPlayerId: string): {
+  public getEnemyIntelSummary(
+    ai: AIPlayer,
+    enemyPlayerId: string
+  ): {
     knownBuildingCount: number;
     knownUnitTypes: number;
     averageIntelConfidence: number;
@@ -337,9 +347,10 @@ export class AIScoutingManager {
     }
 
     const buildings = ai.scoutingMemory.getConfirmedBuildings(enemyPlayerId);
-    const avgConfidence = buildings.length > 0
-      ? buildings.reduce((sum, b) => sum + b.confidence, 0) / buildings.length
-      : 0;
+    const avgConfidence =
+      buildings.length > 0
+        ? buildings.reduce((sum, b) => sum + b.confidence, 0) / buildings.length
+        : 0;
 
     return {
       knownBuildingCount: buildings.length,
@@ -363,7 +374,7 @@ export class AIScoutingManager {
    * Get all known enemy players.
    */
   public getKnownEnemies(ai: AIPlayer): string[] {
-    return ai.scoutingMemory.getAllIntel().map(intel => intel.playerId);
+    return ai.scoutingMemory.getAllIntel().map((intel) => intel.playerId);
   }
 
   /**

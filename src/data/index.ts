@@ -125,12 +125,10 @@ export {
 
 // ==================== AI BUILD ORDERS ====================
 export {
-  AI_DIFFICULTY_CONFIG,
   FACTION_BUILD_ORDERS,
   FACTION_UNIT_COMPOSITIONS,
   getBuildOrders,
   getRandomBuildOrder,
-  getAIConfig,
   getUnitComposition,
   selectUnitToBuild,
   getFactionsWithBuildOrders,
@@ -139,7 +137,6 @@ export {
   type BuildOrderStep,
   type BuildOrderCondition,
   type BuildOrder,
-  type AIBehaviorConfig,
   type UnitCompositionWeights,
   type BuildOrderStyle,
   type BuildOrderStepType,

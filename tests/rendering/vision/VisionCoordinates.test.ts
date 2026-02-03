@@ -6,7 +6,6 @@ import {
   gridToTextureIndex,
   worldToVisionUV,
   isValidGridCell,
-  distanceSquared2D,
 } from '@/rendering/vision/VisionCoordinates';
 
 describe('VisionCoordinates', () => {
@@ -144,16 +143,6 @@ describe('VisionCoordinates', () => {
       expect(isValidGridCell(0, -1, 160, 160)).toBe(false);
       expect(isValidGridCell(160, 0, 160, 160)).toBe(false);
       expect(isValidGridCell(0, 160, 160, 160)).toBe(false);
-    });
-  });
-
-  describe('distanceSquared2D', () => {
-    it('calculates squared distance correctly', () => {
-      // Distance from (0,0) to (3,4) is 5, squared is 25
-      expect(distanceSquared2D(0, 0, 3, 4)).toBe(25);
-
-      // Same point = 0 distance
-      expect(distanceSquared2D(10, 20, 10, 20)).toBe(0);
     });
   });
 

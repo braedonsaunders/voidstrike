@@ -1,11 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
-  AI_DIFFICULTY_CONFIG,
   FACTION_BUILD_ORDERS,
   FACTION_UNIT_COMPOSITIONS,
   getBuildOrders,
   getRandomBuildOrder,
-  getAIConfig,
   getUnitComposition,
   selectUnitToBuild,
   getFactionsWithBuildOrders,
@@ -28,91 +26,6 @@ function createSeededRandom(seed: number) {
 
 describe('AI Build Orders', () => {
   const difficulties: AIDifficulty[] = ['easy', 'medium', 'hard', 'very_hard', 'insane'];
-
-  describe('AI_DIFFICULTY_CONFIG', () => {
-    it('defines config for all difficulty levels', () => {
-      for (const difficulty of difficulties) {
-        expect(AI_DIFFICULTY_CONFIG[difficulty]).toBeDefined();
-      }
-    });
-
-    it('each config has required timing properties', () => {
-      for (const difficulty of difficulties) {
-        const config = AI_DIFFICULTY_CONFIG[difficulty];
-        expect(config.ticksBetweenActions).toBeGreaterThan(0);
-        expect(config.scoutCooldown).toBeGreaterThan(0);
-        expect(config.harassCooldown).toBeGreaterThan(0);
-        expect(config.expansionCooldown).toBeGreaterThan(0);
-        expect(config.attackCooldown).toBeGreaterThan(0);
-      }
-    });
-
-    it('each config has economy properties', () => {
-      for (const difficulty of difficulties) {
-        const config = AI_DIFFICULTY_CONFIG[difficulty];
-        expect(config.targetWorkerCount).toBeGreaterThan(0);
-        expect(config.maxWorkersPerBase).toBeGreaterThan(0);
-        expect(config.expandAtWorkers).toBeGreaterThan(0);
-      }
-    });
-
-    it('each config has army properties', () => {
-      for (const difficulty of difficulties) {
-        const config = AI_DIFFICULTY_CONFIG[difficulty];
-        expect(config.attackArmySupplyThreshold).toBeGreaterThan(0);
-        expect(typeof config.defendArmyRatio).toBe('number');
-        expect(typeof config.harassArmyRatio).toBe('number');
-      }
-    });
-
-    it('each config has resource multipliers', () => {
-      for (const difficulty of difficulties) {
-        const config = AI_DIFFICULTY_CONFIG[difficulty];
-        expect(config.resourceMultiplier).toBeGreaterThan(0);
-        expect(config.buildSpeedMultiplier).toBeGreaterThan(0);
-      }
-    });
-
-    it('each config has intelligence flags', () => {
-      for (const difficulty of difficulties) {
-        const config = AI_DIFFICULTY_CONFIG[difficulty];
-        expect(typeof config.scoutsEnabled).toBe('boolean');
-        expect(typeof config.counterUnitsEnabled).toBe('boolean');
-        expect(typeof config.microEnabled).toBe('boolean');
-      }
-    });
-
-    it('harder difficulties have faster reactions', () => {
-      expect(AI_DIFFICULTY_CONFIG.insane.ticksBetweenActions)
-        .toBeLessThan(AI_DIFFICULTY_CONFIG.easy.ticksBetweenActions);
-    });
-
-    it('harder difficulties have higher target worker counts', () => {
-      expect(AI_DIFFICULTY_CONFIG.insane.targetWorkerCount)
-        .toBeGreaterThan(AI_DIFFICULTY_CONFIG.easy.targetWorkerCount);
-    });
-
-    it('harder difficulties have lower attack thresholds', () => {
-      expect(AI_DIFFICULTY_CONFIG.insane.attackArmySupplyThreshold)
-        .toBeLessThan(AI_DIFFICULTY_CONFIG.easy.attackArmySupplyThreshold);
-    });
-
-    it('only higher difficulties enable micro', () => {
-      expect(AI_DIFFICULTY_CONFIG.easy.microEnabled).toBe(false);
-      expect(AI_DIFFICULTY_CONFIG.hard.microEnabled).toBe(true);
-    });
-
-    it('only higher difficulties enable scouting', () => {
-      expect(AI_DIFFICULTY_CONFIG.easy.scoutsEnabled).toBe(false);
-      expect(AI_DIFFICULTY_CONFIG.medium.scoutsEnabled).toBe(true);
-    });
-
-    it('resource bonuses only apply to highest difficulties', () => {
-      expect(AI_DIFFICULTY_CONFIG.easy.resourceMultiplier).toBe(1.0);
-      expect(AI_DIFFICULTY_CONFIG.medium.resourceMultiplier).toBe(1.0);
-      expect(AI_DIFFICULTY_CONFIG.insane.resourceMultiplier).toBeGreaterThan(1.0);
-    });
-  });
 
   describe('FACTION_BUILD_ORDERS', () => {
     it('defines build orders for at least one faction', () => {
@@ -269,23 +182,6 @@ describe('AI Build Orders', () => {
     });
   });
 
-  describe('getAIConfig', () => {
-    it('returns config for all difficulties', () => {
-      for (const difficulty of difficulties) {
-        const config = getAIConfig(difficulty);
-        expect(config).toBeDefined();
-        expect(config).toBe(AI_DIFFICULTY_CONFIG[difficulty]);
-      }
-    });
-
-    it('returns the correct config type', () => {
-      const config = getAIConfig('hard');
-      expect(config.ticksBetweenActions).toBeDefined();
-      expect(config.targetWorkerCount).toBeDefined();
-      expect(config.microEnabled).toBeDefined();
-    });
-  });
-
   describe('getUnitComposition', () => {
     it('returns composition for valid faction and difficulty', () => {
       const factions = Object.keys(FACTION_UNIT_COMPOSITIONS);
@@ -417,9 +313,7 @@ describe('AI Build Orders', () => {
     });
 
     it('detects unknown unit', () => {
-      const order = createBuildOrder([
-        { type: 'unit', id: 'unknown_unit' },
-      ]);
+      const order = createBuildOrder([{ type: 'unit', id: 'unknown_unit' }]);
 
       const result = validateBuildOrder(order, validUnits, validBuildings, validResearch);
       expect(result.valid).toBe(false);
@@ -427,9 +321,7 @@ describe('AI Build Orders', () => {
     });
 
     it('detects unknown building', () => {
-      const order = createBuildOrder([
-        { type: 'building', id: 'unknown_building' },
-      ]);
+      const order = createBuildOrder([{ type: 'building', id: 'unknown_building' }]);
 
       const result = validateBuildOrder(order, validUnits, validBuildings, validResearch);
       expect(result.valid).toBe(false);
@@ -437,9 +329,7 @@ describe('AI Build Orders', () => {
     });
 
     it('detects unknown research', () => {
-      const order = createBuildOrder([
-        { type: 'research', id: 'unknown_research' },
-      ]);
+      const order = createBuildOrder([{ type: 'research', id: 'unknown_research' }]);
 
       const result = validateBuildOrder(order, validUnits, validBuildings, validResearch);
       expect(result.valid).toBe(false);

@@ -11,8 +11,12 @@
 
 import { World } from '../ecs/World';
 import { EventBus } from '../core/EventBus';
-import { SystemRegistry } from '../core/SystemRegistry';
+import { SystemRegistry, SystemDefinition } from '../core/SystemRegistry';
 import { bootstrapDefinitions, definitionsReady } from '../definitions';
+import type { IGameInstance } from './IGameInstance';
+import type { System } from '../ecs/System';
+import type { GameStatePort } from './GameStatePort';
+import type { AudioSystem } from '../systems/AudioSystem';
 
 // Systems with direct references
 import { VisionSystem } from '../systems/VisionSystem';
@@ -35,7 +39,16 @@ export type GameState = 'initializing' | 'running' | 'paused' | 'ended';
 export interface TerrainCell {
   terrain: 'ground' | 'platform' | 'unwalkable' | 'ramp' | 'unbuildable' | 'creep';
   elevation: number;
-  feature?: 'none' | 'water_shallow' | 'water_deep' | 'forest_light' | 'forest_dense' | 'mud' | 'road' | 'void' | 'cliff';
+  feature?:
+    | 'none'
+    | 'water_shallow'
+    | 'water_deep'
+    | 'forest_light'
+    | 'forest_dense'
+    | 'mud'
+    | 'road'
+    | 'void'
+    | 'cliff';
 }
 
 export interface GameConfig {
@@ -61,8 +74,9 @@ export const DEFAULT_CONFIG: GameConfig = {
 /**
  * Abstract base class providing shared game logic.
  * Subclasses implement thread-specific behavior (main thread vs worker).
+ * Implements IGameInstance interface for use with systems.
  */
-export abstract class GameCore {
+export abstract class GameCore implements IGameInstance {
   // ============================================================================
   // CORE SYSTEMS (shared between main thread and worker)
   // ============================================================================
@@ -78,6 +92,21 @@ export abstract class GameCore {
   public pathfindingSystem: PathfindingSystem;
   public aiMicroSystem: AIMicroSystem;
   public checksumSystem: ChecksumSystem | null = null;
+
+  /**
+   * Audio system for sound effects.
+   * Main thread: AudioSystem instance
+   * Worker: null (audio not available in workers)
+   */
+  public audioSystem: AudioSystem | null = null;
+
+  /**
+   * State port for resource/selection management.
+   * Abstract because implementation differs:
+   * - Game: ZustandStateAdapter for UI integration
+   * - WorkerGame: Internal implementation using playerResources
+   */
+  public abstract statePort: GameStatePort;
 
   // System assigned during initializeSystems()
   protected _projectileSystem: ProjectileSystem | null = null;
@@ -123,7 +152,9 @@ export abstract class GameCore {
     // Ensure definitions are loaded
     // Callers should await initializeDefinitions() before creating GameCore
     if (!definitionsReady()) {
-      console.warn('[GameCore] Definitions not initialized before GameCore creation. Starting async load...');
+      console.warn(
+        '[GameCore] Definitions not initialized before GameCore creation. Starting async load...'
+      );
       // Fire off async load, but this may cause race conditions
       bootstrapDefinitions();
     }
@@ -133,16 +164,24 @@ export abstract class GameCore {
     this.eventBus = new EventBus();
 
     // Pre-create systems that need direct references
-    // Using 'this as any' to satisfy Game type requirement (GameCore is compatible)
-    this.visionSystem = new VisionSystem(this as any, this.config.mapWidth, this.config.mapHeight);
-    this.gameStateSystem = new GameStateSystem(this as any);
-    this.saveLoadSystem = new SaveLoadSystem(this as any);
-    this.pathfindingSystem = new PathfindingSystem(this as any, this.config.mapWidth, this.config.mapHeight);
-    this.aiMicroSystem = new AIMicroSystem(this as any);
+    // Cast to IGameInstance since GameCore implements the interface
+    this.visionSystem = new VisionSystem(
+      this as IGameInstance,
+      this.config.mapWidth,
+      this.config.mapHeight
+    );
+    this.gameStateSystem = new GameStateSystem(this as IGameInstance);
+    this.saveLoadSystem = new SaveLoadSystem(this as IGameInstance);
+    this.pathfindingSystem = new PathfindingSystem(
+      this as IGameInstance,
+      this.config.mapWidth,
+      this.config.mapHeight
+    );
+    this.aiMicroSystem = new AIMicroSystem(this as IGameInstance);
 
     // Initialize checksum system for multiplayer
     if (this.config.isMultiplayer) {
-      this.checksumSystem = new ChecksumSystem(this as any, {
+      this.checksumSystem = new ChecksumSystem(this as IGameInstance, {
         checksumInterval: 5,
         emitNetworkChecksums: true,
         logChecksums: false,
@@ -159,9 +198,8 @@ export abstract class GameCore {
    * Get system definitions for this game instance.
    * Main thread includes SelectionSystem + AudioSystem.
    * Worker excludes them (not available in worker context).
-   * Returns any[] to allow different definition formats between threads.
    */
-  protected abstract getSystemDefinitions(): any[];
+  protected abstract getSystemDefinitions(): SystemDefinition[];
 
   /**
    * Start the game loop.
@@ -193,7 +231,7 @@ export abstract class GameCore {
     }
 
     // Create systems in dependency order
-    const systems = registry.createSystems(this as any);
+    const systems = registry.createSystems(this as IGameInstance);
 
     // Add all systems to world and capture references
     for (const system of systems) {
@@ -206,7 +244,7 @@ export abstract class GameCore {
    * Hook for subclasses to capture system references.
    * Called for each system after creation.
    */
-  protected onSystemCreated(system: any): void {
+  protected onSystemCreated(system: System): void {
     if (system.name === 'ProjectileSystem') {
       this._projectileSystem = system as ProjectileSystem;
     }
@@ -233,8 +271,13 @@ export abstract class GameCore {
     const gridY = Math.floor(worldY);
 
     const firstRow = this.terrainGrid[0];
-    if (!firstRow || gridY < 0 || gridY >= this.terrainGrid.length ||
-        gridX < 0 || gridX >= firstRow.length) {
+    if (
+      !firstRow ||
+      gridY < 0 ||
+      gridY >= this.terrainGrid.length ||
+      gridX < 0 ||
+      gridX >= firstRow.length
+    ) {
       return null;
     }
 
@@ -268,7 +311,9 @@ export abstract class GameCore {
    * Set decoration collision data for building placement validation and pathfinding.
    * Should be called after environment is loaded.
    */
-  public setDecorationCollisions(collisions: Array<{ x: number; z: number; radius: number }>): void {
+  public setDecorationCollisions(
+    collisions: Array<{ x: number; z: number; radius: number }>
+  ): void {
     this.decorationCollisions = collisions;
     this.pathfindingSystem.registerDecorationCollisions(collisions);
   }
@@ -287,10 +332,7 @@ export abstract class GameCore {
   /**
    * Initialize the navmesh for pathfinding from terrain walkable geometry.
    */
-  public async initializeNavMesh(
-    positions: Float32Array,
-    indices: Uint32Array
-  ): Promise<boolean> {
+  public async initializeNavMesh(positions: Float32Array, indices: Uint32Array): Promise<boolean> {
     return this.pathfindingSystem.initializeNavMesh(positions, indices);
   }
 
@@ -311,7 +353,12 @@ export abstract class GameCore {
   /**
    * Check if a building position overlaps with decorations (rocks, trees)
    */
-  public isPositionClearOfDecorations(centerX: number, centerY: number, width: number, height: number): boolean {
+  public isPositionClearOfDecorations(
+    centerX: number,
+    centerY: number,
+    width: number,
+    height: number
+  ): boolean {
     const halfW = width / 2 + 0.5;
     const halfH = height / 2 + 0.5;
 
@@ -331,7 +378,12 @@ export abstract class GameCore {
    * Check if terrain is valid for building placement.
    * Returns true if all tiles are buildable ground at the same elevation.
    */
-  public isValidTerrainForBuilding(centerX: number, centerY: number, width: number, height: number): boolean {
+  public isValidTerrainForBuilding(
+    centerX: number,
+    centerY: number,
+    width: number,
+    height: number
+  ): boolean {
     if (!this.terrainGrid) {
       // No terrain data - allow placement (legacy behavior)
       return true;
@@ -349,8 +401,12 @@ export abstract class GameCore {
         const tileX = Math.floor(centerX + dx);
         const tileY = Math.floor(centerY + dy);
 
-        if (tileY < 0 || tileY >= this.terrainGrid.length ||
-            tileX < 0 || tileX >= firstRow.length) {
+        if (
+          tileY < 0 ||
+          tileY >= this.terrainGrid.length ||
+          tileX < 0 ||
+          tileX >= firstRow.length
+        ) {
           return false;
         }
 
@@ -387,8 +443,12 @@ export abstract class GameCore {
     const halfH = height / 2;
 
     // Check map bounds
-    if (centerX - halfW < 0 || centerY - halfH < 0 ||
-        centerX + halfW > this.config.mapWidth || centerY + halfH > this.config.mapHeight) {
+    if (
+      centerX - halfW < 0 ||
+      centerY - halfH < 0 ||
+      centerX + halfW > this.config.mapWidth ||
+      centerY + halfH > this.config.mapHeight
+    ) {
       return false;
     }
 
@@ -408,15 +468,27 @@ export abstract class GameCore {
 
     for (const buildingId of nearbyBuildingIds) {
       const entity = this.world.getEntity(buildingId);
-      if (!validateEntity(entity, buildingId, 'GameCore.isValidBuildingPlacement:building', this.currentTick)) continue;
+      if (
+        !validateEntity(
+          entity,
+          buildingId,
+          'GameCore.isValidBuildingPlacement:building',
+          this.currentTick
+        )
+      )
+        continue;
 
       const transform = entity.get<Transform>('Transform');
       const building = entity.get<Building>('Building');
       if (!transform || !building) continue;
 
       // Skip flying buildings
-      if (building.isFlying || building.state === 'lifting' ||
-          building.state === 'flying' || building.state === 'landing') {
+      if (
+        building.isFlying ||
+        building.state === 'lifting' ||
+        building.state === 'flying' ||
+        building.state === 'landing'
+      ) {
         continue;
       }
 
@@ -459,7 +531,15 @@ export abstract class GameCore {
         }
 
         const entity = this.world.getEntity(unitId);
-        if (!validateEntity(entity, unitId, 'GameCore.isValidBuildingPlacement:unit', this.currentTick)) continue;
+        if (
+          !validateEntity(
+            entity,
+            unitId,
+            'GameCore.isValidBuildingPlacement:unit',
+            this.currentTick
+          )
+        )
+          continue;
 
         const transform = entity.get<Transform>('Transform');
         if (!transform) continue;

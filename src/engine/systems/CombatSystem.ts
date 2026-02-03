@@ -2,7 +2,7 @@ import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
@@ -145,16 +145,23 @@ export class CombatSystem extends System {
   // PERF: Pre-allocated query result buffer
   private readonly _targetDataBuffer: SpatialEntityData[] = [];
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
 
     // Pre-allocate target data buffer
     for (let i = 0; i < 64; i++) {
       this._targetDataBuffer.push({
-        id: 0, x: 0, y: 0, radius: 0,
-        isFlying: false, state: SpatialUnitState.Idle, playerId: 0,
-        collisionRadius: 0, isWorker: false, maxSpeed: 0,
+        id: 0,
+        x: 0,
+        y: 0,
+        radius: 0,
+        isFlying: false,
+        state: SpatialUnitState.Idle,
+        playerId: 0,
+        collisionRadius: 0,
+        isWorker: false,
+        maxSpeed: 0,
       });
     }
   }
@@ -292,11 +299,15 @@ export class CombatSystem extends System {
   private heapSiftUp(index: number): void {
     while (index > 0) {
       const parent = Math.floor((index - 1) / 2);
-      if (this.attackReadyQueue[parent].nextAttackTime <= this.attackReadyQueue[index].nextAttackTime) {
+      if (
+        this.attackReadyQueue[parent].nextAttackTime <= this.attackReadyQueue[index].nextAttackTime
+      ) {
         break;
       }
-      [this.attackReadyQueue[parent], this.attackReadyQueue[index]] =
-        [this.attackReadyQueue[index], this.attackReadyQueue[parent]];
+      [this.attackReadyQueue[parent], this.attackReadyQueue[index]] = [
+        this.attackReadyQueue[index],
+        this.attackReadyQueue[parent],
+      ];
       index = parent;
     }
   }
@@ -308,17 +319,25 @@ export class CombatSystem extends System {
       const right = 2 * index + 2;
       let smallest = index;
 
-      if (left < length && this.attackReadyQueue[left].nextAttackTime < this.attackReadyQueue[smallest].nextAttackTime) {
+      if (
+        left < length &&
+        this.attackReadyQueue[left].nextAttackTime < this.attackReadyQueue[smallest].nextAttackTime
+      ) {
         smallest = left;
       }
-      if (right < length && this.attackReadyQueue[right].nextAttackTime < this.attackReadyQueue[smallest].nextAttackTime) {
+      if (
+        right < length &&
+        this.attackReadyQueue[right].nextAttackTime < this.attackReadyQueue[smallest].nextAttackTime
+      ) {
         smallest = right;
       }
 
       if (smallest === index) break;
 
-      [this.attackReadyQueue[index], this.attackReadyQueue[smallest]] =
-        [this.attackReadyQueue[smallest], this.attackReadyQueue[index]];
+      [this.attackReadyQueue[index], this.attackReadyQueue[smallest]] = [
+        this.attackReadyQueue[smallest],
+        this.attackReadyQueue[index],
+      ];
       index = smallest;
     }
   }
@@ -510,22 +529,26 @@ export class CombatSystem extends System {
       // Auto-acquire targets for units that need them
       // canAttackWhileMoving units also acquire targets while moving
       // RTS-STYLE: Assault mode units ALWAYS need to acquire targets when idle
-      const needsTarget = unit.targetEntityId === null && (
-        unit.state === 'idle' ||
-        unit.state === 'patrolling' ||
-        unit.state === 'attackmoving' ||
-        unit.state === 'attacking' ||
-        unit.isHoldingPosition ||
-        unit.isInAssaultMode || // RTS-STYLE: Assault mode units always scan
-        (unit.canAttackWhileMoving && unit.state === 'moving')
-      );
+      const needsTarget =
+        unit.targetEntityId === null &&
+        (unit.state === 'idle' ||
+          unit.state === 'patrolling' ||
+          unit.state === 'attackmoving' ||
+          unit.state === 'attacking' ||
+          unit.isHoldingPosition ||
+          unit.isInAssaultMode || // RTS-STYLE: Assault mode units always scan
+          (unit.canAttackWhileMoving && unit.state === 'moving'));
 
       if (needsTarget) {
         // PERF: Use hot cell check instead of expensive spatial query for idle units
         // RTS-STYLE: Skip this optimization for assault mode units - they always search
         if (unit.state === 'idle' && !unit.isHoldingPosition && !unit.isInAssaultMode) {
           // Fast check: is this unit in a hot cell?
-          const inHotCell = this.world.unitGrid.isInHotCell(transform.x, transform.y, this.hotCells);
+          const inHotCell = this.world.unitGrid.isInHotCell(
+            transform.x,
+            transform.y,
+            this.hotCells
+          );
           if (!inHotCell) {
             // Also do the full combat zone check for edge cases
             const inCombatZone = this.checkCombatZone(attacker.id, transform, unit, currentTick);
@@ -568,7 +591,10 @@ export class CombatSystem extends System {
 
         if (target && !unit.isHoldingPosition) {
           // Units with canAttackWhileMoving keep moving while attacking
-          if (unit.canAttackWhileMoving && (unit.state === 'moving' || unit.state === 'attackmoving')) {
+          if (
+            unit.canAttackWhileMoving &&
+            (unit.state === 'moving' || unit.state === 'attackmoving')
+          ) {
             unit.setAttackTargetWhileMoving(target);
           } else {
             // For attackmoving units, save the destination before switching to attacking
@@ -602,14 +628,16 @@ export class CombatSystem extends System {
 
       // Process attacks for units in attacking state
       // Also process for canAttackWhileMoving units that are moving/attackmoving with a target
-      const canProcessAttack = unit.targetEntityId !== null && (
-        unit.state === 'attacking' ||
-        (unit.canAttackWhileMoving && (unit.state === 'moving' || unit.state === 'attackmoving'))
-      );
+      const canProcessAttack =
+        unit.targetEntityId !== null &&
+        (unit.state === 'attacking' ||
+          (unit.canAttackWhileMoving &&
+            (unit.state === 'moving' || unit.state === 'attackmoving')));
 
       if (canProcessAttack) {
         const targetEntity = this.world.getEntity(unit.targetEntityId!);
-        const isAttackingWhileMoving = unit.canAttackWhileMoving && (unit.state === 'moving' || unit.state === 'attackmoving');
+        const isAttackingWhileMoving =
+          unit.canAttackWhileMoving && (unit.state === 'moving' || unit.state === 'attackmoving');
 
         if (!targetEntity || targetEntity.isDestroyed()) {
           // Target no longer exists
@@ -661,8 +689,8 @@ export class CombatSystem extends System {
         // Buildings are always ground targets, units check isFlying
         const targetIsFlying = targetUnit?.isFlying ?? false;
         const canAttackThisTarget = targetBuilding
-          ? unit.canAttackGround  // Buildings are ground targets
-          : unit.canAttackTarget(targetIsFlying);  // Units check air/ground
+          ? unit.canAttackGround // Buildings are ground targets
+          : unit.canAttackTarget(targetIsFlying); // Units check air/ground
 
         if (!canAttackThisTarget) {
           // Cannot attack this target type - clear and find new target
@@ -685,28 +713,50 @@ export class CombatSystem extends System {
         // Calculate effective distance (edge-to-edge)
         // Uses visual radius (model scale) not just collision radius
         let effectiveDistance: number;
-        const attackerRadius = AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius);
+        const attackerRadius = AssetManager.getCachedVisualRadius(
+          unit.unitId,
+          unit.collisionRadius
+        );
 
         if (targetBuilding) {
           // Distance to building edge, minus attacker's visual radius
           const halfW = targetBuilding.width / 2;
           const halfH = targetBuilding.height / 2;
-          const clampedX = Math.max(targetTransform.x - halfW, Math.min(transform.x, targetTransform.x + halfW));
-          const clampedY = Math.max(targetTransform.y - halfH, Math.min(transform.y, targetTransform.y + halfH));
+          const clampedX = Math.max(
+            targetTransform.x - halfW,
+            Math.min(transform.x, targetTransform.x + halfW)
+          );
+          const clampedY = Math.max(
+            targetTransform.y - halfH,
+            Math.min(transform.y, targetTransform.y + halfH)
+          );
           const edgeDx = transform.x - clampedX;
           const edgeDy = transform.y - clampedY;
-          effectiveDistance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
+          effectiveDistance = Math.max(
+            0,
+            Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius
+          );
         } else {
           // Distance between unit edges (center-to-center minus both visual radii)
           const centerDistance = transform.distanceTo(targetTransform);
-          const targetRadius = targetUnit ? AssetManager.getCachedVisualRadius(targetUnit.unitId, targetUnit.collisionRadius) : 0.5;
+          const targetRadius = targetUnit
+            ? AssetManager.getCachedVisualRadius(targetUnit.unitId, targetUnit.collisionRadius)
+            : 0.5;
           effectiveDistance = Math.max(0, centerDistance - attackerRadius - targetRadius);
         }
 
         if (effectiveDistance <= unit.attackRange) {
           // In range - attempt attack
           if (unit.canAttack(gameTime)) {
-            this.performAttack(attacker.id, unit, transform, targetEntity.id, targetHealth, targetTransform, gameTime);
+            this.performAttack(
+              attacker.id,
+              unit,
+              transform,
+              targetEntity.id,
+              targetHealth,
+              targetTransform,
+              gameTime
+            );
           }
         }
         // If not in range, MovementSystem will handle moving toward target
@@ -746,7 +796,9 @@ export class CombatSystem extends System {
           }
         }
 
-        debugCombat.log(`CombatSystem: Building ${buildingComp.buildingId} (${building.id}) destroyed at (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`);
+        debugCombat.log(
+          `CombatSystem: Building ${buildingComp.buildingId} (${building.id}) destroyed at (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`
+        );
 
         this.game.eventBus.emit('building:destroyed', {
           entityId: building.id,
@@ -883,7 +935,10 @@ export class CombatSystem extends System {
       canAttackAir: selfUnit.canAttackAir,
       canAttackGround: selfUnit.canAttackGround,
       includeBuildingsInSearch: selfUnit.canAttackGround,
-      attackerVisualRadius: AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius),
+      attackerVisualRadius: AssetManager.getCachedVisualRadius(
+        selfUnit.unitId,
+        selfUnit.collisionRadius
+      ),
       excludeEntityId: selfId,
     });
 
@@ -959,7 +1014,10 @@ export class CombatSystem extends System {
       canAttackAir: selfUnit.canAttackAir,
       canAttackGround: selfUnit.canAttackGround,
       includeBuildingsInSearch: selfUnit.canAttackGround,
-      attackerVisualRadius: AssetManager.getCachedVisualRadius(selfUnit.unitId, selfUnit.collisionRadius),
+      attackerVisualRadius: AssetManager.getCachedVisualRadius(
+        selfUnit.unitId,
+        selfUnit.collisionRadius
+      ),
       excludeEntityId: selfId,
     });
 
@@ -1010,11 +1068,7 @@ export class CombatSystem extends System {
     const armorReduction = attacker.damageType === 'psionic' ? 0 : targetHealth.armor;
 
     // Use deterministic damage calculation with quantization
-    const finalDamage = deterministicDamage(
-      attacker.attackDamage,
-      multiplier,
-      armorReduction
-    );
+    const finalDamage = deterministicDamage(attacker.attackDamage, multiplier, armorReduction);
 
     // Get target info for events and projectile
     const targetEntity = this.world.getEntity(targetId);
@@ -1085,12 +1139,9 @@ export class CombatSystem extends System {
     } else {
       // PROJECTILE-BASED: Spawn projectile entity, damage on impact
       // Use per-unit airborne heights from assets.json for accurate targeting
-      const startZ = attacker.isFlying
-        ? AssetManager.getAirborneHeight(attacker.unitId)
-        : 0.5;
-      const targetZ = targetIsFlying && targetUnit
-        ? AssetManager.getAirborneHeight(targetUnit.unitId)
-        : 0.5;
+      const startZ = attacker.isFlying ? AssetManager.getAirborneHeight(attacker.unitId) : 0.5;
+      const targetZ =
+        targetIsFlying && targetUnit ? AssetManager.getAirborneHeight(targetUnit.unitId) : 0.5;
 
       const projectileEntity = this.game.projectileSystem.spawnProjectile({
         sourceEntityId: attackerId,
@@ -1113,7 +1164,7 @@ export class CombatSystem extends System {
 
       debugCombat.log(
         `CombatSystem: ${attacker.unitId} (${attackerId}) fired ${projectileTypeId} projectile ` +
-        `(entity: ${projectileEntity?.id ?? 'null'}) at target ${targetId}, damage: ${finalDamage}`
+          `(entity: ${projectileEntity?.id ?? 'null'}) at target ${targetId}, damage: ${finalDamage}`
       );
 
       // Emit attack event for muzzle flash/audio (no damage info - damage on impact)
@@ -1177,7 +1228,15 @@ export class CombatSystem extends System {
       // Skip allies and dead units
       if (!transform || !health || !selectable) continue;
       // Use isEnemy to check team alliance
-      if (!isEnemy(attackerSelectable.playerId, attackerSelectable.teamId, selectable.playerId, selectable.teamId)) continue;
+      if (
+        !isEnemy(
+          attackerSelectable.playerId,
+          attackerSelectable.teamId,
+          selectable.playerId,
+          selectable.teamId
+        )
+      )
+        continue;
       if (health.isDead()) continue;
 
       // Calculate distance from impact point
@@ -1191,7 +1250,10 @@ export class CombatSystem extends System {
         const qRadius = quantize(attacker.splashRadius, QUANT_DAMAGE);
         const qFalloff = QUANT_DAMAGE - Math.floor((qDistance * QUANT_DAMAGE * 0.5) / qRadius);
         const qBaseDamage = quantize(baseDamage, QUANT_DAMAGE);
-        const splashDamage = Math.max(1, Math.floor((qBaseDamage * qFalloff) / (QUANT_DAMAGE * QUANT_DAMAGE)));
+        const splashDamage = Math.max(
+          1,
+          Math.floor((qBaseDamage * qFalloff) / (QUANT_DAMAGE * QUANT_DAMAGE))
+        );
 
         health.takeDamage(splashDamage, gameTime);
 
@@ -1224,7 +1286,15 @@ export class CombatSystem extends System {
 
       if (!transform || !health || !selectable || !building) continue;
       // Use isEnemy to check team alliance
-      if (!isEnemy(attackerSelectable.playerId, attackerSelectable.teamId, selectable.playerId, selectable.teamId)) continue;
+      if (
+        !isEnemy(
+          attackerSelectable.playerId,
+          attackerSelectable.teamId,
+          selectable.playerId,
+          selectable.teamId
+        )
+      )
+        continue;
       if (health.isDead()) continue;
 
       // Distance to building edge

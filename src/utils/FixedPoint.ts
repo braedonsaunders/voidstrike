@@ -13,15 +13,15 @@
 // Fixed-point configuration
 export const FP_SHIFT = 16;
 export const FP_SCALE = 1 << FP_SHIFT; // 65536
-export const FP_HALF = FP_SCALE >> 1;   // 32768 (for rounding)
-export const FP_MASK = FP_SCALE - 1;    // 65535 (fractional mask)
+export const FP_HALF = FP_SCALE >> 1; // 32768 (for rounding)
+export const FP_MASK = FP_SCALE - 1; // 65535 (fractional mask)
 
 // Precomputed constants
 export const FP_ONE = FP_SCALE;
 
 // Maximum safe value to prevent overflow in multiplication
-export const FP_MAX_SAFE = 0x7FFF0000; // ~32767
-export const FP_MIN_SAFE = -0x7FFF0000;
+export const FP_MAX_SAFE = 0x7fff0000; // ~32767
+export const FP_MIN_SAFE = -0x7fff0000;
 
 /**
  * Convert a floating-point number to fixed-point
@@ -129,10 +129,10 @@ export function fpSqrt(fp: number): number {
 /**
  * Quantization precision levels
  */
-export const QUANT_POSITION = 1000;      // 0.001 unit precision for positions
-export const QUANT_DAMAGE = 100;          // 0.01 precision for damage
-export const QUANT_COOLDOWN = 1000;       // 0.001 second precision for cooldowns
-export const QUANT_VELOCITY = 1000;       // 0.001 precision for velocity
+export const QUANT_POSITION = 1000; // 0.001 unit precision for positions
+export const QUANT_DAMAGE = 100; // 0.01 precision for damage
+export const QUANT_COOLDOWN = 1000; // 0.001 second precision for cooldowns
+export const QUANT_VELOCITY = 1000; // 0.001 precision for velocity
 
 /**
  * Quantize a floating-point value to a deterministic grid
@@ -195,7 +195,7 @@ export function integerSqrt(n: number): number {
   if (n < 2) return n;
 
   // Use BigInt for large numbers to avoid precision issues
-  if (n > 0x7FFFFFFF) {
+  if (n > 0x7fffffff) {
     const nBig = BigInt(Math.floor(n));
     let lo = BigInt(1);
     let hi = nBig;
@@ -233,6 +233,12 @@ export function integerSqrt(n: number): number {
 /**
  * Deterministic distance calculation using quantized positions
  * FIX: Uses integer sqrt instead of Math.sqrt for cross-platform determinism
+ *
+ * TODO: Consider migrating multiplayer-critical systems (CombatSystem, ProjectileSystem,
+ * PathfindingSystem, etc.) to use deterministicDistance/deterministicDistanceSquared
+ * instead of the regular distance() from math.ts. The regular Math.sqrt() can produce
+ * subtly different results across different CPUs/browsers, potentially causing desync.
+ * Current usage: These functions are tested but not yet integrated into game systems.
  */
 export function deterministicDistance(x1: number, y1: number, x2: number, y2: number): number {
   // Quantize inputs
@@ -254,7 +260,12 @@ export function deterministicDistance(x1: number, y1: number, x2: number, y2: nu
 /**
  * Deterministic squared distance (avoids sqrt entirely)
  */
-export function deterministicDistanceSquared(x1: number, y1: number, x2: number, y2: number): number {
+export function deterministicDistanceSquared(
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number
+): number {
   const qx1 = quantize(x1, QUANT_POSITION);
   const qy1 = quantize(y1, QUANT_POSITION);
   const qx2 = quantize(x2, QUANT_POSITION);
@@ -270,11 +281,7 @@ export function deterministicDistanceSquared(x1: number, y1: number, x2: number,
 /**
  * Deterministic damage calculation
  */
-export function deterministicDamage(
-  baseDamage: number,
-  multiplier: number,
-  armor: number
-): number {
+export function deterministicDamage(baseDamage: number, multiplier: number, armor: number): number {
   // Quantize all inputs
   const qDamage = quantizeDamage(baseDamage);
   const qMultiplier = quantize(multiplier, QUANT_DAMAGE);

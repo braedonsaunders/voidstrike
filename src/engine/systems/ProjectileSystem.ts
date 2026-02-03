@@ -1,5 +1,5 @@
 import { System } from '../ecs/System';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { Entity } from '../ecs/Entity';
 import { Transform } from '../components/Transform';
 import { Health } from '../components/Health';
@@ -42,7 +42,7 @@ export class ProjectileSystem extends System {
   // Track active projectile count for performance monitoring
   private activeProjectileCount = 0;
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
   }
 
@@ -61,7 +61,9 @@ export class ProjectileSystem extends System {
 
     // Debug: Log projectile count periodically (every 20 ticks = 1 second)
     if (this.activeProjectileCount > 0 && currentTick % 20 === 0) {
-      debugProjectile.log(`ProjectileSystem: ${this.activeProjectileCount} active projectiles at tick ${currentTick}`);
+      debugProjectile.log(
+        `ProjectileSystem: ${this.activeProjectileCount} active projectiles at tick ${currentTick}`
+      );
     }
 
     for (const entity of this._projectileBuffer) {
@@ -272,13 +274,12 @@ export class ProjectileSystem extends System {
 
           const isKillingBlow = targetHealth.isDead();
           const targetIsFlying = targetUnit?.isFlying ?? false;
-          const targetHeight = targetIsFlying && targetUnit
-            ? AssetManager.getAirborneHeight(targetUnit.unitId)
-            : 0;
+          const targetHeight =
+            targetIsFlying && targetUnit ? AssetManager.getAirborneHeight(targetUnit.unitId) : 0;
 
           debugProjectile.log(
             `Projectile ${entity.id} hit target ${projectile.targetEntityId} for ${finalDamage} damage ` +
-            `(health: ${targetHealth.current.toFixed(1)}/${targetHealth.max})${isKillingBlow ? ' [KILL]' : ''}`
+              `(health: ${targetHealth.current.toFixed(1)}/${targetHealth.max})${isKillingBlow ? ' [KILL]' : ''}`
           );
 
           // Emit damage:dealt for UI damage numbers
@@ -309,7 +310,9 @@ export class ProjectileSystem extends System {
           }
         }
       } else {
-        debugProjectile.log(`Projectile ${entity.id} target ${projectile.targetEntityId} no longer exists`);
+        debugProjectile.log(
+          `Projectile ${entity.id} target ${projectile.targetEntityId} no longer exists`
+        );
       }
     }
 
@@ -389,9 +392,7 @@ export class ProjectileSystem extends System {
 
       const isKillingBlow = health.isDead();
       const targetIsFlying = unit?.isFlying ?? false;
-      const targetHeight = targetIsFlying && unit
-        ? AssetManager.getAirborneHeight(unit.unitId)
-        : 0;
+      const targetHeight = targetIsFlying && unit ? AssetManager.getAirborneHeight(unit.unitId) : 0;
 
       debugProjectile.log(
         `Splash hit entity ${entityId} for ${damageWithMultiplier} damage (falloff: ${falloffFactor.toFixed(2)})${isKillingBlow ? ' [KILL]' : ''}`
@@ -531,9 +532,9 @@ export class ProjectileSystem extends System {
       const distSq = dx * dx + dy * dy + dz * dz;
       debugProjectile.log(
         `Projectile ${entity.id} expired without impact (behavior: ${projectile.behavior}), ` +
-        `pos: (${transform.x.toFixed(2)}, ${transform.y.toFixed(2)}, ${transform.z.toFixed(2)}), ` +
-        `target: (${projectile.targetX.toFixed(2)}, ${projectile.targetY.toFixed(2)}, ${projectile.targetZ.toFixed(2)}), ` +
-        `dist: ${Math.sqrt(distSq).toFixed(2)}, targetEntityId: ${projectile.targetEntityId}`
+          `pos: (${transform.x.toFixed(2)}, ${transform.y.toFixed(2)}, ${transform.z.toFixed(2)}), ` +
+          `target: (${projectile.targetX.toFixed(2)}, ${projectile.targetY.toFixed(2)}, ${projectile.targetZ.toFixed(2)}), ` +
+          `dist: ${Math.sqrt(distSq).toFixed(2)}, targetEntityId: ${projectile.targetEntityId}`
       );
 
       // FIX: Emit impact event so visual effects are cleaned up (no damage, just cleanup)

@@ -14,33 +14,33 @@ import { debugNetworking } from '@/utils/debugLogger';
 
 // Connection status for detailed state tracking
 export type ConnectionStatus =
-  | 'disconnected'     // Not connected
-  | 'connecting'       // Initial connection in progress
-  | 'connected'        // Fully connected and operational
-  | 'reconnecting'     // Lost connection, attempting to reconnect
-  | 'waiting'          // Waiting for remote player (they may be reconnecting)
-  | 'failed';          // Connection failed permanently
+  | 'disconnected' // Not connected
+  | 'connecting' // Initial connection in progress
+  | 'connected' // Fully connected and operational
+  | 'reconnecting' // Lost connection, attempting to reconnect
+  | 'waiting' // Waiting for remote player (they may be reconnecting)
+  | 'failed'; // Connection failed permanently
 
 // Desync state
 export type DesyncState =
-  | 'synced'           // Game states match
-  | 'checking'         // Verifying checksums
-  | 'desynced';        // Confirmed desync - game should end
+  | 'synced' // Game states match
+  | 'checking' // Verifying checksums
+  | 'desynced'; // Confirmed desync - game should end
 
 // Connection quality based on latency and jitter
 export type ConnectionQuality = 'excellent' | 'good' | 'poor' | 'critical';
 
 // Latency measurement data
 export interface LatencyStats {
-  currentRTT: number;           // Most recent RTT in ms
-  averageRTT: number;           // Exponential moving average RTT
-  minRTT: number;               // Minimum observed RTT
-  maxRTT: number;               // Maximum observed RTT
-  jitter: number;               // RTT variance (ms)
-  packetsLost: number;          // Number of pings without pong response
-  packetsSent: number;          // Total pings sent
-  lastPingTime: number;         // Timestamp of last ping sent
-  lastPongTime: number;         // Timestamp of last pong received
+  currentRTT: number; // Most recent RTT in ms
+  averageRTT: number; // Exponential moving average RTT
+  minRTT: number; // Minimum observed RTT
+  maxRTT: number; // Maximum observed RTT
+  jitter: number; // RTT variance (ms)
+  packetsLost: number; // Number of pings without pong response
+  packetsSent: number; // Total pings sent
+  lastPingTime: number; // Timestamp of last ping sent
+  lastPongTime: number; // Timestamp of last pong received
 }
 
 export interface BufferedCommand {
@@ -59,6 +59,8 @@ export interface PeerConnection {
   messageHandler: (event: MessageEvent) => void;
   closeHandler: () => void;
   errorHandler: (event: Event) => void;
+  // Cryptographic signing public key (base64) for command verification
+  signingPublicKey?: string;
 }
 
 export interface MultiplayerState {
@@ -89,16 +91,16 @@ export interface MultiplayerState {
 
   // Peer info - supports up to 8 players
   localPeerId: string | null;
-  remotePeerId: string | null;  // Legacy: first peer for backwards compatibility
-  remotePeerIds: string[];      // All remote peer IDs
+  remotePeerId: string | null; // Legacy: first peer for backwards compatibility
+  remotePeerIds: string[]; // All remote peer IDs
 
   // Peer ID to slot ID mapping (e.g., "pubkey123" -> "player2")
   // This maps network peer IDs to game slot IDs for command validation
   peerToSlotId: Map<string, string>;
 
   // WebRTC objects - supports multiple peers
-  dataChannel: RTCDataChannel | null;  // Legacy: first channel for backwards compatibility
-  peerChannels: Map<string, PeerConnection>;  // All peer connections by ID
+  dataChannel: RTCDataChannel | null; // Legacy: first channel for backwards compatibility
+  peerChannels: Map<string, PeerConnection>; // All peer connections by ID
 
   // Reconnection callback (set by lobby hook)
   reconnectCallback: (() => Promise<boolean>) | null;
@@ -128,11 +130,15 @@ export interface MultiplayerState {
   setOnReconnectedCallback: (callback: (() => void) | null) => void;
 
   // Multi-peer actions
-  addPeer: (peerId: string, dataChannel: RTCDataChannel) => void;
+  addPeer: (peerId: string, dataChannel: RTCDataChannel, signingPublicKey?: string) => void;
   removePeer: (peerId: string) => void;
   getPeerChannel: (peerId: string) => RTCDataChannel | null;
   getAllPeerIds: () => string[];
   getConnectedPeerCount: () => number;
+
+  // Signing key management for command verification
+  setPeerSigningKey: (peerId: string, signingPublicKey: string) => void;
+  getPeerSigningKey: (peerId: string) => string | null;
 
   // Peer-to-slot mapping for command validation
   setPeerSlotMapping: (peerId: string, slotId: string) => void;
@@ -252,7 +258,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   setOnReconnectedCallback: (callback) => set({ onReconnectedCallback: callback }),
 
   // Multi-peer management for 8-player support
-  addPeer: (peerId: string, dataChannel: RTCDataChannel) => {
+  addPeer: (peerId: string, dataChannel: RTCDataChannel, signingPublicKey?: string) => {
     const state = get();
     const newPeerChannels = new Map(state.peerChannels);
 
@@ -264,11 +270,13 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         // Handle ping/pong internally
         if (data.type === 'ping') {
           try {
-            dataChannel.send(JSON.stringify({
-              type: 'pong',
-              pingId: data.pingId,
-              timestamp: data.timestamp,
-            }));
+            dataChannel.send(
+              JSON.stringify({
+                type: 'pong',
+                pingId: data.pingId,
+                timestamp: data.timestamp,
+              })
+            );
           } catch (e) {
             debugNetworking.warn(`[Multiplayer] Failed to send pong to ${peerId}:`, e);
           }
@@ -317,6 +325,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       messageHandler,
       closeHandler,
       errorHandler,
+      signingPublicKey,
     };
 
     dataChannel.addEventListener('message', messageHandler);
@@ -359,14 +368,18 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         peer.dataChannel.removeEventListener('message', peer.messageHandler);
         peer.dataChannel.removeEventListener('close', peer.closeHandler);
         peer.dataChannel.removeEventListener('error', peer.errorHandler);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       try {
         peer.dataChannel.close();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       newPeerChannels.delete(peerId);
     }
 
-    const newPeerIds = state.remotePeerIds.filter(id => id !== peerId);
+    const newPeerIds = state.remotePeerIds.filter((id) => id !== peerId);
 
     // Update legacy fields
     const firstPeer = newPeerChannels.values().next().value;
@@ -384,7 +397,9 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       connectionStatus: isStillConnected ? 'connected' : 'disconnected',
     });
 
-    debugNetworking.log(`[Multiplayer] Removed peer ${peerId}. Remaining peers: ${newPeerChannels.size}`);
+    debugNetworking.log(
+      `[Multiplayer] Removed peer ${peerId}. Remaining peers: ${newPeerChannels.size}`
+    );
 
     // If no peers left and we were connected, attempt reconnection (for guests)
     if (!isStillConnected && state.isConnected && state.isMultiplayer && !state.isHost) {
@@ -414,6 +429,21 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       }
     }
     return count;
+  },
+
+  // Signing key management for command verification
+  setPeerSigningKey: (peerId: string, signingPublicKey: string) => {
+    const newPeerChannels = new Map(get().peerChannels);
+    const peer = newPeerChannels.get(peerId);
+    if (peer) {
+      newPeerChannels.set(peerId, { ...peer, signingPublicKey });
+      set({ peerChannels: newPeerChannels });
+      debugNetworking.log(`[Multiplayer] Set signing key for peer: ${peerId.slice(0, 8)}...`);
+    }
+  },
+
+  getPeerSigningKey: (peerId: string) => {
+    return get().peerChannels.get(peerId)?.signingPublicKey || null;
   },
 
   // Peer-to-slot mapping for command validation
@@ -462,11 +492,13 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
           if (data.type === 'ping') {
             // Respond with pong immediately
             try {
-              channel.send(JSON.stringify({
-                type: 'pong',
-                pingId: data.pingId,
-                timestamp: data.timestamp,
-              }));
+              channel.send(
+                JSON.stringify({
+                  type: 'pong',
+                  pingId: data.pingId,
+                  timestamp: data.timestamp,
+                })
+              );
             } catch (e) {
               debugNetworking.warn('[Multiplayer] Failed to send pong:', e);
             }
@@ -583,8 +615,8 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     if (bufferUsage >= 0.8 && bufferUsage < 1.0) {
       debugNetworking.warn(
         `[Multiplayer] WARNING: Command buffer at ${Math.round(bufferUsage * 100)}% capacity ` +
-        `(${state.commandBuffer.length}/${state.maxBufferedCommands}). ` +
-        `Network may be experiencing issues.`
+          `(${state.commandBuffer.length}/${state.maxBufferedCommands}). ` +
+          `Network may be experiencing issues.`
       );
       // Trigger network pause to prevent further buildup
       if (!state.isNetworkPaused) {
@@ -607,10 +639,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       return;
     }
     set({
-      commandBuffer: [
-        ...state.commandBuffer,
-        { command, timestamp: Date.now() },
-      ],
+      commandBuffer: [...state.commandBuffer, { command, timestamp: Date.now() }],
     });
   },
 
@@ -760,7 +789,9 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
     // Exponential backoff: 2s, 4s, 8s, 16s
     const delay = Math.pow(2, attempt) * 1000;
-    debugNetworking.log(`[Multiplayer] Reconnection attempt ${attempt}/${state.maxReconnectAttempts} in ${delay}ms`);
+    debugNetworking.log(
+      `[Multiplayer] Reconnection attempt ${attempt}/${state.maxReconnectAttempts} in ${delay}ms`
+    );
 
     set({
       networkPauseReason: `Connection lost. Reconnecting (attempt ${attempt}/${state.maxReconnectAttempts})...`,
@@ -870,11 +901,13 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
     // Send ping message
     try {
-      state.dataChannel.send(JSON.stringify({
-        type: 'ping',
-        pingId,
-        timestamp: pingId,
-      }));
+      state.dataChannel.send(
+        JSON.stringify({
+          type: 'ping',
+          pingId,
+          timestamp: pingId,
+        })
+      );
     } catch (e) {
       debugNetworking.warn('[Multiplayer] Failed to send ping:', e);
     }
@@ -899,9 +932,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     // Calculate new stats
     const stats = state.latencyStats;
     const alpha = 0.2; // EMA smoothing factor (higher = more responsive)
-    const newAvgRTT = stats.averageRTT === 0
-      ? rtt
-      : stats.averageRTT * (1 - alpha) + rtt * alpha;
+    const newAvgRTT = stats.averageRTT === 0 ? rtt : stats.averageRTT * (1 - alpha) + rtt * alpha;
 
     // Calculate jitter (variance in RTT)
     const jitterAlpha = 0.1;
@@ -939,7 +970,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       quality = 'excellent';
     } else if (averageRTT < 100 && jitter < 40 && lossRate < 0.05) {
       quality = 'good';
-    } else if (averageRTT < 200 && jitter < 80 && lossRate < 0.10) {
+    } else if (averageRTT < 200 && jitter < 80 && lossRate < 0.1) {
       quality = 'poor';
     } else {
       quality = 'critical';
@@ -950,7 +981,9 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     // Log quality changes
     const currentQuality = get().connectionQuality;
     if (currentQuality !== quality) {
-      debugNetworking.log(`[Multiplayer] Connection quality: ${quality} (RTT: ${averageRTT.toFixed(1)}ms, Jitter: ${jitter.toFixed(1)}ms, Loss: ${(lossRate * 100).toFixed(1)}%)`);
+      debugNetworking.log(
+        `[Multiplayer] Connection quality: ${quality} (RTT: ${averageRTT.toFixed(1)}ms, Jitter: ${jitter.toFixed(1)}ms, Loss: ${(lossRate * 100).toFixed(1)}%)`
+      );
     }
   },
 
@@ -997,17 +1030,23 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         peer.dataChannel.removeEventListener('message', peer.messageHandler);
         peer.dataChannel.removeEventListener('close', peer.closeHandler);
         peer.dataChannel.removeEventListener('error', peer.errorHandler);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       try {
         peer.dataChannel.close();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     // Close legacy data channel
     if (dataChannel) {
       try {
         dataChannel.close();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     if (pingInterval) {
@@ -1145,4 +1184,13 @@ export function getPeerIdForSlot(slotId: string): string | null {
 
 export function getAllRemoteSlotIds(): string[] {
   return useMultiplayerStore.getState().getAllRemoteSlotIds();
+}
+
+// Signing key utilities for command verification
+export function setPeerSigningKey(peerId: string, signingPublicKey: string): void {
+  useMultiplayerStore.getState().setPeerSigningKey(peerId, signingPublicKey);
+}
+
+export function getPeerSigningKey(peerId: string): string | null {
+  return useMultiplayerStore.getState().getPeerSigningKey(peerId);
 }

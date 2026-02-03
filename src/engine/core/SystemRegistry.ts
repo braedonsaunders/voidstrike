@@ -1,5 +1,5 @@
 import { System } from '../ecs/System';
-import { Game } from './Game';
+import type { IGameInstance } from './IGameInstance';
 import { debugInitialization } from '@/utils/debugLogger';
 
 /**
@@ -12,9 +12,9 @@ export interface SystemDefinition {
   /** Systems that MUST execute before this one */
   dependencies: string[];
   /** Factory function to create the system instance */
-  factory: (game: Game) => System;
+  factory: (game: IGameInstance) => System;
   /** Optional: only create if this condition is true */
-  condition?: (game: Game) => boolean;
+  condition?: (game: IGameInstance) => boolean;
 }
 
 /**
@@ -135,12 +135,8 @@ export class SystemRegistry {
 
     // If we didn't process all systems, there's a cycle
     if (result.length !== this.definitions.size) {
-      const remaining = [...this.definitions.keys()].filter(
-        (name) => !result.includes(name)
-      );
-      throw new Error(
-        `Circular dependency detected involving systems: ${remaining.join(', ')}`
-      );
+      const remaining = [...this.definitions.keys()].filter((name) => !result.includes(name));
+      throw new Error(`Circular dependency detected involving systems: ${remaining.join(', ')}`);
     }
 
     return result;
@@ -151,7 +147,7 @@ export class SystemRegistry {
    * @param game The game instance to pass to system constructors
    * @returns Array of system instances in execution order
    */
-  public createSystems(game: Game): System[] {
+  public createSystems(game: IGameInstance): System[] {
     const errors = this.validate();
     if (errors.length > 0) {
       throw new Error(`System dependency errors:\n${errors.join('\n')}`);
@@ -223,9 +219,8 @@ export class SystemRegistry {
     for (let i = 0; i < order.length; i++) {
       const name = order[i];
       const def = this.definitions.get(name)!;
-      const deps = def.dependencies.length > 0
-        ? `← [${def.dependencies.join(', ')}]`
-        : '(no dependencies)';
+      const deps =
+        def.dependencies.length > 0 ? `← [${def.dependencies.join(', ')}]` : '(no dependencies)';
       debugInitialization.log(`${i + 1}. ${name} ${deps}`);
     }
   }
