@@ -384,17 +384,11 @@ export class InfluenceMap {
     if (players.length < 2) return;
 
     for (let i = 0; i < this.threatMap.length; i++) {
-      let maxInfluence = 0;
       let totalInfluence = 0;
-      let _dominantPlayer: string | null = null;
 
-      for (const [playerId, data] of players) {
+      for (const [, data] of players) {
         const influence = data.grid[i];
         totalInfluence += influence;
-        if (influence > maxInfluence) {
-          maxInfluence = influence;
-          _dominantPlayer = playerId;
-        }
       }
 
       this.threatMap[i] = totalInfluence;
