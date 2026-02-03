@@ -1,11 +1,12 @@
 /**
  * AIGeneratePanel - LLM-powered map generation panel
  *
- * Provides UI for:
- * - API key configuration (Claude, OpenAI, Gemini)
- * - Map generation settings (players, size, biome, theme)
- * - Generation controls with loading state
- * - History for regeneration with tweaks
+ * Clean, focused layout:
+ * 1. Prompt & Presets (hero section)
+ * 2. Map Configuration (compact grid)
+ * 3. Generate Button
+ * 4. API Settings (collapsible, set-once)
+ * 5. History (collapsible)
  */
 
 'use client';
@@ -32,159 +33,160 @@ export interface AIGeneratePanelProps {
   onMapGenerated: (mapData: MapData) => void;
 }
 
+type ThemeConfig = EditorConfig['theme'];
+
 // ============================================================================
 // CONSTANTS
 // ============================================================================
 
-const PROVIDERS: Array<{ id: LLMProvider; name: string; icon: string }> = [
-  { id: 'claude', name: 'Claude', icon: '🧠' },
-  { id: 'openai', name: 'OpenAI', icon: '🤖' },
-  { id: 'gemini', name: 'Gemini', icon: '✨' },
+const PROVIDERS: Array<{ id: LLMProvider; name: string }> = [
+  { id: 'claude', name: 'Claude' },
+  { id: 'openai', name: 'OpenAI' },
+  { id: 'gemini', name: 'Gemini' },
 ];
 
 const PLAYER_COUNTS: Array<2 | 4 | 6 | 8> = [2, 4, 6, 8];
 
-const MAP_SIZES: Array<{ id: MapGenerationSettings['mapSize']; name: string; desc: string }> = [
-  { id: 'small', name: 'Small', desc: '128x128' },
-  { id: 'medium', name: 'Medium', desc: '176x176' },
-  { id: 'large', name: 'Large', desc: '224x224' },
-  { id: 'huge', name: 'Huge', desc: '256x256' },
+const MAP_SIZES: Array<{ id: MapGenerationSettings['mapSize']; label: string }> = [
+  { id: 'small', label: 'S' },
+  { id: 'medium', label: 'M' },
+  { id: 'large', label: 'L' },
+  { id: 'huge', label: 'XL' },
 ];
 
-const BIOMES: Array<{ id: BiomeType; name: string; icon: string }> = [
-  { id: 'void', name: 'Void', icon: '🌌' },
-  { id: 'grassland', name: 'Grassland', icon: '🌿' },
-  { id: 'desert', name: 'Desert', icon: '🏜️' },
-  { id: 'frozen', name: 'Frozen', icon: '❄️' },
-  { id: 'volcanic', name: 'Volcanic', icon: '🌋' },
-  { id: 'jungle', name: 'Jungle', icon: '🌴' },
-  { id: 'ocean', name: 'Ocean', icon: '🌊' },
-];
-
-const BORDER_STYLES: Array<{ id: MapGenerationSettings['borderStyle']; name: string }> = [
-  { id: 'rocks', name: 'Rocks' },
-  { id: 'crystals', name: 'Crystals' },
-  { id: 'trees', name: 'Trees' },
-  { id: 'mixed', name: 'Mixed' },
-  { id: 'none', name: 'None' },
+const BIOMES: Array<{ id: BiomeType; name: string }> = [
+  { id: 'grassland', name: 'Grass' },
+  { id: 'desert', name: 'Desert' },
+  { id: 'frozen', name: 'Ice' },
+  { id: 'volcanic', name: 'Lava' },
+  { id: 'jungle', name: 'Jungle' },
+  { id: 'ocean', name: 'Ocean' },
+  { id: 'void', name: 'Void' },
 ];
 
 // ============================================================================
 // HELPER COMPONENTS
 // ============================================================================
 
-function Section({
-  title,
-  icon,
-  children,
-  defaultOpen = true,
-  theme,
-}: {
-  title: string;
-  icon?: string;
-  children: React.ReactNode;
-  defaultOpen?: boolean;
-  theme: EditorConfig['theme'];
-}) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-
+function Label({ children, theme }: { children: React.ReactNode; theme: ThemeConfig }) {
   return (
-    <div
-      className="rounded-lg overflow-hidden"
-      style={{
-        backgroundColor: theme.background,
-        border: `1px solid ${theme.border}40`,
-      }}
+    <span
+      className="text-[10px] font-medium uppercase tracking-wide"
+      style={{ color: theme.text.muted }}
     >
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full px-3 py-2 flex items-center gap-2 hover:bg-white/5 transition-colors"
-      >
-        <span
-          className="text-[10px] transition-transform"
-          style={{
-            color: theme.text.muted,
-            transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-          }}
-        >
-          ▶
-        </span>
-        {icon && <span className="text-sm">{icon}</span>}
-        <span className="text-xs font-medium" style={{ color: theme.text.secondary }}>
-          {title}
-        </span>
-      </button>
-      {isOpen && <div className="px-3 pb-3">{children}</div>}
-    </div>
+      {children}
+    </span>
   );
 }
 
-function ToggleButton({
+function Pill({
   active,
   onClick,
   children,
   theme,
-  fullWidth = false,
+  size = 'sm',
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
-  theme: EditorConfig['theme'];
-  fullWidth?: boolean;
+  theme: ThemeConfig;
+  size?: 'xs' | 'sm';
 }) {
   return (
     <button
       onClick={onClick}
       className={`
-        px-3 py-2 rounded-lg text-xs transition-all
-        ${active ? 'ring-1' : 'hover:bg-white/5'}
-        ${fullWidth ? 'w-full' : ''}
+        rounded transition-all font-medium
+        ${size === 'xs' ? 'px-2 py-1 text-[10px]' : 'px-2.5 py-1.5 text-[11px]'}
+        ${active ? '' : 'hover:bg-white/5'}
       `}
       style={{
-        backgroundColor: active ? `${theme.primary}20` : theme.surface,
-        color: active ? theme.text.primary : theme.text.muted,
-        '--tw-ring-color': theme.primary,
-      } as React.CSSProperties}
+        backgroundColor: active ? theme.primary : 'transparent',
+        color: active ? '#fff' : theme.text.muted,
+      }}
     >
       {children}
     </button>
   );
 }
 
-function Checkbox({
+function Toggle({
   checked,
   onChange,
   label,
   theme,
 }: {
   checked: boolean;
-  onChange: (checked: boolean) => void;
+  onChange: (v: boolean) => void;
   label: string;
-  theme: EditorConfig['theme'];
+  theme: ThemeConfig;
 }) {
   return (
-    <label
-      className="flex items-center gap-2 cursor-pointer group"
+    <button
       onClick={() => onChange(!checked)}
+      className="flex items-center gap-2 group"
     >
       <div
-        className="w-4 h-4 rounded border-2 flex items-center justify-center transition-all"
-        style={{
-          borderColor: checked ? theme.primary : theme.border,
-          backgroundColor: checked ? theme.primary : 'transparent',
-        }}
+        className="w-7 h-4 rounded-full relative transition-colors"
+        style={{ backgroundColor: checked ? theme.primary : theme.surface }}
       >
-        {checked && (
-          <span className="text-white text-[10px]">✓</span>
-        )}
+        <div
+          className="absolute top-0.5 w-3 h-3 rounded-full bg-white transition-transform"
+          style={{ transform: checked ? 'translateX(14px)' : 'translateX(2px)' }}
+        />
       </div>
       <span
-        className="text-xs transition-colors group-hover:text-white"
-        style={{ color: theme.text.muted }}
+        className="text-[11px] transition-colors"
+        style={{ color: checked ? theme.text.primary : theme.text.muted }}
       >
         {label}
       </span>
-    </label>
+    </button>
+  );
+}
+
+function Collapsible({
+  title,
+  defaultOpen = false,
+  theme,
+  children,
+  badge,
+}: {
+  title: string;
+  defaultOpen?: boolean;
+  theme: ThemeConfig;
+  children: React.ReactNode;
+  badge?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+
+  return (
+    <div
+      className="rounded-lg overflow-hidden"
+      style={{ backgroundColor: `${theme.surface}80` }}
+    >
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full px-3 py-2 flex items-center justify-between hover:bg-white/5 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <span
+            className="text-[9px] transition-transform"
+            style={{
+              color: theme.text.muted,
+              transform: open ? 'rotate(90deg)' : 'rotate(0deg)',
+            }}
+          >
+            ▶
+          </span>
+          <span className="text-[11px] font-medium" style={{ color: theme.text.secondary }}>
+            {title}
+          </span>
+        </div>
+        {badge}
+      </button>
+      {open && <div className="px-3 pb-3">{children}</div>}
+    </div>
   );
 }
 
@@ -198,22 +200,20 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
   const [showApiKey, setShowApiKey] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<PresetCategory['id']>('standard');
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [presetDropdownOpen, setPresetDropdownOpen] = useState(false);
 
-  // Get presets for current category
   const categoryPresets = getPresetsByCategory(selectedCategory);
+  const selectedPreset = categoryPresets.find((p) => p.id === selectedPresetId);
 
-  // Apply a preset
   const applyPreset = (preset: MapPromptPreset) => {
     setSelectedPresetId(preset.id);
-    // Update theme with the preset prompt
+    setPresetDropdownOpen(false);
     actions.updateSettings({ theme: preset.prompt.trim() });
-    // Apply suggested settings if available
     if (preset.suggestedSettings) {
       actions.updateSettings(preset.suggestedSettings);
     }
   };
 
-  // Handle successful generation
   useEffect(() => {
     if (state.lastGeneration?.mapData) {
       onMapGenerated(state.lastGeneration.mapData);
@@ -221,7 +221,6 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
   }, [state.lastGeneration, onMapGenerated]);
 
   const handleGenerate = async () => {
-    // Validate API key first if not validated
     if (!state.isKeyValid) {
       const valid = await actions.validateApiKey();
       if (!valid) return;
@@ -230,497 +229,404 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
   };
 
   const canGenerate = state.apiKey.length > 0 && !state.isGenerating;
+  const hasValidKey = state.isKeyValid === true;
 
   return (
-    <div className="space-y-3">
-      {/* API Configuration */}
-      <Section title="API Configuration" icon="🔑" theme={theme}>
-        <div className="space-y-3">
-          {/* Provider Selection */}
-          <div>
-            <label
-              className="text-[10px] uppercase tracking-wider block mb-1.5"
+    <div className="space-y-4">
+      {/* ================================================================== */}
+      {/* PROMPT SECTION - Hero Area */}
+      {/* ================================================================== */}
+      <div className="space-y-2">
+        {/* Preset Selector */}
+        <div className="flex items-center justify-between">
+          <Label theme={theme}>Map Prompt</Label>
+          <div className="relative">
+            <button
+              onClick={() => setPresetDropdownOpen(!presetDropdownOpen)}
+              className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] transition-colors hover:bg-white/10"
+              style={{ color: theme.primary }}
+            >
+              <span>Use Preset</span>
+              <span style={{ fontSize: '8px' }}>{presetDropdownOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {/* Preset Dropdown */}
+            {presetDropdownOpen && (
+              <div
+                className="absolute right-0 top-full mt-1 w-64 rounded-lg shadow-xl z-50 overflow-hidden"
+                style={{
+                  backgroundColor: theme.background,
+                  border: `1px solid ${theme.border}`,
+                }}
+              >
+                {/* Category Tabs */}
+                <div
+                  className="flex border-b"
+                  style={{ borderColor: theme.border }}
+                >
+                  {PRESET_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategory(cat.id)}
+                      className="flex-1 py-2 text-[10px] font-medium transition-colors"
+                      style={{
+                        color: selectedCategory === cat.id ? theme.primary : theme.text.muted,
+                        backgroundColor: selectedCategory === cat.id ? `${theme.primary}10` : 'transparent',
+                      }}
+                    >
+                      {cat.name}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Preset List */}
+                <div className="max-h-52 overflow-y-auto">
+                  {categoryPresets.map((preset) => (
+                    <button
+                      key={preset.id}
+                      onClick={() => applyPreset(preset)}
+                      className="w-full px-3 py-2 text-left transition-colors hover:bg-white/5"
+                      style={{
+                        backgroundColor: selectedPresetId === preset.id ? `${theme.primary}15` : 'transparent',
+                      }}
+                    >
+                      <div
+                        className="text-[11px] font-medium"
+                        style={{ color: theme.text.primary }}
+                      >
+                        {preset.name}
+                      </div>
+                      <div
+                        className="text-[9px] mt-0.5 line-clamp-1"
+                        style={{ color: theme.text.muted }}
+                      >
+                        {preset.description}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Active Preset Chip */}
+        {selectedPreset && (
+          <div
+            className="flex items-center justify-between px-2.5 py-1.5 rounded-lg"
+            style={{ backgroundColor: `${theme.primary}15` }}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-[10px]" style={{ color: theme.primary }}>●</span>
+              <span className="text-[11px] font-medium" style={{ color: theme.text.primary }}>
+                {selectedPreset.name}
+              </span>
+            </div>
+            <button
+              onClick={() => {
+                setSelectedPresetId(null);
+                actions.updateSettings({ theme: '' });
+              }}
+              className="text-[10px] px-1.5 rounded hover:bg-white/10 transition-colors"
               style={{ color: theme.text.muted }}
             >
-              Provider
-            </label>
-            <div className="grid grid-cols-3 gap-1">
-              {PROVIDERS.map((provider) => (
-                <ToggleButton
-                  key={provider.id}
-                  active={state.provider === provider.id}
-                  onClick={() => actions.setProvider(provider.id)}
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Prompt Textarea */}
+        <textarea
+          value={state.settings.theme}
+          onChange={(e) => {
+            actions.updateSettings({ theme: e.target.value });
+            if (selectedPresetId) setSelectedPresetId(null);
+          }}
+          placeholder="Describe your map: terrain, layout, strategic elements..."
+          rows={4}
+          className="w-full px-3 py-2.5 rounded-lg text-[12px] leading-relaxed resize-none focus:outline-none focus:ring-1"
+          style={{
+            backgroundColor: theme.surface,
+            border: `1px solid ${theme.border}`,
+            color: theme.text.primary,
+            '--tw-ring-color': theme.primary,
+          } as React.CSSProperties}
+        />
+      </div>
+
+      {/* ================================================================== */}
+      {/* MAP CONFIGURATION - Compact Grid */}
+      {/* ================================================================== */}
+      <div
+        className="p-3 rounded-lg space-y-3"
+        style={{ backgroundColor: `${theme.surface}60` }}
+      >
+        {/* Row 1: Players & Size */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Label theme={theme}>Players</Label>
+            <div className="flex gap-0.5">
+              {PLAYER_COUNTS.map((n) => (
+                <Pill
+                  key={n}
+                  active={state.settings.playerCount === n}
+                  onClick={() => actions.updateSettings({ playerCount: n })}
                   theme={theme}
+                  size="xs"
                 >
-                  <span className="mr-1">{provider.icon}</span>
-                  {provider.name}
-                </ToggleButton>
+                  {n}
+                </Pill>
               ))}
             </div>
           </div>
 
-          {/* API Key Input */}
-          <div>
-            <label
-              className="text-[10px] uppercase tracking-wider block mb-1.5"
-              style={{ color: theme.text.muted }}
-            >
-              API Key
-            </label>
-            <div className="relative">
-              <input
-                type={showApiKey ? 'text' : 'password'}
-                value={state.apiKey}
-                onChange={(e) => actions.setApiKey(e.target.value)}
-                placeholder={`Enter ${state.provider} API key...`}
-                className="w-full px-3 py-2 pr-16 rounded-lg text-sm font-mono"
-                style={{
-                  backgroundColor: theme.surface,
-                  border: `1px solid ${
-                    state.isKeyValid === true
-                      ? theme.success
-                      : state.isKeyValid === false
-                      ? theme.error
-                      : theme.border
-                  }`,
-                  color: theme.text.primary,
-                }}
-              />
-              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-1">
-                <button
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  className="px-2 py-1 text-[10px] rounded hover:bg-white/10 transition-colors"
-                  style={{ color: theme.text.muted }}
+          <div className="w-px h-4" style={{ backgroundColor: theme.border }} />
+
+          <div className="flex items-center gap-2">
+            <Label theme={theme}>Size</Label>
+            <div className="flex gap-0.5">
+              {MAP_SIZES.map((s) => (
+                <Pill
+                  key={s.id}
+                  active={state.settings.mapSize === s.id}
+                  onClick={() => actions.updateSettings({ mapSize: s.id })}
+                  theme={theme}
+                  size="xs"
                 >
-                  {showApiKey ? 'Hide' : 'Show'}
-                </button>
-              </div>
+                  {s.label}
+                </Pill>
+              ))}
             </div>
-            {state.isKeyValid === true && (
-              <div className="mt-1 text-[10px] flex items-center gap-1" style={{ color: theme.success }}>
-                <span>✓</span> Key validated
-              </div>
-            )}
-            {state.isKeyValid === false && (
-              <div className="mt-1 text-[10px] flex items-center gap-1" style={{ color: theme.error }}>
-                <span>✗</span> Invalid key
-              </div>
-            )}
+          </div>
+        </div>
+
+        {/* Row 2: Biome */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Label theme={theme}>Biome</Label>
+          <div className="flex gap-0.5 flex-wrap">
+            {BIOMES.map((b) => (
+              <Pill
+                key={b.id}
+                active={state.settings.biome === b.id}
+                onClick={() => actions.updateSettings({ biome: b.id })}
+                theme={theme}
+                size="xs"
+              >
+                {b.name}
+              </Pill>
+            ))}
+          </div>
+        </div>
+
+        {/* Row 3: Feature Toggles */}
+        <div className="flex items-center gap-4 flex-wrap">
+          <Toggle
+            checked={state.settings.includeForests}
+            onChange={(v) => actions.updateSettings({ includeForests: v })}
+            label="Forests"
+            theme={theme}
+          />
+          <Toggle
+            checked={state.settings.includeWater}
+            onChange={(v) => actions.updateSettings({
+              includeWater: v,
+              islandMap: v ? state.settings.islandMap : false
+            })}
+            label="Water"
+            theme={theme}
+          />
+          {state.settings.includeWater && (
+            <Toggle
+              checked={state.settings.islandMap}
+              onChange={(v) => actions.updateSettings({ islandMap: v })}
+              label="Naval/Islands"
+              theme={theme}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* ================================================================== */}
+      {/* GENERATE BUTTON */}
+      {/* ================================================================== */}
+      <button
+        onClick={handleGenerate}
+        disabled={!canGenerate}
+        className="w-full py-3 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2"
+        style={{
+          backgroundColor: canGenerate ? theme.primary : theme.surface,
+          color: canGenerate ? '#fff' : theme.text.muted,
+          opacity: state.isGenerating ? 0.8 : 1,
+          boxShadow: canGenerate ? `0 4px 20px ${theme.primary}40` : 'none',
+        }}
+      >
+        {state.isGenerating ? (
+          <>
+            <span className="animate-spin">◌</span>
+            Generating...
+          </>
+        ) : (
+          'Generate Map'
+        )}
+      </button>
+
+      {/* ================================================================== */}
+      {/* STATUS MESSAGES */}
+      {/* ================================================================== */}
+
+      {/* Error */}
+      {state.error && (
+        <div
+          className="p-3 rounded-lg text-[11px]"
+          style={{
+            backgroundColor: `${theme.error}10`,
+            border: `1px solid ${theme.error}30`,
+            color: theme.error,
+          }}
+        >
+          <div className="font-medium">Generation failed</div>
+          <div className="mt-1 opacity-80">{state.error}</div>
+        </div>
+      )}
+
+      {/* Success */}
+      {state.lastGeneration && !state.isGenerating && !state.error && (
+        <div
+          className="p-3 rounded-lg text-[11px]"
+          style={{
+            backgroundColor: `${theme.success}10`,
+            border: `1px solid ${theme.success}30`,
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span style={{ color: theme.success }}>✓</span>
+              <span className="font-medium" style={{ color: theme.success }}>
+                {state.lastGeneration.blueprint.meta.name}
+              </span>
+            </div>
+            <span style={{ color: theme.text.muted }}>
+              {state.lastGeneration.blueprint.canvas.width}×{state.lastGeneration.blueprint.canvas.height}
+            </span>
+          </div>
+          <button
+            onClick={actions.regenerate}
+            className="mt-2 w-full py-1.5 rounded text-[10px] transition-colors hover:bg-white/10"
+            style={{
+              backgroundColor: theme.surface,
+              color: theme.text.secondary,
+            }}
+          >
+            Regenerate
+          </button>
+        </div>
+      )}
+
+      {/* ================================================================== */}
+      {/* API CONFIGURATION - Collapsible */}
+      {/* ================================================================== */}
+      <Collapsible
+        title="API Settings"
+        defaultOpen={!hasValidKey}
+        theme={theme}
+        badge={
+          hasValidKey ? (
+            <span className="text-[9px] px-1.5 py-0.5 rounded" style={{ backgroundColor: `${theme.success}20`, color: theme.success }}>
+              Connected
+            </span>
+          ) : null
+        }
+      >
+        <div className="space-y-3">
+          {/* Provider Pills */}
+          <div className="flex gap-1">
+            {PROVIDERS.map((p) => (
+              <Pill
+                key={p.id}
+                active={state.provider === p.id}
+                onClick={() => actions.setProvider(p.id)}
+                theme={theme}
+                size="sm"
+              >
+                {p.name}
+              </Pill>
+            ))}
           </div>
 
-          {/* Validate Button */}
+          {/* API Key Input */}
+          <div className="relative">
+            <input
+              type={showApiKey ? 'text' : 'password'}
+              value={state.apiKey}
+              onChange={(e) => actions.setApiKey(e.target.value)}
+              placeholder={`${state.provider} API key`}
+              className="w-full px-3 py-2 pr-14 rounded-lg text-[11px] font-mono"
+              style={{
+                backgroundColor: theme.background,
+                border: `1px solid ${
+                  state.isKeyValid === true ? theme.success :
+                  state.isKeyValid === false ? theme.error : theme.border
+                }`,
+                color: theme.text.primary,
+              }}
+            />
+            <button
+              onClick={() => setShowApiKey(!showApiKey)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] px-1.5 py-0.5 rounded hover:bg-white/10"
+              style={{ color: theme.text.muted }}
+            >
+              {showApiKey ? 'Hide' : 'Show'}
+            </button>
+          </div>
+
+          {/* Validation Status */}
           {state.apiKey && state.isKeyValid === null && (
             <button
               onClick={actions.validateApiKey}
               disabled={state.isTestingKey}
-              className="w-full py-2 rounded-lg text-xs transition-colors"
+              className="w-full py-1.5 rounded text-[10px] transition-colors"
               style={{
                 backgroundColor: theme.surface,
                 color: theme.text.secondary,
-                border: `1px solid ${theme.border}`,
               }}
             >
               {state.isTestingKey ? 'Validating...' : 'Validate Key'}
             </button>
           )}
-        </div>
-      </Section>
-
-      {/* Map Settings */}
-      <Section title="Map Settings" icon="🗺️" theme={theme}>
-        <div className="space-y-3">
-          {/* Player Count */}
-          <div>
-            <label
-              className="text-[10px] uppercase tracking-wider block mb-1.5"
-              style={{ color: theme.text.muted }}
-            >
-              Players
-            </label>
-            <div className="grid grid-cols-4 gap-1">
-              {PLAYER_COUNTS.map((count) => (
-                <ToggleButton
-                  key={count}
-                  active={state.settings.playerCount === count}
-                  onClick={() => actions.updateSettings({ playerCount: count })}
-                  theme={theme}
-                >
-                  {count}P
-                </ToggleButton>
-              ))}
-            </div>
-          </div>
-
-          {/* Map Size */}
-          <div>
-            <label
-              className="text-[10px] uppercase tracking-wider block mb-1.5"
-              style={{ color: theme.text.muted }}
-            >
-              Size
-            </label>
-            <div className="grid grid-cols-2 gap-1">
-              {MAP_SIZES.map((size) => (
-                <ToggleButton
-                  key={size.id}
-                  active={state.settings.mapSize === size.id}
-                  onClick={() => actions.updateSettings({ mapSize: size.id })}
-                  theme={theme}
-                >
-                  <div className="text-left">
-                    <div>{size.name}</div>
-                    <div className="text-[9px] opacity-60">{size.desc}</div>
-                  </div>
-                </ToggleButton>
-              ))}
-            </div>
-          </div>
-
-          {/* Biome */}
-          <div>
-            <label
-              className="text-[10px] uppercase tracking-wider block mb-1.5"
-              style={{ color: theme.text.muted }}
-            >
-              Biome
-            </label>
-            <div className="grid grid-cols-3 gap-1">
-              {BIOMES.map((biome) => (
-                <ToggleButton
-                  key={biome.id}
-                  active={state.settings.biome === biome.id}
-                  onClick={() => actions.updateSettings({ biome: biome.id })}
-                  theme={theme}
-                >
-                  <span className="mr-1">{biome.icon}</span>
-                  {biome.name}
-                </ToggleButton>
-              ))}
-            </div>
-          </div>
-
-          {/* Border Style */}
-          <div>
-            <label
-              className="text-[10px] uppercase tracking-wider block mb-1.5"
-              style={{ color: theme.text.muted }}
-            >
-              Border Decorations
-            </label>
-            <div className="grid grid-cols-3 gap-1">
-              {BORDER_STYLES.map((style) => (
-                <ToggleButton
-                  key={style.id}
-                  active={state.settings.borderStyle === style.id}
-                  onClick={() => actions.updateSettings({ borderStyle: style.id })}
-                  theme={theme}
-                >
-                  {style.name}
-                </ToggleButton>
-              ))}
-            </div>
-          </div>
-        </div>
-      </Section>
-
-      {/* Features */}
-      <Section title="Features" icon="⚡" theme={theme}>
-        <div className="space-y-2">
-          <Checkbox
-            checked={state.settings.includeForests}
-            onChange={(checked) => actions.updateSettings({ includeForests: checked })}
-            label="Include forests (vision blockers)"
-            theme={theme}
-          />
-          <Checkbox
-            checked={state.settings.includeWater}
-            onChange={(checked) => actions.updateSettings({ includeWater: checked, islandMap: checked ? state.settings.islandMap : false })}
-            label="Include water features"
-            theme={theme}
-          />
-          {state.settings.includeWater && (
-            <div className="ml-6">
-              <Checkbox
-                checked={state.settings.islandMap}
-                onChange={(checked) => actions.updateSettings({ islandMap: checked })}
-                label="Island/Naval map (deep water barriers)"
-                theme={theme}
-              />
+          {state.isKeyValid === false && (
+            <div className="text-[10px]" style={{ color: theme.error }}>
+              Invalid API key
             </div>
           )}
         </div>
-      </Section>
+      </Collapsible>
 
-      {/* Map Presets */}
-      <Section title="Map Presets" icon="📋" theme={theme}>
-        <div className="space-y-3">
-          {/* Category Tabs */}
-          <div className="grid grid-cols-3 gap-1">
-            {PRESET_CATEGORIES.map((category) => (
-              <ToggleButton
-                key={category.id}
-                active={selectedCategory === category.id}
-                onClick={() => {
-                  setSelectedCategory(category.id);
-                  setSelectedPresetId(null);
-                }}
-                theme={theme}
-              >
-                {category.name}
-              </ToggleButton>
-            ))}
-          </div>
-
-          {/* Preset List */}
-          <div className="space-y-1.5 max-h-48 overflow-y-auto">
-            {categoryPresets.map((preset) => (
-              <button
-                key={preset.id}
-                onClick={() => applyPreset(preset)}
-                className={`
-                  w-full p-2.5 rounded-lg text-left transition-all
-                  ${selectedPresetId === preset.id ? 'ring-1' : 'hover:bg-white/5'}
-                `}
-                style={{
-                  backgroundColor: selectedPresetId === preset.id
-                    ? `${theme.primary}15`
-                    : theme.surface,
-                  borderColor: theme.border,
-                  '--tw-ring-color': theme.primary,
-                } as React.CSSProperties}
-              >
-                <div className="flex items-center justify-between">
-                  <span
-                    className="text-xs font-medium"
-                    style={{
-                      color: selectedPresetId === preset.id
-                        ? theme.text.primary
-                        : theme.text.secondary,
-                    }}
-                  >
-                    {preset.name}
-                  </span>
-                  {selectedPresetId === preset.id && (
-                    <span className="text-[10px]" style={{ color: theme.primary }}>
-                      ✓
-                    </span>
-                  )}
-                </div>
-                <div
-                  className="text-[10px] mt-0.5 line-clamp-2"
-                  style={{ color: theme.text.muted }}
-                >
-                  {preset.description}
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {/* Category Description */}
-          <div
-            className="text-[10px] pt-2 border-t"
-            style={{
-              color: theme.text.muted,
-              borderColor: `${theme.border}40`,
-            }}
-          >
-            {PRESET_CATEGORIES.find((c) => c.id === selectedCategory)?.description}
-          </div>
-        </div>
-      </Section>
-
-      {/* Theme Description */}
-      <Section title="Theme Description" icon="💡" theme={theme}>
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label
-              className="text-[10px] uppercase tracking-wider"
-              style={{ color: theme.text.muted }}
-            >
-              Prompt
-            </label>
-            {selectedPresetId && (
-              <button
-                onClick={() => {
-                  setSelectedPresetId(null);
-                  actions.updateSettings({ theme: '' });
-                }}
-                className="text-[10px] px-2 py-0.5 rounded hover:bg-white/10 transition-colors"
-                style={{ color: theme.text.muted }}
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          <textarea
-            value={state.settings.theme}
-            onChange={(e) => {
-              actions.updateSettings({ theme: e.target.value });
-              // Clear preset selection if user edits manually
-              if (selectedPresetId) {
-                setSelectedPresetId(null);
-              }
-            }}
-            placeholder="Select a preset above or describe your map vision... e.g., 'A frozen wasteland with a contested central high ground, multiple attack paths, and hidden gold bases'"
-            rows={5}
-            className="w-full px-3 py-2 rounded-lg text-sm resize-none"
-            style={{
-              backgroundColor: theme.surface,
-              border: `1px solid ${selectedPresetId ? theme.primary : theme.border}`,
-              color: theme.text.primary,
-            }}
-          />
-          <div className="mt-1 text-[10px]" style={{ color: theme.text.muted }}>
-            {selectedPresetId
-              ? 'Edit the preset prompt above or use as-is'
-              : 'Be specific about layout, terrain features, and gameplay style'}
-          </div>
-        </div>
-      </Section>
-
-      {/* Generate Button */}
-      <button
-        onClick={handleGenerate}
-        disabled={!canGenerate}
-        className="w-full py-3 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98]"
-        style={{
-          backgroundColor: canGenerate ? theme.primary : theme.surface,
-          color: canGenerate ? '#fff' : theme.text.muted,
-          opacity: state.isGenerating ? 0.7 : 1,
-          boxShadow: canGenerate ? `0 4px 16px ${theme.primary}50` : 'none',
-        }}
-      >
-        {state.isGenerating ? (
-          <>
-            <span className="animate-spin">⟳</span>
-            Generating Map...
-          </>
-        ) : (
-          <>
-            <span>🪄</span>
-            Generate Map
-          </>
-        )}
-      </button>
-
-      {/* Error Display */}
-      {state.error && (
-        <div
-          className="p-3 rounded-lg text-xs"
-          style={{
-            backgroundColor: `${theme.error}15`,
-            border: `1px solid ${theme.error}30`,
-            color: theme.error,
-          }}
-        >
-          <div className="font-medium mb-1">Generation Failed</div>
-          <div style={{ color: theme.text.muted }}>{state.error}</div>
-        </div>
-      )}
-
-      {/* Success Display */}
-      {state.lastGeneration && !state.isGenerating && !state.error && (
-        <div
-          className="p-3 rounded-lg text-xs"
-          style={{
-            backgroundColor: `${theme.success}15`,
-            border: `1px solid ${theme.success}30`,
-          }}
-        >
-          <div className="flex items-center gap-2 mb-2">
-            <span style={{ color: theme.success }}>✓</span>
-            <span className="font-medium" style={{ color: theme.success }}>
-              Map Generated Successfully
-            </span>
-          </div>
-          <div className="space-y-1" style={{ color: theme.text.muted }}>
-            <div>
-              <strong style={{ color: theme.text.secondary }}>Name:</strong>{' '}
-              {state.lastGeneration.blueprint.meta.name}
-            </div>
-            <div>
-              <strong style={{ color: theme.text.secondary }}>Size:</strong>{' '}
-              {state.lastGeneration.blueprint.canvas.width}x{state.lastGeneration.blueprint.canvas.height}
-            </div>
-            <div>
-              <strong style={{ color: theme.text.secondary }}>Bases:</strong>{' '}
-              {state.lastGeneration.blueprint.bases.length}
-            </div>
-          </div>
-          <button
-            onClick={actions.regenerate}
-            className="mt-2 w-full py-2 rounded text-[11px] transition-colors hover:bg-white/10"
-            style={{
-              backgroundColor: theme.surface,
-              color: theme.text.secondary,
-              border: `1px solid ${theme.border}`,
-            }}
-          >
-            🔄 Regenerate with Same Settings
-          </button>
-        </div>
-      )}
-
-      {/* Generation History */}
+      {/* ================================================================== */}
+      {/* HISTORY - Collapsible */}
+      {/* ================================================================== */}
       {state.generationHistory.length > 0 && (
-        <Section title="History" icon="📜" theme={theme} defaultOpen={false}>
-          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+        <Collapsible title="History" theme={theme}>
+          <div className="space-y-1">
             {state.generationHistory.slice(0, 5).map((entry) => (
               <button
                 key={entry.id}
-                onClick={() => {
-                  const _blueprint = actions.loadFromHistory(entry.id);
-                  // Could regenerate from this blueprint's settings
-                }}
-                className="w-full p-2 rounded text-left text-[11px] transition-colors hover:bg-white/5"
-                style={{
-                  backgroundColor: theme.surface,
-                  border: `1px solid ${theme.border}40`,
-                }}
+                onClick={() => actions.loadFromHistory(entry.id)}
+                className="w-full p-2 rounded text-left text-[10px] transition-colors hover:bg-white/5"
+                style={{ backgroundColor: theme.background }}
               >
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between">
                   <span style={{ color: theme.text.secondary }}>
-                    {entry.settings.playerCount}P {entry.settings.mapSize}
+                    {entry.settings.playerCount}P · {entry.settings.mapSize} · {entry.settings.biome}
                   </span>
                   <span style={{ color: theme.text.muted }}>
-                    {new Date(entry.timestamp).toLocaleTimeString()}
+                    {new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                {entry.settings.theme && (
-                  <div
-                    className="mt-1 truncate"
-                    style={{ color: theme.text.muted }}
-                  >
-                    {entry.settings.theme.slice(0, 50)}...
-                  </div>
-                )}
               </button>
             ))}
           </div>
-        </Section>
+        </Collapsible>
       )}
-
-      {/* Tips */}
-      <Section title="Tips" icon="💭" theme={theme} defaultOpen={false}>
-        <ul className="space-y-1.5 text-[10px]" style={{ color: theme.text.muted }}>
-          <li className="flex items-start gap-2">
-            <span style={{ color: theme.primary }}>•</span>
-            <span>Describe terrain features like &quot;central high ground&quot; or &quot;island bases&quot;</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span style={{ color: theme.primary }}>•</span>
-            <span>Mention expansion layout: &quot;easy natural, contested third&quot;</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span style={{ color: theme.primary }}>•</span>
-            <span>Request strategic elements: &quot;multiple attack paths&quot;, &quot;watch tower at center&quot;</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span style={{ color: theme.primary }}>•</span>
-            <span>Use Ctrl+Z to undo if you don&apos;t like the result</span>
-          </li>
-        </ul>
-      </Section>
     </div>
   );
 }
