@@ -456,7 +456,11 @@ voidstrike/
 │   │   ├── UnitRenderer.ts
 │   │   ├── WallPlacementPreview.ts
 │   │   ├── WatchTowerRenderer.ts
-│   │   └── WaterMesh.ts
+│   │   └── water/              # Unified water rendering system
+│   │       ├── UnifiedWaterMesh.ts
+│   │       ├── WaterMemoryManager.ts
+│   │       ├── PlanarReflection.ts
+│   │       └── index.ts
 │   ├── store/ # State management
 │   │   ├── cameraStore.ts
 │   │   ├── gameSetupStore.ts

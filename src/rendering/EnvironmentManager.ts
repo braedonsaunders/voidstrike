@@ -3,7 +3,6 @@ import { MapData } from '@/data/maps';
 import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
 import { TSLMapBorderFog } from './tsl/MapBorderFog';
-import { WaterMesh, type WaterQuality } from './WaterMesh';
 import { EnvironmentParticles } from './EnhancedDecorations';
 import { InstancedTrees, InstancedRocks, InstancedGrass, InstancedPebbles, InstancedCrystals, updateDecorationFrustum } from './InstancedDecorations';
 import { DecorationLightManager } from './DecorationLightManager';
@@ -15,7 +14,35 @@ import {
   type ShadowQuality,
 } from '@/data/rendering.config';
 
+// New unified water system imports
+import {
+  UnifiedWaterMesh,
+  WaterMemoryManager,
+  PlanarReflection,
+  createPlanarReflectionForQuality,
+  type WaterQuality,
+} from './water';
+import {
+  createWaterMaterial,
+  loadWaterNormalsTexture,
+  getWaterNormalsTextureSync,
+  type TSLWaterMaterial,
+} from './tsl/WaterMaterial';
+
 export type { ShadowQuality };
+export type { WaterQuality };
+
+/**
+ * Water statistics for debugging and monitoring
+ */
+export interface WaterStats {
+  cells: number;
+  vertices: number;
+  drawCalls: number;
+  memoryMB: number;
+  quality: WaterQuality;
+  hasPlanarReflection: boolean;
+}
 
 /**
  * Manages all environmental rendering for a map including:
@@ -40,7 +67,16 @@ export class EnvironmentManager {
   private grass: InstancedGrass | null = null;
   private pebbles: InstancedPebbles | null = null;
   private crystals: InstancedCrystals | null = null;
-  private waterMesh: WaterMesh | null = null;
+
+  // New unified water system
+  private unifiedWaterMesh: UnifiedWaterMesh | null = null;
+  private waterMaterial: TSLWaterMaterial | null = null;
+  private planarReflection: PlanarReflection | null = null;
+  private waterQuality: WaterQuality = 'high';
+  private waterReflectionsEnabled: boolean = true;
+  private waterEnabled: boolean = true;
+  private waterCellCount: number = 0;
+
   private mapBorderFog: TSLMapBorderFog | null = null;
   private particles: EnvironmentParticles | null = null;
   private mapDecorations: MapDecorations | null = null;
@@ -49,6 +85,9 @@ export class EnvironmentManager {
   // Centralized emissive decoration manager with animation and light attachment
   private emissiveDecorationManager: EmissiveDecorationManager | null = null;
   private emissiveLightPool: LightPool | null = null;
+
+  // Renderer reference for planar reflections
+  private renderer: THREE.WebGLRenderer | THREE.WebGPURenderer | null = null;
 
   // Lighting
   private ambientLight: THREE.AmbientLight;
@@ -190,6 +229,19 @@ export class EnvironmentManager {
     this.createEnhancedDecorations();
   }
 
+  /**
+   * Set the renderer reference for planar reflections
+   * Must be called after construction if ultra quality water is desired
+   */
+  public setRenderer(renderer: THREE.WebGLRenderer | THREE.WebGPURenderer): void {
+    this.renderer = renderer;
+
+    // If we're at ultra quality and reflections are enabled, create planar reflection
+    if (this.waterQuality === 'ultra' && this.waterReflectionsEnabled && !this.planarReflection) {
+      this.createPlanarReflectionIfNeeded();
+    }
+  }
+
   private createEnhancedDecorations(): void {
     const getHeightAt = this.terrain.getHeightAt.bind(this.terrain);
 
@@ -215,13 +267,8 @@ export class EnvironmentManager {
       this.scene.add(this.pebbles.group);
     }
 
-    // Water system - handles both full-map water (Ocean biome) and localized features
-    this.waterMesh = new WaterMesh();
-    if (this.biome.hasWater) {
-      this.waterMesh.buildFullMapWater(this.mapData, this.biome);
-    }
-    this.waterMesh.buildFromMapData(this.mapData);
-    this.scene.add(this.waterMesh.group);
+    // Unified water system - handles both full-map water and localized features
+    this.createUnifiedWater();
 
     // Map border fog - dark smoky effect around map edges
     this.mapBorderFog = new TSLMapBorderFog(this.mapData);
@@ -273,6 +320,125 @@ export class EnvironmentManager {
   }
 
   /**
+   * Create the unified water system with optimal quality selection
+   */
+  private createUnifiedWater(): void {
+    // Count water cells to determine optimal quality
+    this.waterCellCount = this.countWaterCells();
+
+    if (this.waterCellCount === 0 && !this.biome.hasWater) {
+      // No water on this map
+      return;
+    }
+
+    // Use memory manager to select optimal quality
+    const memoryManager = WaterMemoryManager;
+    const optimalQuality = memoryManager.selectOptimalQuality(this.waterCellCount);
+    this.waterQuality = optimalQuality;
+    memoryManager.setCurrentQuality(optimalQuality);
+
+    // Get water normals texture (may be null if not yet loaded)
+    const normalMap = getWaterNormalsTextureSync();
+
+    // Start loading water normals texture in background if not cached
+    if (!normalMap) {
+      loadWaterNormalsTexture().then((texture) => {
+        // Texture loaded - could update material if needed
+        // For now, the procedural normals work fine
+        void texture;
+      });
+    }
+
+    // Determine water colors based on biome
+    const isLava = this.biome.name === 'Volcanic';
+    const shallowColor = isLava ? new THREE.Color(0x802000) : new THREE.Color(0x40a0c0);
+    const deepColor = isLava ? new THREE.Color(0x400800) : new THREE.Color(0x004488);
+
+    // Calculate sun direction from directional light
+    this._tempSunDirection.copy(this.directionalLight.position).normalize();
+
+    // Create TSL water material
+    this.waterMaterial = createWaterMaterial({
+      quality: optimalQuality,
+      sunDirection: this._tempSunDirection,
+      shallowColor,
+      deepColor,
+      normalMap,
+      envMap: this.envMap,
+    });
+
+    // Create unified water mesh
+    this.unifiedWaterMesh = new UnifiedWaterMesh({
+      quality: optimalQuality,
+      material: this.waterMaterial.getMaterial(),
+    });
+
+    // Build water from terrain data
+    if (this.mapData.terrain) {
+      this.unifiedWaterMesh.buildFromTerrainData(
+        this.mapData.terrain,
+        this.mapData.width,
+        this.mapData.height
+      );
+    }
+
+    // Add to scene
+    this.scene.add(this.unifiedWaterMesh.mesh);
+    this.scene.add(this.unifiedWaterMesh.shoreGroup);
+
+    // Update memory usage tracking
+    const estimate = memoryManager.estimateMemoryUsage(this.waterCellCount, optimalQuality);
+    memoryManager.updateCurrentUsage(estimate.totalMB);
+
+    // Create planar reflection if ultra quality and renderer is available
+    this.createPlanarReflectionIfNeeded();
+  }
+
+  /**
+   * Create planar reflection system for ultra quality water
+   */
+  private createPlanarReflectionIfNeeded(): void {
+    if (
+      this.waterQuality !== 'ultra' ||
+      !this.waterReflectionsEnabled ||
+      !this.renderer ||
+      this.planarReflection
+    ) {
+      return;
+    }
+
+    // Calculate average water height for reflection plane
+    const waterHeight = this.biome.waterLevel ?? 0.15;
+
+    this.planarReflection = createPlanarReflectionForQuality(
+      this.renderer,
+      'ultra',
+      waterHeight
+    );
+  }
+
+  /**
+   * Count water cells in the map data
+   */
+  private countWaterCells(): number {
+    if (!this.mapData.terrain) return 0;
+
+    let count = 0;
+    for (let y = 0; y < this.mapData.height; y++) {
+      for (let x = 0; x < this.mapData.width; x++) {
+        const cell = this.mapData.terrain[y]?.[x];
+        if (cell) {
+          const feature = cell.feature || 'none';
+          if (feature === 'water_shallow' || feature === 'water_deep') {
+            count++;
+          }
+        }
+      }
+    }
+    return count;
+  }
+
+  /**
    * Update animated elements (water, particles, terrain shader) and decoration frustum culling
    * @param deltaTime Time since last frame
    * @param gameTime Total game time
@@ -284,9 +450,22 @@ export class EnvironmentManager {
     this._tempSunDirection.copy(this.directionalLight.position).normalize();
     this.terrain.update(deltaTime, this._tempSunDirection);
 
-    if (this.waterMesh) {
-      this.waterMesh.update(deltaTime, camera);
+    // Update water material animation
+    if (this.waterMaterial) {
+      this.waterMaterial.update(deltaTime);
+      this.waterMaterial.setSunDirection(this._tempSunDirection);
     }
+
+    // Update water mesh (frustum culling handled by Three.js)
+    if (this.unifiedWaterMesh) {
+      this.unifiedWaterMesh.update(deltaTime, camera);
+    }
+
+    // Update planar reflection for ultra quality
+    if (this.planarReflection && camera) {
+      this.planarReflection.update(this.scene, camera);
+    }
+
     if (this.mapBorderFog) {
       this.mapBorderFog.update(gameTime);
     }
@@ -733,31 +912,103 @@ export class EnvironmentManager {
     }
   }
 
+  // ============================================
+  // WATER CONFIGURATION
+  // ============================================
+
   /**
    * Set water enabled state
    */
   public setWaterEnabled(enabled: boolean): void {
-    if (this.waterMesh) {
-      this.waterMesh.setEnabled(enabled);
+    this.waterEnabled = enabled;
+    if (this.unifiedWaterMesh) {
+      this.unifiedWaterMesh.setEnabled(enabled);
+    }
+    if (this.planarReflection) {
+      this.planarReflection.setEnabled(enabled);
     }
   }
 
   /**
    * Set water quality level
+   * Note: Changing quality requires rebuilding the water mesh
    */
   public setWaterQuality(quality: WaterQuality): void {
-    if (this.waterMesh) {
-      this.waterMesh.setQuality(quality);
+    if (this.waterQuality === quality) return;
+
+    const previousQuality = this.waterQuality;
+    this.waterQuality = quality;
+
+    // Update material quality settings
+    if (this.waterMaterial) {
+      this.waterMaterial.setQuality(quality);
     }
+
+    // Update mesh quality (may trigger rebuild on next buildFromTerrainData call)
+    if (this.unifiedWaterMesh) {
+      this.unifiedWaterMesh.setQuality(quality);
+    }
+
+    // Handle planar reflection based on quality
+    if (quality === 'ultra' && !this.planarReflection && this.waterReflectionsEnabled) {
+      // Upgrade to ultra - create planar reflection
+      this.createPlanarReflectionIfNeeded();
+    } else if (previousQuality === 'ultra' && quality !== 'ultra' && this.planarReflection) {
+      // Downgrade from ultra - dispose planar reflection
+      this.planarReflection.dispose();
+      this.planarReflection = null;
+    }
+
+    // Update memory manager
+    WaterMemoryManager.setCurrentQuality(quality);
+    const estimate = WaterMemoryManager.estimateMemoryUsage(this.waterCellCount, quality);
+    WaterMemoryManager.updateCurrentUsage(estimate.totalMB);
   }
 
   /**
    * Set water reflections enabled
    */
   public setWaterReflectionsEnabled(enabled: boolean): void {
-    if (this.waterMesh) {
-      this.waterMesh.setReflectionsEnabled(enabled);
+    this.waterReflectionsEnabled = enabled;
+
+    if (enabled && this.waterQuality === 'ultra' && !this.planarReflection) {
+      // Enable reflections at ultra quality - create planar reflection
+      this.createPlanarReflectionIfNeeded();
+    } else if (!enabled && this.planarReflection) {
+      // Disable reflections - dispose planar reflection
+      this.planarReflection.dispose();
+      this.planarReflection = null;
     }
+  }
+
+  /**
+   * Get water statistics for debugging and monitoring
+   */
+  public getWaterStats(): WaterStats {
+    const meshStats = this.unifiedWaterMesh?.getStats() ?? {
+      cells: 0,
+      vertices: 0,
+      indices: 0,
+      drawCalls: 0,
+    };
+
+    // Estimate memory usage
+    const estimate = WaterMemoryManager.estimateMemoryUsage(
+      meshStats.cells || this.waterCellCount,
+      this.waterQuality
+    );
+
+    // Add planar reflection memory if present
+    const reflectionMemoryMB = this.planarReflection?.getMemoryUsageMB() ?? 0;
+
+    return {
+      cells: meshStats.cells || this.waterCellCount,
+      vertices: meshStats.vertices,
+      drawCalls: meshStats.drawCalls,
+      memoryMB: estimate.totalMB + reflectionMemoryMB,
+      quality: this.waterQuality,
+      hasPlanarReflection: this.planarReflection !== null,
+    };
   }
 
   /**
@@ -780,7 +1031,13 @@ export class EnvironmentManager {
     if (this.crystals) this.scene.remove(this.crystals.group);
     if (this.grass) this.scene.remove(this.grass.group);
     if (this.pebbles) this.scene.remove(this.pebbles.group);
-    if (this.waterMesh) this.scene.remove(this.waterMesh.group);
+
+    // Remove unified water mesh
+    if (this.unifiedWaterMesh) {
+      this.scene.remove(this.unifiedWaterMesh.mesh);
+      this.scene.remove(this.unifiedWaterMesh.shoreGroup);
+    }
+
     if (this.mapBorderFog) this.scene.remove(this.mapBorderFog.mesh);
     if (this.particles) this.scene.remove(this.particles.points);
     if (this.mapDecorations) this.scene.remove(this.mapDecorations.group);
@@ -789,6 +1046,12 @@ export class EnvironmentManager {
     this.decorationLightManager?.dispose();
     this.emissiveDecorationManager?.dispose();
     this.emissiveLightPool?.dispose();
+
+    // Dispose planar reflection
+    if (this.planarReflection) {
+      this.planarReflection.dispose();
+      this.planarReflection = null;
+    }
 
     // Clear environment map reference
     if (this.envMap) {
@@ -804,7 +1067,8 @@ export class EnvironmentManager {
     const grass = this.grass;
     const pebbles = this.pebbles;
     const terrain = this.terrain;
-    const waterMesh = this.waterMesh;
+    const unifiedWaterMesh = this.unifiedWaterMesh;
+    const waterMaterial = this.waterMaterial;
     const mapBorderFog = this.mapBorderFog;
     const particles = this.particles;
     const mapDecorations = this.mapDecorations;
@@ -817,7 +1081,8 @@ export class EnvironmentManager {
       grass?.dispose();
       pebbles?.dispose();
       terrain.dispose();
-      waterMesh?.dispose();
+      unifiedWaterMesh?.dispose();
+      waterMaterial?.dispose();
       mapBorderFog?.dispose();
       particles?.dispose();
       mapDecorations?.dispose();
@@ -830,10 +1095,12 @@ export class EnvironmentManager {
     this.crystals = null;
     this.grass = null;
     this.pebbles = null;
-    this.waterMesh = null;
+    this.unifiedWaterMesh = null;
+    this.waterMaterial = null;
     this.mapBorderFog = null;
     this.particles = null;
     this.mapDecorations = null;
     this.envMap = null;
+    this.renderer = null;
   }
 }

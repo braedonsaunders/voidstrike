@@ -16,7 +16,7 @@ import type { EventBus } from '@/engine/core/EventBus';
 import { RTSCamera } from '@/rendering/Camera';
 import { TerrainGrid } from '@/rendering/Terrain';
 import { EnvironmentManager } from '@/rendering/EnvironmentManager';
-import { preloadWaterNormals } from '@/rendering/WaterMesh';
+import { loadWaterNormalsTexture } from '@/rendering/tsl/WaterMaterial';
 import { UnitRenderer } from '@/rendering/UnitRenderer';
 import { BuildingRenderer } from '@/rendering/BuildingRenderer';
 import { ResourceRenderer } from '@/rendering/ResourceRenderer';
@@ -34,10 +34,12 @@ import { LightPool } from '@/rendering/LightPool';
 
 import {
   createWebGPURenderer,
+  attemptRecovery,
   RenderContext,
   RenderPipeline,
   TSLFogOfWar,
   TSLGameOverlayManager,
+  type DeviceLostEvent,
 } from '@/rendering/tsl';
 import {
   initCameraMatrices,
@@ -167,6 +169,12 @@ export function useWebGPURenderer({
   const accumulatedTrianglesRef = useRef<number>(0);
   const accumulatedDrawCallsRef = useRef<number>(0);
 
+  // Device lost recovery state
+  const isRecoveringRef = useRef(false);
+  const recoveryAttemptsRef = useRef(0);
+  const deviceLostCallbackRef = useRef<((event: DeviceLostEvent) => void) | null>(null);
+  const MAX_RECOVERY_ATTEMPTS = 3;
+
   const calculateDisplayResolution = useCallback(() => {
     const settings = useUIStore.getState().graphicsSettings;
     const containerWidth = containerRef.current?.clientWidth ?? window.innerWidth;
@@ -217,6 +225,184 @@ export function useWebGPURenderer({
     }
   }, [calculateDisplayResolution]);
 
+  /**
+   * Handle WebGPU device lost event.
+   * Attempts automatic recovery with reduced quality settings.
+   */
+  const handleDeviceLost = useCallback(
+    async (event: DeviceLostEvent) => {
+      // Prevent concurrent recovery attempts
+      if (isRecoveringRef.current) {
+        debugInitialization.warn('[useWebGPURenderer] Device lost during recovery, ignoring');
+        return;
+      }
+
+      isRecoveringRef.current = true;
+      recoveryAttemptsRef.current++;
+
+      // Log detailed error information
+      debugInitialization.error('[useWebGPURenderer] WebGPU device lost:', {
+        reason: event.reason,
+        message: event.message,
+        timestamp: new Date(event.timestamp).toISOString(),
+        gpuName: event.gpuInfo?.name || 'Unknown',
+        recoveryAttempt: recoveryAttemptsRef.current,
+      });
+
+      // Show user notification
+      useUIStore.getState().addNotification(
+        'error',
+        `GPU device lost: ${event.reason === 'destroyed' ? 'Device was reset' : 'Unexpected error'}. Attempting recovery...`,
+        10000
+      );
+
+      // Stop the animation loop
+      if (animationFrameIdRef.current) {
+        cancelAnimationFrame(animationFrameIdRef.current);
+        animationFrameIdRef.current = null;
+      }
+
+      // Check if we've exceeded max recovery attempts
+      if (recoveryAttemptsRef.current > MAX_RECOVERY_ATTEMPTS) {
+        debugInitialization.error(
+          `[useWebGPURenderer] Exceeded max recovery attempts (${MAX_RECOVERY_ATTEMPTS}), giving up`
+        );
+        useUIStore.getState().addNotification(
+          'error',
+          'Failed to recover from GPU error after multiple attempts. Please refresh the page.',
+          0 // Permanent notification
+        );
+        isRecoveringRef.current = false;
+        return;
+      }
+
+      // Get the canvas for recovery
+      const canvas = canvasRef.current;
+      if (!canvas) {
+        debugInitialization.error('[useWebGPURenderer] No canvas available for recovery');
+        useUIStore.getState().addNotification(
+          'error',
+          'Cannot recover: Canvas not available. Please refresh the page.',
+          0
+        );
+        isRecoveringRef.current = false;
+        return;
+      }
+
+      // Dispose current resources before recovery
+      try {
+        // Unsubscribe from device lost callback on old context
+        if (renderContextRef.current && deviceLostCallbackRef.current) {
+          renderContextRef.current.offDeviceLost(deviceLostCallbackRef.current);
+        }
+
+        // Dispose renderers and resources
+        renderPipelineRef.current?.dispose();
+        renderPipelineRef.current = null;
+        fogOfWarRef.current?.dispose();
+        fogOfWarRef.current = null;
+        battleEffectsRef.current?.dispose();
+        battleEffectsRef.current = null;
+        advancedParticlesRef.current?.dispose();
+        advancedParticlesRef.current = null;
+        vehicleEffectsRef.current?.dispose();
+        vehicleEffectsRef.current = null;
+        rallyPointRendererRef.current?.dispose();
+        rallyPointRendererRef.current = null;
+        watchTowerRendererRef.current?.dispose();
+        watchTowerRendererRef.current = null;
+        overlayManagerRef.current?.dispose();
+        overlayManagerRef.current = null;
+        commandQueueRendererRef.current?.dispose();
+        commandQueueRendererRef.current = null;
+        lightPoolRef.current?.dispose();
+        lightPoolRef.current = null;
+        unitRendererRef.current?.dispose();
+        unitRendererRef.current = null;
+        buildingRendererRef.current?.dispose();
+        buildingRendererRef.current = null;
+        resourceRendererRef.current?.dispose();
+        resourceRendererRef.current = null;
+        environmentRef.current?.dispose();
+        environmentRef.current = null;
+        renderContextRef.current?.renderer.dispose();
+        renderContextRef.current = null;
+      } catch (disposeError) {
+        debugInitialization.warn('[useWebGPURenderer] Error disposing resources during recovery:', disposeError);
+      }
+
+      // Attempt recovery with reduced quality
+      try {
+        debugInitialization.log('[useWebGPURenderer] Attempting recovery with reduced quality...');
+
+        const shouldForceWebGL = recoveryAttemptsRef.current >= 2;
+        const newContext = await attemptRecovery(canvas, {
+          reduceQuality: true,
+          forceWebGL: shouldForceWebGL,
+          maxRetries: 2,
+          retryDelayMs: 500,
+        });
+
+        if (!newContext) {
+          throw new Error('attemptRecovery returned null');
+        }
+
+        // Recovery successful - update context
+        renderContextRef.current = newContext;
+        debugInitialization.log(
+          `[useWebGPURenderer] Recovery successful, now using ${newContext.isWebGPU ? 'WebGPU' : 'WebGL'}`
+        );
+
+        // Update UI store with new renderer info
+        useUIStore.getState().setRendererAPI(newContext.isWebGPU ? 'WebGPU' : 'WebGL');
+        useUIStore.getState().setGpuInfo(newContext.gpuInfo);
+
+        // Register device lost handler on new context
+        const newCallback = (e: DeviceLostEvent) => handleDeviceLost(e);
+        deviceLostCallbackRef.current = newCallback;
+        newContext.onDeviceLost(newCallback);
+
+        // Show success notification
+        useUIStore.getState().addNotification(
+          'info',
+          `Graphics recovered using ${newContext.isWebGPU ? 'WebGPU' : 'WebGL'}. Quality may be reduced.`,
+          5000
+        );
+
+        // Apply reduced quality graphics settings to prevent future issues
+        if (shouldForceWebGL || !newContext.isWebGPU) {
+          // Reduce quality settings when falling back to WebGL
+          const currentSettings = useUIStore.getState().graphicsSettings;
+          if (currentSettings.postProcessingEnabled) {
+            debugInitialization.log('[useWebGPURenderer] Reducing post-processing for stability');
+            useUIStore.getState().setPostProcessingEnabled(false);
+          }
+        }
+
+        // Mark renderer as needing reinitialization
+        // The caller (GameCanvas) should detect this and reinitialize the scene
+        isInitializedRef.current = false;
+        isRecoveringRef.current = false;
+
+        // Notify user that reinit is needed
+        useUIStore.getState().addNotification(
+          'warning',
+          'Graphics context recovered. Some visual elements may need to reload.',
+          8000
+        );
+      } catch (recoveryError) {
+        debugInitialization.error('[useWebGPURenderer] Recovery failed:', recoveryError);
+        useUIStore.getState().addNotification(
+          'error',
+          'Failed to recover graphics context. Please refresh the page to continue playing.',
+          0
+        );
+        isRecoveringRef.current = false;
+      }
+    },
+    [canvasRef]
+  );
+
   const initializeRenderer = useCallback(async (): Promise<boolean> => {
     if (!canvasRef.current || !containerRef.current) return false;
     if (isInitializedRef.current) return true;
@@ -247,6 +433,11 @@ export function useWebGPURenderer({
 
       renderContextRef.current = renderContext;
       onWebGPUDetected(renderContext.isWebGPU);
+
+      // Register device lost handler for WebGPU recovery
+      const deviceLostCallback = (event: DeviceLostEvent) => handleDeviceLost(event);
+      deviceLostCallbackRef.current = deviceLostCallback;
+      renderContext.onDeviceLost(deviceLostCallback);
 
       // Update UI store with renderer info
       useUIStore.getState().setRendererAPI(renderContext.isWebGPU ? 'WebGPU' : 'WebGL');
@@ -286,11 +477,12 @@ export function useWebGPURenderer({
       }
 
       // Preload water texture before creating environment
-      await preloadWaterNormals();
+      await loadWaterNormalsTexture();
 
       // Create environment
       const environment = new EnvironmentManager(scene, currentMap);
       environmentRef.current = environment;
+      environment.setRenderer(renderer); // Enable planar reflections for ultra quality water
       const terrain = environment.terrain;
 
       camera.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
@@ -756,6 +948,7 @@ export function useWebGPURenderer({
     onProgress,
     onWebGPUDetected,
     calculateDisplayResolution,
+    handleDeviceLost,
   ]);
 
   const startAnimationLoop = useCallback(() => {
@@ -1083,6 +1276,12 @@ export function useWebGPURenderer({
         unsubscribe();
       }
       eventUnsubscribersRef.current = [];
+
+      // Unsubscribe from device lost callback
+      if (renderContextRef.current && deviceLostCallbackRef.current) {
+        renderContextRef.current.offDeviceLost(deviceLostCallbackRef.current);
+        deviceLostCallbackRef.current = null;
+      }
 
       // Clear projection store
       useProjectionStore.getState().setWorldToScreen(null);

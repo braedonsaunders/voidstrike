@@ -8,11 +8,60 @@
  * - Compute shader support
  * - Post-processing integration
  * - Custom WebGPU device limits (maxVertexBuffers: 16 for TAA velocity)
+ * - Device lost detection and recovery infrastructure
  */
 
 import * as THREE from 'three';
 import { WebGPURenderer, PostProcessing } from 'three/webgpu';
 import { debugInitialization } from '@/utils/debugLogger';
+
+// ============================================
+// Device Lost Types and Interfaces
+// ============================================
+
+/**
+ * Reason for WebGPU device loss.
+ * - 'destroyed': Device was explicitly destroyed (e.g., tab backgrounded, system sleep)
+ * - 'unknown': Device lost for unknown reason (e.g., GPU hang, driver crash, OOM)
+ */
+export type DeviceLostReason = 'destroyed' | 'unknown';
+
+/**
+ * Event emitted when WebGPU device is lost.
+ */
+export interface DeviceLostEvent {
+  /** Reason for device loss */
+  reason: DeviceLostReason;
+  /** Browser-provided message with additional details */
+  message: string;
+  /** Timestamp when device loss was detected */
+  timestamp: number;
+  /** GPU info at time of loss (if available) */
+  gpuInfo: GpuAdapterInfo | null;
+}
+
+/**
+ * Callback invoked when WebGPU device is lost.
+ */
+export type DeviceLostCallback = (event: DeviceLostEvent) => void;
+
+/**
+ * Options for attempting renderer recovery after device loss.
+ */
+export interface RecoveryOptions {
+  /** Reduce quality settings (e.g., lower resolution, fewer effects) */
+  reduceQuality: boolean;
+  /** Force WebGL fallback instead of retrying WebGPU */
+  forceWebGL: boolean;
+  /** Maximum number of retry attempts before giving up */
+  maxRetries?: number;
+  /** Delay in milliseconds between retry attempts */
+  retryDelayMs?: number;
+}
+
+// ============================================
+// Renderer Configuration Types
+// ============================================
 
 export interface WebGPURendererConfig {
   canvas: HTMLCanvasElement;
@@ -41,6 +90,20 @@ export interface RenderContext {
     maxStorageBufferBindingSize: number;
     maxBufferSize: number;
   };
+  /**
+   * Register a callback to be notified when the WebGPU device is lost.
+   * Multiple callbacks can be registered.
+   */
+  onDeviceLost: (callback: DeviceLostCallback) => void;
+  /**
+   * Unregister a previously registered device lost callback.
+   */
+  offDeviceLost: (callback: DeviceLostCallback) => void;
+  /**
+   * Check if the WebGPU device has been lost.
+   * Returns true if device is lost and rendering will fail.
+   */
+  isDeviceLost: () => boolean;
 }
 
 // Default limits when WebGPU is not available or fails
@@ -247,6 +310,105 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
 }
 
 /**
+ * Attempt to access the underlying WebGPU device from the Three.js renderer.
+ * Three.js manages the device internally, so we need to access it through
+ * the backend. This is implementation-dependent and may break with Three.js updates.
+ */
+function getWebGPUDevice(renderer: WebGPURenderer): GPUDevice | null {
+  try {
+    const backend = (renderer as any).backend;
+    if (!backend) {
+      debugInitialization.warn('[WebGPU] No backend available on renderer');
+      return null;
+    }
+
+    // Three.js WebGPUBackend stores device on the backend instance
+    // Path: renderer.backend.device (WebGPUBackend)
+    if (backend.device && typeof backend.device.lost !== 'undefined') {
+      return backend.device as GPUDevice;
+    }
+
+    // Alternative path: through the context adapter
+    // Path: renderer.backend.context.device
+    if (backend.context?.device && typeof backend.context.device.lost !== 'undefined') {
+      return backend.context.device as GPUDevice;
+    }
+
+    // Check if it's stored under a different property
+    if (backend.gpu?.device && typeof backend.gpu.device.lost !== 'undefined') {
+      return backend.gpu.device as GPUDevice;
+    }
+
+    debugInitialization.warn('[WebGPU] Could not locate GPUDevice on renderer backend');
+    return null;
+  } catch (error) {
+    debugInitialization.warn('[WebGPU] Error accessing GPUDevice:', error);
+    return null;
+  }
+}
+
+/**
+ * Set up device lost handler on the WebGPU device.
+ * The handler notifies all registered callbacks when device is lost.
+ */
+function setupDeviceLostHandler(
+  device: GPUDevice,
+  gpuInfo: GpuAdapterInfo | null,
+  callbacks: DeviceLostCallback[],
+  setLostState: (lost: boolean) => void
+): void {
+  device.lost.then((info: GPUDeviceLostInfo) => {
+    // Mark device as lost
+    setLostState(true);
+
+    // Map WebGPU reason to our type
+    const reason: DeviceLostReason = info.reason === 'destroyed' ? 'destroyed' : 'unknown';
+
+    // Create event with all available context
+    const event: DeviceLostEvent = {
+      reason,
+      message: info.message || 'No additional information',
+      timestamp: Date.now(),
+      gpuInfo,
+    };
+
+    // Log detailed error information for debugging
+    debugInitialization.error(`[WebGPU] Device Lost:`, {
+      reason: event.reason,
+      message: event.message,
+      timestamp: new Date(event.timestamp).toISOString(),
+      gpuName: gpuInfo?.name || 'Unknown',
+      gpuVendor: gpuInfo?.vendor || 'Unknown',
+      gpuArchitecture: gpuInfo?.architecture || 'Unknown',
+      isIntegratedGpu: gpuInfo?.isIntegrated ?? 'Unknown',
+    });
+
+    // Additional context logging for debugging
+    if (reason === 'unknown') {
+      debugInitialization.error(
+        '[WebGPU] Device lost with unknown reason. Common causes:\n' +
+        '  - GPU out of memory (VRAM exhausted)\n' +
+        '  - GPU driver crash or reset\n' +
+        '  - System entering sleep/hibernate\n' +
+        '  - GPU removed or switched (laptop external GPU)\n' +
+        '  - Browser tab throttled aggressively'
+      );
+    }
+
+    // Notify all registered callbacks
+    for (const callback of callbacks) {
+      try {
+        callback(event);
+      } catch (callbackError) {
+        debugInitialization.error('[WebGPU] Error in device lost callback:', callbackError);
+      }
+    }
+  });
+
+  debugInitialization.log('[WebGPU] Device lost handler registered');
+}
+
+/**
  * Initialize the WebGPU renderer with async setup and custom device limits.
  *
  * Per Three.js issue #29865 and WebGPU best practices:
@@ -336,14 +498,226 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.BasicShadowMap;
 
-  return {
+  // ============================================
+  // Device Lost Detection Setup
+  // ============================================
+
+  // State for device lost tracking
+  const deviceLostCallbacks: DeviceLostCallback[] = [];
+  let deviceIsLost = false;
+
+  // Set up device lost handler if WebGPU is active
+  if (isWebGPU) {
+    const device = getWebGPUDevice(renderer);
+    if (device) {
+      setupDeviceLostHandler(
+        device,
+        adapterInfo.gpuInfo,
+        deviceLostCallbacks,
+        (lost: boolean) => { deviceIsLost = lost; }
+      );
+    } else {
+      debugInitialization.warn(
+        '[WebGPU] Could not access GPU device for lost detection. ' +
+        'Device lost events will not be reported.'
+      );
+    }
+  }
+
+  // Create the render context with device lost API
+  const context: RenderContext = {
     renderer,
     isWebGPU,
     supportsCompute,
     postProcessing: null,
     gpuInfo: isWebGPU ? adapterInfo.gpuInfo : null,
     deviceLimits: actualLimits,
+
+    onDeviceLost: (callback: DeviceLostCallback) => {
+      if (!deviceLostCallbacks.includes(callback)) {
+        deviceLostCallbacks.push(callback);
+      }
+    },
+
+    offDeviceLost: (callback: DeviceLostCallback) => {
+      const index = deviceLostCallbacks.indexOf(callback);
+      if (index !== -1) {
+        deviceLostCallbacks.splice(index, 1);
+      }
+    },
+
+    isDeviceLost: () => deviceIsLost,
   };
+
+  return context;
+}
+
+/**
+ * Attempt to recover from a device lost error by creating a new renderer.
+ *
+ * Recovery strategies:
+ * 1. Retry WebGPU with same settings (transient failures)
+ * 2. Retry WebGPU with reduced quality (memory pressure)
+ * 3. Fall back to WebGL (persistent WebGPU issues)
+ *
+ * Note: This function creates a NEW renderer. The caller is responsible for:
+ * - Disposing the old renderer
+ * - Recreating all render targets, materials, and scene objects
+ * - Updating all references to the renderer
+ *
+ * @param canvas The canvas element to render to
+ * @param options Recovery options controlling behavior
+ * @returns New RenderContext if recovery succeeds, null if all attempts fail
+ */
+export async function attemptRecovery(
+  canvas: HTMLCanvasElement,
+  options: RecoveryOptions
+): Promise<RenderContext | null> {
+  const maxRetries = options.maxRetries ?? 3;
+  const retryDelayMs = options.retryDelayMs ?? 1000;
+
+  debugInitialization.log('[WebGPU] Attempting recovery from device lost', {
+    reduceQuality: options.reduceQuality,
+    forceWebGL: options.forceWebGL,
+    maxRetries,
+    retryDelayMs,
+  });
+
+  // If forcing WebGL, skip WebGPU attempts entirely
+  if (options.forceWebGL) {
+    debugInitialization.log('[WebGPU] Recovery: Forcing WebGL fallback');
+    try {
+      const context = await createWebGPURenderer({
+        canvas,
+        forceWebGL: true,
+        antialias: !options.reduceQuality, // Disable AA in reduced quality mode
+        powerPreference: options.reduceQuality ? 'low-power' : 'high-performance',
+      });
+
+      debugInitialization.log('[WebGPU] Recovery successful with WebGL fallback');
+      return context;
+    } catch (error) {
+      debugInitialization.error('[WebGPU] Recovery failed: WebGL fallback creation failed', error);
+      return null;
+    }
+  }
+
+  // Try WebGPU with potential quality reduction
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    debugInitialization.log(`[WebGPU] Recovery attempt ${attempt}/${maxRetries}`);
+
+    // Wait before retry (except first attempt)
+    if (attempt > 1) {
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+    }
+
+    try {
+      const context = await createWebGPURenderer({
+        canvas,
+        antialias: !options.reduceQuality, // Disable AA to reduce memory pressure
+        powerPreference: options.reduceQuality ? 'low-power' : 'high-performance',
+        forceWebGL: false,
+      });
+
+      // If we got WebGPU back, great!
+      if (context.isWebGPU) {
+        debugInitialization.log(`[WebGPU] Recovery successful on attempt ${attempt}`);
+        return context;
+      }
+
+      // If we got WebGL fallback when WebGPU was requested, that's still a valid recovery
+      debugInitialization.log(
+        `[WebGPU] Recovery on attempt ${attempt} resulted in WebGL fallback`
+      );
+      return context;
+    } catch (error) {
+      debugInitialization.warn(
+        `[WebGPU] Recovery attempt ${attempt} failed:`,
+        error
+      );
+    }
+  }
+
+  // All WebGPU attempts failed - try WebGL as last resort
+  debugInitialization.log('[WebGPU] All WebGPU recovery attempts failed, trying WebGL fallback');
+  try {
+    const context = await createWebGPURenderer({
+      canvas,
+      forceWebGL: true,
+      antialias: false,
+      powerPreference: 'low-power',
+    });
+
+    debugInitialization.log('[WebGPU] Recovery successful with WebGL fallback (last resort)');
+    return context;
+  } catch (error) {
+    debugInitialization.error('[WebGPU] Recovery failed completely', error);
+    return null;
+  }
+}
+
+/**
+ * Check if WebGPU is likely to be available and working.
+ * Useful for proactive quality tier selection before renderer creation.
+ */
+export async function checkWebGPUSupport(): Promise<{
+  available: boolean;
+  reason: string;
+  gpuInfo: GpuAdapterInfo | null;
+}> {
+  if (!navigator.gpu) {
+    return {
+      available: false,
+      reason: 'WebGPU API not available in this browser',
+      gpuInfo: null,
+    };
+  }
+
+  try {
+    const adapter = await navigator.gpu.requestAdapter({
+      powerPreference: 'high-performance',
+    });
+
+    if (!adapter) {
+      return {
+        available: false,
+        reason: 'No WebGPU adapter available',
+        gpuInfo: null,
+      };
+    }
+
+    // Build GPU info
+    const info = adapter.info;
+    let gpuName = 'Unknown GPU';
+    if (info.description && info.description.length > 0) {
+      gpuName = info.description;
+    } else if (info.device && info.device.length > 0) {
+      gpuName = info.device;
+    } else if (info.vendor && info.architecture) {
+      gpuName = `${formatVendor(info.vendor)} ${formatArchitecture(info.architecture)}`;
+    } else if (info.vendor && info.vendor.length > 0) {
+      gpuName = `${formatVendor(info.vendor)} GPU`;
+    }
+
+    const gpuInfo: GpuAdapterInfo = {
+      name: gpuName,
+      vendor: info.vendor || 'unknown',
+      architecture: info.architecture || '',
+      isIntegrated: detectIntegratedGpu(gpuName, info.vendor || ''),
+    };
+
+    return {
+      available: true,
+      reason: 'WebGPU available',
+      gpuInfo,
+    };
+  } catch (error) {
+    return {
+      available: false,
+      reason: `WebGPU adapter request failed: ${error}`,
+      gpuInfo: null,
+    };
+  }
 }
 
 /**
