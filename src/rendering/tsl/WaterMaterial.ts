@@ -283,9 +283,6 @@ export class TSLWaterMaterial {
     // Note: ior is a regular property, not a node property
     material.ior = WATER_IOR;
 
-    // Specular intensity for water reflections
-    material.specularIntensity = 1.0;
-
     // Environment map for reflections (if provided)
     if (config.envMap) {
       material.envMap = config.envMap;
