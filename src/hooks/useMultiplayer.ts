@@ -67,11 +67,33 @@ export interface GameStartPayload {
   startTime: number;
 }
 
-// STUN servers
-const ICE_SERVERS: RTCIceServer[] = [
+// Default STUN servers (configurable via NEXT_PUBLIC_ICE_SERVERS env var)
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
   { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
 ];
+
+function getIceServers(): RTCIceServer[] {
+  // Next.js inlines NEXT_PUBLIC_* env vars at build time
+  const envServers = (
+    typeof process !== 'undefined' ? process.env?.NEXT_PUBLIC_ICE_SERVERS : undefined
+  ) as string | undefined;
+  if (envServers) {
+    try {
+      const parsed = JSON.parse(envServers) as RTCIceServer[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch {
+      debugNetworking.warn('[Lobby] Invalid NEXT_PUBLIC_ICE_SERVERS format, using defaults');
+    }
+  }
+  return DEFAULT_ICE_SERVERS;
+}
+
+const ICE_SERVERS = getIceServers();
 
 export type LobbyStatus =
   | 'disabled' // Nostr not active (single-player mode)

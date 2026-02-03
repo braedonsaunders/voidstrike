@@ -96,6 +96,11 @@ export interface AbilityDataDefinition {
 }
 
 // ==================== ABILITY DEFINITIONS ====================
+// NOTE: These TypeScript definitions are for reference and type checking only.
+// The authoritative ability data is loaded from JSON files at runtime:
+//   public/data/factions/{faction}/abilities.json
+// Any gameplay-affecting values should be updated in the JSON files.
+// This TS file may be removed in a future refactor.
 
 export const ABILITY_DEFINITIONS: Record<string, AbilityDataDefinition> = {
   // === INFANTRY ABILITIES ===
@@ -106,7 +111,7 @@ export const ABILITY_DEFINITIONS: Record<string, AbilityDataDefinition> = {
     description: 'Increases attack speed and movement speed at the cost of health.',
     targetType: 'instant',
     healthCost: 10,
-    cooldown: 0, // Can use any time
+    cooldown: 10, // Matches JSON authority: public/data/factions/dominion/abilities.json
     duration: 11,
     effects: [
       { type: 'buff', value: 1.5, duration: 11 }, // 50% speed boost

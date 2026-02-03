@@ -12,9 +12,8 @@
  */
 
 import { distance, SeededRandom } from '@/utils/math';
-
-// Debug flag for worker logging (workers can't access UI store)
-const _DEBUG = false;
+import { debugAI, setWorkerDebugSettings } from '@/utils/debugLogger';
+import type { DebugSettings } from '@/store/uiStore';
 
 // Unit priority for focus fire (higher = more important to kill)
 const DEFAULT_UNIT_PRIORITY: Record<string, number> = {
@@ -105,7 +104,12 @@ interface EvaluateMicroMessage {
   seed: number;
 }
 
-type WorkerMessage = InitMessage | EvaluateMicroMessage;
+interface SetDebugSettingsMessage {
+  type: 'setDebugSettings';
+  settings: DebugSettings;
+}
+
+type WorkerMessage = InitMessage | EvaluateMicroMessage | SetDebugSettingsMessage;
 
 // Decision types returned to main thread
 interface MicroDecision {
@@ -147,7 +151,7 @@ function init(workerConfig: AIWorkerConfig): boolean {
     initialized = true;
     return true;
   } catch (error) {
-    console.error('[AIWorker] Init failed:', error);
+    debugAI.error('[AIWorker] Init failed:', error);
     return false;
   }
 }
@@ -565,6 +569,11 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
         tick: message.tick,
         aiPlayerId: message.aiPlayerId,
       });
+      break;
+    }
+
+    case 'setDebugSettings': {
+      setWorkerDebugSettings(message.settings);
       break;
     }
   }
