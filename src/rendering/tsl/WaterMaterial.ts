@@ -222,9 +222,15 @@ export class TSLWaterMaterial {
       const specularColor = vec3(0.8, 0.85, 0.9).mul(specular).mul(0.15);
 
       // Combine: base color + subtle fresnel brightening + specular glint
-      // Instead of mixing with bright rim, just brighten the water color slightly
-      const brightenedColor = variedColor.mul(float(1.0).add(fresnelFactor.mul(0.3)));
-      const finalColor = add(brightenedColor, specularColor);
+      // Keep brightening very subtle to prevent white-out
+      const brightenedColor = variedColor.mul(float(1.0).add(fresnelFactor.mul(0.15)));
+      const combinedColor = add(brightenedColor, specularColor);
+      // Clamp to prevent any color channel exceeding 1.0 (causes white-out)
+      const finalColor = vec3(
+        clamp(combinedColor.x, 0.0, 1.0),
+        clamp(combinedColor.y, 0.0, 1.0),
+        clamp(combinedColor.z, 0.0, 1.0)
+      );
 
       return vec4(finalColor, this.uOpacity);
     })();
