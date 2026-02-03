@@ -1,10 +1,8 @@
 import { useGameStore } from '@/store/gameStore';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { getWorkerBridge, getRenderStateAdapter } from '@/engine/workers';
-import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { WALL_DEFINITIONS } from '@/data/buildings/walls';
-import { getAttackTypeText } from '@/utils/commandIcons';
 import { CommandButtonData, MenuMode } from '../types';
 import { BASIC_BUILDINGS, ADVANCED_BUILDINGS, WALL_BUILDINGS } from '../constants';
 
