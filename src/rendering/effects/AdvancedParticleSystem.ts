@@ -16,16 +16,12 @@ import { MeshBasicNodeMaterial } from 'three/webgpu';
 import {
   Fn,
   vec4,
-  vec3,
   float,
   uniform,
   uv,
   texture,
   clamp,
-  mix,
   viewportCoordinate,
-  instanceIndex,
-  storage,
   instancedBufferAttribute,
 } from 'three/tsl';
 
