@@ -19,7 +19,7 @@ import {
   vec4,
   mrt,
   output,
-  normalView,
+  transformedNormalView,
 } from 'three/tsl';
 import { materialMetalness, materialRoughness } from 'three/tsl';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
@@ -124,11 +124,10 @@ export function createQuarterSSRPipeline(
     const scenePass = pass(scene, camera);
 
     // Enable MRT for SSR (normals and metalrough needed)
-    // Fix for TSL normalView variable initialization issue (Three.js #32009)
-    const normalViewVar = normalView.toVar();
+    // Use transformedNormalView for proper InstancedMesh normal handling (Three.js #18497)
     scenePass.setMRT(mrt({
       output: output,
-      normal: normalViewVar.mul(0.5).add(0.5),
+      normal: transformedNormalView.mul(0.5).add(0.5),
       metalrough: vec2(materialMetalness, materialRoughness),
     }));
 
