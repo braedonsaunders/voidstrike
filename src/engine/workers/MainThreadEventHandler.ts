@@ -40,7 +40,7 @@ import type { WorkerBridge } from './WorkerBridge';
 
 export class MainThreadEventHandler {
   private bridge: WorkerBridge;
-  private localPlayerId: string;
+  private localPlayerId: string | null;
   private battleEffectsCallback: ((event: GameEvent) => void) | null = null;
 
   // Audio state
@@ -59,11 +59,19 @@ export class MainThreadEventHandler {
   // Reusable vector for 3D audio positions
   private tempVec3 = new THREE.Vector3();
 
-  constructor(bridge: WorkerBridge, localPlayerId: string = 'player1') {
+  constructor(bridge: WorkerBridge, localPlayerId: string | null) {
     this.bridge = bridge;
     this.localPlayerId = localPlayerId;
     this.audioRng = new SeededRandom(Date.now());
     this.setupEventListeners();
+  }
+
+  /**
+   * Update the local player ID. Call this when the player enters spectator mode
+   * or when the local player changes mid-session.
+   */
+  public setLocalPlayerId(playerId: string | null): void {
+    this.localPlayerId = playerId;
   }
 
   /**
