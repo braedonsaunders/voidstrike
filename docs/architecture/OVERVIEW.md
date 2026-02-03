@@ -297,6 +297,8 @@ voidstrike/
 │   │   │   ├── GameEvents.ts
 │   │   │   ├── GameLoop.ts # Fixed timestep loop
 │   │   │   ├── GameStatePort.ts
+│   │   │   ├── GPUMemoryTracker.ts
+│   │   │   ├── GPUTimestampProfiler.ts
 │   │   │   ├── IGameInstance.ts
 │   │   │   ├── PerformanceMonitor.ts
 │   │   │   ├── SpatialGrid.ts
