@@ -17,9 +17,12 @@ A groundbreaking multiplayer architecture that requires **zero servers** to oper
 | Phase | Component | Reliability | Why |
 |-------|-----------|-------------|-----|
 | **1** | Connection Codes | ✅ **100%** | Pure WebRTC encoding. Zero external dependencies. Cannot fail. |
-| **2** | LAN Discovery (mDNS) | ✅ **100%** | Standard protocol, works offline |
-| **3** | Nostr Discovery | ✅ **99%** | Hundreds of relays, instant WebSocket, battle-tested by millions |
-| **4** | Peer Relay | ✅ **95%** | Standard WebRTC relay pattern, adds ~50-100ms latency |
+| **2** | LAN Discovery (mDNS) | ⏳ Not implemented | Requires Electron/Tauri for desktop build |
+| **3** | Nostr Discovery | ❌ Removed | Infrastructure removed - lobby codes used instead |
+| **4** | Peer Relay | ❌ Removed | Infrastructure removed - STUN servers handle most NAT cases |
+
+> **Note**: Phase 3 (NostrMatchmaking.ts) and Phase 4 (PeerRelay.ts) infrastructure files were removed.
+> The architecture diagrams below show the original design vision; current implementation uses lobby codes via Nostr relays in useMultiplayer.ts.
 
 ---
 
@@ -30,13 +33,18 @@ A groundbreaking multiplayer architecture that requires **zero servers** to oper
 | Component | File | Status |
 |-----------|------|--------|
 | **Connection Codes** | `ConnectionCode.ts` | ✅ SDP encoding/decoding |
-| **Nostr Matchmaking** | `NostrMatchmaking.ts` | ✅ Relay-based discovery |
 | **Nostr Relays** | `NostrRelays.ts` | ✅ Health-checked relay list |
-| **Peer Relay** | `PeerRelay.ts` | ✅ NAT traversal via peers |
 | **Game Message Protocol** | `types.ts` | ✅ 16 message types |
 | **Checksum System** | `ChecksumSystem.ts` | ✅ State verification + Merkle tree |
 | **Merkle Tree** | `MerkleTree.ts` | ✅ O(log n) divergence detection |
 | **Desync Detection** | `DesyncDetection.ts` | ✅ Debugging tools |
+
+### ❌ What's REMOVED (Phase 3/4 Infrastructure)
+
+| Component | Former File | Notes |
+|-----------|-------------|-------|
+| **Nostr Matchmaking** | `NostrMatchmaking.ts` | Removed - lobby codes via useMultiplayer.ts used instead |
+| **Peer Relay** | `PeerRelay.ts` | Removed - STUN servers handle NAT traversal |
 
 ### ✅ What's COMPLETE (Game Integration)
 
@@ -532,8 +540,10 @@ export async function checkRelayHealth(
 
 ### Technical Implementation
 
+> **Note**: The `NostrMatchmaking.ts` file was removed. The code below is preserved as design reference documentation. Current matchmaking uses lobby codes in `useMultiplayer.ts`.
+
 ```typescript
-// src/engine/network/p2p/NostrMatchmaking.ts
+// REMOVED: src/engine/network/p2p/NostrMatchmaking.ts (design reference only)
 
 import {
   SimplePool,
@@ -986,8 +996,10 @@ When both players are behind **symmetric NAT** (strict corporate firewalls, some
 
 ### Technical Implementation
 
+> **Note**: The `PeerRelay.ts` file was removed. The code below is preserved as design reference documentation for the peer relay concept that was planned but not implemented.
+
 ```typescript
-// src/engine/network/p2p/PeerRelay.ts
+// REMOVED: src/engine/network/p2p/PeerRelay.ts (design reference only)
 
 /**
  * Message types for relay protocol
@@ -1462,38 +1474,16 @@ Tasks:
 ```
 
 ### Phase 3: Nostr Discovery
-**Status**: ✅ Complete
-**Reliability**: 99%
-**Dependencies**: `nostr-tools` (~30KB)
-**Implementation**: `src/engine/network/p2p/NostrMatchmaking.ts`, `src/hooks/useMultiplayer.ts`
+**Status**: ❌ Removed
+**Former Implementation**: `src/engine/network/p2p/NostrMatchmaking.ts` (deleted)
 
-```
-Tasks:
-- [x] NostrMatchmaking class implementation
-- [x] Ephemeral keypair generation
-- [x] Game seek event publishing
-- [x] Game seek subscription and filtering
-- [x] WebRTC offer/answer exchange via Nostr
-- [x] Skill-based matchmaking (300 point bracket)
-- [x] Lobby system with 4-char codes
-- [x] Relay health monitoring
-- [x] Public lobby listing
-```
+The standalone NostrMatchmaking class was removed. Lobby-based matchmaking is now handled directly in `src/hooks/useMultiplayer.ts` using 4-character codes published to Nostr relays.
 
 ### Phase 4: Peer Relay
-**Status**: Ready to implement
-**Reliability**: 95%
-**Dependencies**: None (uses Web Crypto API)
+**Status**: ❌ Removed
+**Former Implementation**: `src/engine/network/p2p/PeerRelay.ts` (deleted)
 
-```
-Tasks:
-- [ ] PeerRelayNetwork class implementation
-- [ ] ECDH key exchange between peers
-- [ ] AES-GCM encryption for relay data
-- [ ] Relay route discovery (BFS)
-- [ ] Message forwarding protocol
-- [ ] Automatic fallback when direct fails
-```
+The peer relay system for routing through other players was planned but removed. STUN servers handle most NAT traversal cases. For symmetric NATs where direct connection fails, players must use connection codes or find a different network configuration.
 
 ---
 
@@ -1635,11 +1625,13 @@ const groups = checksumSystem.getDivergentGroups(remoteMerkleTree, 'units');
 src/engine/network/
 ├── p2p/
 │   ├── ConnectionCode.ts        # Phase 1: Code generation/parsing
-│   ├── NostrMatchmaking.ts      # Phase 3: Nostr-based discovery
-│   ├── PeerRelay.ts             # Phase 4: Relay network
+│   ├── NostrRelays.ts           # Health-checked relay list
 │   └── index.ts                 # Public exports
 ├── MerkleTree.ts                # Merkle tree for O(log n) desync detection
 ├── DesyncDetection.ts           # Desync debugging tools
 ├── index.ts                     # Module exports
 └── types.ts                     # Network types
 ```
+
+> **Note**: `NostrMatchmaking.ts` (Phase 3) and `PeerRelay.ts` (Phase 4) were removed.
+> Matchmaking functionality is now in `src/hooks/useMultiplayer.ts`.

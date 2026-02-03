@@ -274,21 +274,21 @@ this.queueCommand(command);  // NO validation of playerId!
 
 1. **Input Spoofing (playerId)** - `Game.ts:229-247`
 2. **Stale Command Handling** - `Game.ts:890-910`
-3. **No Command Authentication** - `ConnectionCode.ts`, `NostrMatchmaking.ts`
+3. **No Command Authentication** - `ConnectionCode.ts`
 
 ### High
 
 4. **Desync Detection Silent Failures** - `ChecksumSystem.ts:239-257`
 5. **No Determinism Enforcement** - Various (Math.random usage)
-6. **Peer Relay Encryption Fallback** - `PeerRelay.ts:379-416`
-7. **Command Queue Memory Leak** - `Game.ts:836-848`
+6. **Command Queue Memory Leak** - `Game.ts:836-848`
 
 ### Medium
 
-8. **Network Delays & Clock Skew** - `Game.ts:393-407`
-9. **Incomplete Lockstep Barrier** - `Game.ts:163-167`
-10. **Merkle Tree Limited Resolution** - `ChecksumSystem.ts:286-292`
-11. **Cleartext Nostr Transmission** - `NostrMatchmaking.ts`
+7. **Network Delays & Clock Skew** - `Game.ts:393-407`
+8. **Incomplete Lockstep Barrier** - `Game.ts:163-167`
+9. **Merkle Tree Limited Resolution** - `ChecksumSystem.ts:286-292`
+
+> **Note**: Issues related to `NostrMatchmaking.ts` and `PeerRelay.ts` removed - those files have been deleted.
 
 ---
 

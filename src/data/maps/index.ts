@@ -99,14 +99,6 @@ export {
   getConnectivitySummary,
   formatValidationResult,
 
-  // Map scaffolder
-  type MapScaffold,
-  type ScaffoldConfig,
-  scaffoldMap,
-  scaffold1v1Diagonal,
-  scaffold1v1Horizontal,
-  scaffold4Player,
-  addTerrain,
 } from './core';
 
 // JSON-based map exports (primary source of truth)

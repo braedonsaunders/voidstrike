@@ -19,7 +19,6 @@ export { ScoutingMemory, type EnemyIntel, type ScoutedBuilding, type StrategicIn
 // Tactical AI systems
 export { FormationControl, type FormationType, type FormationSlot, type ArmyGroup, type UnitRole } from './FormationControl';
 export { RetreatCoordination, type RetreatOrder, type RetreatState, type GroupRetreatStatus } from './RetreatCoordination';
-export { AbilityAI, type AbilityDecision, executeAbilityDecision } from './AbilityAI';
 
 // Economic AI systems
 export { WorkerDistribution, type BaseSaturation, type WorkerTransfer } from './WorkerDistribution';

@@ -146,7 +146,6 @@ npm run test:coverage # With coverage report
 ### Priority 4: AI Systems
 
 - [ ] **AIWorkerManager.ts** - Worker task assignment
-- [ ] **AbilityAI.ts** - AI ability usage decisions
 - [ ] **FormationControl.ts** - Formation positioning
 - [ ] **InfluenceMap.ts** - Influence calculations
 - [ ] **PositionalAnalysis.ts** - Map analysis
@@ -176,8 +175,6 @@ npm run test:coverage # With coverage report
 ### Priority 7: Network & Multiplayer
 
 - [ ] **ConnectionCode.ts** - Full connection code generation/parsing
-- [ ] **NostrMatchmaking.ts** - Matchmaking via Nostr
-- [ ] **PeerRelay.ts** - P2P relay communication
 - [ ] **ChecksumSystem.ts** - State checksumming for desync detection
 - [ ] **DesyncDetectionManager** - Full desync handling (partial coverage)
 
