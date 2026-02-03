@@ -90,8 +90,8 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
     waveFrequency: 1.0,
     textureSize: 50.0, // Coarser waves, calmer appearance
     distortionScale: 0.5,
-    fresnelPower: 2.0,
-    reflectionStrength: 0.2,
+    fresnelPower: 5.0, // Higher = narrower fresnel at grazing angles
+    reflectionStrength: 0.15,
     opacity: 0.85,
   },
   medium: {
@@ -99,8 +99,8 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
     waveFrequency: 1.5,
     textureSize: 40.0,
     distortionScale: 0.75,
-    fresnelPower: 3.0,
-    reflectionStrength: 0.3,
+    fresnelPower: 5.0,
+    reflectionStrength: 0.2,
     opacity: 0.88,
   },
   high: {
@@ -108,8 +108,8 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
     waveFrequency: 2.0,
     textureSize: 30.0,
     distortionScale: 1.0,
-    fresnelPower: 4.0,
-    reflectionStrength: 0.4,
+    fresnelPower: 5.0,
+    reflectionStrength: 0.25,
     opacity: 0.9,
   },
   ultra: {
@@ -118,7 +118,7 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
     textureSize: 25.0, // Finer waves, more visible detail
     distortionScale: 1.25,
     fresnelPower: 5.0,
-    reflectionStrength: 0.5,
+    reflectionStrength: 0.3,
     opacity: 0.92,
   },
 };
@@ -138,8 +138,8 @@ export class TSLWaterMaterial {
   private uDeepColor = uniform(new THREE.Color(0x004488));
   private uWaveAmplitude = uniform(0.06);
   private uWaveFrequency = uniform(2.0);
-  private uFresnelPower = uniform(4.0);
-  private uReflectionStrength = uniform(0.3);
+  private uFresnelPower = uniform(5.0);
+  private uReflectionStrength = uniform(0.25);
   private uOpacity = uniform(0.9);
 
   // Store textures for disposal
@@ -220,7 +220,8 @@ export class TSLWaterMaterial {
       const specularColor = vec3(1.0, 1.0, 0.95).mul(specular).mul(0.5);
 
       // Combine: base color + fresnel rim + specular
-      const rimColor = vec3(0.7, 0.85, 0.95); // Light sky blue rim
+      // Rim color is a subtle sky reflection, not bright white
+      const rimColor = vec3(0.5, 0.65, 0.75); // Muted sky blue rim
       const withFresnel = mix(variedColor, rimColor, fresnelFactor.mul(this.uReflectionStrength));
       const finalColor = add(withFresnel, specularColor);
 
@@ -320,10 +321,12 @@ export class TSLWaterMaterial {
     material.roughnessNode = roughnessNode;
     material.metalnessNode = metalnessNode;
 
-    // Enable transparency
+    // Enable transparency with depth writing for proper terrain occlusion
+    // Water needs to write depth so terrain above water level properly occludes it
     material.transparent = true;
     material.side = THREE.DoubleSide;
-    material.depthWrite = false;
+    material.depthWrite = true;
+    material.depthTest = true;
 
     return material;
   }
