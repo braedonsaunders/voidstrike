@@ -312,12 +312,15 @@ function cleanupVertexAttributes(
   const kept: string[] = [];
 
   // Essential attributes that should be kept
+  // NOTE: 'color' is intentionally NOT included - AI-generated models (Tripo/Meshy)
+  // bake ambient occlusion into vertex colors, causing dark triangular artifacts.
+  // Removing color attributes entirely is more reliable than just setting
+  // material.vertexColors = false, which may not work with WebGPU/TSL shaders.
   const essentialAttributes = new Set([
     'position',
     'normal',
     'uv',       // Only first UV set
     'tangent',
-    'color',    // Only first color attribute
   ]);
 
   // Additional attributes for skinned meshes
@@ -345,8 +348,9 @@ function cleanupVertexAttributes(
       continue;
     }
 
-    // Remove extra color attributes (color_0, _color_1, etc.)
-    if (name.match(/^_?color_?\d+$/i) && name !== 'color') {
+    // Remove ALL color attributes (color, color_0, _color_1, etc.)
+    // AI-generated models bake ambient occlusion into vertex colors, causing artifacts
+    if (name === 'color' || name.match(/^_?color_?\d+$/i)) {
       geometry.deleteAttribute(name);
       removed.push(name);
       continue;
@@ -541,7 +545,11 @@ function deepCloneGeometry(source: THREE.BufferGeometry): THREE.BufferGeometry {
   const cloned = new THREE.BufferGeometry();
 
   // Copy all attributes with fresh TypedArrays
+  // Skip color attributes - AI models bake AO into vertex colors causing artifacts
   for (const name of Object.keys(source.attributes)) {
+    if (name === 'color' || name.match(/^_?color_?\d+$/i)) {
+      continue; // Skip vertex colors entirely
+    }
     const srcAttr = source.attributes[name];
     const newArray = srcAttr.array.slice(0);
     const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
