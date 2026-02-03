@@ -35,7 +35,14 @@ interface MapPreset {
   category: string;
   description: string;
   prompt: string;
-  suggestedSettings?: Partial<MapGenerationSettings>;
+  suggestedSettings?: {
+    playerCount?: number;
+    mapSize?: string;
+    biome?: string;
+    includeWater?: boolean;
+    includeForests?: boolean;
+    islandMap?: boolean;
+  };
 }
 
 // ============================================================================
@@ -43,7 +50,7 @@ interface MapPreset {
 // ============================================================================
 
 const PRESET_CATEGORIES: PresetCategory[] = mapPresetsConfig.categories;
-const MAP_PRESETS: MapPreset[] = mapPresetsConfig.presets;
+const MAP_PRESETS: MapPreset[] = mapPresetsConfig.presets as MapPreset[];
 
 function getPresetsByCategory(categoryId: string): MapPreset[] {
   return MAP_PRESETS.filter((p) => p.category === categoryId);
