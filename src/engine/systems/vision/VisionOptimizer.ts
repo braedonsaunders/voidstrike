@@ -10,6 +10,7 @@
  */
 
 import { debugPathfinding } from '@/utils/debugLogger';
+import type { LineOfSight, HeightProvider } from './LineOfSight';
 
 export interface VisionCasterState {
   entityId: number;
@@ -70,10 +71,26 @@ export class VisionOptimizer {
   // Pre-computed sight range to cell set mapping for common ranges
   private sightRangeCache: Map<number, Set<{ dx: number; dy: number }>> = new Map();
 
+  // Line-of-sight system for terrain-aware visibility
+  private lineOfSight: LineOfSight | null = null;
+  private heightProvider: HeightProvider | null = null;
+
   constructor(config: VisionOptimizerConfig) {
     this.config = config;
     this.precomputeSightRanges();
-    debugPathfinding.log(`[VisionOptimizer] Initialized ${config.gridWidth}x${config.gridHeight} grid`);
+    debugPathfinding.log(
+      `[VisionOptimizer] Initialized ${config.gridWidth}x${config.gridHeight} grid`
+    );
+  }
+
+  /**
+   * Set the line-of-sight system for terrain-aware visibility
+   * When set, vision calculations will use height-based LOS blocking
+   */
+  public setLineOfSight(los: LineOfSight, heightProvider: HeightProvider): void {
+    this.lineOfSight = los;
+    this.heightProvider = heightProvider;
+    debugPathfinding.log('[VisionOptimizer] Line-of-sight system attached');
   }
 
   /**
@@ -100,12 +117,21 @@ export class VisionOptimizer {
 
   /**
    * Get cells visible from a position with given sight range
+   * Uses LineOfSight for terrain-aware visibility when available
    */
   private getCellsInRange(
     cellX: number,
     cellY: number,
-    sightRange: number
+    sightRange: number,
+    worldX?: number,
+    worldY?: number
   ): Set<number> {
+    // Use LineOfSight for terrain-aware visibility if available
+    if (this.lineOfSight && worldX !== undefined && worldY !== undefined) {
+      return this.lineOfSight.getVisibleCells(worldX, worldY, sightRange);
+    }
+
+    // Fallback to simple circular visibility (no terrain blocking)
     const result = new Set<number>();
     const cellRange = Math.ceil(sightRange / this.config.cellSize);
     const cellRangeSq = cellRange * cellRange;
@@ -221,7 +247,14 @@ export class VisionOptimizer {
    * Increment reference counts for cells visible by this caster
    */
   private incrementCasterVision(caster: VisionCasterState): void {
-    const visibleCells = this.getCellsInRange(caster.cellX, caster.cellY, caster.sightRange);
+    // Pass world coordinates for terrain-aware LOS when LineOfSight is available
+    const visibleCells = this.getCellsInRange(
+      caster.cellX,
+      caster.cellY,
+      caster.sightRange,
+      caster.x,
+      caster.y
+    );
 
     for (const cellKey of visibleCells) {
       let cellRef = this.cellRefCounts.get(cellKey);
@@ -332,7 +365,10 @@ export class VisionOptimizer {
    * Get visibility data for GPU upload (optimized for incremental updates)
    * Returns only dirty cells if incremental, or full grid if not
    */
-  public getVisibilityData(playerId: string, incremental: boolean = false): {
+  public getVisibilityData(
+    playerId: string,
+    incremental: boolean = false
+  ): {
     cells: Array<{ x: number; y: number; visible: number; explored: number }>;
     isDirty: boolean;
   } {

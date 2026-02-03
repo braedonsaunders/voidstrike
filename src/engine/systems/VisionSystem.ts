@@ -78,7 +78,10 @@ export class VisionSystem extends System {
   // PERF: Version counter for dirty checking by FogOfWar renderer
   private visionVersion = 0;
   // PERF: Cached vision masks per player to avoid regenerating every frame
-  private visionMaskCache: Map<string, { mask: Float32Array; width: number; height: number; version: number }> = new Map();
+  private visionMaskCache: Map<
+    string,
+    { mask: Float32Array; width: number; height: number; version: number }
+  > = new Map();
 
   // Web Worker for off-thread vision computation
   private visionWorker: Worker | null = null;
@@ -225,10 +228,9 @@ export class VisionSystem extends System {
 
     try {
       // Create worker as ES module (required for Next.js 16+ Turbopack)
-      this.visionWorker = new Worker(
-        new URL('../../workers/vision.worker.ts', import.meta.url),
-        { type: 'module' }
-      );
+      this.visionWorker = new Worker(new URL('../../workers/vision.worker.ts', import.meta.url), {
+        type: 'module',
+      });
 
       this.visionWorker.onmessage = this.handleWorkerMessage.bind(this);
       this.visionWorker.onerror = (error) => {
@@ -412,9 +414,12 @@ export class VisionSystem extends System {
         mapHeight: this.mapHeight,
         losBlockingThreshold: 1.0,
       });
-      // Re-attach height provider if available
+      // Re-attach height provider and connect to optimizer if available
       if (this.heightProvider) {
         this.lineOfSight.setHeightProvider(this.heightProvider);
+        if (this.visionOptimizer) {
+          this.visionOptimizer.setLineOfSight(this.lineOfSight, this.heightProvider);
+        }
       }
     }
 
@@ -527,6 +532,12 @@ export class VisionSystem extends System {
     if (this.lineOfSight) {
       this.lineOfSight.setHeightProvider(provider);
       debugPathfinding.log('[VisionSystem] Height provider set for LOS blocking');
+
+      // Connect LineOfSight to VisionOptimizer for terrain-aware visibility
+      if (this.visionOptimizer) {
+        this.visionOptimizer.setLineOfSight(this.lineOfSight, provider);
+        debugPathfinding.log('[VisionSystem] LineOfSight connected to VisionOptimizer');
+      }
     }
   }
 
@@ -944,7 +955,7 @@ export class VisionSystem extends System {
     }
 
     // Collect watch tower data
-    const watchTowerData = this.watchTowers.map(tower => ({
+    const watchTowerData = this.watchTowers.map((tower) => ({
       id: tower.id,
       x: tower.x,
       y: tower.y,
@@ -967,12 +978,226 @@ export class VisionSystem extends System {
   }
 
   /**
-   * Main thread fallback for vision computation
+   * Main thread vision computation using optimized reference counting.
+   *
+   * Industry-standard optimizations:
+   * 1. Reference counting: Only update cells when casters cross boundaries
+   * 2. LOS blocking: Use height-based visibility when terrain data available
+   * 3. Incremental updates: Skip if no casters moved between cells
    */
   private updateVisionMainThread(): void {
-    // Clear currently visible cells
-    const gridWidth = this.visionMap.width;
     const currentTick = this.game.getCurrentTick();
+
+    // Use VisionOptimizer if available (reference counting optimization)
+    if (this.visionOptimizer) {
+      this.updateVisionOptimized(currentTick);
+    } else {
+      // Fallback to legacy implementation
+      this.updateVisionLegacy(currentTick);
+    }
+
+    // Increment version for dirty checking by renderers
+    this.visionVersion++;
+  }
+
+  /**
+   * Optimized vision computation using reference counting.
+   * Only processes entities that crossed cell boundaries since last update.
+   */
+  private updateVisionOptimized(currentTick: number): void {
+    if (!this.visionOptimizer) return;
+
+    this.visionOptimizer.setCurrentTick(currentTick);
+
+    // Track which entities we've seen this frame (for removal detection)
+    const seenEntityIds = new Set<number>();
+
+    // Update vision casters from units
+    const units = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable');
+    for (const entity of units) {
+      const transform = entity.get<Transform>('Transform');
+      const unit = entity.get<Unit>('Unit');
+      const selectable = entity.get<Selectable>('Selectable');
+
+      if (!transform || !unit || !selectable) continue;
+
+      this.ensurePlayerRegistered(selectable.playerId);
+      seenEntityIds.add(entity.id);
+
+      // VisionOptimizer only updates when entity crosses cell boundary
+      this.visionOptimizer.updateCaster(
+        entity.id,
+        selectable.playerId,
+        transform.x,
+        transform.y,
+        unit.sightRange
+      );
+    }
+
+    // Update vision casters from buildings
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+    for (const entity of buildings) {
+      const transform = entity.get<Transform>('Transform');
+      const building = entity.get<Building>('Building');
+      const selectable = entity.get<Selectable>('Selectable');
+
+      if (!transform || !building || !selectable) continue;
+      if (!building.isOperational()) continue;
+
+      this.ensurePlayerRegistered(selectable.playerId);
+      seenEntityIds.add(entity.id);
+
+      this.visionOptimizer.updateCaster(
+        entity.id,
+        selectable.playerId,
+        transform.x,
+        transform.y,
+        building.sightRange
+      );
+    }
+
+    // Update watch towers
+    this.updateWatchTowersOptimized(units, seenEntityIds);
+
+    // Process temporary reveals
+    this.processTemporaryRevealsOptimized(currentTick, seenEntityIds);
+
+    // Remove casters for entities that no longer exist
+    for (const [entityId] of this.entityCellPositions) {
+      if (!seenEntityIds.has(entityId)) {
+        this.visionOptimizer.removeCaster(entityId);
+        this.entityCellPositions.delete(entityId);
+      }
+    }
+
+    // Sync optimizer state to visionMap for API compatibility
+    this.syncOptimizerToVisionMap();
+
+    // Clear dirty state after sync
+    this.visionOptimizer.clearDirtyState();
+  }
+
+  /**
+   * Update watch towers using optimized system
+   */
+  private updateWatchTowersOptimized(units: Entity[], seenEntityIds: Set<number>): void {
+    if (!this.visionOptimizer) return;
+
+    const captureRadiusSq = this.WATCH_TOWER_CAPTURE_RADIUS * this.WATCH_TOWER_CAPTURE_RADIUS;
+
+    for (const tower of this.watchTowers) {
+      tower.controllingPlayers.clear();
+      tower.isActive = false;
+
+      // Find units within capture radius
+      const nearbyUnitIds = this.world.unitGrid.queryRadius(
+        tower.x,
+        tower.y,
+        this.WATCH_TOWER_CAPTURE_RADIUS
+      );
+
+      for (const unitId of nearbyUnitIds) {
+        const entity = this.world.getEntity(unitId);
+        if (!entity) continue;
+
+        const transform = entity.get<Transform>('Transform');
+        const selectable = entity.get<Selectable>('Selectable');
+        if (!transform || !selectable) continue;
+
+        const dx = transform.x - tower.x;
+        const dy = transform.y - tower.y;
+        const distSq = dx * dx + dy * dy;
+
+        if (distSq <= captureRadiusSq) {
+          tower.controllingPlayers.add(selectable.playerId);
+          tower.isActive = true;
+        }
+      }
+
+      // Add watch tower as vision caster for controlling players
+      if (tower.isActive) {
+        for (const playerId of tower.controllingPlayers) {
+          // Use negative entity IDs for watch towers to avoid collision
+          const towerId = -tower.id - 10000;
+          seenEntityIds.add(towerId);
+          this.visionOptimizer.updateCaster(towerId, playerId, tower.x, tower.y, tower.radius);
+        }
+      }
+    }
+  }
+
+  /**
+   * Process temporary reveals using optimized system
+   */
+  private processTemporaryRevealsOptimized(currentTick: number, seenEntityIds: Set<number>): void {
+    if (!this.visionOptimizer) return;
+
+    let i = 0;
+    while (i < this.temporaryReveals.length) {
+      const reveal = this.temporaryReveals[i];
+
+      if (reveal.expirationTick <= currentTick) {
+        // Expired - remove caster and reveal entry
+        const revealId = -i - 20000; // Negative ID for reveals
+        this.visionOptimizer.removeCaster(revealId);
+        this.temporaryReveals[i] = this.temporaryReveals[this.temporaryReveals.length - 1];
+        this.temporaryReveals.pop();
+      } else {
+        // Still active - add as caster
+        const revealId = -i - 20000;
+        seenEntityIds.add(revealId);
+        this.visionOptimizer.updateCaster(
+          revealId,
+          reveal.playerId,
+          reveal.position.x,
+          reveal.position.y,
+          reveal.radius
+        );
+
+        // Detect cloaked units if this reveal can detect them
+        if (reveal.detectsCloaked) {
+          this.detectCloakedUnitsInArea(reveal.playerId, reveal.position, reveal.radius);
+        }
+
+        i++;
+      }
+    }
+  }
+
+  /**
+   * Sync VisionOptimizer state to visionMap for API compatibility
+   */
+  private syncOptimizerToVisionMap(): void {
+    if (!this.visionOptimizer) return;
+
+    const gridWidth = this.visionMap.width;
+    const gridHeight = this.visionMap.height;
+
+    for (const playerId of this.knownPlayers) {
+      const visionGrid = this.visionMap.playerVision.get(playerId);
+      const currentVisible = this.visionMap.currentlyVisible.get(playerId);
+
+      if (!visionGrid || !currentVisible) continue;
+
+      currentVisible.clear();
+
+      for (let y = 0; y < gridHeight; y++) {
+        for (let x = 0; x < gridWidth; x++) {
+          const state = this.visionOptimizer.getCellVisionState(x, y, playerId);
+          visionGrid[y][x] = state;
+          if (state === 'visible') {
+            currentVisible.add(y * gridWidth + x);
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Legacy vision computation (fallback when optimizer not available)
+   */
+  private updateVisionLegacy(currentTick: number): void {
+    const gridWidth = this.visionMap.width;
 
     for (const playerId of this.knownPlayers) {
       const currentVisible = this.visionMap.currentlyVisible.get(playerId);
@@ -1006,11 +1231,8 @@ export class VisionSystem extends System {
     // Update watch towers
     this.updateWatchTowers(units);
 
-    // Process temporary reveals (scanner sweep, etc.)
+    // Process temporary reveals
     this.processTemporaryReveals(currentTick);
-
-    // Increment version for dirty checking by renderers
-    this.visionVersion++;
   }
 
   /**
@@ -1231,10 +1453,12 @@ export class VisionSystem extends System {
     // Check cache for existing mask
     const cacheKey = playerId;
     const cached = this.visionMaskCache.get(cacheKey);
-    if (cached &&
-        cached.width === targetWidth &&
-        cached.height === targetHeight &&
-        cached.version === this.visionVersion) {
+    if (
+      cached &&
+      cached.width === targetWidth &&
+      cached.height === targetHeight &&
+      cached.version === this.visionVersion
+    ) {
       return cached.mask;
     }
 
@@ -1257,13 +1481,17 @@ export class VisionSystem extends System {
         const state = visionGrid[srcY]?.[srcX] ?? 'unexplored';
 
         // 0 = unexplored, 0.5 = explored, 1 = visible
-        mask[y * targetWidth + x] =
-          state === 'visible' ? 1.0 : state === 'explored' ? 0.5 : 0.0;
+        mask[y * targetWidth + x] = state === 'visible' ? 1.0 : state === 'explored' ? 0.5 : 0.0;
       }
     }
 
     // Update cache
-    this.visionMaskCache.set(cacheKey, { mask, width: targetWidth, height: targetHeight, version: this.visionVersion });
+    this.visionMaskCache.set(cacheKey, {
+      mask,
+      width: targetWidth,
+      height: targetHeight,
+      version: this.visionVersion,
+    });
 
     return mask;
   }

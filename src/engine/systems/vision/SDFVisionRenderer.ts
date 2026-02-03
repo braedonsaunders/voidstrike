@@ -87,28 +87,59 @@ export class SDFVisionRenderer {
   /**
    * Update SDF from binary visibility data
    *
-   * Uses a two-pass distance transform algorithm:
+   * Computes distance to the visibility boundary using a two-pass distance transform:
    * 1. Forward pass: propagate distance left-to-right, top-to-bottom
    * 2. Backward pass: propagate distance right-to-left, bottom-to-top
+   *
+   * The result is a signed distance field where:
+   * - Values > 0.5 are inside visible area (farther from edge = higher value)
+   * - Values < 0.5 are inside fog area (farther from edge = lower value)
+   * - Value = 0.5 is exactly on the boundary
    *
    * @param playerId Player ID
    * @param visibilityMask Binary visibility data (0 = fog, 1 = visible)
    */
   public updateSDF(playerId: string, visibilityMask: Float32Array): void {
-    const data = this.sdfData.get(playerId);
-    if (!data) {
-      this.getSDFTexture(playerId); // Creates the data array
-    }
+    // Ensure texture exists
+    this.getSDFTexture(playerId);
 
     const sdf = this.sdfData.get(playerId)!;
     const width = this.config.gridWidth;
     const height = this.config.gridHeight;
     const maxDist = this.config.maxDistance;
 
-    // Initialize distance field
-    // Inside visible: 0, Outside visible: large positive
+    // Find boundary cells (visible cells adjacent to fog cells)
+    // Initialize: boundary cells = 0, all others = large value
     for (let i = 0; i < sdf.length; i++) {
-      sdf[i] = visibilityMask[i] > 0.5 ? 0 : maxDist * 2;
+      sdf[i] = maxDist * 2;
+    }
+
+    // Mark boundary cells as 0 (they are on the edge)
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const idx = y * width + x;
+        const isVisible = visibilityMask[idx] > 0.5;
+
+        // Check if this cell is on the boundary (visible cell adjacent to fog)
+        let isBoundary = false;
+        if (isVisible) {
+          // Check 4 neighbors for fog
+          if (x > 0 && visibilityMask[idx - 1] <= 0.5) isBoundary = true;
+          if (x < width - 1 && visibilityMask[idx + 1] <= 0.5) isBoundary = true;
+          if (y > 0 && visibilityMask[idx - width] <= 0.5) isBoundary = true;
+          if (y < height - 1 && visibilityMask[idx + width] <= 0.5) isBoundary = true;
+        } else {
+          // Check 4 neighbors for visible
+          if (x > 0 && visibilityMask[idx - 1] > 0.5) isBoundary = true;
+          if (x < width - 1 && visibilityMask[idx + 1] > 0.5) isBoundary = true;
+          if (y > 0 && visibilityMask[idx - width] > 0.5) isBoundary = true;
+          if (y < height - 1 && visibilityMask[idx + width] > 0.5) isBoundary = true;
+        }
+
+        if (isBoundary) {
+          sdf[idx] = 0;
+        }
+      }
     }
 
     // Forward pass (left-to-right, top-to-bottom)
@@ -153,19 +184,18 @@ export class SDFVisionRenderer {
       }
     }
 
-    // Convert to signed distance (negative inside fog, positive inside visible)
-    // And normalize to 0-1 range for texture
+    // Convert to signed distance normalized to 0-1 range
+    // 0.5 = boundary, >0.5 = inside visible (high = far from edge), <0.5 = inside fog
     for (let i = 0; i < sdf.length; i++) {
       const dist = sdf[i];
       const isVisible = visibilityMask[i] > 0.5;
 
-      // Normalize distance to 0-1 range
-      // 0.5 = boundary, >0.5 = inside visible, <0.5 = inside fog
-      const normalizedDist = Math.min(dist, maxDist) / maxDist;
-      sdf[i] = isVisible ? 0.5 + normalizedDist * 0.5 : 0.5 - normalizedDist * 0.5;
+      // Normalize distance to 0-0.5 range
+      const normalizedDist = (Math.min(dist, maxDist) / maxDist) * 0.5;
+      sdf[i] = isVisible ? 0.5 + normalizedDist : 0.5 - normalizedDist;
     }
 
-    // Update texture
+    // Mark texture for GPU upload
     const tex = this.sdfTextures.get(playerId);
     if (tex) {
       tex.needsUpdate = true;
@@ -188,117 +218,37 @@ export class SDFVisionRenderer {
     // Each pattern is a 4x4 block (16 values, 0-255)
     const basePatterns: Record<number, number[]> = {
       // 0b0000: Isolated visible cell
-      0: [
-        128, 192, 192, 128,
-        192, 255, 255, 192,
-        192, 255, 255, 192,
-        128, 192, 192, 128,
-      ],
+      0: [128, 192, 192, 128, 192, 255, 255, 192, 192, 255, 255, 192, 128, 192, 192, 128],
       // 0b0001: North neighbor visible
-      1: [
-        255, 255, 255, 255,
-        192, 255, 255, 192,
-        192, 255, 255, 192,
-        128, 192, 192, 128,
-      ],
+      1: [255, 255, 255, 255, 192, 255, 255, 192, 192, 255, 255, 192, 128, 192, 192, 128],
       // 0b0010: South neighbor visible
-      2: [
-        128, 192, 192, 128,
-        192, 255, 255, 192,
-        192, 255, 255, 192,
-        255, 255, 255, 255,
-      ],
+      2: [128, 192, 192, 128, 192, 255, 255, 192, 192, 255, 255, 192, 255, 255, 255, 255],
       // 0b0011: North and South visible
-      3: [
-        255, 255, 255, 255,
-        192, 255, 255, 192,
-        192, 255, 255, 192,
-        255, 255, 255, 255,
-      ],
+      3: [255, 255, 255, 255, 192, 255, 255, 192, 192, 255, 255, 192, 255, 255, 255, 255],
       // 0b0100: East neighbor visible
-      4: [
-        128, 192, 255, 255,
-        192, 255, 255, 255,
-        192, 255, 255, 255,
-        128, 192, 255, 255,
-      ],
+      4: [128, 192, 255, 255, 192, 255, 255, 255, 192, 255, 255, 255, 128, 192, 255, 255],
       // 0b0101: North and East visible
-      5: [
-        255, 255, 255, 255,
-        192, 255, 255, 255,
-        192, 255, 255, 255,
-        128, 192, 255, 255,
-      ],
+      5: [255, 255, 255, 255, 192, 255, 255, 255, 192, 255, 255, 255, 128, 192, 255, 255],
       // 0b0110: South and East visible
-      6: [
-        128, 192, 255, 255,
-        192, 255, 255, 255,
-        192, 255, 255, 255,
-        255, 255, 255, 255,
-      ],
+      6: [128, 192, 255, 255, 192, 255, 255, 255, 192, 255, 255, 255, 255, 255, 255, 255],
       // 0b0111: North, South, East visible
-      7: [
-        255, 255, 255, 255,
-        192, 255, 255, 255,
-        192, 255, 255, 255,
-        255, 255, 255, 255,
-      ],
+      7: [255, 255, 255, 255, 192, 255, 255, 255, 192, 255, 255, 255, 255, 255, 255, 255],
       // 0b1000: West neighbor visible
-      8: [
-        255, 255, 192, 128,
-        255, 255, 255, 192,
-        255, 255, 255, 192,
-        255, 255, 192, 128,
-      ],
+      8: [255, 255, 192, 128, 255, 255, 255, 192, 255, 255, 255, 192, 255, 255, 192, 128],
       // 0b1001: North and West visible
-      9: [
-        255, 255, 255, 255,
-        255, 255, 255, 192,
-        255, 255, 255, 192,
-        255, 255, 192, 128,
-      ],
+      9: [255, 255, 255, 255, 255, 255, 255, 192, 255, 255, 255, 192, 255, 255, 192, 128],
       // 0b1010: South and West visible
-      10: [
-        255, 255, 192, 128,
-        255, 255, 255, 192,
-        255, 255, 255, 192,
-        255, 255, 255, 255,
-      ],
+      10: [255, 255, 192, 128, 255, 255, 255, 192, 255, 255, 255, 192, 255, 255, 255, 255],
       // 0b1011: North, South, West visible
-      11: [
-        255, 255, 255, 255,
-        255, 255, 255, 192,
-        255, 255, 255, 192,
-        255, 255, 255, 255,
-      ],
+      11: [255, 255, 255, 255, 255, 255, 255, 192, 255, 255, 255, 192, 255, 255, 255, 255],
       // 0b1100: East and West visible
-      12: [
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-      ],
+      12: [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255],
       // 0b1101: North, East, West visible
-      13: [
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-      ],
+      13: [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255],
       // 0b1110: South, East, West visible
-      14: [
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-      ],
+      14: [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255],
       // 0b1111: All neighbors visible
-      15: [
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-        255, 255, 255, 255,
-      ],
+      15: [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255],
     };
 
     for (const [key, pattern] of Object.entries(basePatterns)) {
@@ -346,7 +296,10 @@ export class SDFVisionRenderer {
           config |= 0b0001;
         }
         // South
-        if (y < this.config.gridHeight - 1 && inputMask[(y + 1) * this.config.gridWidth + x] > 0.5) {
+        if (
+          y < this.config.gridHeight - 1 &&
+          inputMask[(y + 1) * this.config.gridWidth + x] > 0.5
+        ) {
           config |= 0b0010;
         }
         // East
@@ -379,7 +332,11 @@ export class SDFVisionRenderer {
   /**
    * Create upscaled texture with pattern-based AA
    */
-  public createUpscaledTexture(playerId: string, inputMask: Float32Array, scale: number = 4): THREE.DataTexture {
+  public createUpscaledTexture(
+    playerId: string,
+    inputMask: Float32Array,
+    scale: number = 4
+  ): THREE.DataTexture {
     const upscaled = this.upscaleWithPatterns(inputMask, scale);
     const outWidth = this.config.gridWidth * scale;
     const outHeight = this.config.gridHeight * scale;
@@ -421,7 +378,7 @@ export class SDFVisionRenderer {
     const distFromEdge = Math.abs(sdfValue - 0.5);
 
     // Convert to edge factor (closer to edge = higher factor)
-    const edgeFactor = 1 - Math.min(distFromEdge * 2 / this.config.edgeSoftness, 1);
+    const edgeFactor = 1 - Math.min((distFromEdge * 2) / this.config.edgeSoftness, 1);
 
     return edgeFactor;
   }
