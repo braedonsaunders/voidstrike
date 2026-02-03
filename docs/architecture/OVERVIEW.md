@@ -202,6 +202,8 @@ voidstrike/
 │   │   │   ├── EditorMiniMap.tsx
 │   │   │   ├── EditorStatusBar.tsx
 │   │   │   └── EditorToolbar.tsx
+│   │   ├── data/ # Game data definitions
+│   │   │   └── mapPromptPresets.ts
 │   │   ├── hooks/ # React hooks
 │   │   │   ├── useEditorState.ts
 │   │   │   └── useLLMGeneration.ts
