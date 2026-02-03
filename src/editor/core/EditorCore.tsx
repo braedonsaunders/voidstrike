@@ -326,10 +326,22 @@ export function EditorCore({
             severity: issue.type,
             message: issue.message,
             type: (issue as unknown as { issueType?: string }).issueType,
-            affectedNodes: (issue as unknown as { affectedNodes?: unknown[] }).affectedNodes,
-            suggestedFix: (issue as unknown as { suggestedFix?: string }).suggestedFix,
+            affectedNodes: (issue as unknown as { affectedNodes?: string[] }).affectedNodes,
+            suggestedFix: (
+              issue as unknown as { suggestedFix?: { type: string; description: string } }
+            ).suggestedFix,
           })),
-          stats: (result as unknown as { stats?: unknown }).stats,
+          stats: (
+            result as unknown as {
+              stats?: {
+                totalNodes: number;
+                totalEdges: number;
+                islandCount: number;
+                connectedPairs: number;
+                blockedPairs: number;
+              };
+            }
+          ).stats,
           timestamp: Date.now(),
         });
       }
@@ -353,12 +365,11 @@ export function EditorCore({
 
     try {
       // Check if provider has autoFix method
-      if (
-        (dataProvider as unknown as { autoFixMap?: (data: unknown) => Promise<unknown> }).autoFixMap
-      ) {
-        const fixedData = await (
-          dataProvider as unknown as { autoFixMap?: (data: unknown) => Promise<unknown> }
-        ).autoFixMap(state.mapData);
+      const providerWithAutoFix = dataProvider as unknown as {
+        autoFixMap?: (data: EditorMapData) => Promise<EditorMapData>;
+      };
+      if (providerWithAutoFix.autoFixMap) {
+        const fixedData = await providerWithAutoFix.autoFixMap(state.mapData);
         if (fixedData) {
           loadMap(fixedData);
           // Re-validate after fix
