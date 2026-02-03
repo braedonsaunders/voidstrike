@@ -731,6 +731,8 @@ export function createFogOfWarPass(
   const uInverseProjection = uniform(camera.projectionMatrixInverse.clone());
   // Camera world matrix (inverse view) for view->world transform
   const uCameraWorldMatrix = uniform(camera.matrixWorld.clone());
+  // Direct camera position for volumetric fog (more reliable than matrix extraction)
+  const uCameraPos = uniform(camera.position.clone());
 
   // Vision texture (will be set dynamically)
   const uHasVisionTexture = uniform(0.0);
@@ -923,13 +925,12 @@ export function createFogOfWarPass(
     // For quality >= 2, add raymarched volumetric fog depth
     const useVolumetric = uQuality.greaterThanEqual(2);
 
-    // Camera position from world matrix
-    const cameraPos = uCameraWorldMatrix.mul(vec4(0, 0, 0, 1)).xyz;
+    // Use direct camera position uniform (more reliable than matrix extraction)
     const pixelWorldPos = vec3(worldX, worldY, worldZ);
-    const rayDir = normalize(pixelWorldPos.sub(cameraPos));
+    const rayDir = normalize(pixelWorldPos.sub(uCameraPos));
 
     // Distance to surface
-    const surfaceDistance = length(pixelWorldPos.sub(cameraPos));
+    const surfaceDistance = length(pixelWorldPos.sub(uCameraPos));
     const maxDist = min(surfaceDistance, uVolMaxDistance);
     const stepSize = maxDist.div(uVolSteps);
 
@@ -950,7 +951,7 @@ export function createFogOfWarPass(
 
       // Position along ray
       const t = float(idx).add(0.5).mul(stepSize);
-      const pos = cameraPos.add(rayDir.mul(t));
+      const pos = uCameraPos.add(rayDir.mul(t));
 
       // Height-based density falloff (simple exp - no complex functions)
       const heightFactor2 = exp(pos.y.negate().mul(uVolFogHeightFalloff));
@@ -1051,6 +1052,8 @@ export function createFogOfWarPass(
     uInverseProjection.value.copy(cam.projectionMatrixInverse);
     // Camera world matrix transforms view-space to world-space
     uCameraWorldMatrix.value.copy(cam.matrixWorld);
+    // Direct camera position for volumetric fog
+    uCameraPos.value.copy(cam.position);
   };
 
   const applyConfig = (config: Partial<FogOfWarConfig>) => {
