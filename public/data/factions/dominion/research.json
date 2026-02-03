@@ -599,7 +599,7 @@
       {
         "type": "damage_bonus",
         "value": 1,
-        "unitTypes": ["ship"]
+        "unitTypes": ["naval"]
       }
     ]
   },
@@ -618,7 +618,7 @@
       {
         "type": "damage_bonus",
         "value": 1,
-        "unitTypes": ["ship"]
+        "unitTypes": ["naval"]
       }
     ]
   },
@@ -636,7 +636,7 @@
       {
         "type": "damage_bonus",
         "value": 1,
-        "unitTypes": ["ship"]
+        "unitTypes": ["naval"]
       }
     ]
   },
@@ -654,7 +654,7 @@
       {
         "type": "armor_bonus",
         "value": 1,
-        "unitTypes": ["ship"]
+        "unitTypes": ["naval"]
       }
     ]
   },
@@ -673,7 +673,7 @@
       {
         "type": "armor_bonus",
         "value": 1,
-        "unitTypes": ["ship"]
+        "unitTypes": ["naval"]
       }
     ]
   },
@@ -691,7 +691,7 @@
       {
         "type": "armor_bonus",
         "value": 1,
-        "unitTypes": ["ship"]
+        "unitTypes": ["naval"]
       }
     ]
   },
@@ -723,7 +723,7 @@
       {
         "type": "health_bonus",
         "value": 25,
-        "unitTypes": ["ship"]
+        "unitTypes": ["naval"]
       }
     ]
   }

@@ -229,6 +229,23 @@ export const PARTICLE_CONFIGS: Record<ParticleType, ParticleConfig> = {
 };
 
 // ============================================
+// DELAYED EMISSION QUEUE
+// ============================================
+
+/**
+ * Entry in the delayed emission queue for deterministic particle timing.
+ * Uses game ticks instead of setTimeout for multiplayer synchronization.
+ */
+interface DelayedEmission {
+  position: THREE.Vector3;
+  direction: THREE.Vector3;
+  count: number;
+  type: ParticleType;
+  ticksRemaining: number;
+  configOverrides?: Partial<ParticleConfig>;
+}
+
+// ============================================
 // PARTICLE DATA
 // ============================================
 
@@ -257,6 +274,13 @@ export class AdvancedParticleSystem {
   private maxParticles: number;
   private particles: Particle[] = [];
   private activeCount = 0;
+
+  // Delayed emission queue for deterministic timing (replaces non-deterministic setTimeout)
+  // Uses game ticks (20 ticks/second) instead of real time for multiplayer synchronization
+  private delayedEmissions: DelayedEmission[] = [];
+  private tickAccumulator = 0;
+  private static readonly TICK_RATE = 20; // 20 ticks per second
+  private static readonly TICK_DURATION = 1 / 20; // 50ms per tick
 
   // Instance buffers
   private instancedMesh: THREE.InstancedMesh;
@@ -649,6 +673,60 @@ export class AdvancedParticleSystem {
   }
 
   /**
+   * Queue a delayed particle emission using game ticks for deterministic timing.
+   * This replaces setTimeout for multiplayer synchronization.
+   *
+   * @param position - World position for emission (will be cloned)
+   * @param direction - Emission direction (will be cloned)
+   * @param count - Number of particles to emit
+   * @param type - Type of particle to emit
+   * @param delayTicks - Number of game ticks to wait (20 ticks = 1 second)
+   * @param configOverrides - Optional particle config overrides
+   */
+  public queueDelayedEmission(
+    position: THREE.Vector3,
+    direction: THREE.Vector3,
+    count: number,
+    type: ParticleType,
+    delayTicks: number,
+    configOverrides?: Partial<ParticleConfig>
+  ): void {
+    this.delayedEmissions.push({
+      position: position.clone(),
+      direction: direction.clone(),
+      count,
+      type,
+      ticksRemaining: delayTicks,
+      configOverrides,
+    });
+  }
+
+  /**
+   * Process the delayed emission queue based on elapsed ticks.
+   * Called internally by update().
+   */
+  private processDelayedEmissions(ticksElapsed: number): void {
+    // Process in reverse order for safe removal
+    for (let i = this.delayedEmissions.length - 1; i >= 0; i--) {
+      const emission = this.delayedEmissions[i];
+      emission.ticksRemaining -= ticksElapsed;
+
+      if (emission.ticksRemaining <= 0) {
+        // Emit the particles
+        this.emit(
+          emission.position,
+          emission.direction,
+          emission.count,
+          emission.type,
+          emission.configOverrides
+        );
+        // Remove from queue
+        this.delayedEmissions.splice(i, 1);
+      }
+    }
+  }
+
+  /**
    * Emit an explosion effect (combination of fire, smoke, sparks, debris)
    */
   public emitExplosion(position: THREE.Vector3, intensity: number = 1.0): void {
@@ -680,13 +758,10 @@ export class AdvancedParticleSystem {
     }
 
     // Delayed smoke (starts after initial burst)
-    setTimeout(() => {
-      this.emit(position, upDir, Math.floor(8 * intensity), ParticleType.SMOKE);
-    }, 100);
-
-    setTimeout(() => {
-      this.emit(position, upDir, Math.floor(5 * intensity), ParticleType.SMOKE);
-    }, 300);
+    // Uses tick-based queue instead of setTimeout for deterministic multiplayer timing
+    // 100ms = 2 ticks, 300ms = 6 ticks (at 20 ticks/second)
+    this.queueDelayedEmission(position, upDir, Math.floor(8 * intensity), ParticleType.SMOKE, 2);
+    this.queueDelayedEmission(position, upDir, Math.floor(5 * intensity), ParticleType.SMOKE, 6);
   }
 
   /**
@@ -737,6 +812,14 @@ export class AdvancedParticleSystem {
   public update(deltaTime: number, camera?: THREE.Camera): void {
     const dt = deltaTime;
     this.timeUniform.value += dt;
+
+    // Process delayed emissions using tick-based timing for determinism
+    this.tickAccumulator += dt;
+    if (this.tickAccumulator >= AdvancedParticleSystem.TICK_DURATION) {
+      const ticksElapsed = Math.floor(this.tickAccumulator / AdvancedParticleSystem.TICK_DURATION);
+      this.tickAccumulator -= ticksElapsed * AdvancedParticleSystem.TICK_DURATION;
+      this.processDelayedEmissions(ticksElapsed);
+    }
 
     let needsMatrixUpdate = false;
     let maxActiveIndex = 0;
@@ -870,7 +953,7 @@ export class AdvancedParticleSystem {
   }
 
   /**
-   * Clear all particles
+   * Clear all particles and pending delayed emissions
    */
   public clear(): void {
     for (let i = 0; i < this.maxParticles; i++) {
@@ -880,6 +963,10 @@ export class AdvancedParticleSystem {
     }
     this.instancedMesh.instanceMatrix.needsUpdate = true;
     this.activeCount = 0;
+
+    // Clear delayed emission queue and reset tick accumulator
+    this.delayedEmissions.length = 0;
+    this.tickAccumulator = 0;
   }
 
   /**

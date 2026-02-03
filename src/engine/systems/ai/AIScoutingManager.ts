@@ -228,7 +228,7 @@ export class AIScoutingManager {
     }
 
     // Update ScoutingMemory with visible enemies (handles intel tracking internally)
-    scoutingMemory.update(this.coordinator['world'], currentTick, visibleEnemyIds);
+    scoutingMemory.update(this.coordinator.getWorld(), currentTick, visibleEnemyIds);
 
     // Update AI's intel from direct observations
     ai.enemyAirUnits = enemyAirUnits;

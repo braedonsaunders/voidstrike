@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { UpgradeEffect } from '@/data/research/dominion';
+import { calculateWallLine, calculateWallLineCost } from '@/data/buildings/walls';
 import { Game } from '@/engine/core/Game';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { clamp } from '@/utils/math';
@@ -287,8 +288,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => {
       if (!state.wallLine.isActive) return state;
 
-      // Import calculateWallLine dynamically to avoid circular deps
-      const { calculateWallLine, calculateWallLineCost } = require('@/data/buildings/walls');
       const positions = calculateWallLine(state.wallLine.startX, state.wallLine.startY, x, y);
       const totalCost = calculateWallLineCost(positions, state.buildingType || 'wall_segment');
 

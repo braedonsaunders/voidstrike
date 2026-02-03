@@ -55,6 +55,10 @@ export interface PeerConnection {
   latencyStats: LatencyStats;
   connectionQuality: ConnectionQuality;
   pendingPings: Map<number, number>;
+  // Event handler references for cleanup (prevents memory leaks)
+  messageHandler: (event: MessageEvent) => void;
+  closeHandler: () => void;
+  errorHandler: (event: Event) => void;
 }
 
 export interface MultiplayerState {
@@ -73,6 +77,7 @@ export interface MultiplayerState {
   reconnectAttempts: number;
   maxReconnectAttempts: number;
   lastReconnectTime: number | null;
+  isReconnecting: boolean;
 
   // Command buffering
   commandBuffer: BufferedCommand[];
@@ -193,6 +198,7 @@ const initialState = {
   reconnectAttempts: 0,
   maxReconnectAttempts: 4,
   lastReconnectTime: null,
+  isReconnecting: false,
   commandBuffer: [] as BufferedCommand[],
   maxBufferedCommands: 500, // Increased for longer disconnect tolerance
   desyncState: 'synced' as DesyncState,
@@ -250,15 +256,6 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const state = get();
     const newPeerChannels = new Map(state.peerChannels);
 
-    // Create peer connection info
-    const peerConnection: PeerConnection = {
-      peerId,
-      dataChannel,
-      latencyStats: { ...defaultLatencyStats },
-      connectionQuality: 'excellent',
-      pendingPings: new Map(),
-    };
-
     // Set up message handler for this peer's channel
     const messageHandler = (event: MessageEvent) => {
       try {
@@ -310,6 +307,18 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
       debugNetworking.error(`[Multiplayer] Error with peer ${peerId}:`, e);
     };
 
+    // Create peer connection info with handler references for cleanup
+    const peerConnection: PeerConnection = {
+      peerId,
+      dataChannel,
+      latencyStats: { ...defaultLatencyStats },
+      connectionQuality: 'excellent',
+      pendingPings: new Map(),
+      messageHandler,
+      closeHandler,
+      errorHandler,
+    };
+
     dataChannel.addEventListener('message', messageHandler);
     dataChannel.addEventListener('close', closeHandler);
     dataChannel.addEventListener('error', errorHandler);
@@ -345,6 +354,12 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     const peer = newPeerChannels.get(peerId);
 
     if (peer) {
+      // Remove event listeners before closing to prevent memory leaks
+      try {
+        peer.dataChannel.removeEventListener('message', peer.messageHandler);
+        peer.dataChannel.removeEventListener('close', peer.closeHandler);
+        peer.dataChannel.removeEventListener('error', peer.errorHandler);
+      } catch { /* ignore */ }
       try {
         peer.dataChannel.close();
       } catch { /* ignore */ }
@@ -714,15 +729,31 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   attemptReconnect: async () => {
     const state = get();
 
+    // Prevent concurrent reconnection attempts
+    if (state.isReconnecting) {
+      debugNetworking.log('[Multiplayer] Reconnection already in progress, skipping');
+      return false;
+    }
+
+    // If already connected, no need to reconnect
+    if (state.isConnected && state.connectionStatus === 'connected') {
+      debugNetworking.log('[Multiplayer] Already connected, skipping reconnection');
+      return true;
+    }
+
     if (state.reconnectAttempts >= state.maxReconnectAttempts) {
       debugNetworking.log('[Multiplayer] Max reconnection attempts reached');
       set({
         connectionStatus: 'failed',
         isNetworkPaused: true,
         networkPauseReason: 'Connection lost. Unable to reconnect.',
+        isReconnecting: false,
       });
       return false;
     }
+
+    // Mark as reconnecting to prevent concurrent attempts
+    set({ isReconnecting: true });
 
     const attempt = state.reconnectAttempts + 1;
     set({ reconnectAttempts: attempt });
@@ -737,6 +768,14 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
     await new Promise((resolve) => setTimeout(resolve, delay));
 
+    // Re-check state after delay - another attempt may have succeeded
+    const currentState = get();
+    if (currentState.isConnected && currentState.connectionStatus === 'connected') {
+      debugNetworking.log('[Multiplayer] Already reconnected during delay, skipping');
+      set({ isReconnecting: false });
+      return true;
+    }
+
     // Try to reconnect using the callback
     const callback = get().reconnectCallback;
     if (callback) {
@@ -744,6 +783,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         const success = await callback();
         if (success) {
           debugNetworking.log('[Multiplayer] Reconnection successful');
+          set({ isReconnecting: false });
           // Trigger game-level sync after successful reconnection
           const onReconnected = get().onReconnectedCallback;
           if (onReconnected) {
@@ -756,6 +796,9 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
         debugNetworking.error('[Multiplayer] Reconnection failed:', e);
       }
     }
+
+    // Clear the flag before recursing to allow the next attempt
+    set({ isReconnecting: false });
 
     // Recurse for next attempt
     return get().attemptReconnect();
@@ -947,8 +990,14 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   reset: () => {
     const { dataChannel, pingInterval, peerChannels } = get();
 
-    // Close all peer channels
+    // Close all peer channels with proper cleanup
     for (const peer of peerChannels.values()) {
+      // Remove event listeners before closing to prevent memory leaks
+      try {
+        peer.dataChannel.removeEventListener('message', peer.messageHandler);
+        peer.dataChannel.removeEventListener('close', peer.closeHandler);
+        peer.dataChannel.removeEventListener('error', peer.errorHandler);
+      } catch { /* ignore */ }
       try {
         peer.dataChannel.close();
       } catch { /* ignore */ }
