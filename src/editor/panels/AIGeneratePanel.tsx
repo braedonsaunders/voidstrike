@@ -17,7 +17,6 @@ import type { BiomeType } from '@/data/maps/core/ElevationMap';
 import { useLLMGeneration } from '../hooks/useLLMGeneration';
 import type { LLMProvider, MapGenerationSettings } from '../services/LLMMapGenerator';
 import {
-  MAP_PROMPT_PRESETS,
   PRESET_CATEGORIES,
   getPresetsByCategory,
   type MapPromptPreset,
