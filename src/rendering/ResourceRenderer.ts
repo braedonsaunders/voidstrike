@@ -24,7 +24,11 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
   const cloned = new THREE.BufferGeometry();
 
   // Copy all attributes with fresh TypedArrays (no shared references)
+  // Skip color attributes - AI models bake AO into vertex colors causing artifacts
   for (const name of Object.keys(source.attributes)) {
+    if (name === 'color' || name.match(/^_?color_?\d+$/i)) {
+      continue; // Skip vertex colors entirely
+    }
     const srcAttr = source.attributes[name];
     // Create a completely new TypedArray by slicing (creates a copy)
     const newArray = srcAttr.array.slice(0);
@@ -44,9 +48,9 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
 
   // Copy morph attributes if present
   if (source.morphAttributes) {
-    for (const name of Object.keys(source.morphAttributes)) {
-      const srcMorphArray = source.morphAttributes[name];
-      cloned.morphAttributes[name] = srcMorphArray.map(srcAttr => {
+    for (const attrName of Object.keys(source.morphAttributes)) {
+      const srcMorphArray = source.morphAttributes[attrName];
+      cloned.morphAttributes[attrName] = srcMorphArray.map(srcAttr => {
         const newArray = srcAttr.array.slice(0);
         const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
         newAttr.needsUpdate = true;
