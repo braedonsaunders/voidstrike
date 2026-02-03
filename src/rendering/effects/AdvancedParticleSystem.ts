@@ -16,11 +16,17 @@ import { MeshBasicNodeMaterial } from 'three/webgpu';
 import {
   Fn,
   vec4,
+  vec3,
+  float,
   uniform,
   uv,
   texture,
   clamp,
+  mix,
   viewportCoordinate,
+  instanceIndex,
+  storage,
+  instancedBufferAttribute,
 } from 'three/tsl';
 
 // ============================================
@@ -287,6 +293,8 @@ export class AdvancedParticleSystem {
   private positionBuffer: Float32Array;
   private colorBuffer: Float32Array;
   private customDataBuffer: Float32Array; // life, size, rotation, type
+  private particleTypeBuffer: Float32Array; // particle type for texture selection
+  private particleTypeAttribute: THREE.InstancedBufferAttribute;
 
   // Geometry and materials
   private geometry: THREE.PlaneGeometry;
@@ -304,6 +312,11 @@ export class AdvancedParticleSystem {
   private softnessUniform: ReturnType<typeof uniform>;
   private cameraNearUniform: ReturnType<typeof uniform>;
   private cameraFarUniform: ReturnType<typeof uniform>;
+
+  // Texture nodes for different particle types
+  private fireTextureNode: ReturnType<typeof texture>;
+  private smokeTextureNode: ReturnType<typeof texture>;
+  private glowTextureNode: ReturnType<typeof texture>;
 
   // Terrain height function
   private getTerrainHeight: ((x: number, z: number) => number) | null = null;
@@ -352,14 +365,21 @@ export class AdvancedParticleSystem {
     this.positionBuffer = new Float32Array(maxParticles * 3);
     this.colorBuffer = new Float32Array(maxParticles * 4);
     this.customDataBuffer = new Float32Array(maxParticles * 4);
+    this.particleTypeBuffer = new Float32Array(maxParticles);
 
-    // Initialize positions off-screen
+    // Initialize positions off-screen and particle types to 0
     for (let i = 0; i < maxParticles; i++) {
       this.positionBuffer[i * 3 + 1] = -1000;
+      this.particleTypeBuffer[i] = 0;
     }
 
     // Create billboard geometry
     this.geometry = new THREE.PlaneGeometry(1, 1);
+
+    // Create instanced attribute for particle type (used in shader for texture selection)
+    this.particleTypeAttribute = new THREE.InstancedBufferAttribute(this.particleTypeBuffer, 1);
+    this.particleTypeAttribute.setUsage(THREE.DynamicDrawUsage);
+    this.geometry.setAttribute('particleType', this.particleTypeAttribute);
 
     // Initialize TSL uniforms for soft particles
     // Create a placeholder 1x1 depth texture (will be set properly via setDepthTexture)
@@ -376,6 +396,11 @@ export class AdvancedParticleSystem {
     this.softnessUniform = uniform(0.5); // Default softness
     this.cameraNearUniform = uniform(0.1);
     this.cameraFarUniform = uniform(1000.0);
+
+    // Create texture nodes for particle type-based texture selection
+    this.fireTextureNode = texture(this.fireTexture);
+    this.smokeTextureNode = texture(this.smokeTexture);
+    this.glowTextureNode = texture(this.glowTexture);
 
     // Create TSL soft particle material with depth-aware alpha fade
     this.material = this.createSoftParticleMaterial();
@@ -527,19 +552,40 @@ export class AdvancedParticleSystem {
   /**
    * Create TSL soft particle material with depth-aware alpha fade
    * Particles fade when approaching scene geometry to avoid hard clipping
+   * Uses particle type to select appropriate texture (fire, smoke, or glow)
    */
   private createSoftParticleMaterial(): MeshBasicNodeMaterial {
-    const glowTex = this.glowTexture;
+    const fireTex = this.fireTextureNode;
+    const smokeTex = this.smokeTextureNode;
+    const glowTex = this.glowTextureNode;
     const depthTex = this.depthTextureNode;
     const softness = this.softnessUniform;
     const near = this.cameraNearUniform;
     const far = this.cameraFarUniform;
 
-    // TSL fragment shader for soft particles
+    // TSL fragment shader for soft particles with type-based texture selection
     const softParticleFragment = Fn(() => {
-      // Sample the glow texture
       const texCoord = uv();
-      const texColor = texture(glowTex, texCoord);
+
+      // Read particle type from instanced attribute (0=fire, 1=smoke, others=glow)
+      const particleTypeAttr = instancedBufferAttribute(this.particleTypeAttribute);
+
+      // Sample all textures
+      const fireColor = fireTex.sample(texCoord);
+      const smokeColor = smokeTex.sample(texCoord);
+      const glowColor = glowTex.sample(texCoord);
+
+      // Select texture based on particle type using smooth interpolation
+      // This avoids branching in the shader for better GPU performance
+      const isFire = clamp(float(1.0).sub(particleTypeAttr.abs()), 0.0, 1.0);
+      const isSmoke = clamp(float(1.0).sub((particleTypeAttr.sub(1.0)).abs()), 0.0, 1.0);
+      const isOther = clamp(float(1.0).sub(isFire).sub(isSmoke), 0.0, 1.0);
+
+      // Blend textures based on type weights
+      const texColor = vec4(
+        fireColor.rgb.mul(isFire).add(smokeColor.rgb.mul(isSmoke)).add(glowColor.rgb.mul(isOther)),
+        fireColor.a.mul(isFire).add(smokeColor.a.mul(isSmoke)).add(glowColor.a.mul(isOther))
+      );
 
       // Get screen-space coordinates for depth sampling
       const screenUV = viewportCoordinate.xy;
@@ -929,6 +975,9 @@ export class AdvancedParticleSystem {
       // Update color with alpha
       this._tempColor.multiplyScalar(alpha);
       this.instancedMesh.setColorAt(i, this._tempColor);
+
+      // Update particle type attribute for texture selection in shader
+      this.particleTypeBuffer[i] = particle.type;
     }
 
     this.activeCount = maxActiveIndex;
@@ -938,6 +987,8 @@ export class AdvancedParticleSystem {
       if (this.instancedMesh.instanceColor) {
         this.instancedMesh.instanceColor.needsUpdate = true;
       }
+      // Update particle type attribute
+      this.particleTypeAttribute.needsUpdate = true;
     }
   }
 
