@@ -41,7 +41,7 @@ import {
   texture,
   mrt,
   output,
-  transformedNormalView,
+  normalView,
 } from 'three/tsl';
 import { materialMetalness, materialRoughness } from 'three/tsl';
 
@@ -411,14 +411,11 @@ export class RenderPipeline {
     if (needsNormals || needsVelocity) {
       const customVelocity = createInstancedVelocityNode();
       if (needsNormals) {
-        // Use transformedNormalView for MRT output - this properly handles instance
-        // matrix transformations for InstancedMesh (Three.js #18497). Plain normalView
-        // doesn't account for instance transforms, causing incorrect normals for
-        // instanced decorations which GTAO then amplifies as triangular artifacts.
+        // Output view-space normals for GTAO and SSR
         scenePass.setMRT(
           mrt({
             output: output,
-            normal: transformedNormalView.mul(0.5).add(0.5),
+            normal: normalView.mul(0.5).add(0.5),
             metalrough: vec2(materialMetalness, materialRoughness),
             velocity: customVelocity,
           })

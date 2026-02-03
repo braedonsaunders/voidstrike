@@ -201,10 +201,11 @@ function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Materi
   if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
     const stdMaterial = material as THREE.MeshStandardMaterial;
 
-    // Fix AI model artifacts - disable vertex colors and clear ALL texture maps
-    // AI-generated models often have corrupted or low-quality maps that cause
-    // triangular artifacts following mesh topology
+    // Fix AI model artifacts - disable vertex colors, ensure smooth shading,
+    // and clear ALL texture maps. AI-generated models often have corrupted or
+    // low-quality maps that cause triangular artifacts following mesh topology.
     stdMaterial.vertexColors = false;
+    stdMaterial.flatShading = false; // Ensure smooth normal interpolation
     // Clear all maps that could cause per-pixel or per-vertex artifacts
     stdMaterial.aoMap = null;
     stdMaterial.aoMapIntensity = 0;
@@ -217,6 +218,9 @@ function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Materi
     stdMaterial.displacementMap = null;
     stdMaterial.alphaMap = null;
     stdMaterial.bumpMap = null;
+    // Clear base color map - AI models often bake AO/lighting into diffuse texture
+    // which creates triangular artifacts following mesh topology
+    stdMaterial.map = null;
 
     const hints = assetId ? AssetManager.getRenderingHints(assetId) : null;
 
