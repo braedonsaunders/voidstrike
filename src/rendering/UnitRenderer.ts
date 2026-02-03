@@ -37,6 +37,7 @@ import {
 
 // GPU-driven rendering infrastructure
 import { CullingService, EntityCategory } from './services/CullingService';
+import { getConsoleEngineSync } from '@/engine/debug/ConsoleEngine';
 import { LODConfig } from './compute/UnifiedCullingCompute';
 import { GPUIndirectRenderer } from './compute/GPUIndirectRenderer';
 
@@ -1013,10 +1014,13 @@ export class UnitRenderer {
       const isOwned = !isSpectating && ownerId === this.playerId;
       const isEnemy = !isSpectating && selectable && ownerId !== this.playerId;
 
-      // Check visibility for enemy units (skip in spectator mode - show all)
+      // Check visibility for enemy units (skip in spectator mode or if fog disabled - show all)
       let shouldShow = true;
       if (isEnemy && this.visionSystem && this.playerId) {
-        shouldShow = this.visionSystem.isVisible(this.playerId, transform.x, transform.y);
+        const fogDisabled = getConsoleEngineSync()?.getFlag('fogDisabled');
+        if (!fogDisabled) {
+          shouldShow = this.visionSystem.isVisible(this.playerId, transform.x, transform.y);
+        }
       }
 
       // Skip dead units
