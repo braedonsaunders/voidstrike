@@ -20,7 +20,7 @@ import {
   type RenderState,
   type GameEvent,
 } from '@/engine/workers';
-import { useGameSetupStore, getLocalPlayerId, isBattleSimulatorMode } from '@/store/gameSetupStore';
+import { useGameSetupStore, getLocalPlayerId, isBattleSimulatorMode, type GameSetupState } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { useGameStore } from '@/store/gameStore';
 import { isMultiplayerMode } from '@/store/multiplayerStore';
@@ -181,9 +181,10 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
 
       // Subscribe to localPlayerId changes to handle spectator mode transitions
       const unsubscribeLocalPlayer = useGameSetupStore.subscribe(
-        (state) => state.localPlayerId,
-        (newLocalPlayerId) => {
-          eventHandler.setLocalPlayerId(newLocalPlayerId);
+        (state: GameSetupState, prevState: GameSetupState) => {
+          if (state.localPlayerId !== prevState.localPlayerId) {
+            eventHandler.setLocalPlayerId(state.localPlayerId);
+          }
         }
       );
       eventUnsubscribersRef.current.push(unsubscribeLocalPlayer);
