@@ -113,15 +113,14 @@ voidstrike/
 │   │   │   └── HomeBackground.tsx
 │   │   ├── lobby/
 │   │   │   └── LobbyBrowser.tsx
-│   │   ├── ui/
-│   │   │   ├── CommandButton.tsx
-│   │   │   ├── CommandTooltip.tsx
-│   │   │   ├── CostDisplay.tsx
-│   │   │   ├── EmptySlot.tsx
-│   │   │   ├── IconBadge.tsx
-│   │   │   ├── index.ts
-│   │   │   └── Tooltip.tsx
-│   │   └── Providers.tsx
+│   │   └── ui/
+│   │       ├── CommandButton.tsx
+│   │       ├── CommandTooltip.tsx
+│   │       ├── CostDisplay.tsx
+│   │       ├── EmptySlot.tsx
+│   │       ├── IconBadge.tsx
+│   │       ├── index.ts
+│   │       └── Tooltip.tsx
 │   ├── config/ # Configuration files
 │   │   └── consoleCommands.ts
 │   ├── data/ # Game data definitions
@@ -422,6 +421,8 @@ voidstrike/
 │   │   │   └── VehicleEffectsSystem.ts
 │   │   ├── services/
 │   │   │   └── CullingService.ts
+│   │   ├── shaders/
+│   │   │   └── noise.glsl.ts
 │   │   ├── shared/
 │   │   │   ├── GeometryQuarantine.ts
 │   │   │   ├── HealthBarRenderer.ts
@@ -450,6 +451,9 @@ voidstrike/
 │   │   │   ├── VolumetricFog.ts
 │   │   │   ├── WaterMaterial.ts
 │   │   │   └── WebGPURenderer.ts
+│   │   ├── utils/ # Utility functions
+│   │   │   ├── GeometryQuarantine.ts
+│   │   │   └── geometryUtils.ts
 │   │   ├── vision/
 │   │   │   └── VisionCoordinates.ts
 │   │   ├── water/
