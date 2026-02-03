@@ -55,7 +55,7 @@ Connection made    → Direct peer-to-peer, Nostr disconnected
 
 If Nostr becomes unavailable, players can fall back to manual connection code exchange. The game continues to function regardless of external infrastructure.
 
-**Implementation:** `src/engine/network/p2p/NostrMatchmaking.ts`, `ConnectionCode.ts`
+**Implementation:** `src/hooks/useMultiplayer.ts`, `src/store/multiplayerStore.ts`
 
 ---
 

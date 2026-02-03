@@ -8,7 +8,7 @@
 import type { MutableRefObject, RefObject } from 'react';
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { RenderContext, RenderPipeline, TSLFogOfWar } from '@/rendering/tsl';
+import { RenderContext, RenderPipeline } from '@/rendering/tsl';
 import { EnvironmentManager } from '@/rendering/EnvironmentManager';
 import { LightPool } from '@/rendering/LightPool';
 import { RTSCamera } from '@/rendering/Camera';
@@ -24,8 +24,6 @@ export interface UsePostProcessingProps {
   cameraRef: MutableRefObject<RTSCamera | null>;
   environmentRef: MutableRefObject<EnvironmentManager | null>;
   lightPoolRef: MutableRefObject<LightPool | null>;
-  /** @deprecated Fog of war is now handled via RenderPipeline */
-  fogOfWarRef?: MutableRefObject<TSLFogOfWar | null>;
   containerRef: RefObject<HTMLDivElement | null>;
   map: MapData;
 }
@@ -37,7 +35,6 @@ export function usePostProcessing({
   cameraRef,
   environmentRef,
   lightPoolRef,
-  fogOfWarRef: _fogOfWarRef,
   containerRef,
   map,
 }: UsePostProcessingProps): void {
