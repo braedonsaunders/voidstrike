@@ -107,14 +107,14 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
   }
 
   // Ensure normal coordinates exist - required for proper lighting and SSAO
-  // ALWAYS recompute normals - AI models from Tripo/Meshy often have incorrect
-  // or flat normals that cause dark triangular artifacts, especially with GTAO
-  if (cloned.attributes.position) {
+  // Only compute if missing - don't overwrite GLTF normals as they may be
+  // intentionally hard-edged or optimized for the model
+  if (!cloned.attributes.normal && cloned.attributes.position) {
     cloned.computeVertexNormals();
-    // Ensure normals are uploaded to GPU
-    if (cloned.attributes.normal) {
-      cloned.attributes.normal.needsUpdate = true;
-    }
+  }
+  // Ensure normals are uploaded to GPU
+  if (cloned.attributes.normal) {
+    cloned.attributes.normal.needsUpdate = true;
   }
 
   return cloned;

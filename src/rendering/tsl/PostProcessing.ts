@@ -41,7 +41,7 @@ import {
   texture,
   mrt,
   output,
-  normalView,
+  transformedNormalView,
 } from 'three/tsl';
 import { materialMetalness, materialRoughness } from 'three/tsl';
 
@@ -411,16 +411,14 @@ export class RenderPipeline {
     if (needsNormals || needsVelocity) {
       const customVelocity = createInstancedVelocityNode();
       if (needsNormals) {
-        // Fix for TSL normalView variable initialization issue (Three.js #32009):
-        // normalView may not be properly initialized in MRT shader contexts, causing
-        // black/undefined normals for some pixels. Using .toVar() forces proper
-        // variable initialization, preventing triangular artifacts where GTAO would
-        // fall back to depth-based normal reconstruction.
-        const normalViewVar = normalView.toVar();
+        // Use transformedNormalView for MRT output - this properly handles instance
+        // matrix transformations for InstancedMesh (Three.js #18497). Plain normalView
+        // doesn't account for instance transforms, causing incorrect normals for
+        // instanced decorations which GTAO then amplifies as triangular artifacts.
         scenePass.setMRT(
           mrt({
             output: output,
-            normal: normalViewVar.mul(0.5).add(0.5),
+            normal: transformedNormalView.mul(0.5).add(0.5),
             metalrough: vec2(materialMetalness, materialRoughness),
             velocity: customVelocity,
           })
