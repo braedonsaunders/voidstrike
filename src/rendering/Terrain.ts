@@ -5,6 +5,7 @@ import { TSLTerrainMaterial } from './tsl/TerrainMaterial';
 import AssetManager from '@/assets/AssetManager';
 import { debugTerrain } from '@/utils/debugLogger';
 import { clamp, lerp } from '@/utils/math';
+import { getGPUMemoryTracker, estimateGeometryMemory } from '@/engine/core/GPUMemoryTracker';
 
 // Import from central pathfinding config - SINGLE SOURCE OF TRUTH
 import {
@@ -265,6 +266,44 @@ export class Terrain {
 
     const numChunks = this.chunkMeshes.length;
     debugTerrain.log(`[Terrain] Created ${numChunks} terrain chunks for frustum culling`);
+
+    // Report memory usage to central GPU memory tracker
+    this.updateMemoryUsage();
+  }
+
+  /**
+   * Calculate and report terrain memory usage to the central GPU memory tracker.
+   */
+  private updateMemoryUsage(): void {
+    let geometryMB = 0;
+    let heightMapMB = 0;
+
+    // Sum up chunk geometry memory
+    for (const geometry of this.chunkGeometries) {
+      geometryMB += estimateGeometryMemory(geometry);
+    }
+
+    // Guardrail geometry
+    if (this.guardrailGeometry) {
+      geometryMB += estimateGeometryMemory(this.guardrailGeometry);
+    }
+
+    // Height map memory (Float32Array)
+    heightMapMB = this.heightMap.byteLength / (1024 * 1024);
+
+    // NavMesh height map if present
+    if (this.navMeshHeightMap) {
+      heightMapMB += this.navMeshHeightMap.byteLength / (1024 * 1024);
+    }
+
+    const totalMB = geometryMB + heightMapMB;
+
+    getGPUMemoryTracker().updateUsage('terrain', totalMB, {
+      geometry: geometryMB,
+      heightMap: heightMapMB,
+    });
+
+    debugTerrain.log(`[Terrain] Memory usage: ${totalMB.toFixed(2)}MB (geometry: ${geometryMB.toFixed(2)}MB, heightMap: ${heightMapMB.toFixed(2)}MB)`);
   }
 
   /**
@@ -1259,6 +1298,9 @@ export class Terrain {
     } else {
       this.material.dispose();
     }
+
+    // Clear terrain memory from GPU tracker
+    getGPUMemoryTracker().updateUsage('terrain', 0, {});
   }
 
   /**
