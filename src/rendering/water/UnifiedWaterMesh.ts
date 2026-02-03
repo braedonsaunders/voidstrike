@@ -70,6 +70,8 @@ export interface WaterRegion {
   minY: number;
   maxY: number;
   avgElevation: number;
+  /** Minimum elevation in the region - used for consistent water level */
+  minElevation: number;
   isDeepRegion: boolean;
   hasAdjacentOppositeType: boolean;
 }
@@ -93,6 +95,10 @@ export interface UnifiedWaterConfig {
   quality: WaterQuality;
   /** TSL material to use for water rendering */
   material: THREE.Material;
+  /** Global water level from biome (elevation units, not world height) */
+  globalWaterLevel?: number;
+  /** Whether to use global sea level for all water (true for ocean biome) */
+  useGlobalSeaLevel?: boolean;
 }
 
 /**
@@ -110,6 +116,11 @@ export class UnifiedWaterMesh {
   private material: THREE.Material;
   private quality: WaterQuality;
   private enabled: boolean = true;
+
+  /** Global water level from biome config (elevation units) */
+  private globalWaterLevel: number;
+  /** Whether to use global sea level for all water */
+  private useGlobalSeaLevel: boolean;
 
   // Reusable buffer arrays for memory efficiency
   private positionBuffer: Float32Array | null = null;
@@ -131,6 +142,8 @@ export class UnifiedWaterMesh {
   constructor(config: UnifiedWaterConfig) {
     this.quality = config.quality;
     this.material = config.material;
+    this.globalWaterLevel = config.globalWaterLevel ?? 0;
+    this.useGlobalSeaLevel = config.useGlobalSeaLevel ?? false;
 
     // Create initial empty geometry
     this.geometry = new THREE.BufferGeometry();
@@ -299,37 +312,49 @@ export class UnifiedWaterMesh {
   // ==========================================
 
   /**
+   * Cell data with consistent water level for rendering
+   */
+  private CollectedCellType!: {
+    x: number;
+    y: number;
+    elevation: number;
+    waterLevel: number; // Consistent water level for the region
+    isDeep: boolean;
+    regionId: number;
+    size: number;
+  };
+
+  /**
    * Collect cells from all regions and apply cell merging for quality
+   * Uses consistent water level per region (globalSeaLevel or region minElevation)
    */
   private collectAndMergeCells(
     regions: WaterRegion[],
     mergeFactor: number
-  ): Array<{
-    x: number;
-    y: number;
-    elevation: number;
-    isDeep: boolean;
-    regionId: number;
-    size: number;
-  }> {
+  ): Array<typeof this.CollectedCellType> {
+    // Calculate water level for each region
+    const regionWaterLevels = regions.map(region => {
+      if (this.useGlobalSeaLevel) {
+        // Use global sea level from biome config
+        return this.globalWaterLevel;
+      }
+      // Use region's minimum elevation for consistent water surface
+      return region.minElevation;
+    });
+
     if (mergeFactor <= 1) {
       // No merging - return all cells directly
-      const result: Array<{
-        x: number;
-        y: number;
-        elevation: number;
-        isDeep: boolean;
-        regionId: number;
-        size: number;
-      }> = [];
+      const result: Array<typeof this.CollectedCellType> = [];
 
       for (let regionId = 0; regionId < regions.length; regionId++) {
         const region = regions[regionId];
+        const waterLevel = regionWaterLevels[regionId];
         for (const cell of region.cells) {
           result.push({
             x: cell.x,
             y: cell.y,
             elevation: cell.elevation,
+            waterLevel,
             isDeep: cell.isDeep,
             regionId,
             size: 1,
@@ -342,17 +367,11 @@ export class UnifiedWaterMesh {
 
     // Cell merging for lower quality settings
     // Group cells into mergeFactor x mergeFactor blocks
-    const result: Array<{
-      x: number;
-      y: number;
-      elevation: number;
-      isDeep: boolean;
-      regionId: number;
-      size: number;
-    }> = [];
+    const result: Array<typeof this.CollectedCellType> = [];
 
     for (let regionId = 0; regionId < regions.length; regionId++) {
       const region = regions[regionId];
+      const waterLevel = regionWaterLevels[regionId];
 
       // Create a sparse map of cells in this region
       const cellMap = new Map<string, WaterCell>();
@@ -395,6 +414,7 @@ export class UnifiedWaterMesh {
             x: blockX + mergeFactor / 2 - 0.5,
             y: blockY + mergeFactor / 2 - 0.5,
             elevation: totalElevation / cellCount,
+            waterLevel,
             isDeep: hasDeep,
             regionId,
             size: mergeFactor,
@@ -410,6 +430,7 @@ export class UnifiedWaterMesh {
                   x: blockCell.x,
                   y: blockCell.y,
                   elevation: blockCell.elevation,
+                  waterLevel,
                   isDeep: blockCell.isDeep,
                   regionId,
                   size: 1,
@@ -427,17 +448,9 @@ export class UnifiedWaterMesh {
 
   /**
    * Build the main water BufferGeometry from collected cells
+   * Uses consistent waterLevel per region for proper depth sorting
    */
-  private buildWaterGeometry(
-    cells: Array<{
-      x: number;
-      y: number;
-      elevation: number;
-      isDeep: boolean;
-      regionId: number;
-      size: number;
-    }>
-  ): void {
+  private buildWaterGeometry(cells: Array<typeof this.CollectedCellType>): void {
     const cellCount = cells.length;
 
     // Each cell is a quad: 4 vertices, 6 indices (2 triangles)
@@ -465,11 +478,12 @@ export class UnifiedWaterMesh {
     let indexOffset = 0;
 
     for (const cell of cells) {
-      const { x, y, elevation, isDeep, regionId, size } = cell;
+      const { x, y, waterLevel, isDeep, regionId, size } = cell;
 
-      // Calculate world-space height
-      // In Three.js: Y is up, ground plane is X-Z
-      const height = elevation * HEIGHT_SCALE + WATER_SURFACE_OFFSET;
+      // Calculate world-space height using CONSISTENT water level for the region
+      // This ensures all water in a region renders at the same height,
+      // preventing depth sorting issues where water appears over higher terrain
+      const height = waterLevel * HEIGHT_SCALE + WATER_SURFACE_OFFSET;
 
       // Shallow water renders slightly higher for visual blending
       const heightOffset = isDeep ? 0 : 0.02;
@@ -525,12 +539,13 @@ export class UnifiedWaterMesh {
       uvs[uIdx + 6] = x0 * uvScale;
       uvs[uIdx + 7] = z1 * uvScale;
 
-      // Custom water data: vec3(regionId, isDeep, elevation)
+      // Custom water data: vec3(regionId, isDeep, waterLevel)
+      // Using waterLevel (consistent per region) instead of per-cell elevation
       for (let i = 0; i < 4; i++) {
         const wIdx = (vertexOffset + i) * 3;
         waterData[wIdx + 0] = regionId;
         waterData[wIdx + 1] = isDeep ? 1.0 : 0.0;
-        waterData[wIdx + 2] = elevation;
+        waterData[wIdx + 2] = waterLevel;
       }
 
       // Indices (2 triangles per quad)
@@ -879,6 +894,7 @@ export class UnifiedWaterMesh {
     let minY = startY;
     let maxY = startY;
     let totalElevation = 0;
+    let minElevation = Infinity;
     let hasAdjacentOppositeType = false;
 
     // Determine the type of water we're flood filling
@@ -918,6 +934,7 @@ export class UnifiedWaterMesh {
       minY = Math.min(minY, y);
       maxY = Math.max(maxY, y);
       totalElevation += cell.elevation;
+      minElevation = Math.min(minElevation, cell.elevation);
 
       // Add cardinal neighbors to queue
       queue.push({ x: x - 1, y });
@@ -933,6 +950,7 @@ export class UnifiedWaterMesh {
       minY,
       maxY,
       avgElevation: cells.length > 0 ? totalElevation / cells.length : 0,
+      minElevation: cells.length > 0 ? minElevation : 0,
       isDeepRegion,
       hasAdjacentOppositeType,
     };

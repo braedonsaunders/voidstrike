@@ -381,10 +381,14 @@ export class EnvironmentManager {
       envMap: this.envMap,
     });
 
-    // Create unified water mesh
+    // Create unified water mesh with biome water level for proper depth sorting
+    // Ocean biome uses global sea level, other biomes use per-region minimum elevation
+    const isOceanBiome = this.biome.name === 'Ocean';
     this.unifiedWaterMesh = new UnifiedWaterMesh({
       quality: optimalQuality,
       material: this.waterMaterial.getMaterial(),
+      globalWaterLevel: this.biome.waterLevel ?? 0,
+      useGlobalSeaLevel: isOceanBiome,
     });
 
     // Build water from terrain data
