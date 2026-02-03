@@ -202,7 +202,8 @@ voidstrike/
 │   │   │   ├── EditorHeader.tsx
 │   │   │   ├── EditorMiniMap.tsx
 │   │   │   ├── EditorStatusBar.tsx
-│   │   │   └── EditorToolbar.tsx
+│   │   │   ├── EditorToolbar.tsx
+│   │   │   └── UndoPreviewOverlay.tsx
 │   │   ├── hooks/ # React hooks
 │   │   │   ├── useEditorState.ts
 │   │   │   └── useLLMGeneration.ts
@@ -217,6 +218,7 @@ voidstrike/
 │   │   │   ├── EditorModelLoader.ts
 │   │   │   ├── EditorObjects.ts
 │   │   │   ├── EditorTerrain.ts
+│   │   │   ├── EditorUndoPreview.ts
 │   │   │   ├── EditorWater.ts
 │   │   │   ├── GuardrailMesh.ts
 │   │   │   └── index.ts
@@ -259,6 +261,19 @@ voidstrike/
 │   │   ├── combat/
 │   │   │   └── TargetAcquisition.ts
 │   │   ├── components/ # React components
+│   │   │   ├── unit/
+│   │   │   │   ├── BuffMixin.ts
+│   │   │   │   ├── CloakMixin.ts
+│   │   │   │   ├── CombatMixin.ts
+│   │   │   │   ├── CommandQueueMixin.ts
+│   │   │   │   ├── HealRepairMixin.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   ├── SubmarineMixin.ts
+│   │   │   │   ├── TransformMixin.ts
+│   │   │   │   ├── TransportMixin.ts
+│   │   │   │   ├── types.ts
+│   │   │   │   ├── UnitCore.ts
+│   │   │   │   └── WorkerMixin.ts
 │   │   │   ├── Ability.ts
 │   │   │   ├── Building.ts
 │   │   │   ├── Health.ts
@@ -276,8 +291,10 @@ voidstrike/
 │   │   │   ├── Game.ts # Main game class
 │   │   │   ├── GameCommand.ts
 │   │   │   ├── GameCore.ts
+│   │   │   ├── GameEvents.ts
 │   │   │   ├── GameLoop.ts # Fixed timestep loop
 │   │   │   ├── GameStatePort.ts
+│   │   │   ├── IGameInstance.ts
 │   │   │   ├── PerformanceMonitor.ts
 │   │   │   ├── SpatialGrid.ts
 │   │   │   └── SystemRegistry.ts
@@ -313,6 +330,7 @@ voidstrike/
 │   │   │   │   ├── NostrMatchmaking.ts
 │   │   │   │   ├── NostrRelays.ts
 │   │   │   │   └── PeerRelay.ts
+│   │   │   ├── CommandSigning.ts
 │   │   │   ├── DesyncDetection.ts
 │   │   │   ├── index.ts
 │   │   │   ├── MerkleTree.ts
@@ -554,6 +572,7 @@ voidstrike/
     ├── engine/ # Game engine core
     │   ├── ai/ # AI subsystems
     │   │   ├── behaviorTree.test.ts
+    │   │   ├── influenceMap.perf.test.ts
     │   │   └── unitBehaviors.test.ts
     │   ├── components/ # React components
     │   │   ├── ability.test.ts
@@ -580,7 +599,10 @@ voidstrike/
     │   │   ├── entityId.test.ts
     │   │   └── world.test.ts
     │   ├── network/
+    │   │   ├── adaptiveDelay.test.ts
+    │   │   ├── commandSync.test.ts
     │   │   ├── desyncDetection.test.ts
+    │   │   ├── lockstep.test.ts
     │   │   ├── merkleTree.test.ts
     │   │   └── types.test.ts
     │   ├── systems/ # ECS Systems
@@ -591,8 +613,11 @@ voidstrike/
     │   │   │   ├── LineOfSight.test.ts
     │   │   │   └── VisionOptimizer.test.ts
     │   │   ├── abilitySystem.test.ts
+    │   │   ├── AIEconomySystem.test.ts
+    │   │   ├── AIMicroSystem.test.ts
     │   │   ├── buildingPlacementSystem.test.ts
     │   │   ├── combatSystem.test.ts
+    │   │   ├── EnhancedAISystem.test.ts
     │   │   ├── MovementSystem.test.ts
     │   │   ├── pathfindingSystem.test.ts
     │   │   ├── productionSystem.test.ts
