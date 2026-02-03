@@ -280,10 +280,11 @@ export class TSLWaterMaterial {
 
     // IOR for physically-correct fresnel (water = 1.33)
     // This replaces manual fresnel calculation entirely
-    material.iorNode = float(WATER_IOR);
+    // Note: ior is a regular property, not a node property
+    material.ior = WATER_IOR;
 
-    // Optional: slight specular tint for ocean water
-    material.specularColorNode = vec3(0.95, 0.97, 1.0);
+    // Specular intensity for water reflections
+    material.specularIntensity = 1.0;
 
     // Environment map for reflections (if provided)
     if (config.envMap) {
