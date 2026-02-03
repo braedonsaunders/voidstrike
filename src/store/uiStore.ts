@@ -44,19 +44,19 @@ export interface DebugSettings {
 
 // Performance metrics for display
 export interface PerformanceMetrics {
-  cpuTime: number;      // milliseconds spent in JS/game logic
-  gpuTime: number;      // estimated GPU time (frame time - cpu time)
-  frameTime: number;    // total frame time in ms
-  triangles: number;    // triangles rendered this frame
-  drawCalls: number;    // draw calls this frame
-  renderWidth: number;  // actual render width in pixels
+  cpuTime: number; // milliseconds spent in JS/game logic
+  gpuTime: number; // estimated GPU time (frame time - cpu time)
+  frameTime: number; // total frame time in ms
+  triangles: number; // triangles rendered this frame
+  drawCalls: number; // draw calls this frame
+  renderWidth: number; // actual render width in pixels
   renderHeight: number; // actual render height in pixels
   displayWidth: number; // display/canvas width in pixels
   displayHeight: number; // display/canvas height in pixels
   // GPU indirect rendering status
-  gpuCullingActive: boolean;   // true if GPU culling is being used
-  gpuIndirectActive: boolean;  // true if GPU indirect draw is enabled
-  gpuManagedUnits: number;     // units tracked in GPU buffer
+  gpuCullingActive: boolean; // true if GPU culling is being used
+  gpuIndirectActive: boolean; // true if GPU indirect draw is enabled
+  gpuManagedUnits: number; // units tracked in GPU buffer
 }
 
 // Renderer API type (WebGPU or WebGL)
@@ -64,10 +64,10 @@ export type RendererAPI = 'WebGPU' | 'WebGL' | null;
 
 // GPU adapter info for display
 export interface GpuInfo {
-  name: string;           // Device description (e.g., "NVIDIA GeForce RTX 4090")
-  vendor: string;         // Vendor name (e.g., "nvidia", "amd", "intel")
-  architecture: string;   // Architecture (e.g., "ampere")
-  isIntegrated: boolean;  // True if likely an integrated GPU
+  name: string; // Device description (e.g., "NVIDIA GeForce RTX 4090")
+  vendor: string; // Vendor name (e.g., "nvidia", "amd", "intel")
+  architecture: string; // Architecture (e.g., "ampere")
+  isIntegrated: boolean; // True if likely an integrated GPU
 }
 
 // Anti-aliasing mode selection
@@ -98,7 +98,10 @@ export type ResolutionMode = 'native' | 'fixed' | 'percentage';
 // Common fixed resolutions
 export type FixedResolution = '720p' | '1080p' | '1440p' | '4k';
 
-export const FIXED_RESOLUTIONS: Record<FixedResolution, { width: number; height: number; label: string }> = {
+export const FIXED_RESOLUTIONS: Record<
+  FixedResolution,
+  { width: number; height: number; label: string }
+> = {
   '720p': { width: 1280, height: 720, label: '720p (1280×720)' },
   '1080p': { width: 1920, height: 1080, label: '1080p (1920×1080)' },
   '1440p': { width: 2560, height: 1440, label: '1440p (2560×1440)' },
@@ -137,7 +140,6 @@ export interface GraphicsSettings {
 
   // TAA-specific settings
   taaEnabled: boolean; // Derived from antiAliasingMode
-  taaHistoryBlendRate: number; // 0.0-1.0, lower = more smoothing
   taaSharpeningEnabled: boolean;
   taaSharpeningIntensity: number; // 0.0-1.0
 
@@ -193,10 +195,6 @@ export interface GraphicsSettings {
 
   // Environment
   environmentMapEnabled: boolean;
-
-  // Outline (selection)
-  outlineEnabled: boolean;
-  outlineStrength: number;
 
   // Particles
   particlesEnabled: boolean;
@@ -259,7 +257,10 @@ function saveGraphicsSettings(settings: GraphicsSettings, preset: GraphicsPreset
   }
 }
 
-function loadGraphicsSettings(): { settings: Partial<GraphicsSettings>; preset: GraphicsPresetName } | null {
+function loadGraphicsSettings(): {
+  settings: Partial<GraphicsSettings>;
+  preset: GraphicsPresetName;
+} | null {
   if (typeof window === 'undefined' || typeof localStorage === 'undefined') return null;
   try {
     const saved = localStorage.getItem(GRAPHICS_SETTINGS_KEY);
@@ -353,7 +354,13 @@ const savedDebugSettings = loadDebugSettings();
 // Game overlay types for strategic information display
 // 'navmesh' shows ACTUAL pathfinding data from Recast Navigation (critical for debugging)
 // 'resource' highlights mineral fields and gas geysers
-export type GameOverlayType = 'none' | 'elevation' | 'threat' | 'navmesh' | 'resource' | 'buildable';
+export type GameOverlayType =
+  | 'none'
+  | 'elevation'
+  | 'threat'
+  | 'navmesh'
+  | 'resource'
+  | 'buildable';
 
 // Extended overlay types including RTS-style tactical features (attack/vision are dynamic, not cycleable)
 export type ExtendedOverlayType = GameOverlayType | 'attackRange' | 'visionRange';
@@ -474,7 +481,10 @@ export interface UIState {
   togglePing: () => void;
   // Graphics settings actions
   toggleGraphicsOptions: () => void;
-  setGraphicsSetting: <K extends keyof GraphicsSettings>(key: K, value: GraphicsSettings[K]) => void;
+  setGraphicsSetting: <K extends keyof GraphicsSettings>(
+    key: K,
+    value: GraphicsSettings[K]
+  ) => void;
   toggleGraphicsSetting: (key: keyof GraphicsSettings) => void;
   setAntiAliasingMode: (mode: AntiAliasingMode) => void;
   setUpscalingMode: (mode: UpscalingMode) => void;
@@ -588,7 +598,6 @@ export const useUIStore = create<UIState>((set, get) => ({
     antiAliasingMode: 'taa' as AntiAliasingMode,
     fxaaEnabled: false, // Legacy, derived from antiAliasingMode
     taaEnabled: true, // Derived from antiAliasingMode
-    taaHistoryBlendRate: 0.1, // Default blend rate (90% history, 10% current)
     taaSharpeningEnabled: true, // Counter TAA blur with RCAS
     taaSharpeningIntensity: 0.5, // Moderate sharpening
 
@@ -644,10 +653,6 @@ export const useUIStore = create<UIState>((set, get) => ({
 
     // Environment
     environmentMapEnabled: true,
-
-    // Outline (selection)
-    outlineEnabled: true,
-    outlineStrength: 2,
 
     // Particles
     particlesEnabled: true,
@@ -795,10 +800,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     // Save to localStorage
     const s = get();
     saveAudioSettings({
-      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
-      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
-      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
-      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      musicEnabled: s.musicEnabled,
+      soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume,
+      soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled,
+      alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume,
+      alertVolume: s.alertVolume,
       version: AUDIO_SETTINGS_VERSION,
     });
   },
@@ -808,10 +817,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     // Save to localStorage
     const s = get();
     saveAudioSettings({
-      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
-      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
-      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
-      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      musicEnabled: s.musicEnabled,
+      soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume,
+      soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled,
+      alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume,
+      alertVolume: s.alertVolume,
       version: AUDIO_SETTINGS_VERSION,
     });
   },
@@ -820,10 +833,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({ soundVolume: clamp(volume, 0, 1) });
     const s = get();
     saveAudioSettings({
-      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
-      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
-      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
-      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      musicEnabled: s.musicEnabled,
+      soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume,
+      soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled,
+      alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume,
+      alertVolume: s.alertVolume,
       version: AUDIO_SETTINGS_VERSION,
     });
   },
@@ -832,10 +849,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({ musicVolume: clamp(volume, 0, 1) });
     const s = get();
     saveAudioSettings({
-      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
-      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
-      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
-      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      musicEnabled: s.musicEnabled,
+      soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume,
+      soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled,
+      alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume,
+      alertVolume: s.alertVolume,
       version: AUDIO_SETTINGS_VERSION,
     });
   },
@@ -845,10 +866,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     set((state) => ({ voicesEnabled: !state.voicesEnabled }));
     const s = get();
     saveAudioSettings({
-      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
-      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
-      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
-      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      musicEnabled: s.musicEnabled,
+      soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume,
+      soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled,
+      alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume,
+      alertVolume: s.alertVolume,
       version: AUDIO_SETTINGS_VERSION,
     });
   },
@@ -857,10 +882,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     set((state) => ({ alertsEnabled: !state.alertsEnabled }));
     const s = get();
     saveAudioSettings({
-      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
-      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
-      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
-      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      musicEnabled: s.musicEnabled,
+      soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume,
+      soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled,
+      alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume,
+      alertVolume: s.alertVolume,
       version: AUDIO_SETTINGS_VERSION,
     });
   },
@@ -869,10 +898,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({ voiceVolume: clamp(volume, 0, 1) });
     const s = get();
     saveAudioSettings({
-      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
-      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
-      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
-      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      musicEnabled: s.musicEnabled,
+      soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume,
+      soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled,
+      alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume,
+      alertVolume: s.alertVolume,
       version: AUDIO_SETTINGS_VERSION,
     });
   },
@@ -881,10 +914,14 @@ export const useUIStore = create<UIState>((set, get) => ({
     set({ alertVolume: clamp(volume, 0, 1) });
     const s = get();
     saveAudioSettings({
-      musicEnabled: s.musicEnabled, soundEnabled: s.soundEnabled,
-      musicVolume: s.musicVolume, soundVolume: s.soundVolume,
-      voicesEnabled: s.voicesEnabled, alertsEnabled: s.alertsEnabled,
-      voiceVolume: s.voiceVolume, alertVolume: s.alertVolume,
+      musicEnabled: s.musicEnabled,
+      soundEnabled: s.soundEnabled,
+      musicVolume: s.musicVolume,
+      soundVolume: s.soundVolume,
+      voicesEnabled: s.voicesEnabled,
+      alertsEnabled: s.alertsEnabled,
+      voiceVolume: s.voiceVolume,
+      alertVolume: s.alertVolume,
       version: AUDIO_SETTINGS_VERSION,
     });
   },
@@ -893,7 +930,8 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   togglePing: () => set((state) => ({ showPing: !state.showPing })),
 
-  toggleGraphicsOptions: () => set((state) => ({ showGraphicsOptions: !state.showGraphicsOptions })),
+  toggleGraphicsOptions: () =>
+    set((state) => ({ showGraphicsOptions: !state.showGraphicsOptions })),
 
   setRendererAPI: (api) => set({ rendererAPI: api }),
 
@@ -912,7 +950,7 @@ export const useUIStore = create<UIState>((set, get) => ({
         debugInitialization.warn('Failed to load graphics presets, using defaults');
         return;
       }
-      const config = await response.json() as GraphicsPresetsConfig;
+      const config = (await response.json()) as GraphicsPresetsConfig;
       set({
         graphicsPresetsConfig: config,
         graphicsPresetsLoaded: true,
@@ -1142,27 +1180,31 @@ export const useUIStore = create<UIState>((set, get) => ({
 
   toggleDebugMenu: () => set((state) => ({ showDebugMenu: !state.showDebugMenu })),
 
-  togglePerformancePanel: () => set((state) => ({ showPerformancePanel: !state.showPerformancePanel })),
+  togglePerformancePanel: () =>
+    set((state) => ({ showPerformancePanel: !state.showPerformancePanel })),
 
   // Debug console actions
   setConsoleEnabled: (enabled: boolean) => set({ consoleEnabled: enabled }),
-  toggleConsole: () => set((state) => ({ showConsole: state.consoleEnabled && !state.showConsole })),
-  setShowConsole: (show: boolean) => set((state) => ({ showConsole: state.consoleEnabled && show })),
+  toggleConsole: () =>
+    set((state) => ({ showConsole: state.consoleEnabled && !state.showConsole })),
+  setShowConsole: (show: boolean) =>
+    set((state) => ({ showConsole: state.consoleEnabled && show })),
 
   // HUD menu actions
   setShowOptionsMenu: (show: boolean) => set({ showOptionsMenu: show }),
   setShowOverlayMenu: (show: boolean) => set({ showOverlayMenu: show }),
   setShowPlayerStatus: (show: boolean) => set({ showPlayerStatus: show }),
-  closeAllMenus: () => set({
-    showOptionsMenu: false,
-    showOverlayMenu: false,
-    showPlayerStatus: false,
-    showGraphicsOptions: false,
-    showSoundOptions: false,
-    showPerformancePanel: false,
-    showDebugMenu: false,
-    showConsole: false,
-  }),
+  closeAllMenus: () =>
+    set({
+      showOptionsMenu: false,
+      showOverlayMenu: false,
+      showPlayerStatus: false,
+      showGraphicsOptions: false,
+      showSoundOptions: false,
+      showPerformancePanel: false,
+      showDebugMenu: false,
+      showConsole: false,
+    }),
 
   toggleDebugSetting: (key) => {
     set((state) => ({

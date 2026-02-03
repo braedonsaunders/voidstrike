@@ -37,6 +37,7 @@ import {
   UNIT_TURN_RATE,
   ATTACK_STANDOFF_MULTIPLIER,
 } from '@/data/movement.config';
+import { validateEntityAlive } from '@/utils/EntityValidator';
 
 import { FlockingBehavior, FlockingEntityCache, FlockingSpatialGrid } from './FlockingBehavior';
 import { PathfindingMovement, PathfindingWorld, PathfindingGame } from './PathfindingMovement';
@@ -286,7 +287,8 @@ export class MovementOrchestrator {
 
     for (const entityId of entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'MovementOrchestrator:handleAttackMoveCommand'))
+        continue;
 
       const unit = entity.get<Unit>('Unit');
       const transform = entity.get<Transform>('Transform');
@@ -332,7 +334,8 @@ export class MovementOrchestrator {
 
     for (const entityId of entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'MovementOrchestrator:handlePatrolCommand'))
+        continue;
 
       const unit = entity.get<Unit>('Unit');
       const transform = entity.get<Transform>('Transform');
@@ -765,7 +768,14 @@ export class MovementOrchestrator {
     _useWasmThisFrame: boolean
   ): { handled: boolean; skipMovement: boolean; targetX: number | null; targetY: number | null } {
     const targetEntity = this.world.getEntity(unit.targetEntityId!);
-    if (!targetEntity) {
+    // Validate target exists and is not destroyed
+    if (
+      !validateEntityAlive(
+        targetEntity,
+        unit.targetEntityId!,
+        'MovementOrchestrator:processAttackingUnit'
+      )
+    ) {
       return { handled: false, skipMovement: false, targetX: null, targetY: null };
     }
 

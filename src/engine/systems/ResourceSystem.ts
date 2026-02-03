@@ -11,6 +11,7 @@ import { debugResources } from '@/utils/debugLogger';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { EnhancedAISystem } from './EnhancedAISystem';
 import { distance } from '@/utils/math';
+import { validateEntityAlive } from '@/utils/EntityValidator';
 
 // Mining time in seconds (base value - AI may get speed bonuses)
 const MINING_TIME = 2.5;
@@ -116,7 +117,14 @@ export class ResourceSystem extends System {
     queue?: boolean;
   }): void {
     const targetEntity = this.world.getEntity(command.targetEntityId);
-    if (!targetEntity) return;
+    if (
+      !validateEntityAlive(
+        targetEntity,
+        command.targetEntityId,
+        'ResourceSystem:handleGatherCommand'
+      )
+    )
+      return;
 
     const resource = targetEntity.get<Resource>('Resource');
     if (!resource) return;
@@ -143,7 +151,8 @@ export class ResourceSystem extends System {
 
     for (const entityId of command.entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'ResourceSystem:handleGatherCommand:workers'))
+        continue;
 
       const unit = entity.get<Unit>('Unit');
       if (!unit || !unit.isWorker) continue;
@@ -394,7 +403,14 @@ export class ResourceSystem extends System {
       // Check if at resource node
       if (unit.gatherTargetId !== null) {
         const resourceEntity = this.world.getEntity(unit.gatherTargetId);
-        if (!resourceEntity) {
+        // Validate resource entity exists and is not destroyed
+        if (
+          !validateEntityAlive(
+            resourceEntity,
+            unit.gatherTargetId,
+            'ResourceSystem:update:gatherTarget'
+          )
+        ) {
           unit.gatherTargetId = null;
           unit.isMining = false;
           unit.miningTimer = 0;
@@ -665,7 +681,13 @@ export class ResourceSystem extends System {
       // Return to gather target if it still exists
       if (unit.gatherTargetId !== null) {
         const resourceEntity = this.world.getEntity(unit.gatherTargetId);
-        if (resourceEntity) {
+        if (
+          validateEntityAlive(
+            resourceEntity,
+            unit.gatherTargetId,
+            'ResourceSystem:handleResourceReturn'
+          )
+        ) {
           const resourceTransform = resourceEntity.get<Transform>('Transform');
           const resource = resourceEntity.get<Resource>('Resource');
 

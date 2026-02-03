@@ -17,6 +17,7 @@ import { SpatialEntityData, SpatialUnitState } from '../core/SpatialGrid';
 import { findBestTarget as findBestTargetShared, isEnemy } from '../combat/TargetAcquisition';
 import { distance, clamp } from '@/utils/math';
 import { ThrottledCache } from '@/utils/ThrottledCache';
+import { validateEntityAlive } from '@/utils/EntityValidator';
 
 // PERF: Reusable event payload objects to avoid allocation per attack
 const attackEventPayload = {
@@ -350,7 +351,7 @@ export class CombatSystem extends System {
 
     for (const entityId of this.combatActiveUnits) {
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'CombatSystem:rebuildAttackQueue')) continue;
 
       const unit = entity.get<Unit>('Unit');
       if (!unit || unit.state === 'dead') continue;
@@ -394,7 +395,7 @@ export class CombatSystem extends System {
   }): void {
     for (const entityId of command.entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'CombatSystem:handleAttackCommand')) continue;
 
       const unit = entity.get<Unit>('Unit');
       if (!unit) continue;
@@ -519,7 +520,7 @@ export class CombatSystem extends System {
     // PERF OPTIMIZATION: Second pass - target acquisition for combat-active units only
     for (const entityId of this.combatActiveUnits) {
       const attacker = this.world.getEntity(entityId);
-      if (!attacker) continue;
+      if (!validateEntityAlive(attacker, entityId, 'CombatSystem:targetAcquisition')) continue;
 
       const transform = attacker.get<Transform>('Transform');
       const unit = attacker.get<Unit>('Unit');
@@ -790,7 +791,9 @@ export class CombatSystem extends System {
               const resource = resourceEntity.get<Resource>('Resource');
               if (resource) {
                 resource.extractorEntityId = null;
-                debugCombat.log(`CombatSystem: Extractor destroyed, plasma geyser ${buildingComp.linkedResourceId} restored`);
+                debugCombat.log(
+                  `CombatSystem: Extractor destroyed, plasma geyser ${buildingComp.linkedResourceId} restored`
+                );
               }
             }
           }
@@ -850,7 +853,11 @@ export class CombatSystem extends System {
 
     // Get self's player ID
     const selfEntity = this.world.getEntity(selfId);
-    const selfSelectable = selfEntity?.get<Selectable>('Selectable');
+    if (!validateEntityAlive(selfEntity, selfId, 'CombatSystem:checkCombatZone')) {
+      this.combatAwareUnits.delete(selfId);
+      return false;
+    }
+    const selfSelectable = selfEntity.get<Selectable>('Selectable');
     if (!selfSelectable) {
       this.combatAwareUnits.delete(selfId);
       return false;
@@ -876,7 +883,8 @@ export class CombatSystem extends System {
 
       for (const entityId of nearbyBuildingIds) {
         const entity = this.world.getEntity(entityId);
-        if (!entity) continue;
+        if (!validateEntityAlive(entity, entityId, 'CombatSystem:checkCombatZone:buildings'))
+          continue;
 
         const selectable = entity.get<Selectable>('Selectable');
         const health = entity.get<Health>('Health');
@@ -921,7 +929,9 @@ export class CombatSystem extends System {
 
     // Get self's player ID
     const selfEntity = this.world.getEntity(selfId);
-    const selfSelectable = selfEntity?.get<Selectable>('Selectable');
+    if (!validateEntityAlive(selfEntity, selfId, 'CombatSystem:findImmediateAttackTarget'))
+      return null;
+    const selfSelectable = selfEntity.get<Selectable>('Selectable');
     if (!selfSelectable) return null;
 
     // Use shared target acquisition for attack-range search
@@ -1000,7 +1010,8 @@ export class CombatSystem extends System {
   ): number | null {
     // Get self's player ID
     const selfEntity = this.world.getEntity(selfId);
-    const selfSelectable = selfEntity?.get<Selectable>('Selectable');
+    if (!validateEntityAlive(selfEntity, selfId, 'CombatSystem:findBestTargetSpatial')) return null;
+    const selfSelectable = selfEntity.get<Selectable>('Selectable');
     if (!selfSelectable) return null;
 
     // Use shared target acquisition for sight-range search
@@ -1204,7 +1215,8 @@ export class CombatSystem extends System {
   ): void {
     // Get attacker's player ID
     const attackerEntity = this.world.getEntity(attackerId);
-    const attackerSelectable = attackerEntity?.get<Selectable>('Selectable');
+    if (!validateEntityAlive(attackerEntity, attackerId, 'CombatSystem:applySplashDamage')) return;
+    const attackerSelectable = attackerEntity.get<Selectable>('Selectable');
     if (!attackerSelectable) return;
 
     // Use spatial grid to find nearby units - much faster than checking all entities
@@ -1219,7 +1231,7 @@ export class CombatSystem extends System {
       if (entityId === attackerId) continue;
 
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'CombatSystem:applySplashDamage:units')) continue;
 
       const transform = entity.get<Transform>('Transform');
       const health = entity.get<Health>('Health');
@@ -1277,7 +1289,8 @@ export class CombatSystem extends System {
 
     for (const entityId of nearbyBuildingIds) {
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'CombatSystem:applySplashDamage:buildings'))
+        continue;
 
       const transform = entity.get<Transform>('Transform');
       const health = entity.get<Health>('Health');

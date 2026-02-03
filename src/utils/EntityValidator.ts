@@ -103,7 +103,7 @@ class EntityValidatorClass {
     if (sources.length > 0) {
       debugPerformance.warn(
         `[EntityValidator] Missing entity references in last ${REPORT_INTERVAL_MS / 1000}s:\n  ` +
-        sources.join('\n  ')
+          sources.join('\n  ')
       );
     }
 
@@ -172,4 +172,46 @@ export function validateEntity<T>(
   currentTick?: number
 ): entity is T {
   return EntityValidator.validate(entity, entityId, source, currentTick);
+}
+
+/**
+ * Interface for entities that can be destroyed (matches Entity class)
+ */
+interface Destroyable {
+  isDestroyed(): boolean;
+}
+
+/**
+ * Validates that an entity exists AND is not destroyed.
+ * This is the preferred validation for game systems that store entity IDs
+ * and need to verify the entity is still alive before operating on it.
+ *
+ * @example
+ * const targetEntity = world.getEntity(unit.targetEntityId);
+ * if (!validateEntityAlive(targetEntity, unit.targetEntityId, 'CombatSystem')) {
+ *   unit.targetEntityId = null; // Clear stale reference
+ *   continue;
+ * }
+ * // targetEntity is now typed as non-null and guaranteed alive
+ */
+export function validateEntityAlive<T extends Destroyable>(
+  entity: T | null | undefined,
+  entityId: number,
+  source: string,
+  currentTick?: number
+): entity is T {
+  // First check if entity exists
+  if (entity === null || entity === undefined) {
+    EntityValidator.validate(entity, entityId, source, currentTick);
+    return false;
+  }
+
+  // Then check if destroyed
+  if (entity.isDestroyed()) {
+    // Track as missing (destroyed counts as missing for our purposes)
+    EntityValidator.validate(null, entityId, `${source}:destroyed`, currentTick);
+    return false;
+  }
+
+  return true;
 }

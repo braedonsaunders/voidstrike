@@ -14,6 +14,7 @@ import {
 } from '@/data/buildings/dominion';
 import { debugProduction, debugSpawning } from '@/utils/debugLogger';
 import { EnhancedAISystem } from './EnhancedAISystem';
+import { validateEntityAlive } from '@/utils/EntityValidator';
 
 export class ProductionSystem extends System {
   public readonly name = 'ProductionSystem';
@@ -60,7 +61,14 @@ export class ProductionSystem extends System {
     playerId?: string;
   }): void {
     const entity = this.world.getEntity(command.entityId);
-    if (!entity) return;
+    if (
+      !validateEntityAlive(
+        entity,
+        command.entityId,
+        'ProductionSystem:handleCancelProductionCommand'
+      )
+    )
+      return;
 
     const building = entity.get<Building>('Building');
     if (!building) return;
@@ -111,7 +119,10 @@ export class ProductionSystem extends System {
     playerId?: string;
   }): void {
     const entity = this.world.getEntity(command.entityId);
-    if (!entity) return;
+    if (
+      !validateEntityAlive(entity, command.entityId, 'ProductionSystem:handleReorderQueueCommand')
+    )
+      return;
 
     const building = entity.get<Building>('Building');
     if (!building) return;
@@ -143,7 +154,7 @@ export class ProductionSystem extends System {
 
     for (const entityId of entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!entity) continue;
+      if (!validateEntityAlive(entity, entityId, 'ProductionSystem:handleTrainCommand')) continue;
 
       const building = entity.get<Building>('Building');
       if (!building || !building.isComplete()) continue;
@@ -387,7 +398,10 @@ export class ProductionSystem extends System {
 
       // Get the building's owner from its Selectable component
       const buildingEntity = this.world.getEntity(buildingId);
-      const selectable = buildingEntity?.get<Selectable>('Selectable');
+      // Building should still exist since we're in its production callback
+      const selectable = buildingEntity?.isDestroyed()
+        ? undefined
+        : buildingEntity?.get<Selectable>('Selectable');
       const ownerPlayerId = selectable?.playerId;
 
       // Spawn multiple units if produceCount > 1 (reactor bonus)
@@ -433,7 +447,9 @@ export class ProductionSystem extends System {
       } else {
         // This is a research upgrade - emit for Phaser overlay
         const buildingEntity = this.world.getEntity(buildingId);
-        const buildingSelectable = buildingEntity?.get<Selectable>('Selectable');
+        const buildingSelectable = buildingEntity?.isDestroyed()
+          ? undefined
+          : buildingEntity?.get<Selectable>('Selectable');
         if (buildingSelectable?.playerId && isLocalPlayer(buildingSelectable.playerId)) {
           this.game.eventBus.emit('research:complete', {
             buildingId,
@@ -466,7 +482,7 @@ export class ProductionSystem extends System {
 
     // Update entity for mesh refresh
     const entity = this.world.getEntity(buildingId);
-    if (entity) {
+    if (validateEntityAlive(entity, buildingId, 'ProductionSystem:handleBuildingUpgradeComplete')) {
       const health = entity.get<Health>('Health');
       if (health && newDef.maxHealth) {
         // Keep current health percentage, apply to new max
