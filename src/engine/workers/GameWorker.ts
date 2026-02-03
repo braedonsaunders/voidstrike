@@ -650,12 +650,23 @@ export class WorkerGame extends GameCore {
   private collectUnitRenderState(): UnitRenderState[] {
     const states: UnitRenderState[] = [];
     const entities = this.world.getEntitiesWith('Transform', 'Unit', 'Health', 'Selectable');
+    const localPlayerId = this.config.playerId;
 
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
       const unit = entity.get<Unit>('Unit')!;
       const health = entity.get<Health>('Health')!;
       const selectable = entity.get<Selectable>('Selectable')!;
+
+      // Filter enemy units based on fog of war visibility
+      // Only send enemy units to renderer if they're currently visible to local player
+      const isOwnedByLocalPlayer = selectable.playerId === localPlayerId;
+      if (!isOwnedByLocalPlayer) {
+        const isVisible = this.visionSystem.isVisible(localPlayerId, transform.x, transform.y);
+        if (!isVisible) {
+          continue; // Skip enemy units not in line of sight
+        }
+      }
 
       states.push({
         id: entity.id,
@@ -723,12 +734,23 @@ export class WorkerGame extends GameCore {
   private collectBuildingRenderState(): BuildingRenderState[] {
     const states: BuildingRenderState[] = [];
     const entities = this.world.getEntitiesWith('Transform', 'Building', 'Health', 'Selectable');
+    const localPlayerId = this.config.playerId;
 
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
       const building = entity.get<Building>('Building')!;
       const health = entity.get<Health>('Health')!;
       const selectable = entity.get<Selectable>('Selectable')!;
+
+      // Filter enemy buildings based on fog of war exploration
+      // Buildings remain visible once explored (unlike units which require line of sight)
+      const isOwnedByLocalPlayer = selectable.playerId === localPlayerId;
+      if (!isOwnedByLocalPlayer) {
+        const isExplored = this.visionSystem.isExplored(localPlayerId, transform.x, transform.y);
+        if (!isExplored) {
+          continue; // Skip enemy buildings in unexplored areas
+        }
+      }
 
       states.push({
         id: entity.id,
