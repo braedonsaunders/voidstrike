@@ -40,7 +40,7 @@ This document contains all audio specifications, AI prompts for generation, and 
 - [x] `alert/under_attack.mp3`
 - [x] `alert/additional_population_required.mp3`
 - [x] `alert/not_enough_minerals.mp3`
-- [x] `alert/not_enough_vespene.mp3`
+- [x] `alert/not_enough_plasma.mp3`
 - [x] `alert/minerals_depleted.mp3`
 - [x] `alert/building_complete.mp3`
 - [x] `alert/research_complete.mp3`
@@ -304,7 +304,7 @@ These are spoken voice announcements that play to notify the player of important
 | `alert/under_attack.mp3` | 2-3s | "Your base is under attack!" or "You're under attack!" | Urgent female command voice, military alert tone |
 | `alert/additional_population_required.mp3` | 2s | "Additional supply depots required." or "You require more supply." | Female command voice, slight urgency |
 | `alert/not_enough_minerals.mp3` | 1-2s | "Not enough minerals." or "Insufficient minerals." | Neutral female command voice |
-| `alert/not_enough_vespene.mp3` | 1-2s | "Not enough vespene gas." or "Insufficient vespene." | Neutral female command voice |
+| `alert/not_enough_plasma.mp3` | 1-2s | "Not enough plasma gas." or "Insufficient plasma." | Neutral female command voice |
 | `alert/minerals_depleted.mp3` | 1-2s | "Mineral field depleted." | Neutral female command voice |
 | `alert/building_complete.mp3` | 1-2s | "Construction complete." | Positive female command voice |
 | `alert/research_complete.mp3` | 1-2s | "Research complete." | Positive female command voice |

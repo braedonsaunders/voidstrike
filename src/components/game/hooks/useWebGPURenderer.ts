@@ -494,13 +494,13 @@ export function useWebGPURenderer({
         currentMap,
         (x: number, y: number) => terrain.getHeightAt(x, y)
       );
-      placementPreviewRef.current.setVespeneGeyserChecker((x: number, y: number) => {
+      placementPreviewRef.current.setPlasmaGeyserChecker((x: number, y: number) => {
         const world = getWorldProvider();
         const resources = world.getEntitiesWith('Resource', 'Transform');
         const searchRadius = 1.5;
         for (const entity of resources) {
           const resource = entity.get<Resource>('Resource');
-          if (resource?.resourceType !== 'vespene') continue;
+          if (resource?.resourceType !== 'plasma') continue;
           if (resource.hasRefinery?.()) continue;
           const transform = entity.get<Transform>('Transform');
           if (!transform) continue;

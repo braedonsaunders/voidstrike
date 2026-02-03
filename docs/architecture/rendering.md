@@ -937,7 +937,7 @@ const volumetricFog = Fn(({ sceneColor, depth, lightPos, fogDensity }) => {
 | Effect | Implementation | Performance |
 |--------|----------------|-------------|
 | Production building smoke | Local density volumes at building positions | Low cost if localized |
-| Vespene geyser gas | Animated noise-based density | Medium cost |
+| Plasma geyser gas | Animated noise-based density | Medium cost |
 | Battlefield dust/haze | Full-screen low-density fog | Medium cost |
 | Explosion smoke clouds | Temporary high-density spheres | Low (transient) |
 

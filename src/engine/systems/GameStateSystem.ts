@@ -15,8 +15,8 @@ export interface PlayerStats {
   buildingsConstructed: number;
   buildingsLost: number;
   buildingsDestroyed: number;
-  resourcesGathered: { minerals: number; vespene: number };
-  resourcesSpent: { minerals: number; vespene: number };
+  resourcesGathered: { minerals: number; plasma: number };
+  resourcesSpent: { minerals: number; plasma: number };
   peakSupply: number;
   totalDamageDealt: number;
   totalDamageTaken: number;
@@ -72,8 +72,8 @@ export class GameStateSystem extends System {
       buildingsConstructed: 0,
       buildingsLost: 0,
       buildingsDestroyed: 0,
-      resourcesGathered: { minerals: 0, vespene: 0 },
-      resourcesSpent: { minerals: 0, vespene: 0 },
+      resourcesGathered: { minerals: 0, plasma: 0 },
+      resourcesSpent: { minerals: 0, plasma: 0 },
       peakSupply: 0,
       totalDamageDealt: 0,
       totalDamageTaken: 0,
@@ -118,20 +118,20 @@ export class GameStateSystem extends System {
     });
 
     // Track resources gathered
-    this.game.eventBus.on('resources:gathered', (data: { playerId: string; minerals?: number; vespene?: number }) => {
+    this.game.eventBus.on('resources:gathered', (data: { playerId: string; minerals?: number; plasma?: number }) => {
       const stats = this.playerStats.get(data.playerId);
       if (stats) {
         stats.resourcesGathered.minerals += data.minerals || 0;
-        stats.resourcesGathered.vespene += data.vespene || 0;
+        stats.resourcesGathered.plasma += data.plasma || 0;
       }
     });
 
     // Track resources spent
-    this.game.eventBus.on('resources:spent', (data: { playerId: string; minerals?: number; vespene?: number }) => {
+    this.game.eventBus.on('resources:spent', (data: { playerId: string; minerals?: number; plasma?: number }) => {
       const stats = this.playerStats.get(data.playerId);
       if (stats) {
         stats.resourcesSpent.minerals += data.minerals || 0;
-        stats.resourcesSpent.vespene += data.vespene || 0;
+        stats.resourcesSpent.plasma += data.plasma || 0;
       }
     });
 

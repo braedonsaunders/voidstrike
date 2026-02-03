@@ -121,9 +121,9 @@ export class AIBuildOrderExecutor {
     if (step.type === 'building') {
       const buildingDef = BUILDING_DEFINITIONS[step.id];
       if (buildingDef &&
-          (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost)) {
+          (ai.minerals < buildingDef.mineralCost || ai.plasma < buildingDef.plasmaCost)) {
         if (shouldLog) {
-          debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for resources for ${step.id} (need ${buildingDef.mineralCost}M/${buildingDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+          debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for resources for ${step.id} (need ${buildingDef.mineralCost}M/${buildingDef.plasmaCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.plasma)}G)`);
         }
         return;
       }
@@ -132,9 +132,9 @@ export class AIBuildOrderExecutor {
     if (step.type === 'unit') {
       const unitDef = UNIT_DEFINITIONS[step.id];
       if (unitDef) {
-        if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) {
+        if (ai.minerals < unitDef.mineralCost || ai.plasma < unitDef.plasmaCost) {
           if (shouldLog) {
-            debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for resources for ${step.id} (need ${unitDef.mineralCost}M/${unitDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+            debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for resources for ${step.id} (need ${unitDef.mineralCost}M/${unitDef.plasmaCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.plasma)}G)`);
           }
           return;
         }
@@ -156,9 +156,9 @@ export class AIBuildOrderExecutor {
         return;
       }
       if (researchDef &&
-          (ai.minerals < researchDef.mineralCost || ai.vespene < researchDef.vespeneCost)) {
+          (ai.minerals < researchDef.mineralCost || ai.plasma < researchDef.plasmaCost)) {
         if (shouldLog) {
-          debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for resources for research ${step.id} (need ${researchDef.mineralCost}M/${researchDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+          debugAI.log(`[AIBuildOrder] ${ai.playerId}: Waiting for resources for research ${step.id} (need ${researchDef.mineralCost}M/${researchDef.plasmaCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.plasma)}G)`);
         }
         return;
       }
@@ -383,9 +383,9 @@ export class AIBuildOrderExecutor {
       return false;
     }
 
-    if (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost) {
+    if (ai.minerals < buildingDef.mineralCost || ai.plasma < buildingDef.plasmaCost) {
       if (shouldLog) {
-        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - insufficient resources for ${buildingType} (need ${buildingDef.mineralCost}M/${buildingDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+        debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - insufficient resources for ${buildingType} (need ${buildingDef.mineralCost}M/${buildingDef.plasmaCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.plasma)}G)`);
       }
       return false;
     }
@@ -434,12 +434,12 @@ export class AIBuildOrderExecutor {
 
     let buildPos: { x: number; y: number } | null = null;
 
-    // Special handling for extractors - must be placed on vespene geysers
+    // Special handling for extractors - must be placed on plasma geysers
     if (buildingType === config.roles.gasExtractor) {
-      buildPos = economyManager.findAvailableVespeneGeyser(ai, basePos);
+      buildPos = economyManager.findAvailablePlasmaGeyser(ai, basePos);
       if (!buildPos) {
         if (shouldLog) {
-          debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - no available vespene geyser near base`);
+          debugAI.log(`[AIBuildOrder] ${ai.playerId}: tryBuildBuilding - no available plasma geyser near base`);
         }
         return false;
       }
@@ -625,7 +625,7 @@ export class AIBuildOrderExecutor {
     }
 
     // Check resources first
-    if (ai.minerals < addonDef.mineralCost || ai.vespene < addonDef.vespeneCost) {
+    if (ai.minerals < addonDef.mineralCost || ai.plasma < addonDef.plasmaCost) {
       return false;
     }
 
@@ -668,9 +668,9 @@ export class AIBuildOrderExecutor {
     const currentTick = this.game.getCurrentTick();
     const shouldLog = currentTick % 100 === 0;
 
-    if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) {
+    if (ai.minerals < unitDef.mineralCost || ai.plasma < unitDef.plasmaCost) {
       if (shouldLog) {
-        debugAI.warn(`[AIBuildOrder] ${ai.playerId}: INSUFFICIENT RESOURCES for ${unitType} (need ${unitDef.mineralCost}M/${unitDef.vespeneCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.vespene)}G)`);
+        debugAI.warn(`[AIBuildOrder] ${ai.playerId}: INSUFFICIENT RESOURCES for ${unitType} (need ${unitDef.mineralCost}M/${unitDef.plasmaCost}G, have ${Math.floor(ai.minerals)}M/${Math.floor(ai.plasma)}G)`);
       }
       return false;
     }
@@ -704,7 +704,7 @@ export class AIBuildOrderExecutor {
       }
 
       ai.minerals -= unitDef.mineralCost;
-      ai.vespene -= unitDef.vespeneCost;
+      ai.plasma -= unitDef.plasmaCost;
       ai.supply += unitDef.supplyCost; // Track supply used
       building.addToProductionQueue('unit', unitType, unitDef.buildTime, unitDef.supplyCost);
 
@@ -730,7 +730,7 @@ export class AIBuildOrderExecutor {
     const unitDef = UNIT_DEFINITIONS[unitType];
     if (!unitDef) return false;
 
-    if (ai.minerals < unitDef.mineralCost || ai.vespene < unitDef.vespeneCost) {
+    if (ai.minerals < unitDef.mineralCost || ai.plasma < unitDef.plasmaCost) {
       return false;
     }
     if (ai.supply + unitDef.supplyCost > ai.maxSupply) {
@@ -800,7 +800,7 @@ export class AIBuildOrderExecutor {
     }
 
     // Check resources
-    if (ai.minerals < research.mineralCost || ai.vespene < research.vespeneCost) {
+    if (ai.minerals < research.mineralCost || ai.plasma < research.plasmaCost) {
       return false;
     }
 
@@ -832,7 +832,7 @@ export class AIBuildOrderExecutor {
 
     // Deduct resources
     ai.minerals -= research.mineralCost;
-    ai.vespene -= research.vespeneCost;
+    ai.plasma -= research.plasmaCost;
 
     // Track research in progress
     ai.researchInProgress.set(researchId, researchBuilding);
@@ -1195,7 +1195,7 @@ export class AIBuildOrderExecutor {
     }
 
     // Check resources
-    if (ai.minerals < buildingDef.mineralCost || ai.vespene < buildingDef.vespeneCost) {
+    if (ai.minerals < buildingDef.mineralCost || ai.plasma < buildingDef.plasmaCost) {
       return false;
     }
 

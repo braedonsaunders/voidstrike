@@ -15,7 +15,7 @@
         "name",
         "faction",
         "mineralCost",
-        "vespeneCost",
+        "plasmaCost",
         "buildTime",
         "width",
         "height",
@@ -45,10 +45,10 @@
           "minimum": 0,
           "description": "Mineral cost"
         },
-        "vespeneCost": {
+        "plasmaCost": {
           "type": "integer",
           "minimum": 0,
-          "description": "Vespene cost"
+          "description": "Plasma cost"
         },
         "buildTime": {
           "type": "number",

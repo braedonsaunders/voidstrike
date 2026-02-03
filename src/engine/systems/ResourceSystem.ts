@@ -72,7 +72,7 @@ export class ResourceSystem extends System {
   }
 
   /**
-   * Set up extractor completion checkers for all vespene geysers.
+   * Set up extractor completion checkers for all plasma geysers.
    * This allows Resource.hasExtractor() to verify the extractor is complete.
    */
   private setupExtractorCheckers(): void {
@@ -84,11 +84,11 @@ export class ResourceSystem extends System {
       return building ? building.isComplete() : false;
     };
 
-    // Apply to all existing vespene resources
+    // Apply to all existing plasma resources
     const resources = this.world.getEntitiesWith('Resource');
     for (const entity of resources) {
       const resource = entity.get<Resource>('Resource')!;
-      if (resource.resourceType === 'vespene') {
+      if (resource.resourceType === 'plasma') {
         resource.setExtractorCompleteChecker(extractorChecker);
       }
     }
@@ -98,7 +98,7 @@ export class ResourceSystem extends System {
       const entity = this.world.getEntity(data.entityId);
       if (entity) {
         const resource = entity.get<Resource>('Resource');
-        if (resource && resource.resourceType === 'vespene') {
+        if (resource && resource.resourceType === 'plasma') {
           resource.setExtractorCompleteChecker(extractorChecker);
         }
       }
@@ -121,8 +121,8 @@ export class ResourceSystem extends System {
     const resource = targetEntity.get<Resource>('Resource');
     if (!resource) return;
 
-    // Check if trying to gather vespene without an extractor
-    if (resource.resourceType === 'vespene' && !resource.hasRefinery()) {
+    // Check if trying to gather plasma without an extractor
+    if (resource.resourceType === 'plasma' && !resource.hasRefinery()) {
       this.game.eventBus.emit('ui:error', { message: 'Requires an Extractor' });
       return;
     }
@@ -285,12 +285,12 @@ export class ResourceSystem extends System {
   /**
    * Find the nearest non-depleted resource of a given type.
    * Used for auto-reassigning workers when their resource depletes.
-   * For vespene, only returns resources with completed extractors owned by the player.
+   * For plasma, only returns resources with completed extractors owned by the player.
    */
   private findNearestResource(
     x: number,
     y: number,
-    resourceType: 'minerals' | 'vespene',
+    resourceType: 'minerals' | 'plasma',
     playerId: string | undefined
   ): { entityId: number; x: number; y: number } | null {
     const resources = this.getCachedResources();
@@ -304,8 +304,8 @@ export class ResourceSystem extends System {
       if (resource.resourceType !== resourceType) continue;
       if (resource.isDepleted()) continue;
 
-      // For vespene, check if extractor is built and owned by this player
-      if (resourceType === 'vespene') {
+      // For plasma, check if extractor is built and owned by this player
+      if (resourceType === 'plasma') {
         if (!resource.hasRefinery()) continue;
 
         // Verify extractor ownership
@@ -349,7 +349,7 @@ export class ResourceSystem extends System {
       const unit = entity.get<Unit>('Unit');
       if (!unit || !unit.isWorker) continue;
 
-      if (unit.carryingMinerals > 0 || unit.carryingVespene > 0) {
+      if (unit.carryingMinerals > 0 || unit.carryingPlasma > 0) {
         this.findAndReturnToBase(entity);
       }
     }
@@ -369,7 +369,7 @@ export class ResourceSystem extends System {
       if (!transform) continue;
 
       // Check if carrying resources
-      if (unit.carryingMinerals > 0 || unit.carryingVespene > 0) {
+      if (unit.carryingMinerals > 0 || unit.carryingPlasma > 0) {
         this.handleResourceReturn(entity, transform, unit);
         continue;
       }
@@ -426,9 +426,9 @@ export class ResourceSystem extends System {
           debugResources.log(`[ResourceSystem] ${workerId} worker ${entity.id}: distance=${dist.toFixed(2)}, isMining=${unit.isMining}, gatherTargetId=${unit.gatherTargetId}, targetX=${unit.targetX?.toFixed(1)}, targetY=${unit.targetY?.toFixed(1)}, state=${unit.state}`);
         }
 
-        // Vespene extractors are 2x2 buildings - workers need larger gathering distance
+        // Plasma extractors are 2x2 buildings - workers need larger gathering distance
         // Minerals are single tiles - workers can get close
-        const gatherDistance = resource.resourceType === 'vespene' ? 3.5 : 2;
+        const gatherDistance = resource.resourceType === 'plasma' ? 3.5 : 2;
 
         if (dist <= gatherDistance) {
           // At resource - start or continue mining
@@ -457,9 +457,9 @@ export class ResourceSystem extends System {
             unit.miningTimer = 0;
           }
 
-          // For vespene, target a position outside the extractor (which blocks the center)
+          // For plasma, target a position outside the extractor (which blocks the center)
           // Calculate a point on the edge of the extractor closest to the worker
-          if (resource.resourceType === 'vespene') {
+          if (resource.resourceType === 'plasma') {
             const dx = transform.x - resourceTransform.x;
             const dy = transform.y - resourceTransform.y;
             const dist = distance(transform.x, transform.y, resourceTransform.x, resourceTransform.y);
@@ -492,7 +492,7 @@ export class ResourceSystem extends System {
     if (resource.resourceType === 'minerals') {
       unit.carryingMinerals = gathered;
     } else {
-      unit.carryingVespene = gathered;
+      unit.carryingPlasma = gathered;
     }
 
     // Remove gatherer - mining complete
@@ -584,7 +584,7 @@ export class ResourceSystem extends System {
     if (nearestDistance <= dropOffRange) {
       // At base - deposit resources
       const minerals = unit.carryingMinerals;
-      const vespene = unit.carryingVespene;
+      const plasma = unit.carryingPlasma;
 
       if (workerOwner) {
         const aiSystem = this.getAISystem();
@@ -592,7 +592,7 @@ export class ResourceSystem extends System {
 
         if (isAI) {
           // Credit AI player - this is the ONLY way AI gets resources (simulation-based)
-          aiSystem!.creditResources(workerOwner, minerals, vespene);
+          aiSystem!.creditResources(workerOwner, minerals, plasma);
         } else {
           // Try to credit local human player
           // Note: isLocalPlayer uses Zustand which may not work in Web Worker context
@@ -600,12 +600,12 @@ export class ResourceSystem extends System {
           try {
             if (isLocalPlayer(workerOwner)) {
               // Credit local human player via game store
-              this.game.statePort.addResources(minerals, vespene);
+              this.game.statePort.addResources(minerals, plasma);
             }
           } catch {
             // In Web Worker context, Zustand stores may not be available
             // Fall back to using statePort for any non-AI player
-            this.game.statePort.addResources(minerals, vespene);
+            this.game.statePort.addResources(minerals, plasma);
           }
         }
       }
@@ -614,11 +614,11 @@ export class ResourceSystem extends System {
       this.game.eventBus.emit('resource:delivered', {
         playerId: workerOwner,
         minerals,
-        vespene,
+        plasma,
       });
 
       unit.carryingMinerals = 0;
-      unit.carryingVespene = 0;
+      unit.carryingPlasma = 0;
 
       // Return to gather target if it still exists
       if (unit.gatherTargetId !== null) {

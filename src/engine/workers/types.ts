@@ -59,7 +59,7 @@ export interface UnitRenderState {
   // Worker visual info
   isWorker: boolean;
   carryingMinerals: number;
-  carryingVespene: number;
+  carryingPlasma: number;
   isMining: boolean;
   gatherTargetId: number | null;
   // Transform mode
@@ -181,7 +181,7 @@ export interface ProjectileRenderState {
  */
 export interface PlayerResourceState {
   minerals: number;
-  vespene: number;
+  plasma: number;
   supply: number;
   maxSupply: number;
 }
@@ -443,7 +443,7 @@ export interface SpawnMapData {
     y: number;
   }>;
   resources?: Array<{
-    type: 'mineral' | 'vespene';
+    type: 'mineral' | 'plasma';
     x: number;
     y: number;
     amount?: number;

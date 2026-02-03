@@ -1021,8 +1021,8 @@
         ]
       }
     },
-    "vespene": {
-      "model": "/models/resources/vespene_LOD0.glb",
+    "plasma": {
+      "model": "/models/resources/plasma_LOD0.glb",
       "scale": 2.0,
       "rotation": { "y": -90 },
       "animations": {

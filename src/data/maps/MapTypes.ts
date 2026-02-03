@@ -121,7 +121,7 @@ export interface MapCell {
 export interface ResourceNode {
   x: number;
   y: number;
-  type: 'minerals' | 'vespene';
+  type: 'minerals' | 'plasma';
   amount: number;
 }
 
@@ -137,7 +137,7 @@ export interface Expansion {
   x: number;
   y: number;
   minerals: ResourceNode[];
-  vespene: ResourceNode[];
+  plasma: ResourceNode[];
   isMain?: boolean;
   isNatural?: boolean;
 }
@@ -261,7 +261,7 @@ export function createTerrainGrid(
 export const MINERAL_NORMAL = 1500;  // Standard mineral patches
 export const MINERAL_CLOSE = 900;    // Close/small mineral patches (2 per base)
 export const MINERAL_GOLD = 900;     // Gold/rich mineral patches
-export const GAS_NORMAL = 2250;      // Standard vespene geyser
+export const GAS_NORMAL = 2250;      // Standard plasma geyser
 
 // Helper to create mineral arc (8 patches in a crescent shape)
 // The arc faces toward the base center
@@ -332,11 +332,11 @@ export function createMineralLineOld(
   return createMineralLine(baseX, baseY, baseX + offsetX, baseY + offsetY, amount);
 }
 
-// Helper to create vespene geysers (typically 2 per base)
+// Helper to create plasma geysers (typically 2 per base)
 // Places geysers at the ends of the mineral arc, forming a continuous crescent
 // mineralCenterX/Y: center of the mineral arc
 // baseCenterX/Y: position of the command center
-export function createVespeneGeysers(
+export function createPlasmaGeysers(
   mineralCenterX: number,
   mineralCenterY: number,
   baseCenterX: number,
@@ -366,13 +366,13 @@ export function createVespeneGeysers(
     {
       x: Math.round((mineralCenterX - Math.cos(geyser1Angle) * geyserRadius) * 2) / 2,
       y: Math.round((mineralCenterY - Math.sin(geyser1Angle) * geyserRadius) * 2) / 2,
-      type: 'vespene',
+      type: 'plasma',
       amount,
     },
     {
       x: Math.round((mineralCenterX - Math.cos(geyser2Angle) * geyserRadius) * 2) / 2,
       y: Math.round((mineralCenterY - Math.sin(geyser2Angle) * geyserRadius) * 2) / 2,
-      type: 'vespene',
+      type: 'plasma',
       amount,
     },
   ];
@@ -403,14 +403,14 @@ export function createBaseResources(
   gasAmount: number = GAS_NORMAL,
   isGold: boolean = false,
   mineralDistance: number = MINERAL_DISTANCE
-): { minerals: ResourceNode[]; vespene: ResourceNode[] } {
+): { minerals: ResourceNode[]; plasma: ResourceNode[] } {
   // Place mineral center at specified distance from base
   const mineralCenterX = baseX + Math.cos(direction) * mineralDistance;
   const mineralCenterY = baseY + Math.sin(direction) * mineralDistance;
 
   return {
     minerals: createMineralLine(mineralCenterX, mineralCenterY, baseX, baseY, mineralAmount, isGold),
-    vespene: createVespeneGeysers(mineralCenterX, mineralCenterY, baseX, baseY, gasAmount),
+    plasma: createPlasmaGeysers(mineralCenterX, mineralCenterY, baseX, baseY, gasAmount),
   };
 }
 

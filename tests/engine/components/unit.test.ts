@@ -22,7 +22,7 @@ function createBasicDefinition(overrides: Partial<UnitDefinition> = {}): UnitDef
     name: 'Test Unit',
     faction: 'terran',
     mineralCost: 100,
-    vespeneCost: 50,
+    plasmaCost: 50,
     buildTime: 10,
     supplyCost: 1,
     speed: 5,
@@ -89,7 +89,7 @@ describe('Unit Component', () => {
     it('initializes worker state', () => {
       expect(unit.isWorker).toBe(false);
       expect(unit.carryingMinerals).toBe(0);
-      expect(unit.carryingVespene).toBe(0);
+      expect(unit.carryingPlasma).toBe(0);
     });
 
     it('initializes as worker when defined', () => {

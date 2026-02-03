@@ -271,18 +271,18 @@ export class BuildingMechanicsSystem extends System {
       // Under construction: 75% of resources spent so far
       // Complete: 50% of total cost (salvage value)
       let refundMinerals = 0;
-      let refundVespene = 0;
+      let refundPlasma = 0;
 
       if (building.isComplete()) {
         // Complete building: 50% salvage value
         refundMinerals = Math.floor(buildingDef.mineralCost * 0.5);
-        refundVespene = Math.floor(buildingDef.vespeneCost * 0.5);
+        refundPlasma = Math.floor(buildingDef.plasmaCost * 0.5);
       } else {
         // Under construction: 75% of resources spent so far
         const spentMinerals = buildingDef.mineralCost * building.buildProgress;
-        const spentVespene = buildingDef.vespeneCost * building.buildProgress;
+        const spentPlasma = buildingDef.plasmaCost * building.buildProgress;
         refundMinerals = Math.floor(spentMinerals * 0.75);
-        refundVespene = Math.floor(spentVespene * 0.75);
+        refundPlasma = Math.floor(spentPlasma * 0.75);
       }
 
       // Refund supply if building provides supply and is complete
@@ -291,8 +291,8 @@ export class BuildingMechanicsSystem extends System {
       }
 
       // Refund resources
-      if (refundMinerals > 0 || refundVespene > 0) {
-        this.game.statePort.addResources(refundMinerals, refundVespene);
+      if (refundMinerals > 0 || refundPlasma > 0) {
+        this.game.statePort.addResources(refundMinerals, refundPlasma);
       }
 
       // Mark as destroyed
@@ -307,7 +307,7 @@ export class BuildingMechanicsSystem extends System {
         width: building.width,
         height: building.height,
         demolished: true, // Flag to indicate this was a manual demolish
-        refund: { minerals: refundMinerals, vespene: refundVespene },
+        refund: { minerals: refundMinerals, plasma: refundPlasma },
       });
 
       // Destroy the entity

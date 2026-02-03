@@ -5,8 +5,8 @@ import { distance } from '@/utils/math';
 // Extract saturation constants from config
 const OPTIMAL_WORKERS_PER_MINERAL = RESOURCE_TYPES.minerals.optimalWorkersPerSource;
 const MAX_WORKERS_PER_MINERAL = RESOURCE_SYSTEM_CONFIG.maxWorkersPerSource;
-const OPTIMAL_WORKERS_PER_VESPENE = RESOURCE_TYPES.vespene.optimalWorkersPerSource;
-const MAX_WORKERS_PER_VESPENE = RESOURCE_SYSTEM_CONFIG.maxWorkersPerSource;
+const OPTIMAL_WORKERS_PER_PLASMA = RESOURCE_TYPES.plasma.optimalWorkersPerSource;
+const MAX_WORKERS_PER_PLASMA = RESOURCE_SYSTEM_CONFIG.maxWorkersPerSource;
 
 /**
  * ResourceSystem Tests
@@ -32,20 +32,20 @@ describe('ResourceSystem', () => {
       expect(MAX_WORKERS_PER_MINERAL).toBe(3);
     });
 
-    it('defines optimal workers per vespene', () => {
-      expect(OPTIMAL_WORKERS_PER_VESPENE).toBe(3);
+    it('defines optimal workers per plasma', () => {
+      expect(OPTIMAL_WORKERS_PER_PLASMA).toBe(3);
     });
 
-    it('defines max workers per vespene', () => {
-      expect(MAX_WORKERS_PER_VESPENE).toBe(3);
+    it('defines max workers per plasma', () => {
+      expect(MAX_WORKERS_PER_PLASMA).toBe(3);
     });
 
     it('optimal is less than or equal to max for minerals', () => {
       expect(OPTIMAL_WORKERS_PER_MINERAL).toBeLessThanOrEqual(MAX_WORKERS_PER_MINERAL);
     });
 
-    it('optimal is less than or equal to max for vespene', () => {
-      expect(OPTIMAL_WORKERS_PER_VESPENE).toBeLessThanOrEqual(MAX_WORKERS_PER_VESPENE);
+    it('optimal is less than or equal to max for plasma', () => {
+      expect(OPTIMAL_WORKERS_PER_PLASMA).toBeLessThanOrEqual(MAX_WORKERS_PER_PLASMA);
     });
   });
 
@@ -87,24 +87,24 @@ describe('ResourceSystem', () => {
   describe('gathering distance thresholds', () => {
     // From ResourceSystem.update()
     const MINERAL_GATHER_DISTANCE = 2;
-    const VESPENE_GATHER_DISTANCE = 3.5;
+    const PLASMA_GATHER_DISTANCE = 3.5;
 
     it('mineral gathering distance is 2 units', () => {
       expect(MINERAL_GATHER_DISTANCE).toBe(2);
     });
 
-    it('vespene gathering distance is 3.5 units (extractor is 2x2)', () => {
-      expect(VESPENE_GATHER_DISTANCE).toBe(3.5);
+    it('plasma gathering distance is 3.5 units (extractor is 2x2)', () => {
+      expect(PLASMA_GATHER_DISTANCE).toBe(3.5);
     });
 
-    it('vespene distance accounts for larger building', () => {
-      expect(VESPENE_GATHER_DISTANCE).toBeGreaterThan(MINERAL_GATHER_DISTANCE);
+    it('plasma distance accounts for larger building', () => {
+      expect(PLASMA_GATHER_DISTANCE).toBeGreaterThan(MINERAL_GATHER_DISTANCE);
     });
 
     describe('worker can gather when within distance', () => {
-      function canGather(workerX: number, workerY: number, resourceX: number, resourceY: number, resourceType: 'minerals' | 'vespene'): boolean {
+      function canGather(workerX: number, workerY: number, resourceX: number, resourceY: number, resourceType: 'minerals' | 'plasma'): boolean {
         const dist = distance(workerX, workerY, resourceX, resourceY);
-        const threshold = resourceType === 'vespene' ? VESPENE_GATHER_DISTANCE : MINERAL_GATHER_DISTANCE;
+        const threshold = resourceType === 'plasma' ? PLASMA_GATHER_DISTANCE : MINERAL_GATHER_DISTANCE;
         return dist <= threshold;
       }
 
@@ -124,16 +124,16 @@ describe('ResourceSystem', () => {
         expect(canGather(3, 0, 0, 0, 'minerals')).toBe(false);
       });
 
-      it('worker at vespene can gather', () => {
-        expect(canGather(0, 0, 0, 0, 'vespene')).toBe(true);
+      it('worker at plasma can gather', () => {
+        expect(canGather(0, 0, 0, 0, 'plasma')).toBe(true);
       });
 
-      it('worker 3 units from vespene can gather', () => {
-        expect(canGather(3, 0, 0, 0, 'vespene')).toBe(true);
+      it('worker 3 units from plasma can gather', () => {
+        expect(canGather(3, 0, 0, 0, 'plasma')).toBe(true);
       });
 
-      it('worker 4 units from vespene cannot gather', () => {
-        expect(canGather(4, 0, 0, 0, 'vespene')).toBe(false);
+      it('worker 4 units from plasma cannot gather', () => {
+        expect(canGather(4, 0, 0, 0, 'plasma')).toBe(false);
       });
     });
   });
@@ -258,7 +258,7 @@ describe('ResourceSystem', () => {
       id: number;
       x: number;
       y: number;
-      resourceType: 'minerals' | 'vespene';
+      resourceType: 'minerals' | 'plasma';
       isDepleted: boolean;
       gathererCount: number;
     }
@@ -308,10 +308,10 @@ describe('ResourceSystem', () => {
       expect(result[0].id).toBe(2);
     });
 
-    it('excludes vespene geysers', () => {
+    it('excludes plasma geysers', () => {
       const resources: MockResource[] = [
         { id: 1, x: 5, y: 0, resourceType: 'minerals', isDepleted: false, gathererCount: 0 },
-        { id: 2, x: 10, y: 0, resourceType: 'vespene', isDepleted: false, gathererCount: 0 },
+        { id: 2, x: 10, y: 0, resourceType: 'plasma', isDepleted: false, gathererCount: 0 },
       ];
       const result = findNearbyMineralPatches(resources, 0, 0, MINERAL_PATCH_SEARCH_RANGE);
       expect(result.length).toBe(1);
@@ -324,7 +324,7 @@ describe('ResourceSystem', () => {
       id: number;
       x: number;
       y: number;
-      resourceType: 'minerals' | 'vespene';
+      resourceType: 'minerals' | 'plasma';
       isDepleted: boolean;
       gathererCount: number;
       hasRefinery: boolean;
@@ -337,7 +337,7 @@ describe('ResourceSystem', () => {
       resources: MockResource[],
       centerX: number,
       centerY: number,
-      resourceType: 'minerals' | 'vespene'
+      resourceType: 'minerals' | 'plasma'
     ): MockResource | null {
       let nearest: MockResource | null = null;
       let nearestDist = Infinity;
@@ -345,7 +345,7 @@ describe('ResourceSystem', () => {
       for (const r of resources) {
         if (r.resourceType !== resourceType) continue;
         if (r.isDepleted) continue;
-        if (resourceType === 'vespene' && !r.hasRefinery) continue;
+        if (resourceType === 'plasma' && !r.hasRefinery) continue;
         if (r.gathererCount >= MAX_GATHERERS) continue;
 
         const dist = distance(r.x, r.y, centerX, centerY);
@@ -395,12 +395,12 @@ describe('ResourceSystem', () => {
       expect(result).toBeNull();
     });
 
-    it('vespene requires refinery', () => {
+    it('plasma requires refinery', () => {
       const resources: MockResource[] = [
-        { id: 1, x: 10, y: 0, resourceType: 'vespene', isDepleted: false, gathererCount: 0, hasRefinery: false },
-        { id: 2, x: 20, y: 0, resourceType: 'vespene', isDepleted: false, gathererCount: 0, hasRefinery: true },
+        { id: 1, x: 10, y: 0, resourceType: 'plasma', isDepleted: false, gathererCount: 0, hasRefinery: false },
+        { id: 2, x: 20, y: 0, resourceType: 'plasma', isDepleted: false, gathererCount: 0, hasRefinery: true },
       ];
-      const result = findNearestResource(resources, 0, 0, 'vespene');
+      const result = findNearestResource(resources, 0, 0, 'plasma');
       expect(result?.id).toBe(2);
     });
 

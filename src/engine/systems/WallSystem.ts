@@ -383,7 +383,7 @@ export class WallSystem extends System {
 
       // Check cost based on player type
       if (isPlayerAI && aiPlayer) {
-        if (aiPlayer.minerals < upgradeDef.applyCost.minerals || aiPlayer.vespene < upgradeDef.applyCost.vespene) {
+        if (aiPlayer.minerals < upgradeDef.applyCost.minerals || aiPlayer.plasma < upgradeDef.applyCost.plasma) {
           continue;
         }
       } else if (isPlayerLocal) {
@@ -392,9 +392,9 @@ export class WallSystem extends System {
           this.game.eventBus.emit('warning:lowMinerals', {});
           continue;
         }
-        if (this.game.statePort.getVespene() < upgradeDef.applyCost.vespene) {
-          this.game.eventBus.emit('alert:notEnoughVespene', {});
-          this.game.eventBus.emit('warning:lowVespene', {});
+        if (this.game.statePort.getPlasma() < upgradeDef.applyCost.plasma) {
+          this.game.eventBus.emit('alert:notEnoughPlasma', {});
+          this.game.eventBus.emit('warning:lowPlasma', {});
           continue;
         }
       }
@@ -402,9 +402,9 @@ export class WallSystem extends System {
       // Deduct resources based on player type
       if (isPlayerAI && aiPlayer) {
         aiPlayer.minerals -= upgradeDef.applyCost.minerals;
-        aiPlayer.vespene -= upgradeDef.applyCost.vespene;
+        aiPlayer.plasma -= upgradeDef.applyCost.plasma;
       } else if (isPlayerLocal) {
-        this.game.statePort.addResources(-upgradeDef.applyCost.minerals, -upgradeDef.applyCost.vespene);
+        this.game.statePort.addResources(-upgradeDef.applyCost.minerals, -upgradeDef.applyCost.plasma);
       }
 
       // Start upgrade

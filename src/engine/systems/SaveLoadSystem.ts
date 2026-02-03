@@ -37,7 +37,7 @@ export interface SavedPlayerState {
   playerId: string;
   resources: {
     minerals: number;
-    vespene: number;
+    plasma: number;
     supply: number;
     maxSupply: number;
   };
@@ -342,7 +342,7 @@ export class SaveLoadSystem extends System {
         playerId,
         resources: {
           minerals: 0, // Will be restored from ResourceSystem
-          vespene: 0,
+          plasma: 0,
           supply: 0,
           maxSupply: 0,
         },

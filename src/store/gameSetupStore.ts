@@ -110,10 +110,10 @@ export interface GameSetupState {
   enableSpectatorMode: () => void;
 }
 
-export const STARTING_RESOURCES_VALUES: Record<StartingResources, { minerals: number; vespene: number }> = {
-  normal: { minerals: 50, vespene: 0 },
-  high: { minerals: 500, vespene: 200 },
-  insane: { minerals: 10000, vespene: 5000 },
+export const STARTING_RESOURCES_VALUES: Record<StartingResources, { minerals: number; plasma: number }> = {
+  normal: { minerals: 50, plasma: 0 },
+  high: { minerals: 500, plasma: 200 },
+  insane: { minerals: 10000, plasma: 5000 },
 };
 
 export const GAME_SPEED_VALUES: Record<GameSpeed, number> = {

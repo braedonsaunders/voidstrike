@@ -25,7 +25,7 @@ const OBJECT_VISUALS: Record<
   destructible_rock: { color: 0x8b4513, height: 1.5, shape: 'sphere' },
   destructible_debris: { color: 0x606060, height: 1.2, shape: 'sphere' },
   mineral_patch: { color: 0x4169e1, height: 0.8, shape: 'box' },
-  vespene_geyser: { color: 0x32cd32, height: 1.2, shape: 'cylinder' },
+  plasma_geyser: { color: 0x32cd32, height: 1.2, shape: 'cylinder' },
   // Decorations fallback (heights match base scale from assets.json)
   decoration_tree_pine_tall: { color: 0x2e7d32, height: 14, shape: 'cone' },
   decoration_tree_pine_medium: { color: 0x388e3c, height: 10, shape: 'cone' },

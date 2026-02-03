@@ -5,7 +5,7 @@
  * any number of resources with different gathering mechanics.
  *
  * Example configurations:
- * - Sci-fi RTS: minerals, vespene (2 resources)
+ * - Sci-fi RTS: minerals, plasma (2 resources)
  * - Medieval RTS: food, wood, gold, stone (4 resources)
  * - Fantasy RTS: gold, lumber, mana (3 resources)
  */
@@ -52,9 +52,9 @@ export const RESOURCE_TYPES: Record<string, ResourceTypeDefinition> = {
     shortName: 'Min',
     pluralName: 'Minerals',
   },
-  vespene: {
-    id: 'vespene',
-    name: 'Vespene Gas',
+  plasma: {
+    id: 'plasma',
+    name: 'Plasma Gas',
     description: 'Rare gas extracted from geysers, required for advanced units.',
     color: '#40ff80',
     gatherRate: 4,
@@ -65,7 +65,7 @@ export const RESOURCE_TYPES: Record<string, ResourceTypeDefinition> = {
     buildingType: 'extractor',
     defaultSourceAmount: 2000,
     shortName: 'Gas',
-    pluralName: 'Vespene',
+    pluralName: 'Plasma',
   },
 };
 
@@ -109,15 +109,15 @@ export interface StartingResources {
 export const STARTING_RESOURCES: Record<string, StartingResources> = {
   standard: {
     minerals: 50,
-    vespene: 0,
+    plasma: 0,
   },
   quick: {
     minerals: 200,
-    vespene: 100,
+    plasma: 100,
   },
   rich: {
     minerals: 1000,
-    vespene: 500,
+    plasma: 500,
   },
 };
 

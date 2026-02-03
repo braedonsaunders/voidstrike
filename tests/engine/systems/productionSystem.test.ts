@@ -16,100 +16,100 @@ describe('ProductionSystem', () => {
     interface RefundTestCase {
       progress: number;
       mineralCost: number;
-      vespeneCost: number;
+      plasmaCost: number;
       produceCount: number;
     }
 
-    function calculateRefund(testCase: RefundTestCase): { minerals: number; vespene: number } {
+    function calculateRefund(testCase: RefundTestCase): { minerals: number; plasma: number } {
       const refundPercent = testCase.progress < 0.5 ? 1 : 0.5;
       return {
         minerals: Math.floor(testCase.mineralCost * testCase.produceCount * refundPercent),
-        vespene: Math.floor(testCase.vespeneCost * testCase.produceCount * refundPercent),
+        plasma: Math.floor(testCase.plasmaCost * testCase.produceCount * refundPercent),
       };
     }
 
     describe('refund at 0% progress (full refund)', () => {
       it('refunds 100% minerals', () => {
-        const refund = calculateRefund({ progress: 0, mineralCost: 50, vespeneCost: 0, produceCount: 1 });
+        const refund = calculateRefund({ progress: 0, mineralCost: 50, plasmaCost: 0, produceCount: 1 });
         expect(refund.minerals).toBe(50);
       });
 
-      it('refunds 100% vespene', () => {
-        const refund = calculateRefund({ progress: 0, mineralCost: 0, vespeneCost: 25, produceCount: 1 });
-        expect(refund.vespene).toBe(25);
+      it('refunds 100% plasma', () => {
+        const refund = calculateRefund({ progress: 0, mineralCost: 0, plasmaCost: 25, produceCount: 1 });
+        expect(refund.plasma).toBe(25);
       });
 
       it('refunds both resources', () => {
-        const refund = calculateRefund({ progress: 0, mineralCost: 150, vespeneCost: 100, produceCount: 1 });
+        const refund = calculateRefund({ progress: 0, mineralCost: 150, plasmaCost: 100, produceCount: 1 });
         expect(refund.minerals).toBe(150);
-        expect(refund.vespene).toBe(100);
+        expect(refund.plasma).toBe(100);
       });
     });
 
     describe('refund at 25% progress (full refund)', () => {
       it('refunds 100% minerals', () => {
-        const refund = calculateRefund({ progress: 0.25, mineralCost: 100, vespeneCost: 0, produceCount: 1 });
+        const refund = calculateRefund({ progress: 0.25, mineralCost: 100, plasmaCost: 0, produceCount: 1 });
         expect(refund.minerals).toBe(100);
       });
     });
 
     describe('refund at 49% progress (full refund)', () => {
       it('refunds 100% minerals', () => {
-        const refund = calculateRefund({ progress: 0.49, mineralCost: 100, vespeneCost: 0, produceCount: 1 });
+        const refund = calculateRefund({ progress: 0.49, mineralCost: 100, plasmaCost: 0, produceCount: 1 });
         expect(refund.minerals).toBe(100);
       });
     });
 
     describe('refund at 50% progress (half refund)', () => {
       it('refunds 50% minerals', () => {
-        const refund = calculateRefund({ progress: 0.5, mineralCost: 100, vespeneCost: 0, produceCount: 1 });
+        const refund = calculateRefund({ progress: 0.5, mineralCost: 100, plasmaCost: 0, produceCount: 1 });
         expect(refund.minerals).toBe(50);
       });
 
-      it('refunds 50% vespene', () => {
-        const refund = calculateRefund({ progress: 0.5, mineralCost: 0, vespeneCost: 100, produceCount: 1 });
-        expect(refund.vespene).toBe(50);
+      it('refunds 50% plasma', () => {
+        const refund = calculateRefund({ progress: 0.5, mineralCost: 0, plasmaCost: 100, produceCount: 1 });
+        expect(refund.plasma).toBe(50);
       });
     });
 
     describe('refund at 75% progress (half refund)', () => {
       it('refunds 50% minerals', () => {
-        const refund = calculateRefund({ progress: 0.75, mineralCost: 100, vespeneCost: 0, produceCount: 1 });
+        const refund = calculateRefund({ progress: 0.75, mineralCost: 100, plasmaCost: 0, produceCount: 1 });
         expect(refund.minerals).toBe(50);
       });
     });
 
     describe('refund at 99% progress (half refund)', () => {
       it('refunds 50% minerals', () => {
-        const refund = calculateRefund({ progress: 0.99, mineralCost: 100, vespeneCost: 0, produceCount: 1 });
+        const refund = calculateRefund({ progress: 0.99, mineralCost: 100, plasmaCost: 0, produceCount: 1 });
         expect(refund.minerals).toBe(50);
       });
     });
 
     describe('reactor bonus refund (produceCount = 2)', () => {
       it('doubles refund at 0% progress', () => {
-        const refund = calculateRefund({ progress: 0, mineralCost: 50, vespeneCost: 25, produceCount: 2 });
+        const refund = calculateRefund({ progress: 0, mineralCost: 50, plasmaCost: 25, produceCount: 2 });
         expect(refund.minerals).toBe(100);
-        expect(refund.vespene).toBe(50);
+        expect(refund.plasma).toBe(50);
       });
 
       it('doubles refund at 75% progress (half of double)', () => {
-        const refund = calculateRefund({ progress: 0.75, mineralCost: 50, vespeneCost: 25, produceCount: 2 });
+        const refund = calculateRefund({ progress: 0.75, mineralCost: 50, plasmaCost: 25, produceCount: 2 });
         expect(refund.minerals).toBe(50);
-        expect(refund.vespene).toBe(25);
+        expect(refund.plasma).toBe(25);
       });
     });
 
     describe('edge cases', () => {
       it('handles zero cost unit', () => {
-        const refund = calculateRefund({ progress: 0, mineralCost: 0, vespeneCost: 0, produceCount: 1 });
+        const refund = calculateRefund({ progress: 0, mineralCost: 0, plasmaCost: 0, produceCount: 1 });
         expect(refund.minerals).toBe(0);
-        expect(refund.vespene).toBe(0);
+        expect(refund.plasma).toBe(0);
       });
 
       it('floors fractional refunds', () => {
         // 75 * 0.5 = 37.5 -> 37
-        const refund = calculateRefund({ progress: 0.5, mineralCost: 75, vespeneCost: 0, produceCount: 1 });
+        const refund = calculateRefund({ progress: 0.5, mineralCost: 75, plasmaCost: 0, produceCount: 1 });
         expect(refund.minerals).toBe(37);
       });
     });

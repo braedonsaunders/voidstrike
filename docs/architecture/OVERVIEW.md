@@ -891,7 +891,7 @@ Zustand store for reactive game state:
 interface GameState {
   // Resources
   minerals: number;
-  vespene: number;
+  plasma: number;
   supply: number;
   maxSupply: number;
 
@@ -906,7 +906,7 @@ interface GameState {
   // Actions
   selectUnits: (ids: EntityId[]) => void;
   setControlGroup: (key: number, ids: EntityId[]) => void;
-  addResources: (minerals: number, vespene: number) => void;
+  addResources: (minerals: number, plasma: number) => void;
 }
 ```
 
@@ -1400,7 +1400,7 @@ Built-in procedural mesh generation for all unit types (fallback when GLB not fo
 
 - **Units**: Fabricator, Trooper, Breacher, Devastator, Valkyrie, etc.
 - **Buildings**: Headquarters, Supply Cache, Infantry Bay, Forge, etc.
-- **Resources**: Mineral patches, Vespene geysers
+- **Resources**: Mineral patches, Plasma geysers
 - **Decorations**: Trees, rocks, grass
 
 Each procedural mesh:
@@ -2472,7 +2472,7 @@ interface WallLineState {
   startX, startY: number;
   endX, endY: number;
   positions: Array<{ x: number; y: number }>;
-  totalCost: { minerals: number; vespene: number };
+  totalCost: { minerals: number; plasma: number };
 }
 
 // Line calculation (straight lines only)
@@ -2659,7 +2659,7 @@ Metrics tracking for AI economy debugging (separate from AIEconomyManager):
 ```typescript
 interface AIEconomyMetrics {
   mineralsPerMinute: number;
-  vespenePerMinute: number;
+  plasmaPerMinute: number;
   totalMineralsGathered: number;
   workerCount: number;
   incomePerWorker: number;
@@ -2681,8 +2681,8 @@ interface PlayerStats {
   buildingsConstructed: number;
   buildingsLost: number;
   buildingsDestroyed: number;
-  resourcesGathered: { minerals: number; vespene: number };
-  resourcesSpent: { minerals: number; vespene: number };
+  resourcesGathered: { minerals: number; plasma: number };
+  resourcesSpent: { minerals: number; plasma: number };
   totalDamageDealt: number;
   totalDamageTaken: number;
   apm: number;

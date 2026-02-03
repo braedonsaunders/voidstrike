@@ -14,7 +14,7 @@ export class MockStatePort implements GameStatePort {
   private selectedUnits: number[] = [];
   private controlGroups: Map<number, number[]> = new Map();
   private minerals = 50;
-  private vespene = 0;
+  private plasma = 0;
   private supply = 0;
   private maxSupply = 0;
   private research: Map<string, Map<string, ResearchEntry>> = new Map();
@@ -31,8 +31,8 @@ export class MockStatePort implements GameStatePort {
     return this.minerals;
   }
 
-  getVespene(): number {
-    return this.vespene;
+  getPlasma(): number {
+    return this.plasma;
   }
 
   getSupply(): number {
@@ -62,14 +62,14 @@ export class MockStatePort implements GameStatePort {
     this.controlGroups.set(groupNumber, [...entityIds]);
   }
 
-  addResources(minerals: number, vespene: number): void {
+  addResources(minerals: number, plasma: number): void {
     this.minerals = Math.max(0, this.minerals + minerals);
-    this.vespene = Math.max(0, this.vespene + vespene);
+    this.plasma = Math.max(0, this.plasma + plasma);
   }
 
-  setResources(minerals: number, vespene: number): void {
+  setResources(minerals: number, plasma: number): void {
     this.minerals = Math.max(0, minerals);
-    this.vespene = Math.max(0, vespene);
+    this.plasma = Math.max(0, plasma);
   }
 
   addSupply(delta: number): void {
@@ -85,8 +85,8 @@ export class MockStatePort implements GameStatePort {
     this.minerals = amount;
   }
 
-  setVespene(amount: number): void {
-    this.vespene = amount;
+  setPlasma(amount: number): void {
+    this.plasma = amount;
   }
 
   setSupply(current: number, max: number): void {
@@ -98,7 +98,7 @@ export class MockStatePort implements GameStatePort {
     this.selectedUnits = [];
     this.controlGroups.clear();
     this.minerals = 50;
-    this.vespene = 0;
+    this.plasma = 0;
     this.supply = 0;
     this.maxSupply = 0;
     this.research.clear();

@@ -10,7 +10,7 @@ export interface BuildingDefinition {
   description?: string;
   faction: string;
   mineralCost: number;
-  vespeneCost: number;
+  plasmaCost: number;
   buildTime: number; // seconds
   width: number; // grid cells
   height: number;

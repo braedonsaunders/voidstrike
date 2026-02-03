@@ -19,8 +19,8 @@ export class ZustandStateAdapter implements GameStatePort {
     return useGameStore.getState().minerals;
   }
 
-  getVespene(): number {
-    return useGameStore.getState().vespene;
+  getPlasma(): number {
+    return useGameStore.getState().plasma;
   }
 
   getSupply(): number {
@@ -47,12 +47,12 @@ export class ZustandStateAdapter implements GameStatePort {
     useGameStore.getState().setControlGroup(groupNumber, entityIds);
   }
 
-  addResources(minerals: number, vespene: number): void {
-    useGameStore.getState().addResources(minerals, vespene);
+  addResources(minerals: number, plasma: number): void {
+    useGameStore.getState().addResources(minerals, plasma);
   }
 
-  setResources(minerals: number, vespene: number): void {
-    useGameStore.getState().setResources(minerals, vespene);
+  setResources(minerals: number, plasma: number): void {
+    useGameStore.getState().setResources(minerals, plasma);
   }
 
   addSupply(delta: number): void {

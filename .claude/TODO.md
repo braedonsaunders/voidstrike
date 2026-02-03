@@ -157,7 +157,7 @@
 
 ### Economy Metrics System
 - [x] **AIEconomySystem** - New system tracking income rate, worker efficiency, saturation
-- [x] **Income per minute calculation** - Rolling window tracks minerals/vespene per minute
+- [x] **Income per minute calculation** - Rolling window tracks minerals/plasma per minute
 - [x] **Debug logging** - Periodic economy metrics output for debugging
 - [x] **Event-based tracking** - Listens to `resource:delivered` events
 
@@ -393,7 +393,7 @@
 - [x] **Building placement grid** - Green/red tile visualization when placing buildings
 - [x] **Phaser overlay integration** - Fixed event mismatches, added production/research/building alerts
 - [x] **Combat feedback** - Player damage vignette, unit death effects, enhanced combat border
-- [x] **Resource warnings** - "NOT ENOUGH MINERALS/VESPENE", "SUPPLY BLOCKED" alerts
+- [x] **Resource warnings** - "NOT ENOUGH MINERALS/PLASMA", "SUPPLY BLOCKED" alerts
 - [x] **Ability splashes** - Major ability notifications (Stim Pack, Power Cannon)
 - [x] **Rally point visibility** - Rally points now properly show when production buildings are selected
 - [x] **Rally point right-click** - Right-clicking with building selected sets rally point
@@ -405,7 +405,7 @@
 - [x] **Worker physics push collision bug** - Workers (fabricators) were avoiding each other when gathering minerals due to physics push force not exempting worker-to-worker interactions. Separation force already exempted workers, but physics push did not. Fixed by adding worker exemption to `calculatePhysicsPush` in MovementSystem.
 
 ### Audio System Fixes
-- [x] **"Not enough resources" alert audio fix** - Audio was not playing for resource insufficiency alerts. Systems were emitting `'ui:error'` events but AudioSystem was listening for `'alert:notEnoughMinerals'` and `'alert:notEnoughVespene'`. Fixed by updating ProductionSystem, BuildingPlacementSystem, ResearchSystem, and WallSystem to emit the correct alert events alongside the visual warning events.
+- [x] **"Not enough resources" alert audio fix** - Audio was not playing for resource insufficiency alerts. Systems were emitting `'ui:error'` events but AudioSystem was listening for `'alert:notEnoughMinerals'` and `'alert:notEnoughPlasma'`. Fixed by updating ProductionSystem, BuildingPlacementSystem, ResearchSystem, and WallSystem to emit the correct alert events alongside the visual warning events.
 - [x] **Music toggle persistence** - Music on/off state (and all audio settings) now persists across page reloads via localStorage. Added `saveAudioSettings()` and `loadAudioSettings()` functions to uiStore.ts that save/restore musicEnabled, soundEnabled, volumes, and granular audio settings.
 
 ### WASM Boids System Fixes (January 2026)
@@ -435,7 +435,7 @@
 - [x] **Workers stuck in buildings after construction** - Workers would get stuck inside completed buildings or be drawn back into them after construction. Three issues: (1) Workers weren't pushed out of the building footprint when construction completed. (2) No safety check in updateWorkerConstruction for workers still assigned to completed buildings. (3) Workers inside the building couldn't pathfind out. Fixed by: (1) Teleporting workers to the nearest edge of the building footprint when releasing them. (2) Adding a safety check in updateWorkerConstruction that detects workers assigned to completed buildings and releases them with push-out. (3) Updating spatial grid positions after pushing workers out.
 
 ### Resource Rendering Fixes (January 2026)
-- [x] **Debug logging for resource rendering** - Added comprehensive logging to trace mineral/vespene spawning and instanced mesh creation
+- [x] **Debug logging for resource rendering** - Added comprehensive logging to trace mineral/plasma spawning and instanced mesh creation
 - [x] **Resource geometry validation** - Added safety check for models with < 3 vertices, fallback to procedural geometry
 - [x] **yOffset/baseScale clamping** - Prevent resources from rendering underground or at invisible scales due to bad model transforms
 - [x] **Natural expansion minerals not visible** - Fixed by clamping baseScale to >= 0.1. The minerals.glb model normalization was causing baseScale to be ~0.02, making minerals invisible.
@@ -572,8 +572,8 @@
   - **Root cause**: AI was sending ATTACK commands with `targetPosition` (attack-move) instead of `targetEntityId` (direct attack), relying on broken auto-acquire
   - **Fix**: AI now uses `findNearestEnemyEntity()` to find specific targets and sends direct ATTACK commands with `targetEntityId`, same as player right-click attacks
   - Also fixed: EnhancedAISystem gives orders to 'moving' units, AIMicroSystem preserves targets during kiting, CombatSystem handles edge cases
-- [x] **AI vespene extractor expansion** - AI now builds extractors on ALL available vespene geysers near any base (main and expansions), not just the first one
-- [x] **AI vespene worker overloading** - Fixed workers being over-assigned to refineries by tracking workers moving to resources (gatherTargetId) in addition to registered gatherers
+- [x] **AI plasma extractor expansion** - AI now builds extractors on ALL available plasma geysers near any base (main and expansions), not just the first one
+- [x] **AI plasma worker overloading** - Fixed workers being over-assigned to refineries by tracking workers moving to resources (gatherTargetId) in addition to registered gatherers
 - [x] **AI expansion improvements** - Multiple fixes to ensure AI expands:
   - Lowered mineral cluster detection threshold from 4 to 2 for smaller maps
   - Added time-based fallback expansion (after ~100 seconds) even without full army

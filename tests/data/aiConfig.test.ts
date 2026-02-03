@@ -44,7 +44,7 @@ function createTestState(overrides: Partial<AIStateSnapshot> = {}): AIStateSnaps
     personality: 'balanced',
     currentTick: 1000,
     minerals: 200,
-    vespene: 100,
+    plasma: 100,
     supply: 50,
     maxSupply: 100,
     workerCount: 20,
@@ -93,10 +93,10 @@ describe('evaluateCondition', () => {
     });
   });
 
-  describe('vespene conditions', () => {
-    it('evaluates vespene > value', () => {
-      const state = createTestState({ vespene: 150 });
-      const condition: RuleCondition = { type: 'vespene', operator: '>', value: 100 };
+  describe('plasma conditions', () => {
+    it('evaluates plasma > value', () => {
+      const state = createTestState({ plasma: 150 });
+      const condition: RuleCondition = { type: 'plasma', operator: '>', value: 100 };
       expect(evaluateCondition(condition, state)).toBe(true);
     });
   });
@@ -254,14 +254,14 @@ describe('evaluateCondition', () => {
 
 describe('evaluateRule', () => {
   it('returns true when all conditions pass', () => {
-    const state = createTestState({ minerals: 300, vespene: 100 });
+    const state = createTestState({ minerals: 300, plasma: 100 });
     const rule: MacroRule = {
       id: 'test-rule',
       name: 'Test Rule',
       priority: 50,
       conditions: [
         { type: 'minerals', operator: '>', value: 200 },
-        { type: 'vespene', operator: '>=', value: 50 },
+        { type: 'plasma', operator: '>=', value: 50 },
       ],
       action: { type: 'train', targetId: 'marine' },
       cooldownTicks: 0,
@@ -271,14 +271,14 @@ describe('evaluateRule', () => {
   });
 
   it('returns false when any condition fails', () => {
-    const state = createTestState({ minerals: 100, vespene: 100 });
+    const state = createTestState({ minerals: 100, plasma: 100 });
     const rule: MacroRule = {
       id: 'test-rule',
       name: 'Test Rule',
       priority: 50,
       conditions: [
         { type: 'minerals', operator: '>', value: 200 },
-        { type: 'vespene', operator: '>=', value: 50 },
+        { type: 'plasma', operator: '>=', value: 50 },
       ],
       action: { type: 'train', targetId: 'marine' },
       cooldownTicks: 0,
@@ -452,12 +452,12 @@ describe('calculateUtilityScore', () => {
   });
 
   it('applies multiple multipliers', () => {
-    const state = createTestState({ minerals: 500, vespene: 200 });
+    const state = createTestState({ minerals: 500, plasma: 200 });
     const utility: UtilityScore = {
       baseScore: 100,
       conditions: [
         { type: 'minerals', operator: '>', value: 400, multiplier: 2 },
-        { type: 'vespene', operator: '>', value: 100, multiplier: 1.5 },
+        { type: 'plasma', operator: '>', value: 100, multiplier: 1.5 },
       ],
     };
 

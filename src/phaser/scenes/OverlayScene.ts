@@ -388,10 +388,10 @@ export class OverlayScene extends Phaser.Scene {
       this.showAlert('NOT ENOUGH MINERALS', 0xffaa00, 1500);
     });
 
-    this.registerEvent('warning:lowVespene', () => {
+    this.registerEvent('warning:lowPlasma', () => {
       // Skip in spectator mode
       if (this.isSpectator()) return;
-      this.showAlert('NOT ENOUGH VESPENE', 0x00ffaa, 1500);
+      this.showAlert('NOT ENOUGH PLASMA', 0x00ffaa, 1500);
     });
 
     this.registerEvent('warning:supplyBlocked', () => {

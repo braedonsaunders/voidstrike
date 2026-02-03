@@ -65,8 +65,8 @@
         "cooldown": 1000,
         "priority": "CRITICAL"
       },
-      "alert_not_enough_vespene": {
-        "url": "/audio/alert/not_enough_vespene.mp3",
+      "alert_not_enough_plasma": {
+        "url": "/audio/alert/not_enough_plasma.mp3",
         "volume": 0.7,
         "cooldown": 1000,
         "priority": "CRITICAL"

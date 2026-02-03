@@ -69,9 +69,9 @@ const UpgradeTier = memo(function UpgradeTier({
 }) {
   const { status, missingRequirements } = useUpgradeStatus(upgrade.id);
   const minerals = useGameStore((state) => state.minerals);
-  const vespene = useGameStore((state) => state.vespene);
+  const plasma = useGameStore((state) => state.plasma);
 
-  const canAfford = minerals >= upgrade.mineralCost && vespene >= upgrade.vespeneCost;
+  const canAfford = minerals >= upgrade.mineralCost && plasma >= upgrade.plasmaCost;
 
   const statusColors = {
     researched: 'border-green-500 bg-green-900/30',
@@ -96,7 +96,7 @@ const UpgradeTier = memo(function UpgradeTier({
           hover:scale-105 cursor-default
           ${statusColors[status]}
         `}
-        title={`${upgrade.name}\n${upgrade.description}\n\nCost: ${upgrade.mineralCost}m / ${upgrade.vespeneCost}v\nTime: ${upgrade.researchTime}s${missingRequirements.length > 0 ? `\n\nRequires: ${missingRequirements.join(', ')}` : ''}`}
+        title={`${upgrade.name}\n${upgrade.description}\n\nCost: ${upgrade.mineralCost}m / ${upgrade.plasmaCost}v\nTime: ${upgrade.researchTime}s${missingRequirements.length > 0 ? `\n\nRequires: ${missingRequirements.join(', ')}` : ''}`}
       >
         {/* Level badge */}
         {levelLabel && (
@@ -124,8 +124,8 @@ const UpgradeTier = memo(function UpgradeTier({
               {upgrade.mineralCost}
             </span>
             <span className="text-void-500">/</span>
-            <span className={vespene >= upgrade.vespeneCost ? 'text-green-400' : 'text-red-400'}>
-              {upgrade.vespeneCost}
+            <span className={plasma >= upgrade.plasmaCost ? 'text-green-400' : 'text-red-400'}>
+              {upgrade.plasmaCost}
             </span>
           </div>
         )}
@@ -184,9 +184,9 @@ const StandaloneUpgrade = memo(function StandaloneUpgrade({
 }) {
   const { status, missingRequirements } = useUpgradeStatus(upgrade.id);
   const minerals = useGameStore((state) => state.minerals);
-  const vespene = useGameStore((state) => state.vespene);
+  const plasma = useGameStore((state) => state.plasma);
 
-  const canAfford = minerals >= upgrade.mineralCost && vespene >= upgrade.vespeneCost;
+  const canAfford = minerals >= upgrade.mineralCost && plasma >= upgrade.plasmaCost;
 
   const statusColors = {
     researched: 'border-green-500 bg-green-900/30',
@@ -236,8 +236,8 @@ const StandaloneUpgrade = memo(function StandaloneUpgrade({
           <span className={minerals >= upgrade.mineralCost ? 'text-blue-300' : 'text-red-400'}>
             ◆ {upgrade.mineralCost}
           </span>
-          <span className={vespene >= upgrade.vespeneCost ? 'text-green-400' : 'text-red-400'}>
-            ● {upgrade.vespeneCost}
+          <span className={plasma >= upgrade.plasmaCost ? 'text-green-400' : 'text-red-400'}>
+            ● {upgrade.plasmaCost}
           </span>
           <span className="text-void-500">
             {upgrade.researchTime}s

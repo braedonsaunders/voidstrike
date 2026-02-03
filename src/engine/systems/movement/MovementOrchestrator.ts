@@ -902,7 +902,7 @@ export class MovementOrchestrator {
       return true;
     } else {
       if (unit.state === 'gathering') {
-        const isCarryingResources = unit.carryingMinerals > 0 || unit.carryingVespene > 0;
+        const isCarryingResources = unit.carryingMinerals > 0 || unit.carryingPlasma > 0;
         if (!isCarryingResources) {
           unit.targetX = null;
           unit.targetY = null;

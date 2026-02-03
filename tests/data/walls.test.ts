@@ -211,7 +211,7 @@ describe('calculateWallLineCost', () => {
     const cost = calculateWallLineCost(positions, 'wall_segment');
 
     expect(cost.minerals).toBe(75); // 3 * 25
-    expect(cost.vespene).toBe(0);
+    expect(cost.plasma).toBe(0);
   });
 
   it('calculates cost for wall_gate', () => {
@@ -219,7 +219,7 @@ describe('calculateWallLineCost', () => {
     const cost = calculateWallLineCost(positions, 'wall_gate');
 
     expect(cost.minerals).toBe(75); // 1 * 75
-    expect(cost.vespene).toBe(0);
+    expect(cost.plasma).toBe(0);
   });
 
   it('returns zero for invalid building type', () => {
@@ -227,7 +227,7 @@ describe('calculateWallLineCost', () => {
     const cost = calculateWallLineCost(positions, 'invalid_type');
 
     expect(cost.minerals).toBe(0);
-    expect(cost.vespene).toBe(0);
+    expect(cost.plasma).toBe(0);
   });
 
   it('defaults to wall_segment', () => {
@@ -235,14 +235,14 @@ describe('calculateWallLineCost', () => {
     const cost = calculateWallLineCost(positions);
 
     expect(cost.minerals).toBe(50); // 2 * 25
-    expect(cost.vespene).toBe(0);
+    expect(cost.plasma).toBe(0);
   });
 
   it('handles empty positions array', () => {
     const cost = calculateWallLineCost([], 'wall_segment');
 
     expect(cost.minerals).toBe(0);
-    expect(cost.vespene).toBe(0);
+    expect(cost.plasma).toBe(0);
   });
 });
 
@@ -339,8 +339,8 @@ describe('wall costs and timing balance', () => {
 
   it('upgrade research costs more than application', () => {
     for (const upgrade of Object.values(WALL_UPGRADE_DEFINITIONS)) {
-      const researchTotal = upgrade.researchCost.minerals + upgrade.researchCost.vespene;
-      const applyTotal = upgrade.applyCost.minerals + upgrade.applyCost.vespene;
+      const researchTotal = upgrade.researchCost.minerals + upgrade.researchCost.plasma;
+      const applyTotal = upgrade.applyCost.minerals + upgrade.applyCost.plasma;
       expect(researchTotal).toBeGreaterThan(applyTotal);
     }
   });

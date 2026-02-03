@@ -77,7 +77,7 @@ export function mapDataToEditorFormat(map: MapData): EditorMapData {
       properties: {
         name: exp.name,
         minerals: exp.minerals,
-        vespene: exp.vespene,
+        plasma: exp.plasma,
       },
     });
   });
@@ -178,12 +178,12 @@ function editorFormatToMapData(data: EditorMapData): MapData {
 
   for (const obj of data.objects) {
     if (['main_base', 'natural', 'third', 'fourth', 'gold'].includes(obj.type)) {
-      // Get existing minerals/vespene or generate defaults
+      // Get existing minerals/plasma or generate defaults
       let minerals = obj.properties?.minerals as ResourceNode[] | undefined;
-      let vespene = obj.properties?.vespene as ResourceNode[] | undefined;
+      let plasma = obj.properties?.plasma as ResourceNode[] | undefined;
 
       // Auto-generate resources if not defined
-      if (!minerals || minerals.length === 0 || !vespene || vespene.length === 0) {
+      if (!minerals || minerals.length === 0 || !plasma || plasma.length === 0) {
         // Determine direction for resource placement (default to right, can be customized later)
         const direction = (obj.properties?.resourceDirection as number) ?? DIR.RIGHT;
         const isGold = obj.type === 'gold';
@@ -201,7 +201,7 @@ function editorFormatToMapData(data: EditorMapData): MapData {
         );
 
         minerals = minerals && minerals.length > 0 ? minerals : resources.minerals;
-        vespene = vespene && vespene.length > 0 ? vespene : resources.vespene;
+        plasma = plasma && plasma.length > 0 ? plasma : resources.plasma;
       }
 
       expansions.push({
@@ -209,7 +209,7 @@ function editorFormatToMapData(data: EditorMapData): MapData {
         x: obj.x,
         y: obj.y,
         minerals: minerals || [],
-        vespene: vespene || [],
+        plasma: plasma || [],
         isMain: obj.type === 'main_base',
         isNatural: obj.type === 'natural',
       });

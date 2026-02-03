@@ -70,7 +70,7 @@ export class ProductionSystem extends System {
         const refundPercent = cancelled.progress < 0.5 ? 1 : 0.5;
         const produceCount = cancelled.produceCount || 1;
         const mineralRefund = Math.floor(unitDef.mineralCost * produceCount * refundPercent);
-        const vespeneRefund = Math.floor(unitDef.vespeneCost * produceCount * refundPercent);
+        const plasmaRefund = Math.floor(unitDef.plasmaCost * produceCount * refundPercent);
 
         // Check AI status FIRST before checking local player
         const aiSystem = this.getAISystem();
@@ -79,13 +79,13 @@ export class ProductionSystem extends System {
         if (aiPlayer) {
           // Refund to AI player
           aiPlayer.minerals += mineralRefund;
-          aiPlayer.vespene += vespeneRefund;
+          aiPlayer.plasma += plasmaRefund;
           if (cancelled.supplyAllocated) {
             // Note: AI supply is recalculated from entities, no manual adjustment needed
           }
         } else if (playerId && isLocalPlayer(playerId)) {
           // Refund to local human player
-          this.game.statePort.addResources(mineralRefund, vespeneRefund);
+          this.game.statePort.addResources(mineralRefund, plasmaRefund);
           if (cancelled.supplyAllocated) {
             this.game.statePort.addSupply(-cancelled.supplyCost);
           }
@@ -175,9 +175,9 @@ export class ProductionSystem extends System {
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (this.game.statePort.getVespene() < unitDef.vespeneCost) {
-        this.game.eventBus.emit('alert:notEnoughVespene', {});
-        this.game.eventBus.emit('warning:lowVespene', {});
+      if (this.game.statePort.getPlasma() < unitDef.plasmaCost) {
+        this.game.eventBus.emit('alert:notEnoughPlasma', {});
+        this.game.eventBus.emit('warning:lowPlasma', {});
         return;
       }
     }
@@ -200,14 +200,14 @@ export class ProductionSystem extends System {
       } else {
         // Human: check if they can afford two
         const canAffordTwo = this.game.statePort.getMinerals() >= unitDef.mineralCost * 2 &&
-                             this.game.statePort.getVespene() >= unitDef.vespeneCost * 2;
+                             this.game.statePort.getPlasma() >= unitDef.plasmaCost * 2;
         produceCount = canAffordTwo ? 2 : 1;
       }
     }
 
     // Deduct resources based on produceCount (only for human players)
     if (!isOwnerAI) {
-      this.game.statePort.addResources(-unitDef.mineralCost * produceCount, -unitDef.vespeneCost * produceCount);
+      this.game.statePort.addResources(-unitDef.mineralCost * produceCount, -unitDef.plasmaCost * produceCount);
     }
     // AI resources were already deducted in EnhancedAISystem
 
@@ -260,9 +260,9 @@ export class ProductionSystem extends System {
       this.game.eventBus.emit('warning:lowMinerals', {});
       return;
     }
-    if (this.game.statePort.getVespene() < upgradeDef.vespeneCost) {
-      this.game.eventBus.emit('alert:notEnoughVespene', {});
-      this.game.eventBus.emit('warning:lowVespene', {});
+    if (this.game.statePort.getPlasma() < upgradeDef.plasmaCost) {
+      this.game.eventBus.emit('alert:notEnoughPlasma', {});
+      this.game.eventBus.emit('warning:lowPlasma', {});
       return;
     }
 
@@ -284,7 +284,7 @@ export class ProductionSystem extends System {
       if (isUpgrading) continue;
 
       // Deduct resources
-      this.game.statePort.addResources(-upgradeDef.mineralCost, -upgradeDef.vespeneCost);
+      this.game.statePort.addResources(-upgradeDef.mineralCost, -upgradeDef.plasmaCost);
 
       // Add to production queue as 'upgrade' type with building ID
       building.addToProductionQueue('upgrade', upgradeTo, upgradeDef.buildTime);

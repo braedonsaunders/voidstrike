@@ -29,7 +29,7 @@ export class BuildingPlacementPreview {
   private currentPosition: { x: number; y: number } = { x: 0, y: 0 };
   private isValid: boolean = false;
   private getTerrainHeight: ((x: number, y: number) => number) | null = null;
-  private checkVespeneGeyser: ((x: number, y: number) => boolean) | null = null;
+  private checkPlasmaGeyser: ((x: number, y: number) => boolean) | null = null;
   // Validator that checks collisions with buildings, units, resources, decorations
   private placementValidator: ((centerX: number, centerY: number, width: number, height: number) => boolean) | null = null;
 
@@ -93,10 +93,10 @@ export class BuildingPlacementPreview {
   }
 
   /**
-   * Set callback to check if a position is on a vespene geyser
+   * Set callback to check if a position is on a plasma geyser
    */
-  public setVespeneGeyserChecker(fn: (x: number, y: number) => boolean): void {
-    this.checkVespeneGeyser = fn;
+  public setPlasmaGeyserChecker(fn: (x: number, y: number) => boolean): void {
+    this.checkPlasmaGeyser = fn;
   }
 
   /**
@@ -404,9 +404,9 @@ export class BuildingPlacementPreview {
     const halfWidth = width / 2;
     const halfHeight = height / 2;
 
-    // Special case: extractors MUST be placed on vespene geysers
+    // Special case: extractors MUST be placed on plasma geysers
     if (this.currentBuildingType === 'extractor') {
-      if (!this.checkVespeneGeyser || !this.checkVespeneGeyser(centerX, centerY)) {
+      if (!this.checkPlasmaGeyser || !this.checkPlasmaGeyser(centerX, centerY)) {
         return false;
       }
       // If on a geyser, it's valid (skip terrain checks for geysers)

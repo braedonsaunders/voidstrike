@@ -48,7 +48,7 @@ export interface UtilityCondition {
 
 export type ConditionType =
   | 'minerals'
-  | 'vespene'
+  | 'plasma'
   | 'supply'
   | 'maxSupply'
   | 'supplyRatio' // supply / maxSupply
@@ -312,8 +312,8 @@ export interface ProductionBuildingConfig {
   maxTotal: number;
   /** Required buildings before this can be built */
   requires?: string[];
-  /** Minimum vespene to consider building */
-  minVespene?: number;
+  /** Minimum plasma to consider building */
+  minPlasma?: number;
 }
 
 // ==================== FACTION AI CONFIG ====================
@@ -421,8 +421,8 @@ export function evaluateCondition(
     case 'minerals':
       value = state.minerals;
       break;
-    case 'vespene':
-      value = state.vespene;
+    case 'plasma':
+      value = state.plasma;
       break;
     case 'supply':
       value = state.supply;
@@ -624,7 +624,7 @@ export interface AIStateSnapshot {
 
   // Resources
   minerals: number;
-  vespene: number;
+  plasma: number;
   supply: number;
   maxSupply: number;
 

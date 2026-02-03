@@ -476,21 +476,21 @@ export class ConsoleEngine {
 
       case 'addResources': {
         const minerals = (args.minerals as number) ?? (action.minerals as number) ?? 0;
-        const vespene = (args.vespene as number) ?? (action.vespene as number) ?? 0;
-        ctx.game.statePort.addResources(minerals, vespene);
+        const plasma = (args.plasma as number) ?? (action.plasma as number) ?? 0;
+        ctx.game.statePort.addResources(minerals, plasma);
         return {
           success: true,
-          message: `Added ${minerals} minerals, ${vespene} vespene`,
+          message: `Added ${minerals} minerals, ${plasma} plasma`,
         };
       }
 
       case 'setResources': {
         const minerals = args.minerals as number;
-        const vespene = args.vespene as number;
-        ctx.game.statePort.setResources(minerals, vespene);
+        const plasma = args.plasma as number;
+        ctx.game.statePort.setResources(minerals, plasma);
         return {
           success: true,
-          message: `Set resources to ${minerals} minerals, ${vespene} vespene`,
+          message: `Set resources to ${minerals} minerals, ${plasma} plasma`,
         };
       }
 
