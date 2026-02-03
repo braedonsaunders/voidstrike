@@ -32,7 +32,7 @@ export interface CommandQueueBase {
   pathIndex: number;
   gatherTargetId?: number | null;
   carryingMinerals?: number;
-  carryingVespene?: number;
+  carryingPlasma?: number;
   isHelperWorker?: boolean;
   constructingBuildingId?: number | null;
   buildTargetX?: number | null;
@@ -170,8 +170,8 @@ export function CommandQueueMixin<TBase extends Constructor<CommandQueueBase>>(B
             if (this.carryingMinerals !== undefined) {
               this.carryingMinerals = 0;
             }
-            if (this.carryingVespene !== undefined) {
-              this.carryingVespene = 0;
+            if (this.carryingPlasma !== undefined) {
+              this.carryingPlasma = 0;
             }
             if (this.isHelperWorker !== undefined) {
               this.isHelperWorker = false; // Queued builds are intentional, not auto-help

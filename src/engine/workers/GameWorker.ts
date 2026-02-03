@@ -144,7 +144,7 @@ export class WorkerGame extends GameCore {
     getSelectedUnits: () => this.selectedEntityIds,
     getControlGroup: (groupNumber: number) => this.controlGroups.get(groupNumber) ?? [],
     getMinerals: () => this.playerResources.get(this.config.playerId)?.minerals ?? 0,
-    getVespene: () => this.playerResources.get(this.config.playerId)?.vespene ?? 0,
+    getPlasma: () => this.playerResources.get(this.config.playerId)?.plasma ?? 0,
     getSupply: () => this.playerResources.get(this.config.playerId)?.supply ?? 0,
     getMaxSupply: () => this.playerResources.get(this.config.playerId)?.maxSupply ?? 0,
     hasResearch: (playerId: string, upgradeId: string) => {
@@ -167,32 +167,32 @@ export class WorkerGame extends GameCore {
     setControlGroup: (groupNumber: number, entityIds: number[]) => {
       this.controlGroups.set(groupNumber, [...entityIds]);
     },
-    addResources: (minerals: number, vespene: number) => {
+    addResources: (minerals: number, plasma: number) => {
       const current = this.playerResources.get(this.config.playerId) ?? {
         minerals: 0,
-        vespene: 0,
+        plasma: 0,
         supply: 0,
         maxSupply: 0,
       };
       current.minerals = Math.max(0, current.minerals + minerals);
-      current.vespene = Math.max(0, current.vespene + vespene);
+      current.plasma = Math.max(0, current.plasma + plasma);
       this.playerResources.set(this.config.playerId, current);
     },
-    setResources: (minerals: number, vespene: number) => {
+    setResources: (minerals: number, plasma: number) => {
       const current = this.playerResources.get(this.config.playerId) ?? {
         minerals: 0,
-        vespene: 0,
+        plasma: 0,
         supply: 0,
         maxSupply: 0,
       };
       current.minerals = Math.max(0, minerals);
-      current.vespene = Math.max(0, vespene);
+      current.plasma = Math.max(0, plasma);
       this.playerResources.set(this.config.playerId, current);
     },
     addSupply: (delta: number) => {
       const current = this.playerResources.get(this.config.playerId) ?? {
         minerals: 0,
-        vespene: 0,
+        plasma: 0,
         supply: 0,
         maxSupply: 0,
       };
@@ -202,7 +202,7 @@ export class WorkerGame extends GameCore {
     addMaxSupply: (delta: number) => {
       const current = this.playerResources.get(this.config.playerId) ?? {
         minerals: 0,
-        vespene: 0,
+        plasma: 0,
         supply: 0,
         maxSupply: 0,
       };

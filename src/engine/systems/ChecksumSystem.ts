@@ -21,7 +21,7 @@
  */
 
 import { System } from '../ecs/System';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { debugNetworking } from '@/utils/debugLogger';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
@@ -123,7 +123,10 @@ export interface GameStateSnapshot {
   checksum: number;
   timestamp: number;
   entities: EntityStateSnapshot[];
-  playerResources: Map<string, { minerals: number; plasma: number; supply: number; maxSupply: number }>;
+  playerResources: Map<
+    string,
+    { minerals: number; plasma: number; supply: number; maxSupply: number }
+  >;
 }
 
 export interface DesyncReport {
@@ -154,7 +157,15 @@ export class ChecksumSystem extends System {
   private stateSnapshots: GameStateSnapshot[] = [];
   private remoteChecksums: Map<string, Map<number, ChecksumData>> = new Map();
   private desyncReports: DesyncReport[] = [];
-  private pendingDesyncChecks: Map<number, { remotePeerId: string; remoteChecksum: number; remoteMerkleTree?: NetworkMerkleTree; receivedTick: number }[]> = new Map();
+  private pendingDesyncChecks: Map<
+    number,
+    {
+      remotePeerId: string;
+      remoteChecksum: number;
+      remoteMerkleTree?: NetworkMerkleTree;
+      receivedTick: number;
+    }[]
+  > = new Map();
 
   // Merkle tree storage for remote peers
   private remoteMerkleTrees: Map<string, Map<number, NetworkMerkleTree>> = new Map();
@@ -171,7 +182,7 @@ export class ChecksumSystem extends System {
   private _sortBufferResources: import('../ecs/Entity').Entity[] = [];
   private _sortBufferProjectiles: import('../ecs/Entity').Entity[] = [];
 
-  constructor(game: Game, config: Partial<ChecksumConfig> = {}) {
+  constructor(game: IGameInstance, config: Partial<ChecksumConfig> = {}) {
     super(game);
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.setupEventListeners();
@@ -282,7 +293,7 @@ export class ChecksumSystem extends System {
     };
 
     // Find the state snapshot for this tick if available
-    const snapshot = this.stateSnapshots.find(s => s.tick === tick);
+    const snapshot = this.stateSnapshots.find((s) => s.tick === tick);
     if (snapshot) {
       report.localSnapshot = snapshot;
     }
@@ -301,7 +312,9 @@ export class ChecksumSystem extends System {
       );
       debugNetworking.warn(`[ChecksumSystem] Divergent path: ${divergence.path.join(' -> ')}`);
       if (divergence.entityIds.length > 0) {
-        debugNetworking.warn(`[ChecksumSystem] Divergent entity IDs: ${divergence.entityIds.join(', ')}`);
+        debugNetworking.warn(
+          `[ChecksumSystem] Divergent entity IDs: ${divergence.entityIds.join(', ')}`
+        );
       }
     } else if (localChecksumData.merkleTree) {
       // Use category-level comparison if we only have local tree
@@ -310,7 +323,9 @@ export class ChecksumSystem extends System {
         remoteChecksum
       );
       if (divergentCategories.length > 0) {
-        debugNetworking.warn(`[ChecksumSystem] Likely divergent categories: ${divergentCategories.join(', ')}`);
+        debugNetworking.warn(
+          `[ChecksumSystem] Likely divergent categories: ${divergentCategories.join(', ')}`
+        );
       }
     }
 
@@ -518,18 +533,28 @@ export class ChecksumSystem extends System {
         // We now have local checksum - verify
         for (const pending of pendingList) {
           if (localChecksum.checksum !== pending.remoteChecksum) {
-            this.reportDesync(tick, localChecksum, pending.remoteChecksum, pending.remotePeerId, pending.remoteMerkleTree);
+            this.reportDesync(
+              tick,
+              localChecksum,
+              pending.remoteChecksum,
+              pending.remotePeerId,
+              pending.remoteMerkleTree
+            );
           }
         }
         ticksToRemove.push(tick);
       } else if (currentTick - tick > this.config.desyncConfirmationTicks) {
         // CRITICAL: Unable to verify checksums for old tick - potential undetected desync
         // This shouldn't happen in normal gameplay; log as warning
-        debugNetworking.warn(`[ChecksumSystem] UNVERIFIED: Could not verify checksums for tick ${tick} (${pendingList.length} pending). Local computation may be delayed.`);
+        debugNetworking.warn(
+          `[ChecksumSystem] UNVERIFIED: Could not verify checksums for tick ${tick} (${pendingList.length} pending). Local computation may be delayed.`
+        );
         // If we have pending remote checksums but no local, something is wrong
         // In production, this could indicate desync or severe lag
         if (pendingList.length > 0) {
-          console.error(`[ChecksumSystem] Potential desync: remote checksums received but local not computed for tick ${tick}`);
+          console.error(
+            `[ChecksumSystem] Potential desync: remote checksums received but local not computed for tick ${tick}`
+          );
         }
         ticksToRemove.push(tick);
       }
@@ -842,7 +867,10 @@ export class ChecksumSystem extends System {
         projectileGroups.push(MerkleTreeBuilder.createGroupNode(playerId, nodes));
       }
     }
-    const projectilesCategory = MerkleTreeBuilder.createCategoryNode('projectiles', projectileGroups);
+    const projectilesCategory = MerkleTreeBuilder.createCategoryNode(
+      'projectiles',
+      projectileGroups
+    );
 
     // Build Resources category (single group since not player-owned)
     const resourcesCategory = MerkleTreeBuilder.createCategoryNode('resources', [
@@ -871,7 +899,10 @@ export class ChecksumSystem extends System {
    */
   private createStateSnapshot(tick: number): GameStateSnapshot {
     const entities: EntityStateSnapshot[] = [];
-    const playerResources = new Map<string, { minerals: number; plasma: number; supply: number; maxSupply: number }>();
+    const playerResources = new Map<
+      string,
+      { minerals: number; plasma: number; supply: number; maxSupply: number }
+    >();
 
     // Snapshot units
     const units = this.world.getEntitiesWith('Unit', 'Transform', 'Health', 'Selectable');
@@ -1122,19 +1153,23 @@ export class ChecksumSystem extends System {
     }
 
     // Build entity maps
-    const localEntities = new Map(local.entities.map(e => [e.id, e]));
-    const remoteEntities = new Map(remote.entities.map(e => [e.id, e]));
+    const localEntities = new Map(local.entities.map((e) => [e.id, e]));
+    const remoteEntities = new Map(remote.entities.map((e) => [e.id, e]));
 
     // Check for missing entities
     for (const [id, entity] of localEntities) {
       if (!remoteEntities.has(id)) {
-        differences.push(`Entity ${id} (${entity.type} ${entity.unitId || entity.buildingId}) exists locally but not remotely`);
+        differences.push(
+          `Entity ${id} (${entity.type} ${entity.unitId || entity.buildingId}) exists locally but not remotely`
+        );
       }
     }
 
     for (const [id, entity] of remoteEntities) {
       if (!localEntities.has(id)) {
-        differences.push(`Entity ${id} (${entity.type} ${entity.unitId || entity.buildingId}) exists remotely but not locally`);
+        differences.push(
+          `Entity ${id} (${entity.type} ${entity.unitId || entity.buildingId}) exists remotely but not locally`
+        );
       }
     }
 

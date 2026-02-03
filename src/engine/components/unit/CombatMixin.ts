@@ -36,6 +36,9 @@ export interface CombatBase {
   currentSpeed: number;
   isHoldingPosition: boolean;
   isNaval: boolean;
+  // Path properties from UnitCore - needed for holdPosition to clear stale paths
+  path: Array<{ x: number; y: number }>;
+  pathIndex: number;
   // CommandQueue properties - accessed dynamically (optional for type safety)
   commandQueue?: unknown[];
   patrolPoints?: unknown[];
@@ -139,6 +142,9 @@ export function CombatMixin<TBase extends Constructor<CombatBase>>(Base: TBase) 
       this.targetEntityId = null;
       this.state = 'idle';
       this.currentSpeed = 0;
+      // Clear path to prevent stale path from being followed after hold is released
+      this.path = [];
+      this.pathIndex = 0;
       if (this.commandQueue !== undefined) {
         (this as unknown as { commandQueue: unknown[] }).commandQueue = [];
       }

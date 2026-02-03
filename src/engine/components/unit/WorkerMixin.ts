@@ -12,7 +12,7 @@ import type { Constructor, UnitDefinition, UnitState } from './types';
 export interface WorkerFields {
   isWorker: boolean;
   carryingMinerals: number;
-  carryingVespene: number;
+  carryingPlasma: number;
   gatherTargetId: number | null;
   miningTimer: number;
   isMining: boolean;
@@ -46,7 +46,7 @@ export function WorkerMixin<TBase extends Constructor<WorkerBase>>(Base: TBase) 
   return class WithWorker extends Base implements WorkerFields {
     public isWorker: boolean = false;
     public carryingMinerals: number = 0;
-    public carryingVespene: number = 0;
+    public carryingPlasma: number = 0;
     public gatherTargetId: number | null = null;
     public miningTimer: number = 0;
     public isMining: boolean = false;
@@ -93,7 +93,7 @@ export function WorkerMixin<TBase extends Constructor<WorkerBase>>(Base: TBase) 
       this.pathIndex = 0;
       this.gatherTargetId = null;
       this.carryingMinerals = 0;
-      this.carryingVespene = 0;
+      this.carryingPlasma = 0;
     }
 
     /**
@@ -137,7 +137,7 @@ export function WorkerMixin<TBase extends Constructor<WorkerBase>>(Base: TBase) 
     protected initializeWorkerFields(definition: UnitDefinition): void {
       this.isWorker = definition.isWorker ?? false;
       this.carryingMinerals = 0;
-      this.carryingVespene = 0;
+      this.carryingPlasma = 0;
       this.gatherTargetId = null;
       this.miningTimer = 0;
       this.isMining = false;

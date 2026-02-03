@@ -67,7 +67,7 @@ export interface UnitDefinition {
   description?: string;
   faction: string;
   mineralCost: number;
-  vespeneCost: number;
+  plasmaCost: number;
   buildTime: number; // seconds
   supplyCost: number;
   speed: number;
@@ -237,7 +237,7 @@ export interface UnitFields {
   // Worker fields (WorkerMixin)
   isWorker: boolean;
   carryingMinerals: number;
-  carryingVespene: number;
+  carryingPlasma: number;
   gatherTargetId: number | null;
   miningTimer: number;
   isMining: boolean;

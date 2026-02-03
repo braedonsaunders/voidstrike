@@ -10,7 +10,7 @@
  */
 
 import { System } from '../ecs/System';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { EnhancedAISystem } from './EnhancedAISystem';
 import { debugAI } from '@/utils/debugLogger';
 
@@ -51,41 +51,40 @@ export class AIEconomySystem extends System {
   private lastMetricsLogTick: number = 0;
   private readonly METRICS_LOG_INTERVAL = 400; // Log every ~20 seconds
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
 
   private setupEventListeners(): void {
     // Listen for resource deliveries to track income
-    this.game.eventBus.on('resource:delivered', (data: {
-      playerId: string | undefined;
-      minerals: number;
-      plasma: number;
-    }) => {
-      if (!data.playerId) return;
+    this.game.eventBus.on(
+      'resource:delivered',
+      (data: { playerId: string | undefined; minerals: number; plasma: number }) => {
+        if (!data.playerId) return;
 
-      // Only track AI players
-      const aiSystem = this.getAISystem();
-      if (!aiSystem || !aiSystem.isAIPlayer(data.playerId)) return;
+        // Only track AI players
+        const aiSystem = this.getAISystem();
+        if (!aiSystem || !aiSystem.isAIPlayer(data.playerId)) return;
 
-      let tracker = this.incomeTrackers.get(data.playerId);
-      if (!tracker) {
-        tracker = this.createTracker();
-        this.incomeTrackers.set(data.playerId, tracker);
+        let tracker = this.incomeTrackers.get(data.playerId);
+        if (!tracker) {
+          tracker = this.createTracker();
+          this.incomeTrackers.set(data.playerId, tracker);
+        }
+
+        tracker.mineralsGathered += data.minerals;
+        tracker.plasmaGathered += data.plasma;
+        tracker.recentMinerals.push(data.minerals);
+        tracker.recentPlasma.push(data.plasma);
+
+        // Keep rolling window to ~60 seconds of data (1200 ticks at 20 ticks/sec)
+        if (tracker.recentMinerals.length > 100) {
+          tracker.recentMinerals.shift();
+          tracker.recentPlasma.shift();
+        }
       }
-
-      tracker.mineralsGathered += data.minerals;
-      tracker.plasmaGathered += data.plasma;
-      tracker.recentMinerals.push(data.minerals);
-      tracker.recentPlasma.push(data.plasma);
-
-      // Keep rolling window to ~60 seconds of data (1200 ticks at 20 ticks/sec)
-      if (tracker.recentMinerals.length > 100) {
-        tracker.recentMinerals.shift();
-        tracker.recentPlasma.shift();
-      }
-    });
+    );
   }
 
   private createTracker(): IncomeTracker {
@@ -121,11 +120,11 @@ export class AIEconomySystem extends System {
       if (metrics) {
         debugAI.log(
           `[AIEconomy] ${playerId}: ` +
-          `${metrics.mineralsPerMinute.toFixed(0)} M/min, ` +
-          `${metrics.plasmaPerMinute.toFixed(0)} G/min, ` +
-          `workers: ${metrics.workerCount}, ` +
-          `income/worker: ${metrics.incomePerWorker.toFixed(1)}, ` +
-          `current: ${metrics.currentMinerals.toFixed(0)}M/${metrics.currentPlasma.toFixed(0)}G`
+            `${metrics.mineralsPerMinute.toFixed(0)} M/min, ` +
+            `${metrics.plasmaPerMinute.toFixed(0)} G/min, ` +
+            `workers: ${metrics.workerCount}, ` +
+            `income/worker: ${metrics.incomePerWorker.toFixed(1)}, ` +
+            `current: ${metrics.currentMinerals.toFixed(0)}M/${metrics.currentPlasma.toFixed(0)}G`
         );
       }
     }
@@ -154,7 +153,8 @@ export class AIEconomySystem extends System {
     // Get worker count from AI system (we need to expose this or estimate)
     // For now, estimate based on income rate
     const estimatedWorkers = mineralsPerMinute > 0 ? Math.round(mineralsPerMinute / 40) : 0;
-    const incomePerWorker = estimatedWorkers > 0 ? (mineralsPerMinute + plasmaPerMinute) / estimatedWorkers : 0;
+    const incomePerWorker =
+      estimatedWorkers > 0 ? (mineralsPerMinute + plasmaPerMinute) / estimatedWorkers : 0;
 
     return {
       playerId,
