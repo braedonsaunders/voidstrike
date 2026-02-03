@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { Providers } from '@/components/Providers';
 
 export const metadata: Metadata = {
   title: 'VOIDSTRIKE - Browser-Based RTS',
@@ -24,9 +23,7 @@ export default function RootLayout({
         />
       </head>
       <body className="font-sans bg-black text-white antialiased">
-        <Providers>
-          {children}
-        </Providers>
+        {children}
       </body>
     </html>
   );

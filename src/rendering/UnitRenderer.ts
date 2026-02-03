@@ -39,97 +39,16 @@ import {
   EntityIdTracker,
   scheduleGeometryDisposal,
 } from './shared';
+import { cloneGeometryForGPU } from './utils/geometryUtils';
 
 // GPU-driven rendering infrastructure
 import { CullingService, EntityCategory } from './services/CullingService';
 import { LODConfig } from './compute/UnifiedCullingCompute';
 import { GPUIndirectRenderer } from './compute/GPUIndirectRenderer';
 
-/**
- * Clone geometry with completely fresh GPU buffers for WebGPU.
- * Creates new TypedArrays for all attributes and index to ensure zero shared state
- * with the source geometry. This prevents "setIndexBuffer" crashes when source
- * geometry is disposed while clones are still being rendered.
- * Also ensures required attributes (like UVs) exist to prevent "Vertex buffer slot" errors.
- */
-function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry {
-  const cloned = new THREE.BufferGeometry();
-
-  // Copy all attributes with fresh TypedArrays (no shared references)
-  // Skip color attributes - AI models bake AO into vertex colors causing artifacts
-  for (const name of Object.keys(source.attributes)) {
-    if (name === 'color' || name.match(/^_?color_?\d+$/i)) {
-      continue; // Skip vertex colors entirely
-    }
-    const srcAttr = source.attributes[name];
-    // Create a completely new TypedArray by slicing (creates a copy)
-    const newArray = srcAttr.array.slice(0);
-    const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
-    newAttr.needsUpdate = true;
-    cloned.setAttribute(name, newAttr);
-  }
-
-  // Copy index with fresh TypedArray if present
-  if (source.index) {
-    const srcIndex = source.index;
-    const newIndexArray = srcIndex.array.slice(0);
-    const newIndex = new THREE.BufferAttribute(
-      newIndexArray,
-      srcIndex.itemSize,
-      srcIndex.normalized
-    );
-    newIndex.needsUpdate = true;
-    cloned.setIndex(newIndex);
-  }
-
-  // Copy morph attributes if present
-  if (source.morphAttributes) {
-    for (const name of Object.keys(source.morphAttributes)) {
-      const srcMorphArray = source.morphAttributes[name];
-      cloned.morphAttributes[name] = srcMorphArray.map((srcAttr) => {
-        const newArray = srcAttr.array.slice(0);
-        const newAttr = new THREE.BufferAttribute(newArray, srcAttr.itemSize, srcAttr.normalized);
-        newAttr.needsUpdate = true;
-        return newAttr;
-      });
-    }
-  }
-
-  // Copy bounding volumes if computed
-  if (source.boundingBox) {
-    cloned.boundingBox = source.boundingBox.clone();
-  }
-  if (source.boundingSphere) {
-    cloned.boundingSphere = source.boundingSphere.clone();
-  }
-
-  // Copy groups
-  for (const group of source.groups) {
-    cloned.addGroup(group.start, group.count, group.materialIndex);
-  }
-
-  // Ensure UV coordinates exist - required by many shaders (slot 1)
-  // Some models from Tripo/Meshy AI lack UVs, causing "Vertex buffer slot 1" errors
-  if (!cloned.attributes.uv && cloned.attributes.position) {
-    const posCount = cloned.attributes.position.count;
-    const uvArray = new Float32Array(posCount * 2);
-    // Generate basic UV coords based on position (simple projection)
-    const pos = cloned.attributes.position;
-    for (let i = 0; i < posCount; i++) {
-      uvArray[i * 2] = pos.getX(i) * 0.5 + 0.5;
-      uvArray[i * 2 + 1] = pos.getZ(i) * 0.5 + 0.5;
-    }
-    cloned.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
-  }
-
-  // Ensure normal coordinates exist - required for proper lighting and SSAO
-  // Some models from Tripo/Meshy AI lack normals, causing GTAO to reconstruct
-  // normals from depth gradients which creates visible triangular artifacts
-  if (!cloned.attributes.normal && cloned.attributes.position) {
-    cloned.computeVertexNormals();
-  }
-
-  return cloned;
+// Unit geometry cloning - doesn't force recompute normals (units have good normals)
+function cloneGeometryForGPUUnit(source: THREE.BufferGeometry): THREE.BufferGeometry {
+  return cloneGeometryForGPU(source, { recomputeNormals: false });
 }
 
 // Instance data for a single unit type + player combo at a specific LOD level

@@ -219,7 +219,6 @@ export class FormationControl {
     const arcSlots = this.calculateArcPositions(
       group.center,
       facing,
-      enemyCenter,
       meleeUnits.length,
       4 // Distance from center to front
     );
@@ -238,7 +237,6 @@ export class FormationControl {
     const rangedArcSlots = this.calculateArcPositions(
       group.center,
       facing,
-      enemyCenter,
       rangedUnits.length,
       -this.config.rangedOffset // Behind center
     );
@@ -257,7 +255,6 @@ export class FormationControl {
     const siegeSlots = this.calculateArcPositions(
       group.center,
       facing,
-      enemyCenter,
       siegeUnits.length,
       -this.config.rangedOffset * 2
     );
@@ -301,7 +298,6 @@ export class FormationControl {
   private calculateArcPositions(
     center: { x: number; y: number },
     facing: { x: number; y: number },
-    enemyCenter: { x: number; y: number },
     count: number,
     distanceOffset: number
   ): Array<{ x: number; y: number }> {
