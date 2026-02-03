@@ -867,12 +867,45 @@ export class UnifiedWaterMesh {
     }
 
     // Debug log
-    console.log('[UnifiedWaterMesh] Feature counts:', featureCounts);
-    console.log('[UnifiedWaterMesh] Total cells:', totalCells, 'Water regions:', regions.length);
     console.log(
-      '[UnifiedWaterMesh] Total water cells:',
-      regions.reduce((sum, r) => sum + r.cells.length, 0)
+      '[UnifiedWaterMesh] Map dimensions:',
+      width,
+      'x',
+      height,
+      '=',
+      width * height,
+      'total possible cells'
     );
+    console.log(
+      '[UnifiedWaterMesh] Terrain rows:',
+      terrain.length,
+      'First row cols:',
+      terrain[0]?.length
+    );
+    console.log('[UnifiedWaterMesh] Sample cell [0][0]:', JSON.stringify(terrain[0]?.[0]));
+    console.log('[UnifiedWaterMesh] Feature counts:', featureCounts);
+    console.log(
+      '[UnifiedWaterMesh] Cells counted in loop:',
+      totalCells,
+      'Regions:',
+      regions.length
+    );
+    const totalWaterCells = regions.reduce((sum, r) => sum + r.cells.length, 0);
+    console.log('[UnifiedWaterMesh] Total water cells:', totalWaterCells);
+    if (regions.length > 0) {
+      console.log(
+        '[UnifiedWaterMesh] Region 0: cells=',
+        regions[0].cells.length,
+        'bounds x=',
+        regions[0].minX,
+        '-',
+        regions[0].maxX,
+        'y=',
+        regions[0].minY,
+        '-',
+        regions[0].maxY
+      );
+    }
 
     return regions;
   }
@@ -922,6 +955,13 @@ export class UnifiedWaterMesh {
           hasAdjacentOppositeType = true;
         }
         continue;
+      }
+
+      // Debug: Log first few cells being added
+      if (cells.length < 5) {
+        console.log(
+          `[FloodFill] Adding cell (${x},${y}) feature="${feature}" target="${targetFeature}"`
+        );
       }
 
       visited.add(key);
