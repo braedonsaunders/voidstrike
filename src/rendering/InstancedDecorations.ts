@@ -204,6 +204,10 @@ function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Materi
     stdMaterial.aoMapIntensity = 0;
     stdMaterial.lightMap = null;
     stdMaterial.lightMapIntensity = 0;
+    // Clear normal map - AI models often have corrupted or low-quality normal maps
+    // that cause triangular artifacts when combined with vertex normals
+    stdMaterial.normalMap = null;
+    stdMaterial.normalScale.set(1, 1);
 
     const hints = assetId ? AssetManager.getRenderingHints(assetId) : null;
 
@@ -239,6 +243,7 @@ function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Materi
     } else {
       stdMaterial.envMapIntensity = 0;
     }
+    stdMaterial.needsUpdate = true;
   }
 
   return material;
