@@ -469,12 +469,15 @@ export class RenderPipeline {
         outputNode = scenePassColor.mul(mix(float(1.0), aoValue, this.uAOIntensity));
       } else {
         // Full-res AO with scene normals for accurate occlusion
+        // Use high sample count (32) to eliminate dithering/stipple pattern
         const result = createGTAOPass(
           scenePassDepth,
           this.camera,
           {
             radius: this.config.aoRadius,
             intensity: this.config.aoIntensity,
+            samples: 32, // Higher samples = less visible dithering pattern
+            useTemporalFiltering: this.config.taaEnabled, // Smooth AO over frames when TAA is on
           },
           scenePassNormal
         );
