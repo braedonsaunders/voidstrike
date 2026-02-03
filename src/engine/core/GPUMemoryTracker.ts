@@ -517,12 +517,24 @@ export function estimateTextureMemory(texture: THREE.Texture): number {
 }
 
 /**
+ * Render target interface for memory estimation.
+ * Works with both WebGL and WebGPU render targets.
+ */
+interface RenderTargetLike {
+  width: number;
+  height: number;
+  texture: THREE.Texture;
+  textures?: THREE.Texture[];
+  depthBuffer?: boolean;
+}
+
+/**
  * Estimate memory usage for a render target
  *
- * @param target - Three.js render target
+ * @param target - Three.js render target (WebGL or WebGPU)
  * @returns Memory usage in megabytes
  */
-export function estimateRenderTargetMemory(target: THREE.WebGLRenderTarget): number {
+export function estimateRenderTargetMemory(target: RenderTargetLike): number {
   const width = target.width;
   const height = target.height;
 
