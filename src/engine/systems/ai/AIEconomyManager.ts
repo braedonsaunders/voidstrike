@@ -22,15 +22,15 @@ import { Building } from '../../components/Building';
 import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
 import { Resource } from '../../components/Resource';
-import type { Game } from '../../core/Game';
+import type { IGameInstance } from '../../core/IGameInstance';
 import { debugAI } from '@/utils/debugLogger';
 import type { AICoordinator, AIPlayer } from './AICoordinator';
 
 export class AIEconomyManager {
-  private game: Game;
+  private game: IGameInstance;
   private coordinator: AICoordinator;
 
-  constructor(game: Game, coordinator: AICoordinator) {
+  constructor(game: IGameInstance, coordinator: AICoordinator) {
     this.game = game;
     this.coordinator = coordinator;
   }
@@ -117,7 +117,9 @@ export class AIEconomyManager {
   /**
    * Find incomplete buildings (paused or waiting_for_worker) that need workers assigned.
    */
-  public findIncompleteBuildings(playerId: string): Array<{ buildingId: number; progress: number }> {
+  public findIncompleteBuildings(
+    playerId: string
+  ): Array<{ buildingId: number; progress: number }> {
     const buildings = this.coordinator.getCachedBuildingsWithTransform();
     const incomplete: Array<{ buildingId: number; progress: number }> = [];
 
@@ -160,7 +162,9 @@ export class AIEconomyManager {
 
     const target = incompleteBuildings[0];
 
-    debugAI.log(`[AIEconomy] ${ai.playerId}: Resuming incomplete building ${target.buildingId} at ${Math.round(target.progress * 100)}% with worker ${workerId}`);
+    debugAI.log(
+      `[AIEconomy] ${ai.playerId}: Resuming incomplete building ${target.buildingId} at ${Math.round(target.progress * 100)}% with worker ${workerId}`
+    );
 
     this.game.eventBus.emit('command:resume_construction', {
       workerId,
@@ -176,7 +180,12 @@ export class AIEconomyManager {
    * Assign workers to repair damaged buildings and mechanical units.
    */
   public assignWorkersToRepair(ai: AIPlayer): void {
-    const damagedBuildings: Array<{ entityId: number; x: number; y: number; healthPercent: number }> = [];
+    const damagedBuildings: Array<{
+      entityId: number;
+      x: number;
+      y: number;
+      healthPercent: number;
+    }> = [];
     const buildings = this.coordinator.getCachedBuildingsWithTransform();
 
     for (const entity of buildings) {
@@ -195,12 +204,13 @@ export class AIEconomyManager {
           entityId: entity.id,
           x: transform.x,
           y: transform.y,
-          healthPercent
+          healthPercent,
         });
       }
     }
 
-    const damagedUnits: Array<{ entityId: number; x: number; y: number; healthPercent: number }> = [];
+    const damagedUnits: Array<{ entityId: number; x: number; y: number; healthPercent: number }> =
+      [];
     const units = this.coordinator.getCachedUnitsWithTransform();
 
     for (const entity of units) {
@@ -220,7 +230,7 @@ export class AIEconomyManager {
           entityId: entity.id,
           x: transform.x,
           y: transform.y,
-          healthPercent
+          healthPercent,
         });
       }
     }
@@ -254,7 +264,7 @@ export class AIEconomyManager {
           entityId: entity.id,
           x: transform.x,
           y: transform.y,
-          isIdle
+          isIdle,
         });
       }
     }
@@ -367,10 +377,13 @@ export class AIEconomyManager {
 
     // Build resource lookup maps
     const resources = this.coordinator.getCachedResources();
-    const baseToResources = new Map<number, {
-      minerals: Array<{ entityId: number; x: number; y: number; currentWorkers: number }>;
-      refineries: Array<{ entityId: number; resourceEntityId: number; currentWorkers: number }>;
-    }>();
+    const baseToResources = new Map<
+      number,
+      {
+        minerals: Array<{ entityId: number; x: number; y: number; currentWorkers: number }>;
+        refineries: Array<{ entityId: number; resourceEntityId: number; currentWorkers: number }>;
+      }
+    >();
 
     // Initialize resource maps for each base
     for (const base of basePositions) {
@@ -477,14 +490,15 @@ export class AIEconomyManager {
       workerStates[unit.state] = (workerStates[unit.state] || 0) + 1;
 
       const isIdle = unit.state === 'idle';
-      const isMovingNoTarget = unit.state === 'moving' &&
-                               unit.targetX === null &&
-                               unit.targetY === null &&
-                               unit.gatherTargetId === null;
+      const isMovingNoTarget =
+        unit.state === 'moving' &&
+        unit.targetX === null &&
+        unit.targetY === null &&
+        unit.gatherTargetId === null;
       // Workers returning with resources (in 'gathering' state but carrying resources)
       // can be reassigned if a higher priority task is available
-      const isReturningWithResources = unit.state === 'gathering' &&
-                                       (unit.carryingMinerals > 0 || unit.carryingPlasma > 0);
+      const isReturningWithResources =
+        unit.state === 'gathering' && (unit.carryingMinerals > 0 || unit.carryingPlasma > 0);
 
       if (isIdle || isMovingNoTarget || isReturningWithResources) {
         idleWorkers.push({
@@ -497,12 +511,14 @@ export class AIEconomyManager {
 
     // Debug log periodically
     if (this.game.getCurrentTick() % 200 === 0) {
-      const statesStr = Object.entries(workerStates).map(([k, v]) => `${k}:${v}`).join(', ');
+      const statesStr = Object.entries(workerStates)
+        .map(([k, v]) => `${k}:${v}`)
+        .join(', ');
       const saturationSummary = this.getSaturationSummary(ai);
       debugAI.log(
         `[AIEconomy] ${ai.playerId}: workers=[${statesStr}], idle=${idleWorkers.length}, ` +
-        `saturation: ${saturationSummary.totalMineralWorkers}/${saturationSummary.optimalMineralWorkers} minerals, ` +
-        `${saturationSummary.totalGasWorkers}/${saturationSummary.optimalGasWorkers} gas`
+          `saturation: ${saturationSummary.totalMineralWorkers}/${saturationSummary.optimalMineralWorkers} minerals, ` +
+          `${saturationSummary.totalGasWorkers}/${saturationSummary.optimalGasWorkers} gas`
       );
     }
 
@@ -513,7 +529,7 @@ export class AIEconomyManager {
       const workerId = transfer.workerId;
 
       // Find destination base
-      const destBase = basePositions.find(b => b.entityId === transfer.toBase);
+      const destBase = basePositions.find((b) => b.entityId === transfer.toBase);
       if (!destBase) continue;
 
       const destResources = baseToResources.get(transfer.toBase);
@@ -525,33 +541,39 @@ export class AIEconomyManager {
           entityIds: [workerId],
           targetEntityId: transfer.targetResource,
         });
-        debugAI.log(`[AIEconomy] ${ai.playerId}: Transferring worker ${workerId} to resource ${transfer.targetResource}`);
+        debugAI.log(
+          `[AIEconomy] ${ai.playerId}: Transferring worker ${workerId} to resource ${transfer.targetResource}`
+        );
       } else {
         // Otherwise assign to undersaturated resource at destination
-        const refinery = destResources.refineries.find(r => r.currentWorkers < 3);
+        const refinery = destResources.refineries.find((r) => r.currentWorkers < 3);
         if (refinery) {
           this.game.eventBus.emit('command:gather', {
             entityIds: [workerId],
             targetEntityId: refinery.resourceEntityId,
           });
           refinery.currentWorkers++;
-          debugAI.log(`[AIEconomy] ${ai.playerId}: Transferring worker ${workerId} to refinery at base ${transfer.toBase}`);
+          debugAI.log(
+            `[AIEconomy] ${ai.playerId}: Transferring worker ${workerId} to refinery at base ${transfer.toBase}`
+          );
           continue;
         }
 
-        const mineral = destResources.minerals.find(m => m.currentWorkers < 2);
+        const mineral = destResources.minerals.find((m) => m.currentWorkers < 2);
         if (mineral) {
           this.game.eventBus.emit('command:gather', {
             entityIds: [workerId],
             targetEntityId: mineral.entityId,
           });
           mineral.currentWorkers++;
-          debugAI.log(`[AIEconomy] ${ai.playerId}: Transferring worker ${workerId} to minerals at base ${transfer.toBase}`);
+          debugAI.log(
+            `[AIEconomy] ${ai.playerId}: Transferring worker ${workerId} to minerals at base ${transfer.toBase}`
+          );
         }
       }
 
       // Remove from idle workers list if present (so we don't double-assign)
-      const workerIndex = idleWorkers.findIndex(w => w.entityId === workerId);
+      const workerIndex = idleWorkers.findIndex((w) => w.entityId === workerId);
       if (workerIndex !== -1) {
         idleWorkers.splice(workerIndex, 1);
       }
@@ -577,11 +599,11 @@ export class AIEconomyManager {
 
       // Check saturation to determine if we need gas workers
       const saturations = workerDistribution.getSaturations(ai.playerId);
-      const baseSaturation = saturations.find(s => s.baseEntityId === nearestBase.entityId);
+      const baseSaturation = saturations.find((s) => s.baseEntityId === nearestBase.entityId);
 
       // Prioritize gas if undersaturated
       if (baseSaturation && baseSaturation.gasWorkers < baseSaturation.optimalGasWorkers) {
-        const refinery = targetResources.refineries.find(r => r.currentWorkers < 3);
+        const refinery = targetResources.refineries.find((r) => r.currentWorkers < 3);
         if (refinery) {
           this.game.eventBus.emit('command:gather', {
             entityIds: [worker.entityId],
@@ -594,7 +616,7 @@ export class AIEconomyManager {
 
       // Assign to undersaturated mineral (optimal is 2 per patch)
       const mineral = targetResources.minerals
-        .filter(m => m.currentWorkers < 2)
+        .filter((m) => m.currentWorkers < 2)
         .sort((a, b) => a.currentWorkers - b.currentWorkers)[0];
 
       if (mineral) {
@@ -608,7 +630,7 @@ export class AIEconomyManager {
 
       // Allow 3rd worker on minerals if all at 2
       const oversatMineral = targetResources.minerals
-        .filter(m => m.currentWorkers < 3)
+        .filter((m) => m.currentWorkers < 3)
         .sort((a, b) => a.currentWorkers - b.currentWorkers)[0];
 
       if (oversatMineral) {
@@ -635,7 +657,10 @@ export class AIEconomyManager {
   /**
    * Find a plasma geyser near any AI base that doesn't have a refinery yet.
    */
-  public findAvailablePlasmaGeyser(ai: AIPlayer, _basePos: { x: number; y: number }): { x: number; y: number } | null {
+  public findAvailablePlasmaGeyser(
+    ai: AIPlayer,
+    _basePos: { x: number; y: number }
+  ): { x: number; y: number } | null {
     const config = ai.config!;
     const baseTypes = config.roles.baseTypes;
 
@@ -731,5 +756,4 @@ export class AIEconomyManager {
 
     return availableCount;
   }
-
 }

@@ -464,7 +464,10 @@ class DefinitionRegistryClass {
   /**
    * Get produceable units for a building (convenience method)
    */
-  public getProduceableUnits(buildingId: string, hasResearchModule: boolean = false): UnitDefinition[] {
+  public getProduceableUnits(
+    buildingId: string,
+    hasResearchModule: boolean = false
+  ): UnitDefinition[] {
     const building = this.getBuilding(buildingId);
     if (!building || !building.canProduce) return [];
 
@@ -567,16 +570,20 @@ class DefinitionRegistryClass {
   /**
    * Get AI build order configuration.
    * @see @/data/ai/buildOrders.ts
+   * @see @/data/ai/aiConfig.ts
    */
   public getAIConfig() {
-    const ai = require('@/data/ai/buildOrders');
+    const buildOrders = require('@/data/ai/buildOrders');
+    const aiConfig = require('@/data/ai/aiConfig');
+    // Get the default faction's difficulty config (dominion)
+    const factionConfig = aiConfig.getFactionAIConfig('dominion');
     return {
-      difficultyConfig: ai.AI_DIFFICULTY_CONFIG,
-      buildOrders: ai.FACTION_BUILD_ORDERS,
-      unitCompositions: ai.FACTION_UNIT_COMPOSITIONS,
-      getAIConfig: ai.getAIConfig,
-      getBuildOrders: ai.getBuildOrders,
-      selectUnitToBuild: ai.selectUnitToBuild,
+      difficultyConfig: factionConfig?.difficultyConfig ?? {},
+      buildOrders: buildOrders.FACTION_BUILD_ORDERS,
+      unitCompositions: buildOrders.FACTION_UNIT_COMPOSITIONS,
+      getBuildOrders: buildOrders.getBuildOrders,
+      selectUnitToBuild: buildOrders.selectUnitToBuild,
+      getFactionAIConfig: aiConfig.getFactionAIConfig,
     };
   }
 

@@ -5,14 +5,11 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import type { GameCommand } from '../core/GameCommand';
 import { distance, clamp } from '@/utils/math';
 import { BehaviorTreeRunner, globalBlackboard } from '../ai/BehaviorTree';
-import {
-  UnitBehaviorType,
-  createBehaviorTree,
-} from '../ai/UnitBehaviors';
+import { UnitBehaviorType, createBehaviorTree } from '../ai/UnitBehaviors';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 // Import data-driven AI configuration for micro behavior
 import { DOMINION_AI_CONFIG } from '@/data/ai/factions/dominion';
@@ -71,7 +68,7 @@ export class AIMicroSystem extends System {
   private workerManager: AIWorkerManager;
   private useWorker: boolean = true; // Can be disabled for debugging or multiplayer
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
     // PERF: Set game instance for cache tick tracking
@@ -202,7 +199,11 @@ export class AIMicroSystem extends System {
   /**
    * Apply micro decisions from worker
    */
-  private applyWorkerDecisions(playerId: string, decisions: MicroDecision[], currentTick: number): void {
+  private applyWorkerDecisions(
+    playerId: string,
+    decisions: MicroDecision[],
+    currentTick: number
+  ): void {
     for (const decision of decisions) {
       if (decision.action === 'none') continue;
 
@@ -337,8 +338,11 @@ export class AIMicroSystem extends System {
 
       // Process units in combat-related states
       // RTS-STYLE: Also process idle units in assault mode - they need micro to find targets
-      const canProcessUnit = unit.state === 'attacking' || unit.state === 'moving' ||
-        unit.state === 'attackmoving' || (unit.canTransform && unit.state === 'idle') ||
+      const canProcessUnit =
+        unit.state === 'attacking' ||
+        unit.state === 'moving' ||
+        unit.state === 'attackmoving' ||
+        (unit.canTransform && unit.state === 'idle') ||
         (unit.isInAssaultMode && unit.state === 'idle');
       if (!canProcessUnit) continue;
 
@@ -389,8 +393,11 @@ export class AIMicroSystem extends System {
       // Process units in combat-related states
       // attackmoving = moving to position while engaging enemies along the way
       // RTS-STYLE: Also process idle units in assault mode - they need micro to find targets
-      const canProcessUnit = unit.state === 'attacking' || unit.state === 'moving' ||
-        unit.state === 'attackmoving' || (unit.canTransform && unit.state === 'idle') ||
+      const canProcessUnit =
+        unit.state === 'attacking' ||
+        unit.state === 'moving' ||
+        unit.state === 'attackmoving' ||
+        (unit.canTransform && unit.state === 'idle') ||
         (unit.isInAssaultMode && unit.state === 'idle');
       if (!canProcessUnit) continue;
 
@@ -418,12 +425,7 @@ export class AIMicroSystem extends System {
       }
 
       // Run behavior tree
-      const _status = state.behaviorTree.tick(
-        entity.id,
-        this.world,
-        this.game,
-        deltaTime
-      );
+      const _status = state.behaviorTree.tick(entity.id, this.world, this.game, deltaTime);
 
       // Handle kiting with cooldown
       const shouldKite = state.behaviorTree.get<boolean>('shouldKite');
@@ -443,7 +445,10 @@ export class AIMicroSystem extends System {
       }
 
       // Transform decision for units like Valkyrie
-      if (unit.canTransform && currentTick - state.lastTransformDecision > TRANSFORM_DECISION_INTERVAL) {
+      if (
+        unit.canTransform &&
+        currentTick - state.lastTransformDecision > TRANSFORM_DECISION_INTERVAL
+      ) {
         this.handleTransformDecision(entity.id, selectable.playerId, unit, state, currentTick);
       }
 
@@ -590,7 +595,11 @@ export class AIMicroSystem extends System {
    */
   private processRetreatTimeouts(currentTick: number): void {
     for (const [_entityId, state] of this.unitStates) {
-      if (state.retreating && state.retreatEndTick !== null && currentTick >= state.retreatEndTick) {
+      if (
+        state.retreating &&
+        state.retreatEndTick !== null &&
+        currentTick >= state.retreatEndTick
+      ) {
         state.retreating = false;
         state.retreatEndTick = null;
         state.behaviorTree.set('shouldRetreat', false);
@@ -635,11 +644,7 @@ export class AIMicroSystem extends System {
     let maxThreatScore = 0;
     let maxThreatEntityId: number | null = null;
 
-    const nearbyUnits = this.world.unitGrid.queryRadius(
-      transform.x,
-      transform.y,
-      threatRange
-    );
+    const nearbyUnits = this.world.unitGrid.queryRadius(transform.x, transform.y, threatRange);
 
     for (const nearbyId of nearbyUnits) {
       if (nearbyId === entityId) continue;
@@ -926,13 +931,16 @@ const _COUNTER_MATRIX: Record<string, string[]> = DOMINION_AI_CONFIG.tactical.co
 const COMPOSITION_CACHE_DURATION = 40; // Ticks before cache expires
 const compositionCache: Map<string, { tick: number; composition: EnemyComposition }> = new Map();
 const threatGapsCache: Map<string, { tick: number; analysis: ThreatAnalysis }> = new Map();
-const counterRecommendationCache: Map<string, { tick: number; recommendation: CounterRecommendation }> = new Map();
+const counterRecommendationCache: Map<
+  string,
+  { tick: number; recommendation: CounterRecommendation }
+> = new Map();
 
 /**
  * Get current game tick from the global game instance
  * Used for cache invalidation
  */
-let _cachedGameInstance: Game | null = null;
+let _cachedGameInstance: IGameInstance | null = null;
 function getCachedGameTick(): number {
   if (!_cachedGameInstance) return 0;
   return _cachedGameInstance.getCurrentTick();
@@ -942,7 +950,7 @@ function getCachedGameTick(): number {
  * Set the game instance for cache tick tracking
  * Called by AIMicroSystem on init
  */
-export function setAnalysisCacheGameInstance(game: Game): void {
+export function setAnalysisCacheGameInstance(game: IGameInstance): void {
   _cachedGameInstance = game;
 }
 
@@ -1021,8 +1029,16 @@ export function analyzeThreatGaps(
   };
 
   const units = world.getEntitiesWith('Unit', 'Selectable', 'Health', 'Transform');
-  const myUnits: Array<{ entity: import('../ecs/Entity').Entity; unit: Unit; transform: import('../components/Transform').Transform }> = [];
-  const enemyAirUnits: Array<{ entity: import('../ecs/Entity').Entity; unit: Unit; transform: import('../components/Transform').Transform }> = [];
+  const myUnits: Array<{
+    entity: import('../ecs/Entity').Entity;
+    unit: Unit;
+    transform: import('../components/Transform').Transform;
+  }> = [];
+  const enemyAirUnits: Array<{
+    entity: import('../ecs/Entity').Entity;
+    unit: Unit;
+    transform: import('../components/Transform').Transform;
+  }> = [];
 
   // First pass: categorize units
   for (const entity of units) {
@@ -1058,7 +1074,12 @@ export function analyzeThreatGaps(
     if (myUnit.unit.isWorker) continue;
 
     for (const enemyAir of enemyAirUnits) {
-      const dist = distance(enemyAir.transform.x, enemyAir.transform.y, myUnit.transform.x, myUnit.transform.y);
+      const dist = distance(
+        enemyAir.transform.x,
+        enemyAir.transform.y,
+        myUnit.transform.x,
+        myUnit.transform.y
+      );
 
       // Is the enemy air unit close enough to be a threat?
       if (dist <= THREAT_RANGE) {
@@ -1162,7 +1183,7 @@ export function getCounterRecommendation(
   // Sort by priority and remove duplicates (keep highest priority version)
   const seenUnits = new Set<string>();
   recommendation.unitsToBuild.sort((a, b) => b.priority - a.priority);
-  recommendation.unitsToBuild = recommendation.unitsToBuild.filter(u => {
+  recommendation.unitsToBuild = recommendation.unitsToBuild.filter((u) => {
     if (seenUnits.has(u.unitId)) return false;
     seenUnits.add(u.unitId);
     return true;
@@ -1170,7 +1191,7 @@ export function getCounterRecommendation(
 
   const seenBuildings = new Set<string>();
   recommendation.buildingsToBuild.sort((a, b) => b.priority - a.priority);
-  recommendation.buildingsToBuild = recommendation.buildingsToBuild.filter(b => {
+  recommendation.buildingsToBuild = recommendation.buildingsToBuild.filter((b) => {
     if (seenBuildings.has(b.buildingId)) return false;
     seenBuildings.add(b.buildingId);
     return true;

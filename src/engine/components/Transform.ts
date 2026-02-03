@@ -18,15 +18,7 @@ export class Transform extends Component {
   public prevZ: number;
   public prevRotation: number;
 
-  constructor(
-    x = 0,
-    y = 0,
-    z = 0,
-    rotation = 0,
-    scaleX = 1,
-    scaleY = 1,
-    scaleZ = 1
-  ) {
+  constructor(x = 0, y = 0, z = 0, rotation = 0, scaleX = 1, scaleY = 1, scaleZ = 1) {
     super();
     this.x = x;
     this.y = y;
@@ -58,10 +50,6 @@ export class Transform extends Component {
 
   public distanceTo(other: Transform): number {
     return distance(this.x, this.y, other.x, other.y);
-  }
-
-  public distanceToPoint(x: number, y: number): number {
-    return distance(this.x, this.y, x, y);
   }
 
   public setRotation(rotation: number): void {

@@ -23,7 +23,8 @@ import { Unit } from '../../components/Unit';
 import { Building } from '../../components/Building';
 import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
-import type { Game } from '../../core/Game';
+import type { Entity } from '../../ecs/Entity';
+import type { IGameInstance } from '../../core/IGameInstance';
 import type { GameCommand } from '../../core/GameCommand';
 import { debugAI } from '@/utils/debugLogger';
 import type { AICoordinator, AIPlayer, EnemyRelation } from './AICoordinator';
@@ -41,7 +42,7 @@ const DEFENSE_COMMAND_INTERVAL = 20; // Re-command defending units every 20 tick
 const HUNT_MODE_BUILDING_THRESHOLD = 3; // Enter hunt mode when enemy has <= 3 buildings
 
 export class AITacticsManager {
-  private game: Game;
+  private game: IGameInstance;
   private coordinator: AICoordinator;
 
   // RTS-style engagement tracking per AI player
@@ -50,7 +51,7 @@ export class AITacticsManager {
   private lastDefenseCommandTick: Map<string, number> = new Map();
   private isEngaged: Map<string, boolean> = new Map();
 
-  constructor(game: Game, coordinator: AICoordinator) {
+  constructor(game: IGameInstance, coordinator: AICoordinator) {
     this.game = game;
     this.coordinator = coordinator;
   }
@@ -92,7 +93,9 @@ export class AITacticsManager {
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       if (selectable.playerId === ai.playerId) continue;
-      const myBuildings = buildings.filter(b => b.get<Selectable>('Selectable')?.playerId === ai.playerId);
+      const myBuildings = buildings.filter(
+        (b: Entity) => b.get<Selectable>('Selectable')?.playerId === ai.playerId
+      );
       const myTeam = myBuildings[0]?.get<Selectable>('Selectable')?.teamId ?? 0;
       if (!isEnemy(ai.playerId, myTeam, selectable.playerId, selectable.teamId)) continue;
       enemyPlayerIds.add(selectable.playerId);
@@ -146,7 +149,10 @@ export class AITacticsManager {
       }
 
       // Decay grudge damage over time
-      const decayFactor = Math.pow(0.5, (currentTick - relation.lastAttackedUsTick) / AITacticsManager.GRUDGE_HALF_LIFE_TICKS);
+      const decayFactor = Math.pow(
+        0.5,
+        (currentTick - relation.lastAttackedUsTick) / AITacticsManager.GRUDGE_HALF_LIFE_TICKS
+      );
       relation.damageDealtToUs *= decayFactor;
 
       // Use InfluenceMap for threat analysis near our base
@@ -154,7 +160,12 @@ export class AITacticsManager {
       relation.armyNearUs = Math.round(threatAnalysis.enemyInfluence);
 
       // Calculate threat score using influence map data
-      relation.threatScore = this.calculateThreatScoreWithInfluence(ai, relation, threatAnalysis, currentTick);
+      relation.threatScore = this.calculateThreatScoreWithInfluence(
+        ai,
+        relation,
+        threatAnalysis,
+        currentTick
+      );
     }
 
     // Clean up relations for dead players
@@ -228,9 +239,11 @@ export class AITacticsManager {
 
     if (bestEnemyId) {
       const relation = ai.enemyRelations.get(bestEnemyId)!;
-      debugAI.log(`[AITacticsManager] ${ai.playerId} selected primary enemy: ${bestEnemyId} ` +
-        `(score: ${relation.threatScore.toFixed(2)}, distance: ${relation.baseDistance.toFixed(0)}, ` +
-        `armyNearUs: ${relation.armyNearUs})`);
+      debugAI.log(
+        `[AITacticsManager] ${ai.playerId} selected primary enemy: ${bestEnemyId} ` +
+          `(score: ${relation.threatScore.toFixed(2)}, distance: ${relation.baseDistance.toFixed(0)}, ` +
+          `armyNearUs: ${relation.armyNearUs})`
+      );
     }
 
     return bestEnemyId;
@@ -239,7 +252,12 @@ export class AITacticsManager {
   /**
    * Record damage dealt to this AI by an attacker.
    */
-  public recordDamageReceived(ai: AIPlayer, attackerPlayerId: string, damage: number, currentTick: number): void {
+  public recordDamageReceived(
+    ai: AIPlayer,
+    attackerPlayerId: string,
+    damage: number,
+    currentTick: number
+  ): void {
     let relation = ai.enemyRelations.get(attackerPlayerId);
     if (!relation) {
       relation = {
@@ -309,7 +327,7 @@ export class AITacticsManager {
    */
   public isUnderAttack(ai: AIPlayer): boolean {
     const currentTick = this.game.getCurrentTick();
-    const recentEnemyContact = (currentTick - ai.lastEnemyContact) < THREAT_WINDOW_TICKS;
+    const recentEnemyContact = currentTick - ai.lastEnemyContact < THREAT_WINDOW_TICKS;
 
     // Use influence map for threat detection
     const basePos = this.coordinator.findAIBase(ai);
@@ -385,7 +403,13 @@ export class AITacticsManager {
     unitId: string;
     attackRange: number;
   }> {
-    const units: Array<{ entityId: number; x: number; y: number; unitId: string; attackRange: number }> = [];
+    const units: Array<{
+      entityId: number;
+      x: number;
+      y: number;
+      unitId: string;
+      attackRange: number;
+    }> = [];
     const entities = this.coordinator.getCachedUnitsWithTransform();
 
     for (const entity of entities) {
@@ -532,7 +556,13 @@ export class AITacticsManager {
    */
   private applyFormation(
     ai: AIPlayer,
-    armyUnits: Array<{ entityId: number; x: number; y: number; unitId: string; attackRange: number }>,
+    armyUnits: Array<{
+      entityId: number;
+      x: number;
+      y: number;
+      unitId: string;
+      attackRange: number;
+    }>,
     targetPosition: { x: number; y: number },
     formationType: FormationType
   ): Array<{ entityId: number; position: { x: number; y: number } }> {
@@ -546,7 +576,7 @@ export class AITacticsManager {
       formationControl.deleteGroup(groupId);
     }
 
-    const unitIds = armyUnits.map(u => u.entityId);
+    const unitIds = armyUnits.map((u) => u.entityId);
     groupId = formationControl.createGroup(this.world, unitIds, ai.playerId);
     this.activeFormationGroups.set(ai.playerId, groupId);
 
@@ -555,7 +585,11 @@ export class AITacticsManager {
 
     switch (formationType) {
       case 'concave':
-        formationSlots = formationControl.calculateConcaveFormation(this.world, groupId, targetPosition);
+        formationSlots = formationControl.calculateConcaveFormation(
+          this.world,
+          groupId,
+          targetPosition
+        );
         break;
       case 'box':
         formationSlots = formationControl.calculateBoxFormation(this.world, groupId);
@@ -571,7 +605,7 @@ export class AITacticsManager {
     }
 
     // Convert FormationSlot[] to expected return type
-    return formationSlots.map(slot => ({
+    return formationSlots.map((slot) => ({
       entityId: slot.entityId,
       position: slot.targetPosition,
     }));
@@ -657,10 +691,14 @@ export class AITacticsManager {
       if (!attackTarget) {
         ai.state = 'building';
         this.isEngaged.set(ai.playerId, false);
-        debugAI.log(`[AITactics] ${ai.playerId}: Hunt mode - no enemy buildings found, returning to build`);
+        debugAI.log(
+          `[AITactics] ${ai.playerId}: Hunt mode - no enemy buildings found, returning to build`
+        );
         return;
       }
-      debugAI.log(`[AITactics] ${ai.playerId}: HUNT MODE - targeting enemy building at (${attackTarget.x.toFixed(0)}, ${attackTarget.y.toFixed(0)})`);
+      debugAI.log(
+        `[AITactics] ${ai.playerId}: HUNT MODE - targeting enemy building at (${attackTarget.x.toFixed(0)}, ${attackTarget.y.toFixed(0)})`
+      );
     } else {
       attackTarget = this.findEnemyBase(ai);
       if (!attackTarget) {
@@ -718,7 +756,9 @@ export class AITacticsManager {
           };
           this.game.issueAICommand(command);
         }
-        debugAI.log(`[AITactics] ${ai.playerId}: Re-commanding ${idleAssaultUnits.length} idle assault units with spread positions`);
+        debugAI.log(
+          `[AITactics] ${ai.playerId}: Re-commanding ${idleAssaultUnits.length} idle assault units with spread positions`
+        );
       }
 
       this.lastReCommandTick.set(ai.playerId, currentTick);
@@ -746,7 +786,9 @@ export class AITacticsManager {
           };
           this.game.issueAICommand(command);
         }
-        debugAI.log(`[AITactics] ${ai.playerId}: HUNT MODE - spreading ${armyUnits.length} units around target`);
+        debugAI.log(
+          `[AITactics] ${ai.playerId}: HUNT MODE - spreading ${armyUnits.length} units around target`
+        );
       } else {
         // Regular attack - send all units to same target
         const command: GameCommand = {
@@ -770,7 +812,7 @@ export class AITacticsManager {
         if (enemyCluster) {
           debugAI.log(
             `[AITactics] ${ai.playerId}: UNIT HUNT MODE - no buildings, targeting enemy units at ` +
-            `(${enemyCluster.x.toFixed(0)}, ${enemyCluster.y.toFixed(0)})`
+              `(${enemyCluster.x.toFixed(0)}, ${enemyCluster.y.toFixed(0)})`
           );
 
           // Attack-move to enemy unit cluster
@@ -795,7 +837,9 @@ export class AITacticsManager {
       if (disengagedDuration > 100) {
         ai.state = 'building';
         this.isEngaged.set(ai.playerId, false);
-        debugAI.log(`[AITactics] ${ai.playerId}: Disengaged for ${disengagedDuration} ticks, returning to build`);
+        debugAI.log(
+          `[AITactics] ${ai.playerId}: Disengaged for ${disengagedDuration} ticks, returning to build`
+        );
       }
     }
   }
@@ -871,7 +915,9 @@ export class AITacticsManager {
       }
     }
     if (individualRetreatsIssued > 0) {
-      debugAI.log(`[AITactics] ${ai.playerId}: Issued ${individualRetreatsIssued} individual retreat orders`);
+      debugAI.log(
+        `[AITactics] ${ai.playerId}: Issued ${individualRetreatsIssued} individual retreat orders`
+      );
     }
 
     // Find nearest enemy threat using InfluenceMap
@@ -891,7 +937,9 @@ export class AITacticsManager {
         retreatCoordinator.forceRetreat(ai.playerId, entityId, rallyPoint, currentTick);
       }
 
-      debugAI.log(`[AITactics] ${ai.playerId}: Initiating coordinated retreat, danger level: ${threatAnalysis.dangerLevel.toFixed(2)}`);
+      debugAI.log(
+        `[AITactics] ${ai.playerId}: Initiating coordinated retreat, danger level: ${threatAnalysis.dangerLevel.toFixed(2)}`
+      );
       return;
     }
 
@@ -944,7 +992,7 @@ export class AITacticsManager {
 
         debugAI.log(
           `[AITactics] ${ai.playerId}: Commanding ${idleDefenders.length}/${armyUnits.length} ` +
-          `idle defenders to threat at (${threatPos.x.toFixed(0)}, ${threatPos.y.toFixed(0)})`
+            `idle defenders to threat at (${threatPos.x.toFixed(0)}, ${threatPos.y.toFixed(0)})`
         );
       }
 
@@ -974,7 +1022,8 @@ export class AITacticsManager {
 
       const isIdle = unit.state === 'idle' && unit.targetEntityId === null;
       const isStuck = unit.state === 'idle' && !unit.isInAssaultMode;
-      const isEngaged = unit.targetEntityId !== null ||
+      const isEngaged =
+        unit.targetEntityId !== null ||
         unit.state === 'attacking' ||
         (unit.state === 'attackmoving' && unit.targetX !== null);
 
@@ -989,7 +1038,10 @@ export class AITacticsManager {
   /**
    * Find the nearest enemy threat using InfluenceMap for guidance.
    */
-  private findNearestThreat(ai: AIPlayer, position: { x: number; y: number }): { x: number; y: number } | null {
+  private findNearestThreat(
+    ai: AIPlayer,
+    position: { x: number; y: number }
+  ): { x: number; y: number } | null {
     const units = this.coordinator.getCachedUnitsWithTransform();
     let nearestThreat: { x: number; y: number; distance: number } | null = null;
 
@@ -1043,7 +1095,11 @@ export class AITacticsManager {
 
     if (startPos) {
       // Check threat level at target - if too dangerous, find safer approach
-      const targetThreat = influenceMap.getThreatAnalysis(harassTarget.x, harassTarget.y, ai.playerId);
+      const targetThreat = influenceMap.getThreatAnalysis(
+        harassTarget.x,
+        harassTarget.y,
+        ai.playerId
+      );
       if (targetThreat.dangerLevel > 0.6) {
         // Try to approach from safe direction
         const safeOffset = {
@@ -1119,11 +1175,11 @@ export class AITacticsManager {
       if (!unit || !health) continue;
       if (health.isDead()) continue;
 
-      const isIdleAssault = unit.isInAssaultMode &&
-        unit.state === 'idle' &&
-        unit.targetEntityId === null;
+      const isIdleAssault =
+        unit.isInAssaultMode && unit.state === 'idle' && unit.targetEntityId === null;
 
-      const isCompletelyIdle = unit.state === 'idle' &&
+      const isCompletelyIdle =
+        unit.state === 'idle' &&
         unit.targetEntityId === null &&
         !unit.isInAssaultMode &&
         !unit.isHoldingPosition;
@@ -1319,7 +1375,11 @@ export class AITacticsManager {
     const influenceMap = this.coordinator.getInfluenceMap();
 
     // Get safe direction from current position
-    const threatAnalysis = influenceMap.getThreatAnalysis(fromPosition.x, fromPosition.y, ai.playerId);
+    const threatAnalysis = influenceMap.getThreatAnalysis(
+      fromPosition.x,
+      fromPosition.y,
+      ai.playerId
+    );
 
     // Build path using safe direction as guide
     const path: Array<{ x: number; y: number }> = [];

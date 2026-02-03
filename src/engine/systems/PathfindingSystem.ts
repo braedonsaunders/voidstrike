@@ -15,12 +15,8 @@ import { System } from '../ecs/System';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
-import type { Game } from '../core/Game';
-import {
-  RecastNavigation,
-  getRecastNavigation,
-  PathResult,
-} from '../pathfinding/RecastNavigation';
+import type { IGameInstance } from '../core/IGameInstance';
+import { RecastNavigation, getRecastNavigation, PathResult } from '../pathfinding/RecastNavigation';
 import { debugPathfinding, debugPerformance } from '@/utils/debugLogger';
 import { distance, clamp } from '@/utils/math';
 
@@ -158,9 +154,15 @@ class PathRequestPriorityQueue {
     this.entityIndex.set(this.heap[j].entityId, j);
   }
 
-  private parent(i: number): number { return Math.floor((i - 1) / 2); }
-  private leftChild(i: number): number { return 2 * i + 1; }
-  private rightChild(i: number): number { return 2 * i + 2; }
+  private parent(i: number): number {
+    return Math.floor((i - 1) / 2);
+  }
+  private leftChild(i: number): number {
+    return 2 * i + 1;
+  }
+  private rightChild(i: number): number {
+    return 2 * i + 2;
+  }
 }
 
 interface UnitPathState {
@@ -208,7 +210,7 @@ export class PathfindingSystem extends System {
   private cachedNavMeshGeometry: { positions: Float32Array; indices: Uint32Array } | null = null;
   private cachedHeightMap: { data: Float32Array; width: number; height: number } | null = null;
 
-  constructor(game: Game, mapWidth: number, mapHeight: number) {
+  constructor(game: IGameInstance, mapWidth: number, mapHeight: number) {
     super(game);
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;
@@ -216,9 +218,7 @@ export class PathfindingSystem extends System {
     this.setupEventListeners();
     this.initializeWorker();
 
-    debugPathfinding.log(
-      `[PathfindingSystem] Initialized for ${mapWidth}x${mapHeight} map`
-    );
+    debugPathfinding.log(`[PathfindingSystem] Initialized for ${mapWidth}x${mapHeight} map`);
   }
 
   /**
@@ -226,7 +226,9 @@ export class PathfindingSystem extends System {
    */
   private initializeWorker(): void {
     if (typeof Worker === 'undefined') {
-      debugPathfinding.warn('[PathfindingSystem] Web Workers not supported, using main thread fallback');
+      debugPathfinding.warn(
+        '[PathfindingSystem] Web Workers not supported, using main thread fallback'
+      );
       return;
     }
 
@@ -314,7 +316,8 @@ export class PathfindingSystem extends System {
     const gridWidth = Math.floor(this.mapWidth) + 1;
     const gridHeight = Math.floor(this.mapHeight) + 1;
     const heightMap = new Float32Array(gridWidth * gridHeight);
-    const heightFn = this.terrainHeightFunction ?? ((x: number, z: number) => this.game.getTerrainHeightAt(x, z));
+    const heightFn =
+      this.terrainHeightFunction ?? ((x: number, z: number) => this.game.getTerrainHeightAt(x, z));
 
     for (let y = 0; y < gridHeight; y++) {
       for (let x = 0; x < gridWidth; x++) {
@@ -422,7 +425,12 @@ export class PathfindingSystem extends System {
       this.recast.setTerrainHeightProvider(fn);
       debugPathfinding.log('[PathfindingSystem] Updated terrain height provider');
     }
-    if (this.pathWorker && this.workerWasmInitialized && this.cachedNavMeshGeometry && this.navMeshReady) {
+    if (
+      this.pathWorker &&
+      this.workerWasmInitialized &&
+      this.cachedNavMeshGeometry &&
+      this.navMeshReady
+    ) {
       this.sendGeometryToWorker();
     }
   }
@@ -444,9 +452,7 @@ export class PathfindingSystem extends System {
     this.cachedNavMeshGeometry = null;
     this.cachedHeightMap = null;
 
-    debugPathfinding.log(
-      `[PathfindingSystem] Reinitialized for ${mapWidth}x${mapHeight}`
-    );
+    debugPathfinding.log(`[PathfindingSystem] Reinitialized for ${mapWidth}x${mapHeight}`);
   }
 
   /**
@@ -468,10 +474,7 @@ export class PathfindingSystem extends System {
    * Initialize navmesh from terrain geometry
    * Called by Game when terrain is loaded
    */
-  public async initializeNavMesh(
-    positions: Float32Array,
-    indices: Uint32Array
-  ): Promise<boolean> {
+  public async initializeNavMesh(positions: Float32Array, indices: Uint32Array): Promise<boolean> {
     debugPathfinding.log('[PathfindingSystem] Initializing navmesh from geometry...');
 
     const success = await this.recast.generateFromGeometry(
@@ -539,7 +542,9 @@ export class PathfindingSystem extends System {
     if (success) {
       debugPathfinding.log('[PathfindingSystem] Water navmesh initialized successfully');
     } else {
-      debugPathfinding.log('[PathfindingSystem] No water navmesh generated (map may not have water)');
+      debugPathfinding.log(
+        '[PathfindingSystem] No water navmesh generated (map may not have water)'
+      );
     }
 
     return success;
@@ -548,16 +553,10 @@ export class PathfindingSystem extends System {
   /**
    * Initialize navmesh from Three.js mesh
    */
-  public async initializeNavMeshFromMesh(
-    mesh: THREE.Mesh
-  ): Promise<boolean> {
+  public async initializeNavMeshFromMesh(mesh: THREE.Mesh): Promise<boolean> {
     debugPathfinding.log('[PathfindingSystem] Initializing navmesh from mesh...');
 
-    const success = await this.recast.generateFromTerrain(
-      mesh,
-      this.mapWidth,
-      this.mapHeight
-    );
+    const success = await this.recast.generateFromTerrain(mesh, this.mapWidth, this.mapHeight);
 
     this.navMeshReady = success;
 
@@ -585,59 +584,84 @@ export class PathfindingSystem extends System {
    * Legacy terrain data loader - generates navmesh geometry from terrain grid
    */
   public loadTerrainData(): void {
-    debugPathfinding.log('[PathfindingSystem] loadTerrainData called - navmesh will be initialized from terrain mesh');
+    debugPathfinding.log(
+      '[PathfindingSystem] loadTerrainData called - navmesh will be initialized from terrain mesh'
+    );
     // NavMesh is now generated from terrain mesh in Game.ts
     // This method is kept for backwards compatibility
   }
 
   private setupEventListeners(): void {
     // Building events for dynamic obstacles
-    this.game.eventBus.on('building:placed', (data: {
-      entityId: number;
-      position: { x: number; y: number };
-      width: number;
-      height: number;
-    }) => {
-      // Add cylinder obstacle (5-10x faster than box for TileCache updates)
-      this.recast.addObstacle(
-        data.entityId,
-        data.position.x,
-        data.position.y,
-        data.width,
-        data.height
-      );
-      // Forward to worker (for path queries)
-      this.sendObstacleToWorker('add', data.entityId, data.position.x, data.position.y, data.width, data.height);
-    });
+    this.game.eventBus.on(
+      'building:placed',
+      (data: {
+        entityId: number;
+        position: { x: number; y: number };
+        width: number;
+        height: number;
+      }) => {
+        // Add cylinder obstacle (5-10x faster than box for TileCache updates)
+        this.recast.addObstacle(
+          data.entityId,
+          data.position.x,
+          data.position.y,
+          data.width,
+          data.height
+        );
+        // Forward to worker (for path queries)
+        this.sendObstacleToWorker(
+          'add',
+          data.entityId,
+          data.position.x,
+          data.position.y,
+          data.width,
+          data.height
+        );
+      }
+    );
 
-    this.game.eventBus.on('building:destroyed', (data: {
-      entityId: number;
-      position: { x: number; y: number };
-      width: number;
-      height: number;
-    }) => {
-      this.recast.removeObstacle(data.entityId);
-      // Forward to worker
-      this.sendObstacleToWorker('remove', data.entityId, 0, 0, 0, 0);
-    });
+    this.game.eventBus.on(
+      'building:destroyed',
+      (data: {
+        entityId: number;
+        position: { x: number; y: number };
+        width: number;
+        height: number;
+      }) => {
+        this.recast.removeObstacle(data.entityId);
+        // Forward to worker
+        this.sendObstacleToWorker('remove', data.entityId, 0, 0, 0, 0);
+      }
+    );
 
-    this.game.eventBus.on('building:constructionStarted', (data: {
-      entityId: number;
-      position: { x: number; y: number };
-      width: number;
-      height: number;
-    }) => {
-      // Add cylinder obstacle (5-10x faster than box for TileCache updates)
-      this.recast.addObstacle(
-        data.entityId,
-        data.position.x,
-        data.position.y,
-        data.width,
-        data.height
-      );
-      // Forward to worker
-      this.sendObstacleToWorker('add', data.entityId, data.position.x, data.position.y, data.width, data.height);
-    });
+    this.game.eventBus.on(
+      'building:constructionStarted',
+      (data: {
+        entityId: number;
+        position: { x: number; y: number };
+        width: number;
+        height: number;
+      }) => {
+        // Add cylinder obstacle (5-10x faster than box for TileCache updates)
+        this.recast.addObstacle(
+          data.entityId,
+          data.position.x,
+          data.position.y,
+          data.width,
+          data.height
+        );
+        // Forward to worker
+        this.sendObstacleToWorker(
+          'add',
+          data.entityId,
+          data.position.x,
+          data.position.y,
+          data.width,
+          data.height
+        );
+      }
+    );
 
     // Unit lifecycle events
     this.game.eventBus.on('unit:died', (data: { entityId: number }) => {
@@ -651,38 +675,36 @@ export class PathfindingSystem extends System {
     });
 
     // Path requests
-    this.game.eventBus.on('pathfinding:request', (data: {
-      entityId: number;
-      targetX: number;
-      targetY: number;
-      priority?: number;
-    }) => {
-      const entity = this.world.getEntity(data.entityId);
-      if (!entity) return;
+    this.game.eventBus.on(
+      'pathfinding:request',
+      (data: { entityId: number; targetX: number; targetY: number; priority?: number }) => {
+        const entity = this.world.getEntity(data.entityId);
+        if (!entity) return;
 
-      const transform = entity.get<Transform>('Transform');
-      const unit = entity.get<Unit>('Unit');
-      if (!transform || !unit) return;
+        const transform = entity.get<Transform>('Transform');
+        const unit = entity.get<Unit>('Unit');
+        if (!transform || !unit) return;
 
-      // Air units use direct paths (no terrain collision)
-      if (unit.movementDomain === 'air') {
-        const margin = 1;
-        const clampedX = clamp(data.targetX, margin, this.mapWidth - margin);
-        const clampedY = clamp(data.targetY, margin, this.mapHeight - margin);
-        unit.setPath([{ x: clampedX, y: clampedY }]);
-        return;
+        // Air units use direct paths (no terrain collision)
+        if (unit.movementDomain === 'air') {
+          const margin = 1;
+          const clampedX = clamp(data.targetX, margin, this.mapWidth - margin);
+          const clampedY = clamp(data.targetY, margin, this.mapHeight - margin);
+          unit.setPath([{ x: clampedX, y: clampedY }]);
+          return;
+        }
+
+        this.queuePathRequest({
+          entityId: data.entityId,
+          startX: transform.x,
+          startY: transform.y,
+          endX: data.targetX,
+          endY: data.targetY,
+          priority: data.priority ?? 1,
+          movementDomain: unit.movementDomain,
+        });
       }
-
-      this.queuePathRequest({
-        entityId: data.entityId,
-        startX: transform.x,
-        startY: transform.y,
-        endX: data.targetX,
-        endY: data.targetY,
-        priority: data.priority ?? 1,
-        movementDomain: unit.movementDomain,
-      });
-    });
+    );
   }
 
   private queuePathRequest(request: PathRequest): void {
@@ -799,11 +821,7 @@ export class PathfindingSystem extends System {
     this.unitPathStates.delete(entityId);
   }
 
-  private isPathRecentlyFailed(
-    entityId: number,
-    destX: number,
-    destY: number
-  ): boolean {
+  private isPathRecentlyFailed(entityId: number, destX: number, destY: number): boolean {
     const key = `${entityId}_${Math.floor(destX)}_${Math.floor(destY)}`;
     const entry = this.failedPathCache.get(key);
     if (!entry) return false;
@@ -820,11 +838,7 @@ export class PathfindingSystem extends System {
     return true;
   }
 
-  private recordFailedPath(
-    entityId: number,
-    destX: number,
-    destY: number
-  ): void {
+  private recordFailedPath(entityId: number, destX: number, destY: number): void {
     const key = `${entityId}_${Math.floor(destX)}_${Math.floor(destY)}`;
     const currentTick = this.game.getCurrentTick();
 
@@ -1022,19 +1036,11 @@ export class PathfindingSystem extends System {
       if (building.state === 'destroyed' || building.isFlying) continue;
 
       // Use cylinder obstacles (5-10x faster than box for TileCache updates)
-      this.recast.addObstacle(
-        entity.id,
-        transform.x,
-        transform.y,
-        building.width,
-        building.height
-      );
+      this.recast.addObstacle(entity.id, transform.x, transform.y, building.width, building.height);
       blockedCount++;
     }
 
-    debugPathfinding.log(
-      `[PathfindingSystem] Synced ${blockedCount} buildings as obstacles`
-    );
+    debugPathfinding.log(`[PathfindingSystem] Synced ${blockedCount} buildings as obstacles`);
   }
 
   private checkMovingUnits(currentTick: number): void {
@@ -1081,7 +1087,12 @@ export class PathfindingSystem extends System {
         state.destinationY = unit.targetY;
       }
 
-      const distanceMoved = distance(state.lastPosition.x, state.lastPosition.y, transform.x, transform.y);
+      const distanceMoved = distance(
+        state.lastPosition.x,
+        state.lastPosition.y,
+        transform.x,
+        transform.y
+      );
 
       if (distanceMoved > MIN_MOVEMENT_THRESHOLD) {
         state.lastPosition = { x: transform.x, y: transform.y };
@@ -1090,13 +1101,9 @@ export class PathfindingSystem extends System {
         const ticksSinceMove = currentTick - state.lastMoveTick;
         const ticksSinceRepath = currentTick - state.lastRepathTick;
 
-        if (
-          ticksSinceMove > MAX_STUCK_TICKS &&
-          ticksSinceRepath > PATH_REQUEST_COOLDOWN
-        ) {
+        if (ticksSinceMove > MAX_STUCK_TICKS && ticksSinceRepath > PATH_REQUEST_COOLDOWN) {
           const distToDest = Math.sqrt(
-            (transform.x - state.destinationX) ** 2 +
-              (transform.y - state.destinationY) ** 2
+            (transform.x - state.destinationX) ** 2 + (transform.y - state.destinationY) ** 2
           );
 
           if (distToDest > 2) {
@@ -1126,11 +1133,7 @@ export class PathfindingSystem extends System {
   }
 
   // Public API
-  public requestPathForEntity(
-    entityId: number,
-    targetX: number,
-    targetY: number
-  ): void {
+  public requestPathForEntity(entityId: number, targetX: number, targetY: number): void {
     this.game.eventBus.emit('pathfinding:request', {
       entityId,
       targetX,
@@ -1194,7 +1197,7 @@ export class PathfindingSystem extends System {
       // Start at -10000 to leave room for other negative ID uses
       const decorationEntityId = -10000 - i;
 
-      const width = deco.radius * 2;  // diameter
+      const width = deco.radius * 2; // diameter
       const height = deco.radius * 2; // diameter
 
       // Add cylinder obstacle for the decoration (main thread)
@@ -1262,7 +1265,15 @@ export class PathfindingSystem extends System {
 
     if (dist < 0.01) {
       // Worker is at center - pick arbitrary direction
-      return this.findValidPerimeterPoint(targetX, targetY, targetWidth, targetHeight, 1, 0, interactionRange);
+      return this.findValidPerimeterPoint(
+        targetX,
+        targetY,
+        targetWidth,
+        targetHeight,
+        1,
+        0,
+        interactionRange
+      );
     }
 
     // Normalize direction
@@ -1270,15 +1281,40 @@ export class PathfindingSystem extends System {
     const dirY = dy / dist;
 
     // First try: point on perimeter in direction of worker
-    const result = this.findValidPerimeterPoint(targetX, targetY, targetWidth, targetHeight, dirX, dirY, interactionRange);
+    const result = this.findValidPerimeterPoint(
+      targetX,
+      targetY,
+      targetWidth,
+      targetHeight,
+      dirX,
+      dirY,
+      interactionRange
+    );
     if (result) return result;
 
     // Second try: sample points around the perimeter
-    const angles = [0, Math.PI / 4, Math.PI / 2, 3 * Math.PI / 4, Math.PI, -3 * Math.PI / 4, -Math.PI / 2, -Math.PI / 4];
+    const angles = [
+      0,
+      Math.PI / 4,
+      Math.PI / 2,
+      (3 * Math.PI) / 4,
+      Math.PI,
+      (-3 * Math.PI) / 4,
+      -Math.PI / 2,
+      -Math.PI / 4,
+    ];
     for (const angle of angles) {
       const sampleDirX = Math.cos(angle);
       const sampleDirY = Math.sin(angle);
-      const sampleResult = this.findValidPerimeterPoint(targetX, targetY, targetWidth, targetHeight, sampleDirX, sampleDirY, interactionRange);
+      const sampleResult = this.findValidPerimeterPoint(
+        targetX,
+        targetY,
+        targetWidth,
+        targetHeight,
+        sampleDirX,
+        sampleDirY,
+        interactionRange
+      );
       if (sampleResult) return sampleResult;
     }
 

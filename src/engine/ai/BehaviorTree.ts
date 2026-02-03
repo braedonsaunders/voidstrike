@@ -25,7 +25,7 @@ export type BehaviorStatus = 'success' | 'failure' | 'running';
 export interface BehaviorContext {
   entityId: number;
   world: import('../ecs/World').World;
-  game: import('../core/Game').Game;
+  game: import('../core/IGameInstance').IGameInstance;
   blackboard: Blackboard;
   deltaTime: number;
   tick: number;
@@ -426,11 +426,7 @@ export function guard(
 /**
  * Cooldown - Only allows child to run after cooldown period
  */
-export function cooldown(
-  name: string,
-  cooldownMs: number,
-  child: BehaviorNode
-): BehaviorNode {
+export function cooldown(name: string, cooldownMs: number, child: BehaviorNode): BehaviorNode {
   const stateKey = `__cd_${name}_${++nodeIdCounter}`;
 
   return createNode(
@@ -491,11 +487,7 @@ export function cooldownTicks(
 /**
  * Timeout - Fails if child takes too long (by ticks)
  */
-export function timeout(
-  name: string,
-  maxTicks: number,
-  child: BehaviorNode
-): BehaviorNode {
+export function timeout(name: string, maxTicks: number, child: BehaviorNode): BehaviorNode {
   const startKey = `__to_${name}_${++nodeIdCounter}`;
 
   return createNode(
@@ -553,10 +545,7 @@ export function reactive(
 /**
  * Action - Wraps a function that performs an action
  */
-export function action(
-  name: string,
-  fn: (context: BehaviorContext) => boolean
-): BehaviorNode {
+export function action(name: string, fn: (context: BehaviorContext) => boolean): BehaviorNode {
   return createNode(
     (context: BehaviorContext) => {
       return fn(context) ? 'success' : 'failure';
@@ -608,7 +597,10 @@ export function wait(name: string, durationTicks: number): BehaviorNode {
 /**
  * Log - Logs a message (for debugging)
  */
-export function log(name: string, message: string | ((ctx: BehaviorContext) => string)): BehaviorNode {
+export function log(
+  name: string,
+  message: string | ((ctx: BehaviorContext) => string)
+): BehaviorNode {
   return createNode(
     (context: BehaviorContext) => {
       const msg = typeof message === 'function' ? message(context) : message;
@@ -631,7 +623,8 @@ export function setBlackboard(
 ): BehaviorNode {
   return createNode(
     (context: BehaviorContext) => {
-      const v = typeof value === 'function' ? (value as (ctx: BehaviorContext) => unknown)(context) : value;
+      const v =
+        typeof value === 'function' ? (value as (ctx: BehaviorContext) => unknown)(context) : value;
       context.blackboard.set(key, v);
       return 'success';
     },
@@ -679,7 +672,7 @@ export class BehaviorTreeRunner {
   public tick(
     entityId: number,
     world: import('../ecs/World').World,
-    game: import('../core/Game').Game,
+    game: import('../core/IGameInstance').IGameInstance,
     deltaTime: number
   ): BehaviorStatus {
     const context: BehaviorContext = {

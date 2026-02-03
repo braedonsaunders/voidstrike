@@ -20,6 +20,11 @@ import type { Filter, NostrEvent } from 'nostr-tools';
 import { getRelays } from '@/engine/network/p2p/NostrRelays';
 import type { PlayerSlot, StartingResources, GameSpeed } from '@/store/gameSetupStore';
 import { useMultiplayerStore } from '@/store/multiplayerStore';
+import {
+  CommandSigningManager,
+  getCommandSigningManager,
+  resetCommandSigningManager,
+} from '@/engine/network/CommandSigning';
 
 // Short code alphabet (no confusing chars)
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -28,13 +33,13 @@ const CODE_LENGTH = 4;
 // Nostr event kinds for lobby signaling
 // Using high kind numbers to avoid conflicts with standard Nostr apps
 const EVENT_KINDS = {
-  LOBBY_HOST: 30430,    // Host announces lobby
-  LOBBY_JOIN: 30431,    // Guest requests to join
-  LOBBY_ACCEPT: 30432,  // Host accepts guest
-  WEBRTC_OFFER: 30433,  // WebRTC offer
+  LOBBY_HOST: 30430, // Host announces lobby
+  LOBBY_JOIN: 30431, // Guest requests to join
+  LOBBY_ACCEPT: 30432, // Host accepts guest
+  WEBRTC_OFFER: 30433, // WebRTC offer
   WEBRTC_ANSWER: 30434, // WebRTC answer
-  LOBBY_REJECT: 30435,  // Host rejects guest (no slots available)
-  PUBLIC_LOBBY: 30436,  // Public lobby listing for browser
+  LOBBY_REJECT: 30435, // Host rejects guest (no slots available)
+  PUBLIC_LOBBY: 30436, // Public lobby listing for browser
 };
 
 // Tag for public lobby discovery (reserved for future public lobby browser feature)
@@ -69,11 +74,11 @@ const ICE_SERVERS: RTCIceServer[] = [
 ];
 
 export type LobbyStatus =
-  | 'disabled'     // Nostr not active (single-player mode)
+  | 'disabled' // Nostr not active (single-player mode)
   | 'initializing'
-  | 'hosting'      // Your lobby is active, waiting for guests
-  | 'joining'      // Attempting to join another lobby
-  | 'connected'    // Connected to another lobby as guest
+  | 'hosting' // Your lobby is active, waiting for guests
+  | 'joining' // Attempting to join another lobby
+  | 'connected' // Connected to another lobby as guest
   | 'error';
 
 export interface GuestConnection {
@@ -169,9 +174,9 @@ async function publishToRelays(
   event: NostrEvent
 ): Promise<boolean> {
   const results = await Promise.allSettled(
-    relays.map(r =>
+    relays.map((r) =>
       // pool.publish returns Promise<string>[], wrap in Promise.all to get single Promise
-      Promise.all(pool.publish([r], event)).catch(err => {
+      Promise.all(pool.publish([r], event)).catch((err) => {
         // Silently ignore rate-limit errors - they're expected with frequent events
         if (err?.message?.includes('rate-limit')) {
           return []; // Return empty array to count as success
@@ -181,7 +186,7 @@ async function publishToRelays(
     )
   );
 
-  const successCount = results.filter(r => r.status === 'fulfilled').length;
+  const successCount = results.filter((r) => r.status === 'fulfilled').length;
   if (successCount > 0) {
     debugNetworking.log(`[Lobby] Published to ${successCount}/${relays.length} relays`);
   } else {
@@ -226,6 +231,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
   const pcRef = useRef<RTCPeerConnection | null>(null); // For guest mode
   const gameStartCallbackRef = useRef<(() => void) | null>(null);
   const joinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const signingManagerRef = useRef<CommandSigningManager | null>(null);
 
   // Refs for stable access in callbacks without causing effect re-runs
   const guestsRef = useRef<GuestConnection[]>(guests);
@@ -288,6 +294,12 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
         secretKeyRef.current = secretKey;
         pubkeyRef.current = pubkey;
 
+        // Initialize command signing for multiplayer security
+        const signingManager = getCommandSigningManager();
+        await signingManager.initialize();
+        signingManagerRef.current = signingManager;
+        debugNetworking.log('[Lobby] Initialized command signing');
+
         // Get relays
         const relays = await getRelays(6);
         relaysRef.current = relays;
@@ -304,15 +316,18 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
 
         // Publish lobby announcement
         // Use 't' tag for lobby code (single-letter tags are indexed by relays per NIP-12)
-        const lobbyEvent = finalizeEvent({
-          kind: EVENT_KINDS.LOBBY_HOST,
-          created_at: Math.floor(Date.now() / 1000),
-          tags: [
-            ['d', `voidstrike-lobby-${code}`],
-            ['t', code], // Use 't' tag for filtering - relays index single-letter tags
-          ],
-          content: JSON.stringify({ code }),
-        }, secretKey);
+        const lobbyEvent = finalizeEvent(
+          {
+            kind: EVENT_KINDS.LOBBY_HOST,
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+              ['d', `voidstrike-lobby-${code}`],
+              ['t', code], // Use 't' tag for filtering - relays index single-letter tags
+            ],
+            content: JSON.stringify({ code }),
+          },
+          secretKey
+        );
 
         const published = await publishToRelays(pool, relays, lobbyEvent);
         if (!published) {
@@ -329,13 +344,25 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
           since: subscriptionStartTime,
         };
 
-        debugNetworking.log('[Lobby] Subscribing to join requests for code:', code, 'with filter:', JSON.stringify(filter));
+        debugNetworking.log(
+          '[Lobby] Subscribing to join requests for code:',
+          code,
+          'with filter:',
+          JSON.stringify(filter)
+        );
         const sub = pool.subscribeMany(relays, filter, {
           oneose: () => {
-            debugNetworking.log('[Lobby] Join subscription caught up with stored events (EOSE), now listening for new events');
+            debugNetworking.log(
+              '[Lobby] Join subscription caught up with stored events (EOSE), now listening for new events'
+            );
           },
           onevent: async (event: NostrEvent) => {
-            debugNetworking.log('[Lobby] Received join request event:', event.id.slice(0, 8) + '...', 'tags:', JSON.stringify(event.tags));
+            debugNetworking.log(
+              '[Lobby] Received join request event:',
+              event.id.slice(0, 8) + '...',
+              'tags:',
+              JSON.stringify(event.tags)
+            );
             try {
               const data = JSON.parse(event.content);
               const guestPubkey = event.pubkey;
@@ -346,15 +373,18 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
               if (!slotId) {
                 debugNetworking.log('[Lobby] No open slots available, sending rejection');
                 // Send rejection to guest
-                const rejectEvent = finalizeEvent({
-                  kind: EVENT_KINDS.LOBBY_REJECT,
-                  created_at: Math.floor(Date.now() / 1000),
-                  tags: [
-                    ['p', guestPubkey],
-                    ['t', code],
-                  ],
-                  content: JSON.stringify({ reason: 'No open slots available' }),
-                }, secretKey);
+                const rejectEvent = finalizeEvent(
+                  {
+                    kind: EVENT_KINDS.LOBBY_REJECT,
+                    created_at: Math.floor(Date.now() / 1000),
+                    tags: [
+                      ['p', guestPubkey],
+                      ['t', code],
+                    ],
+                    content: JSON.stringify({ reason: 'No open slots available' }),
+                  },
+                  secretKey
+                );
                 await publishToRelays(pool, relays, rejectEvent);
                 return;
               }
@@ -366,9 +396,9 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
               const channel = pc.createDataChannel('game', { ordered: true });
               channel.onopen = () => {
                 debugNetworking.log('[Lobby] Data channel open with guest:', guestName);
-                setGuests(prev => prev.map(g =>
-                  g.pubkey === guestPubkey ? { ...g, dataChannel: channel } : g
-                ));
+                setGuests((prev) =>
+                  prev.map((g) => (g.pubkey === guestPubkey ? { ...g, dataChannel: channel } : g))
+                );
               };
 
               // Add guest to list
@@ -379,26 +409,33 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
                 pc,
                 dataChannel: null,
               };
-              setGuests(prev => [...prev, guestConn]);
+              setGuests((prev) => [...prev, guestConn]);
 
               // Create and send offer
               const offer = await pc.createOffer();
               await pc.setLocalDescription(offer);
               const iceCandidates = await gatherICE(pc);
 
-              const offerEvent = finalizeEvent({
-                kind: EVENT_KINDS.WEBRTC_OFFER,
-                created_at: Math.floor(Date.now() / 1000),
-                tags: [
-                  ['p', guestPubkey],
-                  ['t', code], // Use 't' tag for lobby code
-                ],
-                content: JSON.stringify({
-                  sdp: offer.sdp,
-                  ice: iceCandidates,
-                  slotId,
-                }),
-              }, secretKey);
+              // Include signing public key for command verification
+              const signingPublicKey = signingManagerRef.current?.getPublicKey() || '';
+
+              const offerEvent = finalizeEvent(
+                {
+                  kind: EVENT_KINDS.WEBRTC_OFFER,
+                  created_at: Math.floor(Date.now() / 1000),
+                  tags: [
+                    ['p', guestPubkey],
+                    ['t', code], // Use 't' tag for lobby code
+                  ],
+                  content: JSON.stringify({
+                    sdp: offer.sdp,
+                    ice: iceCandidates,
+                    slotId,
+                    signingPublicKey,
+                  }),
+                },
+                secretKey
+              );
 
               await publishToRelays(pool, relays, offerEvent);
               debugNetworking.log('[Lobby] Sent offer to guest');
@@ -410,7 +447,10 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
                 '#p': [pubkey],
                 since: Math.floor(Date.now() / 1000) - 300, // 5 minutes back
               };
-              debugNetworking.log('[Lobby] Subscribing for answer from guest:', guestPubkey.slice(0, 8) + '...');
+              debugNetworking.log(
+                '[Lobby] Subscribing for answer from guest:',
+                guestPubkey.slice(0, 8) + '...'
+              );
 
               const answerSub = pool.subscribeMany(relays, answerFilter, {
                 onevent: async (answerEvent: NostrEvent) => {
@@ -426,6 +466,18 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
                         debugNetworking.warn('[Lobby] ICE error:', e);
                       }
                     }
+
+                    // Store guest's signing public key for command verification
+                    if (answerData.signingPublicKey && signingManagerRef.current) {
+                      await signingManagerRef.current.addPeerPublicKey(
+                        guestPubkey,
+                        answerData.signingPublicKey
+                      );
+                      debugNetworking.log(
+                        '[Lobby] Stored signing key for guest:',
+                        guestPubkey.slice(0, 8) + '...'
+                      );
+                    }
                   } catch (e) {
                     debugNetworking.error('[Lobby] Failed to process answer:', e);
                   }
@@ -437,11 +489,10 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
                 if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
                   debugNetworking.log('[Lobby] Guest disconnected:', guestName);
                   onGuestLeaveRef.current?.(slotId);
-                  setGuests(prev => prev.filter(g => g.pubkey !== guestPubkey));
+                  setGuests((prev) => prev.filter((g) => g.pubkey !== guestPubkey));
                   answerSub.close();
                 }
               };
-
             } catch (e) {
               debugNetworking.error('[Lobby] Failed to process join request:', e);
             }
@@ -450,7 +501,6 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
 
         subRef.current = sub;
         setStatus('hosting');
-
       } catch (e) {
         debugNetworking.error('[Lobby] Init error:', e);
         if (mounted) {
@@ -468,7 +518,9 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       try {
         subRef.current?.close();
         subRef.current = null;
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       // Clear any pending join timeout to prevent stale state updates
       if (joinTimeoutRef.current) {
         clearTimeout(joinTimeoutRef.current);
@@ -482,11 +534,16 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       pubkeyRef.current = null;
       relaysRef.current = [];
       // Close peer connections
-      guestsRef.current.forEach(g => {
+      guestsRef.current.forEach((g) => {
         try {
           g.pc.close();
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       });
+      // Reset command signing manager
+      resetCommandSigningManager();
+      signingManagerRef.current = null;
     };
   }, [enabled, onGuestJoin]); // Re-initialize when enabled changes or guest handler changes
 
@@ -515,6 +572,14 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       debugNetworking.log('[Lobby] Guest using relays:', relays);
       debugNetworking.log('[Lobby] Guest pubkey:', pubkey.slice(0, 8) + '...');
 
+      // Initialize signing manager if not already initialized (guest mode)
+      if (!signingManagerRef.current || !signingManagerRef.current.isInitialized()) {
+        const signingManager = getCommandSigningManager();
+        await signingManager.initialize();
+        signingManagerRef.current = signingManager;
+        debugNetworking.log('[Lobby] Guest initialized command signing');
+      }
+
       // Subscribe for offer FIRST (before sending join request)
       // This ensures we catch the offer even if host responds quickly
       const offerFilter: Filter = {
@@ -524,7 +589,10 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
         since: Math.floor(Date.now() / 1000) - 300, // 5 minutes back
       };
 
-      debugNetworking.log('[Lobby] Subscribing for offers with filter:', JSON.stringify(offerFilter));
+      debugNetworking.log(
+        '[Lobby] Subscribing for offers with filter:',
+        JSON.stringify(offerFilter)
+      );
 
       let handled = false;
 
@@ -575,26 +643,39 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
               }
             }
 
+            // Store host's signing public key for command verification
+            if (data.signingPublicKey && signingManagerRef.current) {
+              await signingManagerRef.current.addPeerPublicKey(hostPubkey, data.signingPublicKey);
+              debugNetworking.log(
+                '[Lobby] Stored signing key for host:',
+                hostPubkey.slice(0, 8) + '...'
+              );
+            }
+
             // Create and send answer
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
             const iceCandidates = await gatherICE(pc);
 
-            const answerEvent = finalizeEvent({
-              kind: EVENT_KINDS.WEBRTC_ANSWER,
-              created_at: Math.floor(Date.now() / 1000),
-              tags: [
-                ['p', hostPubkey],
-              ],
-              content: JSON.stringify({
-                sdp: answer.sdp,
-                ice: iceCandidates,
-              }),
-            }, secretKey);
+            // Include our signing public key for command verification
+            const guestSigningKey = signingManagerRef.current?.getPublicKey() || '';
+
+            const answerEvent = finalizeEvent(
+              {
+                kind: EVENT_KINDS.WEBRTC_ANSWER,
+                created_at: Math.floor(Date.now() / 1000),
+                tags: [['p', hostPubkey]],
+                content: JSON.stringify({
+                  sdp: answer.sdp,
+                  ice: iceCandidates,
+                  signingPublicKey: guestSigningKey,
+                }),
+              },
+              secretKey
+            );
 
             await publishToRelays(pool, relays, answerEvent);
             debugNetworking.log('[Lobby] Sent answer to host');
-
           } catch (e) {
             debugNetworking.error('[Lobby] Failed to process offer:', e);
             setError('Failed to connect to host');
@@ -650,19 +731,25 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       });
 
       // Small delay to ensure subscriptions are active before publishing join request
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
       // Publish join request with 't' tag for lobby code
-      const joinEvent = finalizeEvent({
-        kind: EVENT_KINDS.LOBBY_JOIN,
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ['t', normalizedCode], // Use 't' tag for filtering by relays
-        ],
-        content: JSON.stringify({ name: playerName }),
-      }, secretKey);
+      const joinEvent = finalizeEvent(
+        {
+          kind: EVENT_KINDS.LOBBY_JOIN,
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            ['t', normalizedCode], // Use 't' tag for filtering by relays
+          ],
+          content: JSON.stringify({ name: playerName }),
+        },
+        secretKey
+      );
 
-      debugNetworking.log('[Lobby] Publishing join request with tags:', JSON.stringify(joinEvent.tags));
+      debugNetworking.log(
+        '[Lobby] Publishing join request with tags:',
+        JSON.stringify(joinEvent.tags)
+      );
       const published = await publishToRelays(pool, relays, joinEvent);
       if (!published) {
         offerSub.close();
@@ -685,7 +772,6 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
         }
         joinTimeoutRef.current = null;
       }, 30000);
-
     } catch (e) {
       debugNetworking.error('[Lobby] Join error:', e);
       setError(e instanceof Error ? e.message : 'Failed to join lobby');
@@ -705,51 +791,57 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     setStatus('hosting');
   }, []);
 
-  const kickGuest = useCallback((pubkey: string) => {
-    const guest = guests.find(g => g.pubkey === pubkey);
-    if (guest) {
-      guest.pc.close();
-      onGuestLeave?.(guest.slotId);
-      setGuests(prev => prev.filter(g => g.pubkey !== pubkey));
-    }
-  }, [guests, onGuestLeave]);
+  const kickGuest = useCallback(
+    (pubkey: string) => {
+      const guest = guests.find((g) => g.pubkey === pubkey);
+      if (guest) {
+        guest.pc.close();
+        onGuestLeave?.(guest.slotId);
+        setGuests((prev) => prev.filter((g) => g.pubkey !== pubkey));
+      }
+    },
+    [guests, onGuestLeave]
+  );
 
   // Send lobby state to all connected guests (host only)
-  const sendLobbyState = useCallback((state: LobbyState) => {
-    if (!isHost) return;
+  const sendLobbyState = useCallback(
+    (state: LobbyState) => {
+      if (!isHost) return;
 
-    const connectedGuests = guests.filter(g => g.dataChannel?.readyState === 'open');
-    if (connectedGuests.length === 0) return;
+      const connectedGuests = guests.filter((g) => g.dataChannel?.readyState === 'open');
+      if (connectedGuests.length === 0) return;
 
-    debugNetworking.log('[Lobby] Sending lobby state to', connectedGuests.length, 'guests');
+      debugNetworking.log('[Lobby] Sending lobby state to', connectedGuests.length, 'guests');
 
-    connectedGuests.forEach(guest => {
-      // Include guest's slot ID in their message
-      const guestState: LobbyState = {
-        ...state,
-        guestSlotId: guest.slotId,
-      };
+      connectedGuests.forEach((guest) => {
+        // Include guest's slot ID in their message
+        const guestState: LobbyState = {
+          ...state,
+          guestSlotId: guest.slotId,
+        };
 
-      const message: LobbyMessage = {
-        type: 'lobby_state',
-        payload: guestState,
-        timestamp: Date.now(),
-      };
+        const message: LobbyMessage = {
+          type: 'lobby_state',
+          payload: guestState,
+          timestamp: Date.now(),
+        };
 
-      try {
-        guest.dataChannel?.send(JSON.stringify(message));
-      } catch (e) {
-        debugNetworking.error('[Lobby] Failed to send to guest:', e);
-      }
-    });
-  }, [isHost, guests]);
+        try {
+          guest.dataChannel?.send(JSON.stringify(message));
+        } catch (e) {
+          debugNetworking.error('[Lobby] Failed to send to guest:', e);
+        }
+      });
+    },
+    [isHost, guests]
+  );
 
   // Send game start signal to all guests (host only)
   // Returns number of guests successfully notified
   const sendGameStart = useCallback((): number => {
     if (!isHost) return 0;
 
-    const connectedGuests = guests.filter(g => g.dataChannel?.readyState === 'open');
+    const connectedGuests = guests.filter((g) => g.dataChannel?.readyState === 'open');
     debugNetworking.log('[Lobby] Sending game start to', connectedGuests.length, 'guests');
 
     if (connectedGuests.length === 0) {
@@ -764,7 +856,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     };
 
     let successCount = 0;
-    connectedGuests.forEach(guest => {
+    connectedGuests.forEach((guest) => {
       try {
         guest.dataChannel?.send(JSON.stringify(message));
         successCount++;
@@ -814,7 +906,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
       await joinLobby(code, name);
 
       // Wait a bit for connection to establish
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
 
       // Check if we successfully connected by checking the actual connection state
       const currentHostConnection = pcRef.current;
@@ -877,7 +969,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
 
     // Find the host's slot - the first human player that isn't a guest
     const hostSlot = receivedLobbyState.playerSlots.find(
-      slot => slot.type === 'human' && !slot.isGuest
+      (slot) => slot.type === 'human' && !slot.isGuest
     );
 
     if (hostSlot) {
@@ -888,7 +980,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
 
   // Sync ALL guest data channels to multiplayerStore (for host mode - 8 player support)
   useEffect(() => {
-    const connectedGuests = guests.filter(g => g.dataChannel?.readyState === 'open');
+    const connectedGuests = guests.filter((g) => g.dataChannel?.readyState === 'open');
 
     if (connectedGuests.length > 0) {
       const store = useMultiplayerStore.getState();
@@ -903,7 +995,9 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
           // Check if this peer is already added
           const existingChannel = store.getPeerChannel(guest.pubkey);
           if (!existingChannel) {
-            debugNetworking.log(`[Lobby] Adding guest ${guest.name} (${guest.pubkey.slice(0, 8)}...) to multiplayerStore`);
+            debugNetworking.log(
+              `[Lobby] Adding guest ${guest.name} (${guest.pubkey.slice(0, 8)}...) to multiplayerStore`
+            );
             store.addPeer(guest.pubkey, guest.dataChannel);
           }
           // Set up peer-to-slot mapping for command validation
@@ -912,43 +1006,48 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
         }
       }
 
-      debugNetworking.log(`[Lobby] Total connected guests in store: ${store.getConnectedPeerCount()}`);
+      debugNetworking.log(
+        `[Lobby] Total connected guests in store: ${store.getConnectedPeerCount()}`
+      );
     }
   }, [guests]);
 
   // Count guests with open data channels
-  const connectedGuestCount = guests.filter(g => g.dataChannel?.readyState === 'open').length;
+  const connectedGuestCount = guests.filter((g) => g.dataChannel?.readyState === 'open').length;
 
   // Publish public lobby listing
-  const publishPublicListing = useCallback(async (lobbyData: {
-    hostName: string;
-    mapName: string;
-    mapId: string;
-    currentPlayers: number;
-    maxPlayers: number;
-    gameMode: string;
-  }): Promise<boolean> => {
-    const pool = poolRef.current;
-    const secretKey = secretKeyRef.current;
-    const relays = relaysRef.current;
-    const code = lobbyCode;
+  const publishPublicListing = useCallback(
+    async (lobbyData: {
+      hostName: string;
+      mapName: string;
+      mapId: string;
+      currentPlayers: number;
+      maxPlayers: number;
+      gameMode: string;
+    }): Promise<boolean> => {
+      const pool = poolRef.current;
+      const secretKey = secretKeyRef.current;
+      const relays = relaysRef.current;
+      const code = lobbyCode;
 
-    if (!pool || !secretKey || !code || relays.length === 0) {
-      debugNetworking.warn('[Lobby] Cannot publish public listing - not initialized');
-      return false;
-    }
+      if (!pool || !secretKey || !code || relays.length === 0) {
+        debugNetworking.warn('[Lobby] Cannot publish public listing - not initialized');
+        return false;
+      }
 
-    try {
-      const { publishPublicLobby } = await import('./usePublicLobbies');
-      return await publishPublicLobby(pool, relays, secretKey, {
-        ...lobbyData,
-        code,
-      });
-    } catch (e) {
-      debugNetworking.error('[Lobby] Failed to publish public listing:', e);
-      return false;
-    }
-  }, [lobbyCode]);
+      try {
+        const { publishPublicLobby } = await import('./usePublicLobbies');
+        return await publishPublicLobby(pool, relays, secretKey, {
+          ...lobbyData,
+          code,
+        });
+      } catch (e) {
+        debugNetworking.error('[Lobby] Failed to publish public listing:', e);
+        return false;
+      }
+    },
+    [lobbyCode]
+  );
 
   return {
     status,

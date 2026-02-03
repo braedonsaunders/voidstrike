@@ -105,16 +105,6 @@ describe('Transform Component', () => {
     });
   });
 
-  describe('distanceToPoint', () => {
-    it('calculates distance to a point', () => {
-      expect(transform.distanceToPoint(13, 24)).toBe(5);
-    });
-
-    it('returns 0 for same position', () => {
-      expect(transform.distanceToPoint(10, 20)).toBe(0);
-    });
-  });
-
   describe('setRotation', () => {
     it('updates rotation and stores previous', () => {
       transform.setRotation(Math.PI);

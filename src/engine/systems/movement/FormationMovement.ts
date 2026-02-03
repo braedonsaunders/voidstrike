@@ -12,7 +12,7 @@ import { Transform } from '../../components/Transform';
 import { Unit } from '../../components/Unit';
 import { World } from '../../ecs/World';
 import { EventBus } from '../../core/EventBus';
-import type { Game } from '../../core/Game';
+import type { IGameInstance } from '../../core/IGameInstance';
 import {
   generateFormationPositions,
   sortUnitsForFormation,
@@ -61,13 +61,13 @@ export class FormationMovement {
   private eventBus: EventBus;
   private requestPathWithCooldown: PathRequestCallback;
   private recast: RecastNavigation;
-  private game: Game;
+  private game: IGameInstance;
 
   constructor(
     world: World,
     eventBus: EventBus,
     requestPathWithCooldown: PathRequestCallback,
-    game: Game
+    game: IGameInstance
   ) {
     this.world = world;
     this.eventBus = eventBus;

@@ -1,4 +1,4 @@
-import { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { World } from './World';
 
 export abstract class System {
@@ -12,9 +12,9 @@ export abstract class System {
   public abstract readonly name: string;
 
   protected world!: World;
-  protected game: Game;
+  protected game: IGameInstance;
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     this.game = game;
   }
 

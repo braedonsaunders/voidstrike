@@ -16,12 +16,31 @@
 
 import { GameCore, GameConfig } from '../core/GameCore';
 import { PerformanceMonitor } from '../core/PerformanceMonitor';
+import type { SystemDefinition } from '../core/SystemRegistry';
+import type { System } from '../ecs/System';
+import type { IGameInstance } from '../core/IGameInstance';
+import type { GameStatePort } from '../core/GameStatePort';
+import type { UpgradeEffect } from '@/data/research/dominion';
+import type {
+  CombatAttackEventData,
+  DamageDealtEventData,
+  ProjectileSpawnedEventData,
+  ProjectileImpactEventData,
+  UnitDiedEventData,
+  UnitTrainedEventData,
+  BuildingDestroyedEventData,
+  BuildingCompleteEventData,
+  UpgradeCompleteEventData,
+  AbilityUsedEventData,
+  AlertTriggeredEventData,
+  GameOverEventData,
+} from '../core/GameEvents';
 import { debugInitialization } from '@/utils/debugLogger';
 import { initializeDefinitions } from '../definitions/bootstrap';
 
 // Components
 import { Transform } from '../components/Transform';
-import { Unit } from '../components/Unit';
+import { Unit, type QueuedCommand } from '../components/Unit';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
 import { Health } from '../components/Health';
@@ -101,6 +120,12 @@ export class WorkerGame extends GameCore {
     { minerals: number; plasma: number; supply: number; maxSupply: number }
   > = new Map();
 
+  // Player research tracking (upgradeId -> completion time)
+  private playerResearch: Map<
+    string,
+    Map<string, { effects: UpgradeEffect[]; completedAt: number }>
+  > = new Map();
+
   // Player team assignments (0 = FFA, 1-4 = team alliance)
   private playerTeams: Map<string, number> = new Map();
 
@@ -110,6 +135,81 @@ export class WorkerGame extends GameCore {
   // Idempotency flag to prevent duplicate entity spawning
   private entitiesAlreadySpawned = false;
   private controlGroups: Map<number, number[]> = new Map();
+
+  /**
+   * Worker-specific GameStatePort implementation.
+   * Uses internal playerResources map for resource management.
+   */
+  public statePort: GameStatePort = {
+    getSelectedUnits: () => this.selectedEntityIds,
+    getControlGroup: (groupNumber: number) => this.controlGroups.get(groupNumber) ?? [],
+    getMinerals: () => this.playerResources.get(this.config.playerId)?.minerals ?? 0,
+    getPlasma: () => this.playerResources.get(this.config.playerId)?.plasma ?? 0,
+    getSupply: () => this.playerResources.get(this.config.playerId)?.supply ?? 0,
+    getMaxSupply: () => this.playerResources.get(this.config.playerId)?.maxSupply ?? 0,
+    hasResearch: (playerId: string, upgradeId: string) => {
+      return this.playerResearch.get(playerId)?.has(upgradeId) ?? false;
+    },
+    addResearch: (
+      playerId: string,
+      upgradeId: string,
+      effects: UpgradeEffect[],
+      completedAt: number
+    ) => {
+      if (!this.playerResearch.has(playerId)) {
+        this.playerResearch.set(playerId, new Map());
+      }
+      this.playerResearch.get(playerId)!.set(upgradeId, { effects, completedAt });
+    },
+    selectUnits: (entityIds: number[]) => {
+      this.selectedEntityIds = [...entityIds];
+    },
+    setControlGroup: (groupNumber: number, entityIds: number[]) => {
+      this.controlGroups.set(groupNumber, [...entityIds]);
+    },
+    addResources: (minerals: number, plasma: number) => {
+      const current = this.playerResources.get(this.config.playerId) ?? {
+        minerals: 0,
+        plasma: 0,
+        supply: 0,
+        maxSupply: 0,
+      };
+      current.minerals = Math.max(0, current.minerals + minerals);
+      current.plasma = Math.max(0, current.plasma + plasma);
+      this.playerResources.set(this.config.playerId, current);
+    },
+    setResources: (minerals: number, plasma: number) => {
+      const current = this.playerResources.get(this.config.playerId) ?? {
+        minerals: 0,
+        plasma: 0,
+        supply: 0,
+        maxSupply: 0,
+      };
+      current.minerals = Math.max(0, minerals);
+      current.plasma = Math.max(0, plasma);
+      this.playerResources.set(this.config.playerId, current);
+    },
+    addSupply: (delta: number) => {
+      const current = this.playerResources.get(this.config.playerId) ?? {
+        minerals: 0,
+        plasma: 0,
+        supply: 0,
+        maxSupply: 0,
+      };
+      current.supply = Math.max(0, current.supply + delta);
+      this.playerResources.set(this.config.playerId, current);
+    },
+    addMaxSupply: (delta: number) => {
+      const current = this.playerResources.get(this.config.playerId) ?? {
+        minerals: 0,
+        plasma: 0,
+        supply: 0,
+        maxSupply: 0,
+      };
+      current.maxSupply = Math.max(0, current.maxSupply + delta);
+      this.playerResources.set(this.config.playerId, current);
+    },
+  };
 
   // Debug tracking
   private hasLoggedFirstRenderState = false;
@@ -145,20 +245,20 @@ export class WorkerGame extends GameCore {
   // SYSTEM DEFINITIONS (worker excludes Selection + Audio)
   // ============================================================================
 
-  protected getSystemDefinitions(): any[] {
+  protected getSystemDefinitions(): SystemDefinition[] {
     return [
       // SPAWN LAYER
       {
         name: 'SpawnSystem',
         dependencies: [] as string[],
-        factory: () => new SpawnSystem(this as any),
+        factory: () => new SpawnSystem(this as IGameInstance),
       },
 
       // PLACEMENT LAYER
       {
         name: 'BuildingPlacementSystem',
         dependencies: [] as string[],
-        factory: () => new BuildingPlacementSystem(this as any),
+        factory: () => new BuildingPlacementSystem(this as IGameInstance),
       },
       {
         name: 'PathfindingSystem',
@@ -170,24 +270,24 @@ export class WorkerGame extends GameCore {
       {
         name: 'BuildingMechanicsSystem',
         dependencies: ['BuildingPlacementSystem'],
-        factory: () => new BuildingMechanicsSystem(this as any),
+        factory: () => new BuildingMechanicsSystem(this as IGameInstance),
       },
       {
         name: 'WallSystem',
         dependencies: ['BuildingPlacementSystem'],
-        factory: () => new WallSystem(this as any),
+        factory: () => new WallSystem(this as IGameInstance),
       },
       {
         name: 'UnitMechanicsSystem',
         dependencies: [] as string[],
-        factory: () => new UnitMechanicsSystem(this as any),
+        factory: () => new UnitMechanicsSystem(this as IGameInstance),
       },
 
       // MOVEMENT LAYER
       {
         name: 'MovementSystem',
         dependencies: ['PathfindingSystem', 'UnitMechanicsSystem'],
-        factory: () => new MovementSystem(this as any),
+        factory: () => new MovementSystem(this as IGameInstance),
       },
 
       // VISION LAYER
@@ -201,34 +301,34 @@ export class WorkerGame extends GameCore {
       {
         name: 'CombatSystem',
         dependencies: ['MovementSystem', 'VisionSystem'],
-        factory: () => new CombatSystem(this as any),
+        factory: () => new CombatSystem(this as IGameInstance),
       },
       {
         name: 'ProjectileSystem',
         dependencies: ['CombatSystem'],
-        factory: () => new ProjectileSystem(this as any),
+        factory: () => new ProjectileSystem(this as IGameInstance),
       },
       {
         name: 'AbilitySystem',
         dependencies: ['CombatSystem'],
-        factory: () => new AbilitySystem(this as any),
+        factory: () => new AbilitySystem(this as IGameInstance),
       },
 
       // ECONOMY LAYER
       {
         name: 'ResourceSystem',
         dependencies: ['MovementSystem'],
-        factory: () => new ResourceSystem(this as any),
+        factory: () => new ResourceSystem(this as IGameInstance),
       },
       {
         name: 'ProductionSystem',
         dependencies: ['ResourceSystem'],
-        factory: () => new ProductionSystem(this as any),
+        factory: () => new ProductionSystem(this as IGameInstance),
       },
       {
         name: 'ResearchSystem',
         dependencies: ['ProductionSystem'],
-        factory: () => new ResearchSystem(this as any),
+        factory: () => new ResearchSystem(this as IGameInstance),
       },
 
       // AI LAYER (conditional)
@@ -237,12 +337,12 @@ export class WorkerGame extends GameCore {
             {
               name: 'EnhancedAISystem',
               dependencies: ['CombatSystem', 'ResourceSystem'],
-              factory: () => new EnhancedAISystem(this as any, this.config.aiDifficulty),
+              factory: () => new EnhancedAISystem(this as IGameInstance, this.config.aiDifficulty),
             },
             {
               name: 'AIEconomySystem',
               dependencies: ['EnhancedAISystem'],
-              factory: () => new AIEconomySystem(this as any),
+              factory: () => new AIEconomySystem(this as IGameInstance),
             },
             {
               name: 'AIMicroSystem',
@@ -275,7 +375,7 @@ export class WorkerGame extends GameCore {
     ];
   }
 
-  protected override onSystemCreated(system: any): void {
+  protected override onSystemCreated(system: System): void {
     super.onSystemCreated(system);
 
     // Capture ProjectileSystem reference
@@ -290,14 +390,14 @@ export class WorkerGame extends GameCore {
 
   private setupEventListeners(): void {
     // Combat events
-    this.eventBus.on('combat:attack', (data: any) => {
+    this.eventBus.on('combat:attack', (data: CombatAttackEventData) => {
       this.pendingEvents.push({
         type: 'combat:attack',
         attackerId: data.attackerEntityId,
         attackerType: data.attackerId || 'unknown',
         attackerPos: data.attackerPos,
         targetPos: data.targetPos,
-        targetId: data.targetEntityId,
+        targetId: data.targetId,
         targetUnitType: data.targetUnitType,
         damage: data.damage,
         damageType: data.damageType,
@@ -308,7 +408,7 @@ export class WorkerGame extends GameCore {
     });
 
     // Damage dealt events (for UI damage numbers)
-    this.eventBus.on('damage:dealt', (data: any) => {
+    this.eventBus.on('damage:dealt', (data: DamageDealtEventData) => {
       this.pendingEvents.push({
         type: 'damage:dealt',
         targetId: data.targetId,
@@ -324,7 +424,7 @@ export class WorkerGame extends GameCore {
     });
 
     // Projectile events
-    this.eventBus.on('projectile:spawned', (data: any) => {
+    this.eventBus.on('projectile:spawned', (data: ProjectileSpawnedEventData) => {
       this.pendingEvents.push({
         type: 'projectile:spawned',
         entityId: data.entityId,
@@ -336,7 +436,7 @@ export class WorkerGame extends GameCore {
       });
     });
 
-    this.eventBus.on('projectile:impact', (data: any) => {
+    this.eventBus.on('projectile:impact', (data: ProjectileImpactEventData) => {
       this.pendingEvents.push({
         type: 'projectile:impact',
         entityId: data.entityId,
@@ -348,7 +448,7 @@ export class WorkerGame extends GameCore {
     });
 
     // Unit events
-    this.eventBus.on('unit:died', (data: any) => {
+    this.eventBus.on('unit:died', (data: UnitDiedEventData) => {
       this.pendingEvents.push({
         type: 'unit:died',
         entityId: data.entityId,
@@ -359,7 +459,7 @@ export class WorkerGame extends GameCore {
       });
     });
 
-    this.eventBus.on('unit:trained', (data: any) => {
+    this.eventBus.on('unit:trained', (data: UnitTrainedEventData) => {
       this.pendingEvents.push({
         type: 'unit:trained',
         entityId: data.entityId,
@@ -370,7 +470,7 @@ export class WorkerGame extends GameCore {
     });
 
     // Building events
-    this.eventBus.on('building:destroyed', (data: any) => {
+    this.eventBus.on('building:destroyed', (data: BuildingDestroyedEventData) => {
       this.pendingEvents.push({
         type: 'building:destroyed',
         entityId: data.entityId,
@@ -381,7 +481,7 @@ export class WorkerGame extends GameCore {
       });
     });
 
-    this.eventBus.on('building:complete', (data: any) => {
+    this.eventBus.on('building:complete', (data: BuildingCompleteEventData) => {
       this.pendingEvents.push({
         type: 'building:complete',
         entityId: data.entityId,
@@ -392,7 +492,7 @@ export class WorkerGame extends GameCore {
     });
 
     // Upgrade events
-    this.eventBus.on('upgrade:complete', (data: any) => {
+    this.eventBus.on('upgrade:complete', (data: UpgradeCompleteEventData) => {
       this.pendingEvents.push({
         type: 'upgrade:complete',
         upgradeId: data.upgradeId,
@@ -401,7 +501,7 @@ export class WorkerGame extends GameCore {
     });
 
     // Ability events
-    this.eventBus.on('ability:used', (data: any) => {
+    this.eventBus.on('ability:used', (data: AbilityUsedEventData) => {
       this.pendingEvents.push({
         type: 'ability:used',
         abilityId: data.abilityId,
@@ -414,18 +514,23 @@ export class WorkerGame extends GameCore {
     });
 
     // Alert events
-    this.eventBus.on('alert:triggered', (data: any) => {
+    this.eventBus.on('alert:triggered', (data: AlertTriggeredEventData) => {
       this.pendingEvents.push({
         type: 'alert',
-        alertType: data.alertType,
+        alertType: data.alertType as
+          | 'under_attack'
+          | 'unit_ready'
+          | 'research_complete'
+          | 'resources_low'
+          | 'base_destroyed',
         position: data.position,
         playerId: data.playerId,
-        details: data.details,
+        details: data.details ? JSON.stringify(data.details) : undefined,
       });
     });
 
     // Game over
-    this.eventBus.on('game:over', (data: any) => {
+    this.eventBus.on('game:over', (data: GameOverEventData) => {
       postMessage({
         type: 'gameOver',
         winnerId: data.winnerId,
@@ -713,7 +818,7 @@ export class WorkerGame extends GameCore {
         targetY: unit.targetY,
         speed: unit.speed,
         // Command queue (serialized for transfer)
-        commandQueue: unit.commandQueue.map((cmd) => ({
+        commandQueue: unit.commandQueue.map((cmd: QueuedCommand) => ({
           type: cmd.type,
           targetX: cmd.targetX,
           targetY: cmd.targetY,

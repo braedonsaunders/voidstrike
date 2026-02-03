@@ -25,15 +25,11 @@ import { Unit } from '../../components/Unit';
 import { Building } from '../../components/Building';
 import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
-import type { Game } from '../../core/Game';
+import type { IGameInstance } from '../../core/IGameInstance';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { debugAI } from '@/utils/debugLogger';
 import { SeededRandom } from '@/utils/math';
-import {
-  getRandomBuildOrder,
-  type AIDifficulty,
-  type BuildOrderStep,
-} from '@/data/ai/buildOrders';
+import { getRandomBuildOrder, type AIDifficulty, type BuildOrderStep } from '@/data/ai/buildOrders';
 import {
   type FactionAIConfig,
   type AIStateSnapshot,
@@ -56,7 +52,13 @@ import { WorkerDistribution } from '../../ai/WorkerDistribution';
 import { RetreatCoordination } from '../../ai/RetreatCoordination';
 import { FormationControl } from '../../ai/FormationControl';
 
-export type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting' | 'harassing';
+export type AIState =
+  | 'building'
+  | 'expanding'
+  | 'attacking'
+  | 'defending'
+  | 'scouting'
+  | 'harassing';
 export type { AIDifficulty };
 
 /**
@@ -280,7 +282,7 @@ export class AICoordinator extends System {
   private positionalAnalysis: PositionalAnalysis;
   private positionalAnalysisInitialized: boolean = false;
 
-  constructor(game: Game, difficulty: AIDifficulty = 'medium') {
+  constructor(game: IGameInstance, difficulty: AIDifficulty = 'medium') {
     super(game);
     this.defaultDifficulty = difficulty;
 
@@ -305,12 +307,15 @@ export class AICoordinator extends System {
   }
 
   private setupEventListeners(): void {
-    this.game.eventBus.on('vision:enemySighted', (data: { playerId: string; position: { x: number; y: number } }) => {
-      for (const ai of this.aiPlayers.values()) {
-        if (ai.playerId !== data.playerId) continue;
-        ai.lastEnemyContact = this.game.getCurrentTick();
+    this.game.eventBus.on(
+      'vision:enemySighted',
+      (data: { playerId: string; position: { x: number; y: number } }) => {
+        for (const ai of this.aiPlayers.values()) {
+          if (ai.playerId !== data.playerId) continue;
+          ai.lastEnemyContact = this.game.getCurrentTick();
+        }
       }
-    });
+    );
 
     this.game.eventBus.on('alert:underAttack', (data: { playerId: string }) => {
       const ai = this.aiPlayers.get(data.playerId);
@@ -319,34 +324,42 @@ export class AICoordinator extends System {
       }
     });
 
-    this.game.eventBus.on('resource:depleted', (data: { resourceType: string; position: { x: number; y: number } }) => {
-      const currentTick = this.game.getCurrentTick();
-      for (const ai of this.aiPlayers.values()) {
-        const basePositions = this.getAIBasePositions(ai);
-        for (const basePos of basePositions) {
-          const dx = data.position.x - basePos.x;
-          const dy = data.position.y - basePos.y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          if (distance <= 30) {
-            ai.depletedPatchesNearBases++;
-            ai.lastDepletionTick = currentTick;
-            debugAI.log(`[AICoordinator] ${ai.playerId}: Resource depleted near base! Total depleted: ${ai.depletedPatchesNearBases}`);
-            break;
+    this.game.eventBus.on(
+      'resource:depleted',
+      (data: { resourceType: string; position: { x: number; y: number } }) => {
+        const currentTick = this.game.getCurrentTick();
+        for (const ai of this.aiPlayers.values()) {
+          const basePositions = this.getAIBasePositions(ai);
+          for (const basePos of basePositions) {
+            const dx = data.position.x - basePos.x;
+            const dy = data.position.y - basePos.y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            if (distance <= 30) {
+              ai.depletedPatchesNearBases++;
+              ai.lastDepletionTick = currentTick;
+              debugAI.log(
+                `[AICoordinator] ${ai.playerId}: Resource depleted near base! Total depleted: ${ai.depletedPatchesNearBases}`
+              );
+              break;
+            }
           }
         }
       }
-    });
+    );
 
     // Track research completion
-    this.game.eventBus.on('research:complete', (event: { buildingId: number; upgradeId: string }) => {
-      for (const ai of this.aiPlayers.values()) {
-        if (ai.researchInProgress.has(event.upgradeId)) {
-          ai.completedResearch.add(event.upgradeId);
-          ai.researchInProgress.delete(event.upgradeId);
-          debugAI.log(`[AICoordinator] ${ai.playerId}: Research complete: ${event.upgradeId}`);
+    this.game.eventBus.on(
+      'research:complete',
+      (event: { buildingId: number; upgradeId: string }) => {
+        for (const ai of this.aiPlayers.values()) {
+          if (ai.researchInProgress.has(event.upgradeId)) {
+            ai.completedResearch.add(event.upgradeId);
+            ai.researchInProgress.delete(event.upgradeId);
+            debugAI.log(`[AICoordinator] ${ai.playerId}: Research complete: ${event.upgradeId}`);
+          }
         }
       }
-    });
+    );
   }
 
   // === Cache Methods (exposed for subsystems) ===
@@ -368,7 +381,12 @@ export class AICoordinator extends System {
 
   public getCachedUnitsWithTransform(): Entity[] {
     if (!this.entityCache.unitsWithTransform) {
-      this.entityCache.unitsWithTransform = this.world.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
+      this.entityCache.unitsWithTransform = this.world.getEntitiesWith(
+        'Unit',
+        'Transform',
+        'Selectable',
+        'Health'
+      );
     }
     return this.entityCache.unitsWithTransform;
   }
@@ -382,7 +400,12 @@ export class AICoordinator extends System {
 
   public getCachedBuildingsWithTransform(): Entity[] {
     if (!this.entityCache.buildingsWithTransform) {
-      this.entityCache.buildingsWithTransform = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
+      this.entityCache.buildingsWithTransform = this.world.getEntitiesWith(
+        'Building',
+        'Transform',
+        'Selectable',
+        'Health'
+      );
     }
     return this.entityCache.buildingsWithTransform;
   }
@@ -437,7 +460,9 @@ export class AICoordinator extends System {
     const chokePoints = this.positionalAnalysis.getChokePoints();
     const expansionLocations = this.positionalAnalysis.getExpansionLocations();
 
-    debugAI.log(`[AICoordinator] Positional analysis initialized: ${chokePoints.length} choke points, ${expansionLocations.length} expansion locations`);
+    debugAI.log(
+      `[AICoordinator] Positional analysis initialized: ${chokePoints.length} choke points, ${expansionLocations.length} expansion locations`
+    );
   }
 
   /**
@@ -459,7 +484,9 @@ export class AICoordinator extends System {
   ): void {
     // Idempotency check: prevent duplicate registrations that would reset AI state
     if (this.aiPlayers.has(playerId)) {
-      debugAI.log(`[AICoordinator] AI ${playerId} already registered, skipping duplicate registration`);
+      debugAI.log(
+        `[AICoordinator] AI ${playerId} already registered, skipping duplicate registration`
+      );
       return;
     }
 
@@ -476,15 +503,25 @@ export class AICoordinator extends System {
     let actualPersonality = personality;
     if (personality === 'balanced' && aiIndex > 0) {
       // Give subsequent AIs varied personalities for more interesting games
-      const personalities: AIPersonality[] = ['aggressive', 'defensive', 'economic', 'balanced', 'turtle'];
+      const personalities: AIPersonality[] = [
+        'aggressive',
+        'defensive',
+        'economic',
+        'balanced',
+        'turtle',
+      ];
       actualPersonality = personalities[aiIndex % personalities.length];
     }
 
-    debugAI.log(`[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}, personality: ${actualPersonality}, seed: ${aiSeed}`);
+    debugAI.log(
+      `[AICoordinator] Registering AI: ${playerId}, faction: ${faction}, difficulty: ${difficulty}, personality: ${actualPersonality}, seed: ${aiSeed}`
+    );
 
     const factionConfig = getFactionAIConfig(faction);
     if (!factionConfig) {
-      throw new Error(`No AI configuration found for faction: ${faction}. Define a FactionAIConfig in src/data/ai/factions/${faction}.ts`);
+      throw new Error(
+        `No AI configuration found for faction: ${faction}. Define a FactionAIConfig in src/data/ai/factions/${faction}.ts`
+      );
     }
 
     const difficultySettings = factionConfig.difficultyConfig[difficulty];
@@ -592,7 +629,7 @@ export class AICoordinator extends System {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
       const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32bit integer
     }
     return Math.abs(hash);
@@ -621,7 +658,9 @@ export class AICoordinator extends System {
     if (!ai) {
       // Debug: this would mean resources are being credited to an unregistered player
       if (this.game.getCurrentTick() % 100 === 0) {
-        debugAI.warn(`[AICoordinator] creditResources called for unregistered player: ${playerId}. Registered players: ${Array.from(this.aiPlayers.keys()).join(', ')}`);
+        debugAI.warn(
+          `[AICoordinator] creditResources called for unregistered player: ${playerId}. Registered players: ${Array.from(this.aiPlayers.keys()).join(', ')}`
+        );
       }
       return;
     }
@@ -631,7 +670,9 @@ export class AICoordinator extends System {
 
     // Log periodically
     if (this.game.getCurrentTick() % 100 === 0) {
-      debugAI.log(`[AICoordinator] ${playerId} received: +${minerals} minerals, +${plasma} gas (total: ${Math.floor(ai.minerals)}M, ${Math.floor(ai.plasma)}G)`);
+      debugAI.log(
+        `[AICoordinator] ${playerId} received: +${minerals} minerals, +${plasma} gas (total: ${Math.floor(ai.minerals)}M, ${Math.floor(ai.plasma)}G)`
+      );
     }
   }
 
@@ -767,25 +808,38 @@ export class AICoordinator extends System {
     return null;
   }
 
-  private loadBuildOrder(faction: string, difficulty: AIDifficulty, aiRandom?: SeededRandom): BuildOrderStep[] {
+  private loadBuildOrder(
+    faction: string,
+    difficulty: AIDifficulty,
+    aiRandom?: SeededRandom
+  ): BuildOrderStep[] {
     // Use provided random or create a temporary one for build order selection
     const randomToUse = aiRandom ?? new SeededRandom(this.baseSeed + this.aiPlayerIndex);
     const buildOrder = getRandomBuildOrder(faction, difficulty, randomToUse);
     if (!buildOrder) {
-      throw new Error(`[AICoordinator] No build order configured for faction ${faction} (${difficulty}).`);
+      throw new Error(
+        `[AICoordinator] No build order configured for faction ${faction} (${difficulty}).`
+      );
     }
-    debugAI.log(`[AICoordinator] Loaded build order: ${buildOrder.name} for ${faction} (${difficulty})`);
+    debugAI.log(
+      `[AICoordinator] Loaded build order: ${buildOrder.name} for ${faction} (${difficulty})`
+    );
     return [...buildOrder.steps];
   }
 
   private getActionDelay(difficulty: AIDifficulty): number {
     const baseDelay = this.ticksBetweenActions;
     switch (difficulty) {
-      case 'easy': return baseDelay * 3;
-      case 'medium': return baseDelay * 2;
-      case 'hard': return baseDelay;
-      case 'very_hard': return Math.floor(baseDelay * 0.7);
-      case 'insane': return Math.floor(baseDelay * 0.5);
+      case 'easy':
+        return baseDelay * 3;
+      case 'medium':
+        return baseDelay * 2;
+      case 'hard':
+        return baseDelay;
+      case 'very_hard':
+        return Math.floor(baseDelay * 0.7);
+      case 'insane':
+        return Math.floor(baseDelay * 0.5);
     }
   }
 
@@ -839,11 +893,16 @@ export class AICoordinator extends System {
     const recentDeathsPressure = Math.min(1, ai.recentWorkerDeaths / 5);
     const isUnderHarassment = currentTick - ai.lastWorkerDeathTick < 100;
 
-    ai.workerReplacementPriority = Math.min(1, deficitRatio * 0.5 + recentDeathsPressure * 0.3 + (isUnderHarassment ? 0.2 : 0));
+    ai.workerReplacementPriority = Math.min(
+      1,
+      deficitRatio * 0.5 + recentDeathsPressure * 0.3 + (isUnderHarassment ? 0.2 : 0)
+    );
     ai.previousWorkerIds = currentWorkerIds;
 
     if (newDeaths > 0) {
-      debugAI.log(`[AICoordinator] ${ai.playerId}: ${newDeaths} worker(s) died! Recent deaths: ${ai.recentWorkerDeaths.toFixed(1)}, priority: ${ai.workerReplacementPriority.toFixed(2)}`);
+      debugAI.log(
+        `[AICoordinator] ${ai.playerId}: ${newDeaths} worker(s) died! Recent deaths: ${ai.recentWorkerDeaths.toFixed(1)}, priority: ${ai.workerReplacementPriority.toFixed(2)}`
+      );
     }
 
     const buildings = this.getCachedBuildings();
@@ -863,7 +922,10 @@ export class AICoordinator extends System {
 
       // Track buildings under construction (not complete)
       if (!building.isComplete()) {
-        buildingsInProgress.set(building.buildingId, (buildingsInProgress.get(building.buildingId) || 0) + 1);
+        buildingsInProgress.set(
+          building.buildingId,
+          (buildingsInProgress.get(building.buildingId) || 0) + 1
+        );
       }
 
       // Calculate supply cost of units in production queues
@@ -927,7 +989,9 @@ export class AICoordinator extends System {
     // Per-AI random is now used instead of shared random - no global reseed needed
 
     if (currentTick === 1) {
-      debugAI.log(`[AICoordinator] Tick 1: Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ') || '(none)'}`);
+      debugAI.log(
+        `[AICoordinator] Tick 1: Registered AI players: ${Array.from(this.aiPlayers.keys()).join(', ') || '(none)'}`
+      );
     }
 
     // Update shared AI primitives once per cycle
@@ -946,14 +1010,19 @@ export class AICoordinator extends System {
       const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
       if (totalBuildings === 0) {
         if (currentTick % 100 === 0) {
-          debugAI.warn(`[AICoordinator] ${playerId} has NO buildings detected! AI logic SKIPPED. buildingCounts:`, Object.fromEntries(ai.buildingCounts));
+          debugAI.warn(
+            `[AICoordinator] ${playerId} has NO buildings detected! AI logic SKIPPED. buildingCounts:`,
+            Object.fromEntries(ai.buildingCounts)
+          );
         }
         continue;
       }
 
       // Periodic status log
       if (currentTick % 200 === 0) {
-        debugAI.log(`[AICoordinator] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, plasma=${Math.floor(ai.plasma)}, supply=${ai.supply}/${ai.maxSupply}, buildOrderStep=${ai.buildOrderIndex}/${ai.buildOrder.length}, state=${ai.state}`);
+        debugAI.log(
+          `[AICoordinator] ${playerId}: workers=${ai.workerCount}, buildings=${totalBuildings}, minerals=${Math.floor(ai.minerals)}, plasma=${Math.floor(ai.plasma)}, supply=${ai.supply}/${ai.maxSupply}, buildOrderStep=${ai.buildOrderIndex}/${ai.buildOrder.length}, state=${ai.state}`
+        );
       }
 
       this.updateMaxSupply(ai);
@@ -961,7 +1030,9 @@ export class AICoordinator extends System {
       // Warn if AI is supply blocked with resources available
       if (ai.supply >= ai.maxSupply && ai.minerals >= 50) {
         if (currentTick % 100 === 0) {
-          debugAI.warn(`[AICoordinator] ${playerId} is SUPPLY BLOCKED: supply=${ai.supply}/${ai.maxSupply}, minerals=${Math.floor(ai.minerals)}`);
+          debugAI.warn(
+            `[AICoordinator] ${playerId} is SUPPLY BLOCKED: supply=${ai.supply}/${ai.maxSupply}, minerals=${Math.floor(ai.minerals)}`
+          );
         }
       }
 

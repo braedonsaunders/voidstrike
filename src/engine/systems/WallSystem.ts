@@ -1,5 +1,5 @@
 import { System } from '../ecs/System';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { Entity } from '../ecs/Entity';
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
@@ -29,7 +29,7 @@ export class WallSystem extends System {
   // Cached reference to AI system (lazy loaded)
   private aiSystem: EnhancedAISystem | null = null;
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
@@ -63,7 +63,10 @@ export class WallSystem extends System {
     this.game.eventBus.on('wall:build', this.handleWallBuildCommand.bind(this));
   }
 
-  private handleWallBuildCommand(command: { segments: Array<{ x: number; y: number }>; playerId?: string }): void {
+  private handleWallBuildCommand(command: {
+    segments: Array<{ x: number; y: number }>;
+    playerId?: string;
+  }): void {
     // Forward each segment to the wall placement system via existing mechanism
     for (const segment of command.segments) {
       this.game.eventBus.emit('wall:place_request', {
@@ -181,7 +184,12 @@ export class WallSystem extends System {
   /**
    * Apply visual and stat effects when wall upgrade completes
    */
-  private applyWallUpgradeEffects(entity: Entity, wall: Wall, building: Building, health: Health): void {
+  private applyWallUpgradeEffects(
+    entity: Entity,
+    wall: Wall,
+    building: Building,
+    health: Health
+  ): void {
     switch (wall.appliedUpgrade) {
       case 'reinforced':
         // Double health, increase armor
@@ -362,7 +370,10 @@ export class WallSystem extends System {
 
     // Check if research is complete
     if (!this.game.statePort.hasResearch(playerId, `wall_${upgradeType}`)) {
-      this.game.eventBus.emit('ui:error', { message: `Research ${upgradeDef.name} first`, playerId });
+      this.game.eventBus.emit('ui:error', {
+        message: `Research ${upgradeDef.name} first`,
+        playerId,
+      });
       return;
     }
 
@@ -383,7 +394,10 @@ export class WallSystem extends System {
 
       // Check cost based on player type
       if (isPlayerAI && aiPlayer) {
-        if (aiPlayer.minerals < upgradeDef.applyCost.minerals || aiPlayer.plasma < upgradeDef.applyCost.plasma) {
+        if (
+          aiPlayer.minerals < upgradeDef.applyCost.minerals ||
+          aiPlayer.plasma < upgradeDef.applyCost.plasma
+        ) {
           continue;
         }
       } else if (isPlayerLocal) {
@@ -404,7 +418,10 @@ export class WallSystem extends System {
         aiPlayer.minerals -= upgradeDef.applyCost.minerals;
         aiPlayer.plasma -= upgradeDef.applyCost.plasma;
       } else if (isPlayerLocal) {
-        this.game.statePort.addResources(-upgradeDef.applyCost.minerals, -upgradeDef.applyCost.plasma);
+        this.game.statePort.addResources(
+          -upgradeDef.applyCost.minerals,
+          -upgradeDef.applyCost.plasma
+        );
       }
 
       // Start upgrade
@@ -421,11 +438,7 @@ export class WallSystem extends System {
   /**
    * Handle mounting a turret on a wall
    */
-  private handleMountTurret(data: {
-    wallId: number;
-    turretId: number;
-    playerId?: string;
-  }): void {
+  private handleMountTurret(data: { wallId: number; turretId: number; playerId?: string }): void {
     const { wallId, turretId, playerId = getLocalPlayerId() ?? 'player1' } = data;
 
     const wallEntity = this.world.getEntity(wallId);
@@ -446,7 +459,10 @@ export class WallSystem extends System {
 
     // Verify ownership
     if (wallSelectable?.playerId !== playerId || turretSelectable?.playerId !== playerId) {
-      this.game.eventBus.emit('ui:error', { message: 'Cannot mount turret on enemy wall', playerId });
+      this.game.eventBus.emit('ui:error', {
+        message: 'Cannot mount turret on enemy wall',
+        playerId,
+      });
       return;
     }
 
@@ -458,7 +474,10 @@ export class WallSystem extends System {
 
     // Verify turret is a defense turret
     if (turretBuilding.buildingId !== 'defense_turret') {
-      this.game.eventBus.emit('ui:error', { message: 'Only Defense Turrets can be mounted', playerId });
+      this.game.eventBus.emit('ui:error', {
+        message: 'Only Defense Turrets can be mounted',
+        playerId,
+      });
       return;
     }
 
@@ -488,7 +507,11 @@ export class WallSystem extends System {
   /**
    * Check if a position has a wall (for pathfinding)
    */
-  public isWallAt(x: number, y: number, playerId: string): { blocked: boolean; gatePassable: boolean } {
+  public isWallAt(
+    x: number,
+    y: number,
+    playerId: string
+  ): { blocked: boolean; gatePassable: boolean } {
     const walls = this.world.getEntitiesWith('Wall', 'Building', 'Transform', 'Selectable');
 
     for (const entity of walls) {
@@ -502,8 +525,12 @@ export class WallSystem extends System {
       const halfW = building.width / 2;
       const halfH = building.height / 2;
 
-      if (x >= transform.x - halfW && x <= transform.x + halfW &&
-          y >= transform.y - halfH && y <= transform.y + halfH) {
+      if (
+        x >= transform.x - halfW &&
+        x <= transform.x + halfW &&
+        y >= transform.y - halfH &&
+        y <= transform.y + halfH
+      ) {
         // Found wall at position
         if (wall.isGate && wall.isPassable() && selectable.playerId === playerId) {
           return { blocked: false, gatePassable: true };

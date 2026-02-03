@@ -1,5 +1,5 @@
 import { System } from '../ecs/System';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { Entity } from '../ecs/Entity';
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
@@ -37,7 +37,10 @@ export class BuildingPlacementSystem extends System {
   private readonly WALL_AOE_CONSTRUCTION_RANGE = 3.0;
 
   // Track pending addon attachments (addon ID -> parent building info)
-  private pendingAddonAttachments: Map<number, { parentBuildingId: number; addonType: 'research_module' | 'production_module' | null }> = new Map();
+  private pendingAddonAttachments: Map<
+    number,
+    { parentBuildingId: number; addonType: 'research_module' | 'production_module' | null }
+  > = new Map();
 
   // Wall line ID counter for tracking wall segments placed together
   private nextWallLineId = 1;
@@ -63,7 +66,7 @@ export class BuildingPlacementSystem extends System {
     return 0;
   }
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
@@ -114,7 +117,7 @@ export class BuildingPlacementSystem extends System {
     }
 
     // Filter to valid positions only
-    const validPositions = positions.filter(p => p.valid);
+    const validPositions = positions.filter((p) => p.valid);
     if (validPositions.length === 0) {
       this.game.eventBus.emit('ui:error', { message: 'No valid wall positions', playerId });
       return;
@@ -217,7 +220,7 @@ export class BuildingPlacementSystem extends System {
     }
 
     // Get all entity IDs for wall line tracking
-    const allWallEntityIds = placedWalls.map(w => w.entityId);
+    const allWallEntityIds = placedWalls.map((w) => w.entityId);
 
     // Smart worker assignment: assign each worker to the nearest unassigned segment
     // Then workers can contribute to ALL nearby walls with AoE construction
@@ -283,21 +286,22 @@ export class BuildingPlacementSystem extends System {
       workerUnit.wallLineSegments = [...allWallEntityIds]; // All segments for auto-continue
     }
 
-    debugBuildingPlacement.log(`BuildingPlacementSystem: Placed ${placedWalls.length} wall segments (line #${wallLineId}), assigned ${workerAssignments.length} workers with smart distribution`);
+    debugBuildingPlacement.log(
+      `BuildingPlacementSystem: Placed ${placedWalls.length} wall segments (line #${wallLineId}), assigned ${workerAssignments.length} workers with smart distribution`
+    );
   }
 
   /**
    * Handle a worker being commanded to resume construction on a paused or in-progress building    */
-  private handleResumeConstruction(data: {
-    workerId: number;
-    buildingId: number;
-  }): void {
+  private handleResumeConstruction(data: { workerId: number; buildingId: number }): void {
     const { workerId, buildingId } = data;
 
     // Get the worker entity
     const workerEntity = this.world.getEntity(workerId);
     if (!workerEntity) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Worker ${workerId} not found for resume construction`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: Worker ${workerId} not found for resume construction`
+      );
       return;
     }
 
@@ -310,7 +314,9 @@ export class BuildingPlacementSystem extends System {
     // Get the building entity
     const buildingEntity = this.world.getEntity(buildingId);
     if (!buildingEntity) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Building ${buildingId} not found for resume construction`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: Building ${buildingId} not found for resume construction`
+      );
       return;
     }
 
@@ -320,19 +326,29 @@ export class BuildingPlacementSystem extends System {
     const workerSelectable = workerEntity.get<Selectable>('Selectable');
 
     if (!building || !buildingTransform || !buildingSelectable) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Building ${buildingId} missing required components`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: Building ${buildingId} missing required components`
+      );
       return;
     }
 
     // Verify building is under construction (waiting, constructing, or paused)
-    if (building.state !== 'waiting_for_worker' && building.state !== 'constructing' && building.state !== 'paused') {
-      debugBuildingPlacement.log(`BuildingPlacementSystem: Building ${buildingId} is not under construction (state: ${building.state})`);
+    if (
+      building.state !== 'waiting_for_worker' &&
+      building.state !== 'constructing' &&
+      building.state !== 'paused'
+    ) {
+      debugBuildingPlacement.log(
+        `BuildingPlacementSystem: Building ${buildingId} is not under construction (state: ${building.state})`
+      );
       return;
     }
 
     // Verify worker and building belong to same player
     if (workerSelectable?.playerId !== buildingSelectable.playerId) {
-      debugBuildingPlacement.log(`BuildingPlacementSystem: Worker ${workerId} cannot construct enemy building`);
+      debugBuildingPlacement.log(
+        `BuildingPlacementSystem: Worker ${workerId} cannot construct enemy building`
+      );
       return;
     }
 
@@ -348,7 +364,9 @@ export class BuildingPlacementSystem extends System {
     unit.carryingMinerals = 0;
     unit.carryingPlasma = 0;
 
-    debugBuildingPlacement.log(`BuildingPlacementSystem: Worker ${workerId} assigned to resume construction of ${building.name} at ${Math.round(building.buildProgress * 100)}%`);
+    debugBuildingPlacement.log(
+      `BuildingPlacementSystem: Worker ${workerId} assigned to resume construction of ${building.name} at ${Math.round(building.buildProgress * 100)}%`
+    );
   }
 
   private handleBuildingPlace(data: {
@@ -366,14 +384,26 @@ export class BuildingPlacementSystem extends System {
     const parentBuildingId = data.attachTo ?? data.parentBuildingId;
 
     if (!definition) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Unknown building type: ${buildingType}`);
-      this.game.eventBus.emit('ui:error', { message: `Unknown building: ${buildingType}`, playerId });
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: Unknown building type: ${buildingType}`
+      );
+      this.game.eventBus.emit('ui:error', {
+        message: `Unknown building: ${buildingType}`,
+        playerId,
+      });
       return;
     }
 
     // Validate position exists
-    if (!data.position || typeof data.position.x !== 'number' || typeof data.position.y !== 'number') {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Invalid position for ${buildingType}:`, data.position);
+    if (
+      !data.position ||
+      typeof data.position.x !== 'number' ||
+      typeof data.position.y !== 'number'
+    ) {
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: Invalid position for ${buildingType}:`,
+        data.position
+      );
       return;
     }
 
@@ -429,14 +459,20 @@ export class BuildingPlacementSystem extends System {
     if (buildingType === 'extractor') {
       plasmaGeyserEntity = this.findPlasmaGeyserAt(snappedX, snappedY);
       if (!plasmaGeyserEntity) {
-        this.game.eventBus.emit('ui:error', { message: 'Extractor must be placed on a Plasma Geyser', playerId });
+        this.game.eventBus.emit('ui:error', {
+          message: 'Extractor must be placed on a Plasma Geyser',
+          playerId,
+        });
         return;
       }
       const resource = plasmaGeyserEntity.get<Resource>('Resource')!;
       // Check if ANY extractor exists (complete or under construction) - not just complete ones
       // This prevents duplicate extractor placement attempts while one is being built
       if (resource.extractorEntityId !== null) {
-        this.game.eventBus.emit('ui:error', { message: 'Plasma Geyser already has an Extractor', playerId });
+        this.game.eventBus.emit('ui:error', {
+          message: 'Plasma Geyser already has an Extractor',
+          playerId,
+        });
         return;
       }
     }
@@ -451,8 +487,20 @@ export class BuildingPlacementSystem extends System {
 
     // Check placement validity using center position (exclude builder from collision)
     // Skip collision check for extractors since they go on plasma geysers
-    if (buildingType !== 'extractor' && !this.isValidPlacement(snappedX, snappedY, definition.width, definition.height, worker.entity.id)) {
-      this.game.eventBus.emit('ui:error', { message: 'Cannot build here - area blocked', playerId });
+    if (
+      buildingType !== 'extractor' &&
+      !this.isValidPlacement(
+        snappedX,
+        snappedY,
+        definition.width,
+        definition.height,
+        worker.entity.id
+      )
+    ) {
+      this.game.eventBus.emit('ui:error', {
+        message: 'Cannot build here - area blocked',
+        playerId,
+      });
       return;
     }
 
@@ -474,7 +522,16 @@ export class BuildingPlacementSystem extends System {
       .add(new Transform(snappedX, snappedY, 0))
       .add(new Building(definition))
       .add(health)
-      .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId, 1, 0, teamId));
+      .add(
+        new Selectable(
+          Math.max(definition.width, definition.height) * 0.6,
+          10,
+          playerId,
+          1,
+          0,
+          teamId
+        )
+      );
 
     // Building starts in 'waiting_for_worker' state (from constructor)
     // Construction will start when worker arrives at site
@@ -486,11 +543,19 @@ export class BuildingPlacementSystem extends System {
       // PERF: Store reverse lookup for O(1) access when extractor is destroyed
       const buildingComp = buildingEntity.get<Building>('Building')!;
       buildingComp.linkedResourceId = plasmaGeyserEntity.id;
-      debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor ${buildingEntity.id} associated with plasma geyser ${plasmaGeyserEntity.id}`);
+      debugBuildingPlacement.log(
+        `BuildingPlacementSystem: Extractor ${buildingEntity.id} associated with plasma geyser ${plasmaGeyserEntity.id}`
+      );
     }
 
     // Push any units out of the building footprint
-    this.pushUnitsFromBuilding(snappedX, snappedY, definition.width, definition.height, worker.entity.id);
+    this.pushUnitsFromBuilding(
+      snappedX,
+      snappedY,
+      definition.width,
+      definition.height,
+      worker.entity.id
+    );
 
     // Assign the worker to this construction
     const workerUnit = worker.entity.get<Unit>('Unit')!;
@@ -509,7 +574,9 @@ export class BuildingPlacementSystem extends System {
       plasmaGeyserId: plasmaGeyserEntity?.id,
     });
 
-    debugBuildingPlacement.log(`BuildingPlacementSystem: ${definition.name} placed at (${snappedX}, ${snappedY}), SCV ${worker.entity.id} assigned`);
+    debugBuildingPlacement.log(
+      `BuildingPlacementSystem: ${definition.name} placed at (${snappedX}, ${snappedY}), SCV ${worker.entity.id} assigned`
+    );
   }
 
   /**
@@ -532,34 +599,46 @@ export class BuildingPlacementSystem extends System {
     // Get and validate parent building
     const parentEntity = this.world.getEntity(parentBuildingId);
     if (!parentEntity) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Parent building ${parentBuildingId} not found for addon`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: Parent building ${parentBuildingId} not found for addon`
+      );
       return;
     }
 
     const parentBuilding = parentEntity.get<Building>('Building');
     const parentSelectable = parentEntity.get<Selectable>('Selectable');
     if (!parentBuilding || !parentSelectable) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Parent building ${parentBuildingId} missing components`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: Parent building ${parentBuildingId} missing components`
+      );
       return;
     }
 
     // Validate parent can have addon and doesn't already have one
     if (!parentBuilding.canHaveAddon) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: ${parentBuilding.name} cannot have addons`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: ${parentBuilding.name} cannot have addons`
+      );
       return;
     }
     if (parentBuilding.hasAddon()) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: ${parentBuilding.name} already has an addon`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: ${parentBuilding.name} already has an addon`
+      );
       return;
     }
     if (parentBuilding.state !== 'complete') {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: ${parentBuilding.name} is not complete`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: ${parentBuilding.name} is not complete`
+      );
       return;
     }
 
     // Check addon placement validity (exclude parent from collision)
     if (!this.isValidAddonPlacement(x, y, definition.width, definition.height, parentBuildingId)) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Addon position (${x}, ${y}) is blocked`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: Addon position (${x}, ${y}) is blocked`
+      );
       this.game.eventBus.emit('building:addonFailed', {
         buildingId: parentBuildingId,
         reason: 'Addon position blocked',
@@ -575,8 +654,12 @@ export class BuildingPlacementSystem extends System {
     addonBuilding.attachedToId = parentBuildingId;
 
     // Store addon type for later attachment when complete
-    const addonTypeForAttachment = buildingType === 'research_module' ? 'research_module' :
-                        buildingType === 'production_module' ? 'production_module' : null;
+    const addonTypeForAttachment =
+      buildingType === 'research_module'
+        ? 'research_module'
+        : buildingType === 'production_module'
+          ? 'production_module'
+          : null;
 
     const addonHealth = new Health(definition.maxHealth, definition.armor, 'structure');
     addonHealth.current = definition.maxHealth * 0.1; // Start at 10% health like buildings
@@ -586,7 +669,16 @@ export class BuildingPlacementSystem extends System {
       .add(new Transform(x, y, 0))
       .add(addonBuilding)
       .add(addonHealth)
-      .add(new Selectable(Math.max(definition.width, definition.height) * 0.6, 10, playerId, 1, 0, addonTeamId));
+      .add(
+        new Selectable(
+          Math.max(definition.width, definition.height) * 0.6,
+          10,
+          playerId,
+          1,
+          0,
+          addonTeamId
+        )
+      );
 
     // Store pending addon attachment info (will be attached when construction completes)
     this.pendingAddonAttachments.set(addonEntity.id, {
@@ -614,7 +706,9 @@ export class BuildingPlacementSystem extends System {
       playerId,
     });
 
-    debugBuildingPlacement.log(`BuildingPlacementSystem: ${definition.name} addon construction started for ${parentBuilding.name} at (${x}, ${y})`);
+    debugBuildingPlacement.log(
+      `BuildingPlacementSystem: ${definition.name} addon construction started for ${parentBuilding.name} at (${x}, ${y})`
+    );
   }
 
   /**
@@ -774,7 +868,9 @@ export class BuildingPlacementSystem extends System {
     // Get the parent building entity
     const parentEntity = this.world.getEntity(buildingId);
     if (!parentEntity) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Parent building ${buildingId} not found`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: Parent building ${buildingId} not found`
+      );
       return;
     }
 
@@ -789,7 +885,10 @@ export class BuildingPlacementSystem extends System {
 
     // Verify building can have an addon
     if (!parentBuilding.canHaveAddon) {
-      this.game.eventBus.emit('ui:error', { message: 'This building cannot have addons', playerId });
+      this.game.eventBus.emit('ui:error', {
+        message: 'This building cannot have addons',
+        playerId,
+      });
       return;
     }
 
@@ -821,7 +920,9 @@ export class BuildingPlacementSystem extends System {
     // Check resources (local player via game store, AI via AI state)
     if (isPlayerAI && aiPlayer) {
       if (aiPlayer.minerals < addonDef.mineralCost || aiPlayer.plasma < addonDef.plasmaCost) {
-        debugBuildingPlacement.log(`BuildingPlacementSystem: AI ${playerId} lacks resources for addon ${addonType} (need ${addonDef.mineralCost}M/${addonDef.plasmaCost}G, have ${Math.floor(aiPlayer.minerals)}M/${Math.floor(aiPlayer.plasma)}G)`);
+        debugBuildingPlacement.log(
+          `BuildingPlacementSystem: AI ${playerId} lacks resources for addon ${addonType} (need ${addonDef.mineralCost}M/${addonDef.plasmaCost}G, have ${Math.floor(aiPlayer.minerals)}M/${Math.floor(aiPlayer.plasma)}G)`
+        );
         return;
       }
     } else if (isPlayerLocal) {
@@ -843,7 +944,10 @@ export class BuildingPlacementSystem extends System {
 
     // Check if addon position is valid (no collisions - exclude parent building from check)
     if (!this.isValidAddonPlacement(addonX, addonY, addonDef.width, addonDef.height, buildingId)) {
-      this.game.eventBus.emit('ui:error', { message: 'Cannot build addon here - blocked', playerId });
+      this.game.eventBus.emit('ui:error', {
+        message: 'Cannot build addon here - blocked',
+        playerId,
+      });
       return;
     }
 
@@ -863,8 +967,12 @@ export class BuildingPlacementSystem extends System {
     addonBuilding.attachedToId = buildingId;
 
     // Store addon type for later attachment when complete
-    const addonTypeForAttachment = addonType === 'research_module' ? 'research_module' :
-                        addonType === 'production_module' ? 'production_module' : null;
+    const addonTypeForAttachment =
+      addonType === 'research_module'
+        ? 'research_module'
+        : addonType === 'production_module'
+          ? 'production_module'
+          : null;
 
     const addonHealth = new Health(addonDef.maxHealth, addonDef.armor, 'structure');
     addonHealth.current = addonDef.maxHealth * 0.1; // Start at 10% health like buildings
@@ -874,7 +982,16 @@ export class BuildingPlacementSystem extends System {
       .add(new Transform(addonX, addonY, 0))
       .add(addonBuilding)
       .add(addonHealth)
-      .add(new Selectable(Math.max(addonDef.width, addonDef.height) * 0.6, 10, playerId, 1, 0, addonTeamId2));
+      .add(
+        new Selectable(
+          Math.max(addonDef.width, addonDef.height) * 0.6,
+          10,
+          playerId,
+          1,
+          0,
+          addonTeamId2
+        )
+      );
 
     // Store pending addon attachment info (will be attached when construction completes)
     this.pendingAddonAttachments.set(addonEntity.id, {
@@ -890,7 +1007,9 @@ export class BuildingPlacementSystem extends System {
       playerId,
     });
 
-    debugBuildingPlacement.log(`BuildingPlacementSystem: ${addonDef.name} built for ${parentBuilding.name} at (${addonX}, ${addonY})`);
+    debugBuildingPlacement.log(
+      `BuildingPlacementSystem: ${addonDef.name} built for ${parentBuilding.name} at (${addonX}, ${addonY})`
+    );
   }
 
   /**
@@ -914,7 +1033,12 @@ export class BuildingPlacementSystem extends System {
       if (unit.constructingBuildingId === buildingEntityId) {
         // Push worker out of building footprint if they're inside
         // This ensures they can pathfind correctly after being released
-        if (buildingX !== undefined && buildingY !== undefined && buildingWidth !== undefined && buildingHeight !== undefined) {
+        if (
+          buildingX !== undefined &&
+          buildingY !== undefined &&
+          buildingWidth !== undefined &&
+          buildingHeight !== undefined
+        ) {
           const halfW = buildingWidth / 2 + 0.5;
           const halfH = buildingHeight / 2 + 0.5;
           const dx = transform.x - buildingX;
@@ -940,7 +1064,9 @@ export class BuildingPlacementSystem extends System {
             // Update spatial grid position
             this.world.unitGrid.update(entity.id, transform.x, transform.y, unit.collisionRadius);
 
-            debugBuildingPlacement.log(`Worker ${entity.id} pushed out of completed building to (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`);
+            debugBuildingPlacement.log(
+              `Worker ${entity.id} pushed out of completed building to (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`
+            );
           }
         }
 
@@ -965,13 +1091,17 @@ export class BuildingPlacementSystem extends System {
             // Clear path so MovementSystem calculates new path
             unit.path = [];
             unit.pathIndex = 0;
-            debugBuildingPlacement.log(`Worker ${entity.id} auto-continuing to wall segment ${nextSegment.entity.id}`);
+            debugBuildingPlacement.log(
+              `Worker ${entity.id} auto-continuing to wall segment ${nextSegment.entity.id}`
+            );
             continue;
           } else {
             // All segments complete, clear wall line data
             unit.wallLineId = null;
             unit.wallLineSegments = [];
-            debugBuildingPlacement.log(`Worker ${entity.id} finished wall line, all segments complete`);
+            debugBuildingPlacement.log(
+              `Worker ${entity.id} finished wall line, all segments complete`
+            );
           }
         }
 
@@ -998,7 +1128,9 @@ export class BuildingPlacementSystem extends System {
                   unit.targetX = resourceTransform.x;
                   unit.targetY = resourceTransform.y;
                 }
-                debugBuildingPlacement.log(`Helper worker ${entity.id} returning to gather resource ${previousGatherTargetId}`);
+                debugBuildingPlacement.log(
+                  `Helper worker ${entity.id} returning to gather resource ${previousGatherTargetId}`
+                );
                 continue;
               }
             }
@@ -1008,7 +1140,9 @@ export class BuildingPlacementSystem extends System {
           if (returnX !== null && returnY !== null) {
             unit.cancelBuilding();
             unit.setMoveTarget(returnX, returnY);
-            debugBuildingPlacement.log(`Helper worker ${entity.id} returning to original position (${returnX.toFixed(1)}, ${returnY.toFixed(1)})`);
+            debugBuildingPlacement.log(
+              `Helper worker ${entity.id} returning to original position (${returnX.toFixed(1)}, ${returnY.toFixed(1)})`
+            );
           } else {
             unit.cancelBuilding();
           }
@@ -1024,7 +1158,9 @@ export class BuildingPlacementSystem extends System {
               if (nextBuilding && !nextBuilding.isComplete()) {
                 // Execute the queued build command
                 unit.executeNextCommand();
-                debugBuildingPlacement.log(`Worker ${entity.id} moving to next queued building ${nextBuild.buildingEntityId}`);
+                debugBuildingPlacement.log(
+                  `Worker ${entity.id} moving to next queued building ${nextBuild.buildingEntityId}`
+                );
                 continue;
               }
             }
@@ -1114,16 +1250,33 @@ export class BuildingPlacementSystem extends System {
     return null;
   }
 
-  private isValidPlacement(centerX: number, centerY: number, width: number, height: number, excludeEntityId?: number): boolean {
+  private isValidPlacement(
+    centerX: number,
+    centerY: number,
+    width: number,
+    height: number,
+    excludeEntityId?: number
+  ): boolean {
     // Debug: log placement attempt
-    debugBuildingPlacement.log(`BuildingPlacement: Attempting at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}), size ${width}x${height}, map bounds: ${this.game.config.mapWidth}x${this.game.config.mapHeight}`);
+    debugBuildingPlacement.log(
+      `BuildingPlacement: Attempting at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}), size ${width}x${height}, map bounds: ${this.game.config.mapWidth}x${this.game.config.mapHeight}`
+    );
 
     // Use the centralized validation from Game class
     // Skip unit check - units will be pushed away after placement
-    const isValid = this.game.isValidBuildingPlacement(centerX, centerY, width, height, excludeEntityId, true);
+    const isValid = this.game.isValidBuildingPlacement(
+      centerX,
+      centerY,
+      width,
+      height,
+      excludeEntityId,
+      true
+    );
 
     if (!isValid) {
-      debugBuildingPlacement.log(`BuildingPlacement: Failed at (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`);
+      debugBuildingPlacement.log(
+        `BuildingPlacement: Failed at (${centerX.toFixed(1)}, ${centerY.toFixed(1)})`
+      );
     }
 
     return isValid;
@@ -1133,7 +1286,13 @@ export class BuildingPlacementSystem extends System {
    * Push all units out of a building footprint.
    * Units are moved to the nearest edge of the building.
    */
-  private pushUnitsFromBuilding(centerX: number, centerY: number, width: number, height: number, excludeEntityId?: number): void {
+  private pushUnitsFromBuilding(
+    centerX: number,
+    centerY: number,
+    width: number,
+    height: number,
+    excludeEntityId?: number
+  ): void {
     const halfW = width / 2 + 0.5; // Add buffer
     const halfH = height / 2 + 0.5;
 
@@ -1189,7 +1348,9 @@ export class BuildingPlacementSystem extends System {
 
         // Move the unit
         unit.setMoveTarget(clampedX, clampedY);
-        debugBuildingPlacement.log(`Pushed unit ${unitId} from building footprint to (${clampedX.toFixed(1)}, ${clampedY.toFixed(1)})`);
+        debugBuildingPlacement.log(
+          `Pushed unit ${unitId} from building footprint to (${clampedX.toFixed(1)}, ${clampedY.toFixed(1)})`
+        );
       }
     }
   }
@@ -1197,14 +1358,24 @@ export class BuildingPlacementSystem extends System {
   /**
    * Check if an addon placement is valid (excludes parent building from collision check)
    */
-  private isValidAddonPlacement(centerX: number, centerY: number, width: number, height: number, parentBuildingId: number): boolean {
+  private isValidAddonPlacement(
+    centerX: number,
+    centerY: number,
+    width: number,
+    height: number,
+    parentBuildingId: number
+  ): boolean {
     const config = this.game.config;
     const halfW = width / 2;
     const halfH = height / 2;
 
     // Check map bounds
-    if (centerX - halfW < 0 || centerY - halfH < 0 ||
-        centerX + halfW > config.mapWidth || centerY + halfH > config.mapHeight) {
+    if (
+      centerX - halfW < 0 ||
+      centerY - halfH < 0 ||
+      centerX + halfW > config.mapWidth ||
+      centerY + halfH > config.mapHeight
+    ) {
       debugBuildingPlacement.log(`AddonPlacement: Failed - out of map bounds`);
       return false;
     }
@@ -1231,7 +1402,9 @@ export class BuildingPlacementSystem extends System {
       const dy = Math.abs(centerY - transform.y);
 
       if (dx < halfW + existingHalfW + 0.5 && dy < halfH + existingHalfH + 0.5) {
-        debugBuildingPlacement.log(`AddonPlacement: Failed - overlaps building at (${transform.x}, ${transform.y})`);
+        debugBuildingPlacement.log(
+          `AddonPlacement: Failed - overlaps building at (${transform.x}, ${transform.y})`
+        );
         return false;
       }
     }
@@ -1303,7 +1476,8 @@ export class BuildingPlacementSystem extends System {
   }
 
   // Track worker wander state for RTS-style construction movement
-  private workerWanderState: Map<number, { targetX: number; targetY: number; timer: number }> = new Map();
+  private workerWanderState: Map<number, { targetX: number; targetY: number; timer: number }> =
+    new Map();
 
   /**
    * Handle workers moving to and arriving at construction sites
@@ -1338,7 +1512,9 @@ export class BuildingPlacementSystem extends System {
       // Safety check: If building is already complete, release the worker
       // This handles edge cases where worker didn't get properly released
       if (building.isComplete()) {
-        debugBuildingPlacement.log(`Worker ${entity.id} was stuck on completed building ${unit.constructingBuildingId}, releasing`);
+        debugBuildingPlacement.log(
+          `Worker ${entity.id} was stuck on completed building ${unit.constructingBuildingId}, releasing`
+        );
 
         // Push worker out of building footprint
         const halfW = building.width / 2 + 0.5;
@@ -1445,7 +1621,11 @@ export class BuildingPlacementSystem extends System {
       const buildingTransform = entity.get<Transform>('Transform')!;
 
       // Skip buildings that are not in an under-construction state
-      if (building.state !== 'waiting_for_worker' && building.state !== 'constructing' && building.state !== 'paused') {
+      if (
+        building.state !== 'waiting_for_worker' &&
+        building.state !== 'constructing' &&
+        building.state !== 'paused'
+      ) {
         continue;
       }
 
@@ -1465,7 +1645,9 @@ export class BuildingPlacementSystem extends System {
             buildingType: building.buildingId,
             position: { x: buildingTransform.x, y: buildingTransform.y },
           });
-          debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction started - worker arrived!`);
+          debugBuildingPlacement.log(
+            `BuildingPlacementSystem: ${building.name} construction started - worker arrived!`
+          );
         }
 
         // If building was paused, resume construction
@@ -1477,7 +1659,9 @@ export class BuildingPlacementSystem extends System {
             position: { x: buildingTransform.x, y: buildingTransform.y },
             progress: building.buildProgress,
           });
-          debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction resumed at ${Math.round(building.buildProgress * 100)}%!`);
+          debugBuildingPlacement.log(
+            `BuildingPlacementSystem: ${building.name} construction resumed at ${Math.round(building.buildProgress * 100)}%!`
+          );
         }
 
         // Progress construction
@@ -1518,7 +1702,13 @@ export class BuildingPlacementSystem extends System {
             }
 
             // Release workers and push them out of the building footprint
-            this.releaseWorkersFromBuilding(entity.id, buildingTransform.x, buildingTransform.y, building.width, building.height);
+            this.releaseWorkersFromBuilding(
+              entity.id,
+              buildingTransform.x,
+              buildingTransform.y,
+              building.width,
+              building.height
+            );
 
             this.game.eventBus.emit('building:complete', {
               entityId: entity.id,
@@ -1528,7 +1718,9 @@ export class BuildingPlacementSystem extends System {
             });
           }
 
-          debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction complete!`);
+          debugBuildingPlacement.log(
+            `BuildingPlacementSystem: ${building.name} construction complete!`
+          );
         }
       } else {
         // No worker is constructing - pause if construction had started
@@ -1541,7 +1733,9 @@ export class BuildingPlacementSystem extends System {
             position: { x: buildingTransform.x, y: buildingTransform.y },
             progress: building.buildProgress,
           });
-          debugBuildingPlacement.log(`BuildingPlacementSystem: ${building.name} construction paused at ${Math.round(building.buildProgress * 100)}% - no worker present`);
+          debugBuildingPlacement.log(
+            `BuildingPlacementSystem: ${building.name} construction paused at ${Math.round(building.buildProgress * 100)}% - no worker present`
+          );
         }
       }
     }
@@ -1550,10 +1744,16 @@ export class BuildingPlacementSystem extends System {
   /**
    * Handle addon construction completion - attach to parent building
    */
-  private handleAddonCompletion(addonEntityId: number, addonBuilding: Building, playerId?: string): void {
+  private handleAddonCompletion(
+    addonEntityId: number,
+    addonBuilding: Building,
+    playerId?: string
+  ): void {
     const pendingAttachment = this.pendingAddonAttachments.get(addonEntityId);
     if (!pendingAttachment) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: No pending attachment found for addon ${addonEntityId}`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: No pending attachment found for addon ${addonEntityId}`
+      );
       return;
     }
 
@@ -1562,14 +1762,18 @@ export class BuildingPlacementSystem extends System {
     // Get the parent building
     const parentEntity = this.world.getEntity(parentBuildingId);
     if (!parentEntity) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Parent building ${parentBuildingId} not found for addon completion`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: Parent building ${parentBuildingId} not found for addon completion`
+      );
       this.pendingAddonAttachments.delete(addonEntityId);
       return;
     }
 
     const parentBuilding = parentEntity.get<Building>('Building');
     if (!parentBuilding) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Parent building ${parentBuildingId} missing Building component`);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: Parent building ${parentBuildingId} missing Building component`
+      );
       this.pendingAddonAttachments.delete(addonEntityId);
       return;
     }
@@ -1590,7 +1794,9 @@ export class BuildingPlacementSystem extends System {
       playerId,
     });
 
-    debugBuildingPlacement.log(`BuildingPlacementSystem: Addon ${addonBuilding.name} attached to parent building ${parentBuildingId}`);
+    debugBuildingPlacement.log(
+      `BuildingPlacementSystem: Addon ${addonBuilding.name} attached to parent building ${parentBuildingId}`
+    );
   }
 
   /**
@@ -1622,8 +1828,9 @@ export class BuildingPlacementSystem extends System {
       // For walls: Allow any worker with this wall in their wallLineSegments to contribute (AoE construction)
       // For regular buildings: Only the assigned worker can construct
       const canConstruct = isWall
-        ? (unit.wallLineSegments.includes(buildingEntityId) || unit.constructingBuildingId === buildingEntityId)
-        : (unit.constructingBuildingId === buildingEntityId);
+        ? unit.wallLineSegments.includes(buildingEntityId) ||
+          unit.constructingBuildingId === buildingEntityId
+        : unit.constructingBuildingId === buildingEntityId;
 
       if (!canConstruct) {
         continue;
@@ -1631,7 +1838,12 @@ export class BuildingPlacementSystem extends System {
 
       const workerTransform = entity.get<Transform>('Transform');
       if (!workerTransform) continue;
-      const dist = distance(buildingTransform.x, buildingTransform.y, workerTransform.x, workerTransform.y);
+      const dist = distance(
+        buildingTransform.x,
+        buildingTransform.y,
+        workerTransform.x,
+        workerTransform.y
+      );
 
       // Worker is close enough to construct
       // For walls: Use larger AoE construction range so workers can build multiple nearby walls
@@ -1719,7 +1931,12 @@ export class BuildingPlacementSystem extends System {
         // Don't auto-assign workers that are already building something
         if (unit.constructingBuildingId !== null) continue;
 
-        const dist = distance(buildingTransform.x, buildingTransform.y, workerTransform.x, workerTransform.y);
+        const dist = distance(
+          buildingTransform.x,
+          buildingTransform.y,
+          workerTransform.x,
+          workerTransform.y
+        );
 
         if (dist < closestDistance) {
           closestDistance = dist;
@@ -1762,7 +1979,9 @@ export class BuildingPlacementSystem extends System {
         const taskInfo = unit.previousGatherTargetId
           ? `will return to gathering resource ${unit.previousGatherTargetId}`
           : `will return to (${unit.returnPositionX?.toFixed(1)}, ${unit.returnPositionY?.toFixed(1)})`;
-        debugBuildingPlacement.log(`Auto-assigned worker ${closestWorker.id} to help build ${building.name} (${taskInfo})`);
+        debugBuildingPlacement.log(
+          `Auto-assigned worker ${closestWorker.id} to help build ${building.name} (${taskInfo})`
+        );
       }
     }
   }
@@ -1799,11 +2018,15 @@ export class BuildingPlacementSystem extends System {
           // Refund to AI player
           aiPlayer.minerals += definition.mineralCost;
           aiPlayer.plasma += definition.plasmaCost;
-          debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.plasmaCost} plasma to AI ${selectable.playerId} for cancelled ${building.name}`);
+          debugBuildingPlacement.log(
+            `BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.plasmaCost} plasma to AI ${selectable.playerId} for cancelled ${building.name}`
+          );
         } else if (isLocalPlayer(selectable.playerId)) {
           // Refund to local human player
           this.game.statePort.addResources(definition.mineralCost, definition.plasmaCost);
-          debugBuildingPlacement.log(`BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.plasmaCost} plasma for cancelled ${building.name}`);
+          debugBuildingPlacement.log(
+            `BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.plasmaCost} plasma for cancelled ${building.name}`
+          );
         }
 
         // PERF: If this is an extractor/refinery, restore the plasma geyser visibility
@@ -1815,7 +2038,9 @@ export class BuildingPlacementSystem extends System {
               const resource = resourceEntity.get<Resource>('Resource');
               if (resource) {
                 resource.extractorEntityId = null;
-                debugBuildingPlacement.log(`BuildingPlacementSystem: Extractor cancelled, plasma geyser ${building.linkedResourceId} restored`);
+                debugBuildingPlacement.log(
+                  `BuildingPlacementSystem: Extractor cancelled, plasma geyser ${building.linkedResourceId} restored`
+                );
               }
             }
           }
@@ -1829,7 +2054,9 @@ export class BuildingPlacementSystem extends System {
           position: { x: transform.x, y: transform.y },
         });
 
-        debugBuildingPlacement.log(`BuildingPlacementSystem: Cancelled orphaned blueprint ${building.name} at (${transform.x}, ${transform.y}) - no workers assigned`);
+        debugBuildingPlacement.log(
+          `BuildingPlacementSystem: Cancelled orphaned blueprint ${building.name} at (${transform.x}, ${transform.y}) - no workers assigned`
+        );
       }
 
       // Remove the building entity

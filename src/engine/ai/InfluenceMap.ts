@@ -15,6 +15,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { distance } from '@/utils/math';
+import { debugAI } from '@/utils/debugLogger';
 
 // Influence value type: positive = friendly, negative = enemy
 export type InfluenceValue = number;
@@ -59,6 +60,28 @@ interface PlayerInfluence {
 }
 
 /**
+ * Performance metrics for influence map updates
+ */
+export interface InfluenceMapMetrics {
+  /** Last update time in milliseconds */
+  lastUpdateMs: number;
+  /** Average update time over buffer window */
+  averageMs: number;
+  /** Maximum update time in buffer */
+  maxMs: number;
+  /** 95th percentile update time */
+  p95Ms: number;
+  /** Number of units processed in last update */
+  lastUnitCount: number;
+  /** Number of samples in the metrics buffer */
+  sampleCount: number;
+}
+
+// Performance thresholds (ms)
+const PERF_WARN_THRESHOLD_MS = 2;
+const METRICS_BUFFER_SIZE = 100;
+
+/**
  * Threat analysis result for a position
  */
 export interface ThreatAnalysis {
@@ -101,6 +124,12 @@ export class InfluenceMap {
   // Pre-computed decay lookup for performance
   private readonly decayLookup: Float32Array;
 
+  // Performance metrics
+  private updateTimesBuffer: Float32Array;
+  private unitCountsBuffer: Uint16Array;
+  private metricsIndex: number = 0;
+  private metricsCount: number = 0;
+
   constructor(mapWidth: number, mapHeight: number, cellSize: number = 4) {
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;
@@ -119,12 +148,18 @@ export class InfluenceMap {
     for (let d = 0; d <= maxDist; d++) {
       this.decayLookup[d] = Math.pow(this.config.decayRate, d);
     }
+
+    // Initialize performance metrics buffers
+    this.updateTimesBuffer = new Float32Array(METRICS_BUFFER_SIZE);
+    this.unitCountsBuffer = new Uint16Array(METRICS_BUFFER_SIZE);
   }
 
   /**
    * Update the influence map for a given tick
    */
   public update(world: World, currentTick: number): void {
+    const startTime = performance.now();
+
     // Clear combined maps
     this.threatMap.fill(0);
     this.controlMap.fill(0);
@@ -133,7 +168,11 @@ export class InfluenceMap {
     const entities = world.getEntitiesWith('Transform', 'Selectable', 'Health');
 
     // Group entities by player
-    const playerEntities: Map<string, Array<{ x: number; y: number; influence: number; isAir: boolean }>> = new Map();
+    const playerEntities: Map<
+      string,
+      Array<{ x: number; y: number; influence: number; isAir: boolean }>
+    > = new Map();
+    let unitCount = 0;
 
     for (const entity of entities) {
       const transform = entity.get<Transform>('Transform')!;
@@ -142,6 +181,7 @@ export class InfluenceMap {
 
       if (health.isDead()) continue;
 
+      unitCount++;
       const playerId = selectable.playerId;
       if (!playerEntities.has(playerId)) {
         playerEntities.set(playerId, []);
@@ -189,6 +229,17 @@ export class InfluenceMap {
 
     // Build combined threat and control maps
     this.buildCombinedMaps();
+
+    // Record performance metrics
+    const elapsed = performance.now() - startTime;
+    this.recordUpdateMetrics(elapsed, unitCount);
+
+    // Log warning if update took too long
+    if (elapsed > PERF_WARN_THRESHOLD_MS) {
+      debugAI.warn(
+        `[InfluenceMap] Update took ${elapsed.toFixed(2)}ms for ${unitCount} units (threshold: ${PERF_WARN_THRESHOLD_MS}ms)`
+      );
+    }
   }
 
   /**
@@ -216,12 +267,7 @@ export class InfluenceMap {
 
     // Propagate influence from each source
     for (const source of sources) {
-      this.propagateInfluence(
-        playerData.grid,
-        source.x,
-        source.y,
-        source.influence
-      );
+      this.propagateInfluence(playerData.grid, source.x, source.y, source.influence);
       playerData.totalInfluence += source.influence;
     }
 
@@ -295,11 +341,7 @@ export class InfluenceMap {
   /**
    * Get threat analysis for a world position
    */
-  public getThreatAnalysis(
-    x: number,
-    y: number,
-    myPlayerId: string
-  ): ThreatAnalysis {
+  public getThreatAnalysis(x: number, y: number, myPlayerId: string): ThreatAnalysis {
     const col = Math.floor(x / this.cellSize);
     const row = Math.floor(y / this.cellSize);
 
@@ -366,8 +408,14 @@ export class InfluenceMap {
 
     // Sample surrounding cells to find gradient
     const offsets = [
-      [-1, 0], [1, 0], [0, -1], [0, 1],
-      [-1, -1], [1, -1], [-1, 1], [1, 1],
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+      [-1, -1],
+      [1, -1],
+      [-1, 1],
+      [1, 1],
     ];
 
     for (const [dx, dy] of offsets) {
@@ -418,7 +466,13 @@ export class InfluenceMap {
     const endRow = Math.floor(endY / this.cellSize);
 
     // Simple A* with threat cost
-    const openSet: Array<{ col: number; row: number; g: number; f: number; parent: number | null }> = [];
+    const openSet: Array<{
+      col: number;
+      row: number;
+      g: number;
+      f: number;
+      parent: number | null;
+    }> = [];
     const closedSet = new Set<number>();
     const cameFrom = new Map<number, number>();
 
@@ -448,8 +502,14 @@ export class InfluenceMap {
 
       // Check neighbors
       const neighbors = [
-        [-1, 0], [1, 0], [0, -1], [0, 1],
-        [-1, -1], [1, -1], [-1, 1], [1, 1],
+        [-1, 0],
+        [1, 0],
+        [0, -1],
+        [0, 1],
+        [-1, -1],
+        [1, -1],
+        [-1, 1],
+        [1, 1],
       ];
 
       for (const [dx, dy] of neighbors) {
@@ -468,7 +528,7 @@ export class InfluenceMap {
 
         const tentativeG = current.g + totalCost;
 
-        const existing = openSet.find(n => n.col === nCol && n.row === nRow);
+        const existing = openSet.find((n) => n.col === nCol && n.row === nRow);
         if (existing) {
           if (tentativeG < existing.g) {
             existing.g = tentativeG;
@@ -630,5 +690,80 @@ export class InfluenceMap {
     this.playerInfluence.clear();
     this.threatMap.fill(0);
     this.controlMap.fill(0);
+  }
+
+  // =============================================================================
+  // PERFORMANCE METRICS
+  // =============================================================================
+
+  /**
+   * Record update metrics in the rolling buffer
+   */
+  private recordUpdateMetrics(elapsedMs: number, unitCount: number): void {
+    this.updateTimesBuffer[this.metricsIndex] = elapsedMs;
+    this.unitCountsBuffer[this.metricsIndex] = unitCount;
+    this.metricsIndex = (this.metricsIndex + 1) % METRICS_BUFFER_SIZE;
+    if (this.metricsCount < METRICS_BUFFER_SIZE) {
+      this.metricsCount++;
+    }
+  }
+
+  /**
+   * Get current performance metrics
+   */
+  public getMetrics(): InfluenceMapMetrics {
+    if (this.metricsCount === 0) {
+      return {
+        lastUpdateMs: 0,
+        averageMs: 0,
+        maxMs: 0,
+        p95Ms: 0,
+        lastUnitCount: 0,
+        sampleCount: 0,
+      };
+    }
+
+    // Get the most recent values
+    const lastIndex = (this.metricsIndex - 1 + METRICS_BUFFER_SIZE) % METRICS_BUFFER_SIZE;
+    const lastUpdateMs = this.updateTimesBuffer[lastIndex];
+    const lastUnitCount = this.unitCountsBuffer[lastIndex];
+
+    // Calculate statistics over the buffer
+    let sum = 0;
+    let max = 0;
+    const times: number[] = [];
+
+    for (let i = 0; i < this.metricsCount; i++) {
+      const time = this.updateTimesBuffer[i];
+      sum += time;
+      if (time > max) max = time;
+      times.push(time);
+    }
+
+    const averageMs = sum / this.metricsCount;
+
+    // Calculate 95th percentile
+    times.sort((a, b) => a - b);
+    const p95Index = Math.floor(times.length * 0.95);
+    const p95Ms = times[Math.min(p95Index, times.length - 1)];
+
+    return {
+      lastUpdateMs,
+      averageMs,
+      maxMs: max,
+      p95Ms,
+      lastUnitCount,
+      sampleCount: this.metricsCount,
+    };
+  }
+
+  /**
+   * Reset performance metrics buffer
+   */
+  public resetMetrics(): void {
+    this.metricsIndex = 0;
+    this.metricsCount = 0;
+    this.updateTimesBuffer.fill(0);
+    this.unitCountsBuffer.fill(0);
   }
 }

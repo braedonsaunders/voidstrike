@@ -16,7 +16,7 @@
  */
 
 import { System } from '../ecs/System';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { MovementOrchestrator } from './movement/MovementOrchestrator';
 
 export class MovementSystem extends System {
@@ -25,7 +25,7 @@ export class MovementSystem extends System {
 
   private orchestrator: MovementOrchestrator;
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.orchestrator = new MovementOrchestrator(game, game.world);
     this.orchestrator.setupEventListeners();

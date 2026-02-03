@@ -1,11 +1,15 @@
 import { System } from '../ecs/System';
 import { Entity } from '../ecs/Entity';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
-import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
+import {
+  BUILDING_DEFINITIONS,
+  RESEARCH_MODULE_UNITS,
+  PRODUCTION_MODULE_UNITS,
+} from '@/data/buildings/dominion';
 import { findBuildingTarget } from '../combat/TargetAcquisition';
 import { distance } from '@/utils/math';
 
@@ -42,7 +46,7 @@ export class BuildingMechanicsSystem extends System {
   public readonly name = 'BuildingMechanicsSystem';
   // Priority is set by SystemRegistry based on dependencies (runs after BuildingPlacementSystem)
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
@@ -51,9 +55,15 @@ export class BuildingMechanicsSystem extends System {
     this.game.eventBus.on('command:liftOff', this.handleLiftOffCommand.bind(this));
     this.game.eventBus.on('command:land', this.handleLandCommand.bind(this));
     this.game.eventBus.on('command:buildAddon', this.handleBuildAddonCommand.bind(this));
-    this.game.eventBus.on('command:lowerSupplyDepot', this.handleLowerSupplyDepotCommand.bind(this));
+    this.game.eventBus.on(
+      'command:lowerSupplyDepot',
+      this.handleLowerSupplyDepotCommand.bind(this)
+    );
     this.game.eventBus.on('command:attachToAddon', this.handleAttachToAddonCommand.bind(this));
-    this.game.eventBus.on('command:flyingBuildingMove', this.handleFlyingBuildingMoveCommand.bind(this));
+    this.game.eventBus.on(
+      'command:flyingBuildingMove',
+      this.handleFlyingBuildingMoveCommand.bind(this)
+    );
     this.game.eventBus.on('command:demolish', this.handleDemolishCommand.bind(this));
     // Multiplayer-synced addon commands
     this.game.eventBus.on('addon:lift', this.handleAddonLiftCommand.bind(this));
@@ -82,7 +92,11 @@ export class BuildingMechanicsSystem extends System {
     });
   }
 
-  private handleAddonLandCommand(command: { buildingId: number; targetPosition?: { x: number; y: number }; playerId?: string }): void {
+  private handleAddonLandCommand(command: {
+    buildingId: number;
+    targetPosition?: { x: number; y: number };
+    playerId?: string;
+  }): void {
     // This handles a building attaching to an existing addon at a position
     // The building should fly to the position and then attach
     const entity = this.world.getEntity(command.buildingId);
@@ -139,7 +153,15 @@ export class BuildingMechanicsSystem extends System {
     if (!building || !transform) return;
 
     // Check if landing spot is valid
-    if (!this.isValidLandingSpot(command.position.x, command.position.y, building.width, building.height, command.buildingId)) {
+    if (
+      !this.isValidLandingSpot(
+        command.position.x,
+        command.position.y,
+        building.width,
+        building.height,
+        command.buildingId
+      )
+    ) {
       this.game.eventBus.emit('building:landingFailed', {
         buildingId: command.buildingId,
         reason: 'Invalid landing position',
@@ -216,7 +238,8 @@ export class BuildingMechanicsSystem extends System {
 
     if (!building || !addon) return;
 
-    const addonType = addon.buildingId === 'research_module' ? 'research_module' : 'production_module';
+    const addonType =
+      addon.buildingId === 'research_module' ? 'research_module' : 'production_module';
     building.attachAddon(addonType, data.addonId);
     addon.attachedToId = data.buildingId;
 
@@ -258,8 +281,12 @@ export class BuildingMechanicsSystem extends System {
       if (!building || !transform || !selectable) continue;
 
       // Cannot demolish buildings that are destroyed or flying
-      if (building.state === 'destroyed' || building.state === 'lifting' ||
-          building.state === 'flying' || building.state === 'landing') {
+      if (
+        building.state === 'destroyed' ||
+        building.state === 'lifting' ||
+        building.state === 'flying' ||
+        building.state === 'landing'
+      ) {
         continue;
       }
 
@@ -315,11 +342,23 @@ export class BuildingMechanicsSystem extends System {
     }
   }
 
-  private isValidLandingSpot(x: number, y: number, width: number, height: number, excludeId: number): boolean {
+  private isValidLandingSpot(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    excludeId: number
+  ): boolean {
     return this.isValidBuildingSpot(x, y, width, height, excludeId);
   }
 
-  private isValidBuildingSpot(x: number, y: number, width: number, height: number, excludeId: number): boolean {
+  private isValidBuildingSpot(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    excludeId: number
+  ): boolean {
     const config = this.game.config;
     if (x < 0 || y < 0 || x + width > config.mapWidth || y + height > config.mapHeight) {
       return false;
@@ -333,7 +372,13 @@ export class BuildingMechanicsSystem extends System {
       const building = entity.get<Building>('Building')!;
 
       // Skip flying buildings (includes lifting, flying, and landing states)
-      if (building.isFlying || building.state === 'lifting' || building.state === 'flying' || building.state === 'landing') continue;
+      if (
+        building.isFlying ||
+        building.state === 'lifting' ||
+        building.state === 'flying' ||
+        building.state === 'landing'
+      )
+        continue;
 
       if (
         x < transform.x + building.width + 1 &&
@@ -424,7 +469,9 @@ export class BuildingMechanicsSystem extends System {
             const deceleration = 2.0;
 
             // Calculate stopping distance
-            const currentSpeedSq = building.flyingCurrentSpeed ? building.flyingCurrentSpeed * building.flyingCurrentSpeed : 0;
+            const currentSpeedSq = building.flyingCurrentSpeed
+              ? building.flyingCurrentSpeed * building.flyingCurrentSpeed
+              : 0;
             const stoppingDistance = currentSpeedSq / (2 * deceleration);
 
             let targetSpeed: number;
@@ -442,9 +489,15 @@ export class BuildingMechanicsSystem extends System {
             }
 
             if (building.flyingCurrentSpeed < targetSpeed) {
-              building.flyingCurrentSpeed = Math.min(targetSpeed, building.flyingCurrentSpeed + acceleration * dt);
+              building.flyingCurrentSpeed = Math.min(
+                targetSpeed,
+                building.flyingCurrentSpeed + acceleration * dt
+              );
             } else {
-              building.flyingCurrentSpeed = Math.max(targetSpeed, building.flyingCurrentSpeed - deceleration * dt);
+              building.flyingCurrentSpeed = Math.max(
+                targetSpeed,
+                building.flyingCurrentSpeed - deceleration * dt
+              );
             }
 
             const moveDistance = building.flyingCurrentSpeed * dt;
@@ -474,7 +527,11 @@ export class BuildingMechanicsSystem extends System {
     }
   }
 
-  private checkForAddonAttachment(buildingId: number, transform: Transform, building: Building): void {
+  private checkForAddonAttachment(
+    buildingId: number,
+    transform: Transform,
+    building: Building
+  ): void {
     if (!building.canHaveAddon || building.hasAddon()) return;
 
     // Check for addon at expected position
@@ -489,7 +546,11 @@ export class BuildingMechanicsSystem extends System {
       const addonTransform = entity.get<Transform>('Transform')!;
 
       // Check if this is an unattached addon at the right position
-      if (addonBuilding.buildingId !== 'research_module' && addonBuilding.buildingId !== 'production_module') continue;
+      if (
+        addonBuilding.buildingId !== 'research_module' &&
+        addonBuilding.buildingId !== 'production_module'
+      )
+        continue;
       if (addonBuilding.attachedToId !== null) continue;
 
       const dx = Math.abs(addonTransform.x - addonX);

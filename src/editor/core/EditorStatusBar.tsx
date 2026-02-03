@@ -7,6 +7,7 @@
 'use client';
 
 import type { EditorConfig, EditorState, EditorObject } from '../config/EditorConfig';
+import type { TerrainDiff } from '../hooks/useEditorState';
 
 export interface EditorStatusBarProps {
   config: EditorConfig;
@@ -14,6 +15,10 @@ export interface EditorStatusBarProps {
   cursorPosition: { x: number; y: number } | null;
   cursorWorldPosition: { x: number; y: number; z: number } | null;
   hoveredObject: EditorObject | null;
+  /** Whether undo preview is active */
+  isUndoPreviewActive?: boolean;
+  /** The undo preview diff (if active) */
+  undoPreview?: TerrainDiff | null;
 }
 
 export function EditorStatusBar({
@@ -22,15 +27,18 @@ export function EditorStatusBar({
   cursorPosition,
   cursorWorldPosition: _cursorWorldPosition,
   hoveredObject,
+  isUndoPreviewActive,
+  undoPreview,
 }: EditorStatusBarProps) {
   const activeTool = config.tools.find((t) => t.id === state.activeTool);
   const selectedElevation = config.terrain.elevations.find((e) => e.id === state.selectedElevation);
   const selectedFeature = config.terrain.features.find((f) => f.id === state.selectedFeature);
 
   // Get current cell info if cursor is on map
-  const cellInfo = cursorPosition && state.mapData
-    ? state.mapData.terrain[cursorPosition.y]?.[cursorPosition.x]
-    : null;
+  const cellInfo =
+    cursorPosition && state.mapData
+      ? state.mapData.terrain[cursorPosition.y]?.[cursorPosition.x]
+      : null;
 
   return (
     <div
@@ -56,10 +64,7 @@ export function EditorStatusBar({
       {/* Selected elevation */}
       {selectedElevation && (
         <div className="flex items-center gap-1.5">
-          <div
-            className="w-3 h-3 rounded"
-            style={{ backgroundColor: selectedElevation.color }}
-          />
+          <div className="w-3 h-3 rounded" style={{ backgroundColor: selectedElevation.color }} />
           <span>{selectedElevation.name}</span>
         </div>
       )}
@@ -91,13 +96,11 @@ export function EditorStatusBar({
       {cellInfo && (
         <>
           <div className="font-mono">
-            <span className="opacity-50">Elev:</span>{' '}
-            <span>{cellInfo.elevation}</span>
+            <span className="opacity-50">Elev:</span> <span>{cellInfo.elevation}</span>
           </div>
           {cellInfo.feature !== 'none' && (
             <div>
-              <span className="opacity-50">Feature:</span>{' '}
-              <span>{cellInfo.feature}</span>
+              <span className="opacity-50">Feature:</span> <span>{cellInfo.feature}</span>
             </div>
           )}
         </>
@@ -126,15 +129,43 @@ export function EditorStatusBar({
 
       {/* Selection count */}
       {state.selectedObjects.length > 0 && (
-        <div style={{ color: config.theme.primary }}>
-          {state.selectedObjects.length} selected
-        </div>
+        <div style={{ color: config.theme.primary }}>{state.selectedObjects.length} selected</div>
       )}
 
       {/* Map dimensions */}
       {state.mapData && (
         <div className="font-mono opacity-50">
           {state.mapData.width}×{state.mapData.height}
+        </div>
+      )}
+
+      {/* Undo preview indicator */}
+      {isUndoPreviewActive && undoPreview && (
+        <div
+          className="px-2 py-0.5 rounded text-[10px] flex items-center gap-1.5 font-medium"
+          style={{ backgroundColor: config.theme.primary, color: '#fff' }}
+        >
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          <span>
+            Undo Preview: {undoPreview.cellCount} cell{undoPreview.cellCount !== 1 ? 's' : ''}
+          </span>
+          {undoPreview.hasObjectChanges && (
+            <span>
+              + {undoPreview.objectChangeCount} obj{undoPreview.objectChangeCount !== 1 ? 's' : ''}
+            </span>
+          )}
         </div>
       )}
 

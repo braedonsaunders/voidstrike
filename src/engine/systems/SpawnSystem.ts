@@ -1,5 +1,5 @@
 import { System } from '../ecs/System';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
@@ -29,7 +29,7 @@ export class SpawnSystem extends System {
   // Cached reference to AI system (lazy loaded)
   private aiSystem: EnhancedAISystem | null = null;
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
@@ -97,8 +97,7 @@ export class SpawnSystem extends System {
 
     // Visual scale based on unit size (larger units get bigger hitboxes)
     // This helps select larger units like capital ships more easily
-    const visualScale = definition.maxHealth > 300 ? 1.5 :
-                        definition.maxHealth > 150 ? 1.2 : 1.0;
+    const visualScale = definition.maxHealth > 300 ? 1.5 : definition.maxHealth > 150 ? 1.2 : 1.0;
 
     // Selection radius based on unit type
     const selectionRadius = isFlying ? 1.5 : 1.2;
@@ -148,7 +147,9 @@ export class SpawnSystem extends System {
             entityIds: [entity.id],
             targetEntityId: rallyTargetId,
           });
-          debugSpawning.log(`SpawnSystem: Auto-gather for ${definition.name} to resource ${rallyTargetId}`);
+          debugSpawning.log(
+            `SpawnSystem: Auto-gather for ${definition.name} to resource ${rallyTargetId}`
+          );
         }
       }
     } else if (rallyX !== null && rallyX !== undefined && rallyY !== null && rallyY !== undefined) {
@@ -157,7 +158,9 @@ export class SpawnSystem extends System {
         entityIds: [entity.id],
         targetPosition: { x: rallyX, y: rallyY },
       });
-      debugSpawning.log(`SpawnSystem: Moving ${definition.name} to rally point (${rallyX.toFixed(1)}, ${rallyY.toFixed(1)})`);
+      debugSpawning.log(
+        `SpawnSystem: Moving ${definition.name} to rally point (${rallyX.toFixed(1)}, ${rallyY.toFixed(1)})`
+      );
     }
 
     // Emit spawn complete event for UI feedback
@@ -168,7 +171,9 @@ export class SpawnSystem extends System {
       position: { x, y },
     });
 
-    debugSpawning.log(`SpawnSystem: Spawned ${definition.name} at (${x.toFixed(1)}, ${y.toFixed(1)}) for ${playerId}`);
+    debugSpawning.log(
+      `SpawnSystem: Spawned ${definition.name} at (${x.toFixed(1)}, ${y.toFixed(1)}) for ${playerId}`
+    );
   }
 
   /**
@@ -238,7 +243,9 @@ export class SpawnSystem extends System {
       position: { x, y },
     });
 
-    debugSpawning.log(`SpawnSystem: Spawned ${definition.name} at (${x.toFixed(1)}, ${y.toFixed(1)}) for ${playerId}`);
+    debugSpawning.log(
+      `SpawnSystem: Spawned ${definition.name} at (${x.toFixed(1)}, ${y.toFixed(1)}) for ${playerId}`
+    );
   }
 
   private handleUnitDeath(data: { entityId: number }): void {
@@ -267,7 +274,10 @@ export class SpawnSystem extends System {
     }
   }
 
-  private getArmorType(definition: { isFlying?: boolean; maxHealth: number }): 'light' | 'armored' | 'massive' | 'structure' {
+  private getArmorType(definition: {
+    isFlying?: boolean;
+    maxHealth: number;
+  }): 'light' | 'armored' | 'massive' | 'structure' {
     if (definition.isFlying) {
       return definition.maxHealth > 200 ? 'massive' : 'light';
     }

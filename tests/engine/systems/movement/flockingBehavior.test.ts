@@ -1,7 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { FlockingBehavior, FlockingEntityCache, FlockingSpatialGrid } from '@/engine/systems/movement/FlockingBehavior';
+import {
+  FlockingBehavior,
+  FlockingEntityCache,
+  FlockingSpatialGrid,
+} from '@/engine/systems/movement/FlockingBehavior';
 import { Transform } from '@/engine/components/Transform';
-import { Unit, UnitState } from '@/engine/components/Unit';
+import { Unit, UnitState, UnitData } from '@/engine/components/Unit';
 import { Velocity } from '@/engine/components/Velocity';
 import { SpatialEntityData, SpatialUnitState } from '@/engine/core/SpatialGrid';
 import { PooledVector2 } from '@/utils/VectorPool';
@@ -30,7 +34,7 @@ import {
 // =============================================================================
 
 /** Create a minimal Unit component for testing */
-function createTestUnit(overrides: Partial<Unit> = {}): Unit {
+function createTestUnit(overrides: Partial<UnitData> = {}): Unit {
   const unit = {
     type: 'Unit' as const,
     entityId: 1,
@@ -55,7 +59,7 @@ function createTestUnit(overrides: Partial<Unit> = {}): Unit {
     isBiological: true,
     isMechanical: false,
     ...overrides,
-  } as Unit;
+  } as unknown as Unit;
   return unit;
 }
 
@@ -70,9 +74,16 @@ function createTestVelocity(x = 0, y = 0): Velocity {
 }
 
 /** Create a mock spatial grid for testing */
-function createMockSpatialGrid(entities: Map<number, { x: number; y: number; data: SpatialEntityData }>): FlockingSpatialGrid {
+function createMockSpatialGrid(
+  entities: Map<number, { x: number; y: number; data: SpatialEntityData }>
+): FlockingSpatialGrid {
   return {
-    queryRadiusWithData(x: number, y: number, radius: number, buffer: SpatialEntityData[]): SpatialEntityData[] {
+    queryRadiusWithData(
+      x: number,
+      y: number,
+      radius: number,
+      buffer: SpatialEntityData[]
+    ): SpatialEntityData[] {
       const results: SpatialEntityData[] = [];
       let bufferIndex = 0;
 
@@ -109,7 +120,9 @@ function createMockSpatialGrid(entities: Map<number, { x: number; y: number; dat
 }
 
 /** Create a mock entity cache for testing */
-function createMockEntityCache(entities: Map<number, { transform: Transform; unit: Unit; velocity: Velocity }>): FlockingEntityCache {
+function createMockEntityCache(
+  entities: Map<number, { transform: Transform; unit: Unit; velocity: Velocity }>
+): FlockingEntityCache {
   return {
     get(entityId: number) {
       return entities.get(entityId);
@@ -123,7 +136,12 @@ function createOutputVector(): PooledVector2 {
 }
 
 /** Create spatial entity data from unit/transform */
-function createSpatialData(id: number, transform: Transform, unit: Unit, playerId: number = 1): SpatialEntityData {
+function createSpatialData(
+  id: number,
+  transform: Transform,
+  unit: Unit,
+  playerId: number = 1
+): SpatialEntityData {
   return {
     id,
     x: transform.x,
@@ -140,15 +158,24 @@ function createSpatialData(id: number, transform: Transform, unit: Unit, playerI
 
 function stateToSpatialState(state: UnitState): SpatialUnitState {
   switch (state) {
-    case 'idle': return SpatialUnitState.Idle;
-    case 'moving': return SpatialUnitState.Moving;
-    case 'attacking': return SpatialUnitState.Attacking;
-    case 'attackmoving': return SpatialUnitState.AttackMoving;
-    case 'gathering': return SpatialUnitState.Gathering;
-    case 'building': return SpatialUnitState.Building;
-    case 'patrolling': return SpatialUnitState.Patrolling;
-    case 'dead': return SpatialUnitState.Dead;
-    default: return SpatialUnitState.Idle;
+    case 'idle':
+      return SpatialUnitState.Idle;
+    case 'moving':
+      return SpatialUnitState.Moving;
+    case 'attacking':
+      return SpatialUnitState.Attacking;
+    case 'attackmoving':
+      return SpatialUnitState.AttackMoving;
+    case 'gathering':
+      return SpatialUnitState.Gathering;
+    case 'building':
+      return SpatialUnitState.Building;
+    case 'patrolling':
+      return SpatialUnitState.Patrolling;
+    case 'dead':
+      return SpatialUnitState.Dead;
+    default:
+      return SpatialUnitState.Idle;
   }
 }
 
@@ -243,7 +270,11 @@ describe('FlockingBehavior', () => {
       // Self at position (0, 0)
       entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
       // Neighbor at position (0.8, 0) - overlapping with self
-      entities.set(2, { x: 0.8, y: 0, data: createSpatialData(2, neighborTransform, neighborUnit) });
+      entities.set(2, {
+        x: 0.8,
+        y: 0,
+        data: createSpatialData(2, neighborTransform, neighborUnit),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -265,7 +296,11 @@ describe('FlockingBehavior', () => {
 
       const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      entities.set(2, { x: 1.0, y: 0, data: createSpatialData(2, neighborTransform, deadNeighbor) });
+      entities.set(2, {
+        x: 1.0,
+        y: 0,
+        data: createSpatialData(2, neighborTransform, deadNeighbor),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -285,7 +320,11 @@ describe('FlockingBehavior', () => {
 
       const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      entities.set(2, { x: 1.0, y: 0, data: createSpatialData(2, neighborTransform, flyingNeighbor) });
+      entities.set(2, {
+        x: 1.0,
+        y: 0,
+        data: createSpatialData(2, neighborTransform, flyingNeighbor),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -305,7 +344,11 @@ describe('FlockingBehavior', () => {
 
       const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      entities.set(2, { x: 1.0, y: 0, data: createSpatialData(2, neighborTransform, workerNeighbor) });
+      entities.set(2, {
+        x: 1.0,
+        y: 0,
+        data: createSpatialData(2, neighborTransform, workerNeighbor),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -323,7 +366,11 @@ describe('FlockingBehavior', () => {
 
       const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      entities.set(2, { x: 1.0, y: 0, data: createSpatialData(2, createTestTransform(1.0, 0), neighborUnit) });
+      entities.set(2, {
+        x: 1.0,
+        y: 0,
+        data: createSpatialData(2, createTestTransform(1.0, 0), neighborUnit),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -349,7 +396,11 @@ describe('FlockingBehavior', () => {
 
       const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      entities.set(2, { x: 1.0, y: 0, data: createSpatialData(2, createTestTransform(1.0, 0), neighborUnit) });
+      entities.set(2, {
+        x: 1.0,
+        y: 0,
+        data: createSpatialData(2, createTestTransform(1.0, 0), neighborUnit),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -361,7 +412,11 @@ describe('FlockingBehavior', () => {
       flocking.setCurrentTick(SEPARATION_THROTTLE_TICKS);
 
       // Move neighbor (this would change the force)
-      entities.set(2, { x: 2.0, y: 0, data: createSpatialData(2, createTestTransform(2.0, 0), neighborUnit) });
+      entities.set(2, {
+        x: 2.0,
+        y: 0,
+        data: createSpatialData(2, createTestTransform(2.0, 0), neighborUnit),
+      });
 
       // Should recalculate (though result may be same due to physics)
       const out2 = createOutputVector();
@@ -414,8 +469,16 @@ describe('FlockingBehavior', () => {
 
       const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      entities.set(2, { x: 5, y: 0, data: createSpatialData(2, createTestTransform(5, 0), neighbor1) });
-      entities.set(3, { x: 5, y: 5, data: createSpatialData(3, createTestTransform(5, 5), neighbor2) });
+      entities.set(2, {
+        x: 5,
+        y: 0,
+        data: createSpatialData(2, createTestTransform(5, 0), neighbor1),
+      });
+      entities.set(3, {
+        x: 5,
+        y: 5,
+        data: createSpatialData(3, createTestTransform(5, 5), neighbor2),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -436,7 +499,11 @@ describe('FlockingBehavior', () => {
 
       const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      entities.set(2, { x: 5, y: 0, data: createSpatialData(2, createTestTransform(5, 0), idleNeighbor) });
+      entities.set(2, {
+        x: 5,
+        y: 0,
+        data: createSpatialData(2, createTestTransform(5, 0), idleNeighbor),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -454,7 +521,11 @@ describe('FlockingBehavior', () => {
 
       const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      entities.set(2, { x: 5, y: 0, data: createSpatialData(2, createTestTransform(5, 0), neighbor) });
+      entities.set(2, {
+        x: 5,
+        y: 0,
+        data: createSpatialData(2, createTestTransform(5, 0), neighbor),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -521,13 +592,32 @@ describe('FlockingBehavior', () => {
 
       const gridEntities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       gridEntities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      gridEntities.set(2, { x: 2, y: 0, data: createSpatialData(2, neighbor1Transform, neighbor1Unit) });
-      gridEntities.set(3, { x: 2, y: 2, data: createSpatialData(3, neighbor2Transform, neighbor2Unit) });
+      gridEntities.set(2, {
+        x: 2,
+        y: 0,
+        data: createSpatialData(2, neighbor1Transform, neighbor1Unit),
+      });
+      gridEntities.set(3, {
+        x: 2,
+        y: 2,
+        data: createSpatialData(3, neighbor2Transform, neighbor2Unit),
+      });
 
-      const cacheEntities = new Map<number, { transform: Transform; unit: Unit; velocity: Velocity }>();
+      const cacheEntities = new Map<
+        number,
+        { transform: Transform; unit: Unit; velocity: Velocity }
+      >();
       cacheEntities.set(1, { transform: selfTransform, unit: selfUnit, velocity: selfVelocity });
-      cacheEntities.set(2, { transform: neighbor1Transform, unit: neighbor1Unit, velocity: neighbor1Velocity });
-      cacheEntities.set(3, { transform: neighbor2Transform, unit: neighbor2Unit, velocity: neighbor2Velocity });
+      cacheEntities.set(2, {
+        transform: neighbor1Transform,
+        unit: neighbor1Unit,
+        velocity: neighbor1Velocity,
+      });
+      cacheEntities.set(3, {
+        transform: neighbor2Transform,
+        unit: neighbor2Unit,
+        velocity: neighbor2Velocity,
+      });
 
       const grid = createMockSpatialGrid(gridEntities);
       const cache = createMockEntityCache(cacheEntities);
@@ -551,11 +641,22 @@ describe('FlockingBehavior', () => {
 
       const gridEntities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       gridEntities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      gridEntities.set(2, { x: 2, y: 0, data: createSpatialData(2, neighborTransform, neighborUnit) });
+      gridEntities.set(2, {
+        x: 2,
+        y: 0,
+        data: createSpatialData(2, neighborTransform, neighborUnit),
+      });
 
-      const cacheEntities = new Map<number, { transform: Transform; unit: Unit; velocity: Velocity }>();
+      const cacheEntities = new Map<
+        number,
+        { transform: Transform; unit: Unit; velocity: Velocity }
+      >();
       cacheEntities.set(1, { transform: selfTransform, unit: selfUnit, velocity: selfVelocity });
-      cacheEntities.set(2, { transform: neighborTransform, unit: neighborUnit, velocity: neighborVelocity });
+      cacheEntities.set(2, {
+        transform: neighborTransform,
+        unit: neighborUnit,
+        velocity: neighborVelocity,
+      });
 
       const grid = createMockSpatialGrid(gridEntities);
       const cache = createMockEntityCache(cacheEntities);
@@ -595,7 +696,11 @@ describe('FlockingBehavior', () => {
 
       const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      entities.set(2, { x: 0.5, y: 0, data: createSpatialData(2, neighborTransform, neighborUnit) });
+      entities.set(2, {
+        x: 0.5,
+        y: 0,
+        data: createSpatialData(2, neighborTransform, neighborUnit),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -615,7 +720,11 @@ describe('FlockingBehavior', () => {
 
       const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
-      entities.set(2, { x: 0.5, y: 0, data: createSpatialData(2, neighborTransform, neighborUnit) });
+      entities.set(2, {
+        x: 0.5,
+        y: 0,
+        data: createSpatialData(2, neighborTransform, neighborUnit),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -815,7 +924,9 @@ describe('FlockingBehavior', () => {
 
       // After cleanup, calculations should work fresh
       flocking.setCurrentTick(100);
-      expect(() => flocking.calculateSeparationForce(1, transform, unit, out, 10, grid)).not.toThrow();
+      expect(() =>
+        flocking.calculateSeparationForce(1, transform, unit, out, 10, grid)
+      ).not.toThrow();
     });
 
     it('handles cleanup of non-existent entity gracefully', () => {
@@ -861,7 +972,11 @@ describe('FlockingBehavior', () => {
 
       const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
       entities.set(1, { x: 5, y: 5, data: createSpatialData(1, transform, unit) });
-      entities.set(2, { x: 6, y: 5, data: createSpatialData(2, createTestTransform(6, 5), neighborUnit) });
+      entities.set(2, {
+        x: 6,
+        y: 5,
+        data: createSpatialData(2, createTestTransform(6, 5), neighborUnit),
+      });
 
       const grid = createMockSpatialGrid(entities);
 
@@ -889,7 +1004,8 @@ describe('FlockingBehavior', () => {
       const results1: { vx: number; vy: number }[] = [];
       const results2: { vx: number; vy: number }[] = [];
 
-      let prevVx = 0, prevVy = 0;
+      let prevVx = 0,
+        prevVy = 0;
       for (const v of velocities) {
         results1.push(flocking1.smoothVelocity(1, v.vx, v.vy, prevVx, prevVy));
         prevVx = v.vx;

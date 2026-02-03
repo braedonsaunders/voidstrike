@@ -4,10 +4,14 @@ import { Building, ProductionQueueItem } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Ability, DOMINION_ABILITIES } from '../components/Ability';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { isLocalPlayer } from '@/store/gameSetupStore';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
-import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS, PRODUCTION_MODULE_UNITS } from '@/data/buildings/dominion';
+import {
+  BUILDING_DEFINITIONS,
+  RESEARCH_MODULE_UNITS,
+  PRODUCTION_MODULE_UNITS,
+} from '@/data/buildings/dominion';
 import { debugProduction, debugSpawning } from '@/utils/debugLogger';
 import { EnhancedAISystem } from './EnhancedAISystem';
 
@@ -18,7 +22,7 @@ export class ProductionSystem extends System {
   // Cached reference to AI system (lazy loaded)
   private aiSystem: EnhancedAISystem | null = null;
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
@@ -120,10 +124,7 @@ export class ProductionSystem extends System {
     }
   }
 
-  private handleTrainCommand(command: {
-    entityIds: number[];
-    unitType: string;
-  }): void {
+  private handleTrainCommand(command: { entityIds: number[]; unitType: string }): void {
     const { entityIds, unitType } = command;
     const unitDef = UNIT_DEFINITIONS[unitType];
 
@@ -133,7 +134,11 @@ export class ProductionSystem extends System {
     }
 
     // Find all valid buildings that can produce this unit, then pick the one with shortest queue
-    let bestBuilding: { entityId: number; building: Building; selectable: Selectable | undefined } | null = null;
+    let bestBuilding: {
+      entityId: number;
+      building: Building;
+      selectable: Selectable | undefined;
+    } | null = null;
     let shortestQueueLength = Infinity;
 
     for (const entityId of entityIds) {
@@ -199,15 +204,19 @@ export class ProductionSystem extends System {
         produceCount = 2;
       } else {
         // Human: check if they can afford two
-        const canAffordTwo = this.game.statePort.getMinerals() >= unitDef.mineralCost * 2 &&
-                             this.game.statePort.getPlasma() >= unitDef.plasmaCost * 2;
+        const canAffordTwo =
+          this.game.statePort.getMinerals() >= unitDef.mineralCost * 2 &&
+          this.game.statePort.getPlasma() >= unitDef.plasmaCost * 2;
         produceCount = canAffordTwo ? 2 : 1;
       }
     }
 
     // Deduct resources based on produceCount (only for human players)
     if (!isOwnerAI) {
-      this.game.statePort.addResources(-unitDef.mineralCost * produceCount, -unitDef.plasmaCost * produceCount);
+      this.game.statePort.addResources(
+        -unitDef.mineralCost * produceCount,
+        -unitDef.plasmaCost * produceCount
+      );
     }
     // AI resources were already deducted in EnhancedAISystem
 
@@ -242,10 +251,7 @@ export class ProductionSystem extends System {
     });
   }
 
-  private handleUpgradeBuildingCommand(command: {
-    entityIds: number[];
-    upgradeTo: string;
-  }): void {
+  private handleUpgradeBuildingCommand(command: { entityIds: number[]; upgradeTo: string }): void {
     const { entityIds, upgradeTo } = command;
     const upgradeDef = BUILDING_DEFINITIONS[upgradeTo];
 
@@ -326,7 +332,11 @@ export class ProductionSystem extends System {
         // Check if we need to allocate supply for this item
         // An item needs supply allocated if it's a unit with supplyCost > 0
         // and supply hasn't been allocated yet
-        if (currentItem.type === 'unit' && currentItem.supplyCost > 0 && !currentItem.supplyAllocated) {
+        if (
+          currentItem.type === 'unit' &&
+          currentItem.supplyCost > 0 &&
+          !currentItem.supplyAllocated
+        ) {
           // FIX: Only use game store for human players, not AI
           const selectable = entity.get<Selectable>('Selectable');
           const ownerPlayerId = selectable?.playerId;
@@ -338,7 +348,10 @@ export class ProductionSystem extends System {
           } else {
             // Human player - use game store for supply tracking
             // Try to allocate supply if there's room
-            if (this.game.statePort.getSupply() + currentItem.supplyCost <= this.game.statePort.getMaxSupply()) {
+            if (
+              this.game.statePort.getSupply() + currentItem.supplyCost <=
+              this.game.statePort.getMaxSupply()
+            ) {
               // We have room - allocate supply
               this.game.statePort.addSupply(currentItem.supplyCost);
               currentItem.supplyAllocated = true;
@@ -380,11 +393,13 @@ export class ProductionSystem extends System {
       // Spawn multiple units if produceCount > 1 (reactor bonus)
       for (let i = 0; i < item.produceCount; i++) {
         // Offset spawn position slightly for multiple units to avoid overlap
-        const spawnX = baseSpawnX + (i * 0.5);
-        const spawnY = baseSpawnY + (i * 0.5);
+        const spawnX = baseSpawnX + i * 0.5;
+        const spawnY = baseSpawnY + i * 0.5;
 
         // Diagnostic: log when units are spawned (helps debug AI production issues)
-        debugSpawning.log(`[ProductionSystem] ${ownerPlayerId}: Spawning ${item.id} at (${spawnX.toFixed(1)}, ${spawnY.toFixed(1)})`);
+        debugSpawning.log(
+          `[ProductionSystem] ${ownerPlayerId}: Spawning ${item.id} at (${spawnX.toFixed(1)}, ${spawnY.toFixed(1)})`
+        );
 
         this.game.eventBus.emit('unit:spawn', {
           unitType: item.id,
@@ -434,7 +449,7 @@ export class ProductionSystem extends System {
     buildingId: number,
     building: Building,
     newBuildingType: string,
-    newDef: typeof BUILDING_DEFINITIONS[string]
+    newDef: (typeof BUILDING_DEFINITIONS)[string]
   ): void {
     // Transform the building to the new type
     building.buildingId = newDef.id;

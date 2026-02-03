@@ -227,7 +227,11 @@ export class EditorObjects {
     radius: number,
     color: number
   ): { mesh: THREE.Mesh; height: number } {
-    const visual = OBJECT_VISUALS[type] || { color: 0xffffff, height: 1, shape: 'cylinder' as const };
+    const visual = OBJECT_VISUALS[type] || {
+      color: 0xffffff,
+      height: 1,
+      shape: 'cylinder' as const,
+    };
 
     let geometry: THREE.BufferGeometry;
     switch (visual.shape) {
@@ -279,7 +283,9 @@ export class EditorObjects {
     let baseScale = 1; // Base scale from model normalization
     let baseRotation = 0; // Base rotation from model normalization (radians)
 
-    const modelInstance = this.modelsInitialized ? EditorModelLoader.getModelInstance(obj.type) : null;
+    const modelInstance = this.modelsInitialized
+      ? EditorModelLoader.getModelInstance(obj.type)
+      : null;
 
     if (modelInstance) {
       // Use real model - already normalized and grounded (bottom at y=0)
@@ -386,10 +392,6 @@ export class EditorObjects {
 
     const terrainHeight = this.getTerrainHeight ? this.getTerrainHeight(x, y) : 0;
 
-    // Get the current total scale and calculate user scale (unused but kept for future use)
-    const totalScale = instance.mesh.children[0]?.scale.x || 1;
-    const _userScale = instance.baseScale > 0 ? totalScale / instance.baseScale : 1;
-
     // Get visual height from bounding box (at current scale)
     let scaledHeight = 2;
     if (instance.mesh.children[0]) {
@@ -456,7 +458,8 @@ export class EditorObjects {
     // Add user rotation to base rotation
     // baseRotation is in radians (from EditorModelLoader), userRotation is in degrees
     if (instance.mesh.children[0]) {
-      instance.mesh.children[0].rotation.y = instance.baseRotation + THREE.MathUtils.degToRad(userRotation);
+      instance.mesh.children[0].rotation.y =
+        instance.baseRotation + THREE.MathUtils.degToRad(userRotation);
     }
   }
 
@@ -508,7 +511,10 @@ export class EditorObjects {
         instance.mesh.traverse((child) => {
           if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
             child.material.emissive?.setHex(0x000000);
-          } else if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshLambertMaterial) {
+          } else if (
+            child instanceof THREE.Mesh &&
+            child.material instanceof THREE.MeshLambertMaterial
+          ) {
             child.material.emissive?.setHex(0x000000);
           }
         });
@@ -528,7 +534,10 @@ export class EditorObjects {
         instance.mesh.traverse((child) => {
           if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
             child.material.emissive?.setHex(0x222222);
-          } else if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshLambertMaterial) {
+          } else if (
+            child instanceof THREE.Mesh &&
+            child.material instanceof THREE.MeshLambertMaterial
+          ) {
             child.material.emissive?.setHex(0x222222);
           }
         });

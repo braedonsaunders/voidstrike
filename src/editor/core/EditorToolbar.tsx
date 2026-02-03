@@ -22,6 +22,12 @@ export interface EditorToolbarProps {
   onElevationSelect: (elevation: number) => void;
   onSymmetryChange?: (mode: SymmetryMode) => void;
   onSnapChange?: (mode: SnapMode) => void;
+  /** Whether undo is available */
+  canUndo?: boolean;
+  /** Whether undo preview is currently active */
+  isUndoPreviewActive?: boolean;
+  /** Callback to toggle undo preview */
+  onToggleUndoPreview?: () => void;
 }
 
 // Tool groups for organization
@@ -90,9 +96,7 @@ function ToolButton({
       }}
     >
       <span className={compact ? 'text-sm' : 'text-base'}>{tool.icon}</span>
-      {!compact && (
-        <span className="text-xs font-medium hidden xl:inline">{tool.name}</span>
-      )}
+      {!compact && <span className="text-xs font-medium hidden xl:inline">{tool.name}</span>}
     </button>
   );
 }
@@ -215,12 +219,14 @@ function ElevationSelector({
               w-6 h-6 rounded-md border transition-all duration-150
               ${selected === elev.id ? 'scale-110 ring-2 ring-offset-1' : 'hover:scale-105'}
             `}
-            style={{
-              backgroundColor: elev.color,
-              borderColor: selected === elev.id ? '#fff' : `${elev.color}80`,
-              '--tw-ring-color': theme.primary,
-              '--tw-ring-offset-color': theme.surface,
-            } as React.CSSProperties}
+            style={
+              {
+                backgroundColor: elev.color,
+                borderColor: selected === elev.id ? '#fff' : `${elev.color}80`,
+                '--tw-ring-color': theme.primary,
+                '--tw-ring-offset-color': theme.surface,
+              } as React.CSSProperties
+            }
           />
           {showTooltip === elev.id && (
             <div
@@ -232,9 +238,7 @@ function ElevationSelector({
               }}
             >
               {elev.name}
-              {elev.shortcut && (
-                <span className="ml-1 opacity-50">({elev.shortcut})</span>
-              )}
+              {elev.shortcut && <span className="ml-1 opacity-50">({elev.shortcut})</span>}
             </div>
           )}
         </div>
@@ -370,10 +374,7 @@ function BrushSizeControl({
           accentColor: theme.primary,
         }}
       />
-      <span
-        className="w-5 text-center text-xs font-mono"
-        style={{ color: theme.text.secondary }}
-      >
+      <span className="w-5 text-center text-xs font-mono" style={{ color: theme.text.secondary }}>
         {value}
       </span>
     </div>
@@ -382,12 +383,7 @@ function BrushSizeControl({
 
 // Vertical divider
 function Divider({ theme }: { theme: EditorConfig['theme'] }) {
-  return (
-    <div
-      className="w-px h-6 mx-1"
-      style={{ backgroundColor: theme.border }}
-    />
-  );
+  return <div className="w-px h-6 mx-1" style={{ backgroundColor: theme.border }} />;
 }
 
 export function EditorToolbar({
@@ -402,6 +398,9 @@ export function EditorToolbar({
   onElevationSelect,
   onSymmetryChange,
   onSnapChange,
+  canUndo = false,
+  isUndoPreviewActive = false,
+  onToggleUndoPreview,
 }: EditorToolbarProps) {
   const theme = config.theme;
   const activeToolConfig = config.tools.find((t) => t.id === activeTool);
@@ -547,7 +546,7 @@ export function EditorToolbar({
 
       <Divider theme={theme} />
 
-      {/* Keyboard hints */}
+      {/* Keyboard hints and undo preview button */}
       <div className="hidden lg:flex items-center gap-2">
         <span
           className="text-[10px] px-1.5 py-0.5 rounded"
@@ -561,6 +560,38 @@ export function EditorToolbar({
         >
           Ctrl+Z Undo
         </span>
+
+        {/* Undo preview toggle button */}
+        {canUndo && onToggleUndoPreview && (
+          <button
+            onClick={onToggleUndoPreview}
+            title="Preview undo changes (Ctrl+Shift+Z)"
+            className={`
+              h-7 px-2 rounded flex items-center gap-1.5 text-xs transition-all duration-150
+              ${isUndoPreviewActive ? 'shadow-md' : 'hover:bg-white/5'}
+            `}
+            style={{
+              backgroundColor: isUndoPreviewActive ? theme.primary : theme.background,
+              color: isUndoPreviewActive ? '#fff' : theme.text.muted,
+              border: isUndoPreviewActive ? 'none' : `1px solid ${theme.border}`,
+            }}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
+            <span>Preview</span>
+          </button>
+        )}
       </div>
     </div>
   );

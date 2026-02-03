@@ -6,7 +6,7 @@
  * the ChecksumSystem to provide detailed diagnostics.
  */
 
-import { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { ChecksumSystem, ChecksumData, DesyncReport } from '../systems/ChecksumSystem';
 import { QUANT_POSITION, QUANT_DAMAGE } from '@/utils/FixedPoint';
 import { debugNetworking } from '@/utils/debugLogger';
@@ -107,7 +107,7 @@ export interface SerializedCommand {
 // =============================================================================
 
 export class DesyncDetectionManager {
-  private game: Game;
+  private game: IGameInstance;
   private checksumSystem: ChecksumSystem | null = null;
   private config: DesyncDetectionConfig;
   private desyncHistory: DesyncReport[] = [];
@@ -117,7 +117,7 @@ export class DesyncDetectionManager {
   private lastCleanupTick: number = 0;
   private static readonly CLEANUP_INTERVAL_TICKS = 100; // Cleanup every 100 ticks (~5 seconds at 20 TPS)
 
-  constructor(game: Game, config: Partial<DesyncDetectionConfig> = {}) {
+  constructor(game: IGameInstance, config: Partial<DesyncDetectionConfig> = {}) {
     this.game = game;
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.setupEventListeners();
@@ -169,13 +169,15 @@ export class DesyncDetectionManager {
     if (this.config.verboseLogging) {
       debugNetworking.log(`[DesyncDetection] Desync detected at tick ${data.tick}`);
       debugNetworking.log(`[DesyncDetection] Local checksum: 0x${data.localChecksum.toString(16)}`);
-      debugNetworking.log(`[DesyncDetection] Remote checksum: 0x${data.remoteChecksum.toString(16)}`);
+      debugNetworking.log(
+        `[DesyncDetection] Remote checksum: 0x${data.remoteChecksum.toString(16)}`
+      );
       debugNetworking.log(`[DesyncDetection] Remote peer ID: ${data.remotePeerId}`);
       debugNetworking.log('[DesyncDetection] Desync report:', data.report);
     }
 
     // Pause game if configured
-    if (this.config.pauseOnDesync) {
+    if (this.config.pauseOnDesync && this.game.pause) {
       this.game.pause();
       debugNetworking.warn('[DesyncDetection] Game paused due to desync');
     }
@@ -272,8 +274,8 @@ export class DesyncDetectionManager {
       const snapshot = report.localSnapshot;
 
       // Count entity types
-      const _unitCount = snapshot.entities.filter(e => e.type === 'unit').length;
-      const _buildingCount = snapshot.entities.filter(e => e.type === 'building').length;
+      const _unitCount = snapshot.entities.filter((e) => e.type === 'unit').length;
+      const _buildingCount = snapshot.entities.filter((e) => e.type === 'building').length;
 
       // Look for suspicious patterns
       for (const entity of snapshot.entities) {
@@ -404,17 +406,23 @@ export class DesyncDetectionManager {
             y: entity.qy / QUANT_POSITION,
             z: entity.qz / QUANT_POSITION,
           },
-          health: entity.qMaxHealth > 0 ? {
-            current: entity.qHealth / QUANT_DAMAGE,
-            max: entity.qMaxHealth / QUANT_DAMAGE,
-            shield: entity.qShield !== undefined ? entity.qShield / QUANT_DAMAGE : undefined,
-          } : undefined,
+          health:
+            entity.qMaxHealth > 0
+              ? {
+                  current: entity.qHealth / QUANT_DAMAGE,
+                  max: entity.qMaxHealth / QUANT_DAMAGE,
+                  shield: entity.qShield !== undefined ? entity.qShield / QUANT_DAMAGE : undefined,
+                }
+              : undefined,
           state: entity.state || entity.buildingState,
-          target: entity.qTargetX !== undefined ? {
-            x: entity.qTargetX / QUANT_POSITION,
-            y: entity.qTargetY !== undefined ? entity.qTargetY / QUANT_POSITION : undefined,
-            entityId: entity.targetEntityId,
-          } : undefined,
+          target:
+            entity.qTargetX !== undefined
+              ? {
+                  x: entity.qTargetX / QUANT_POSITION,
+                  y: entity.qTargetY !== undefined ? entity.qTargetY / QUANT_POSITION : undefined,
+                  entityId: entity.targetEntityId,
+                }
+              : undefined,
         });
       }
     }
@@ -573,7 +581,9 @@ export function compareChecksums(local: ChecksumData, remote: ChecksumData): str
   const differences: string[] = [];
 
   if (local.checksum !== remote.checksum) {
-    differences.push(`Checksum: ${formatChecksum(local.checksum)} vs ${formatChecksum(remote.checksum)}`);
+    differences.push(
+      `Checksum: ${formatChecksum(local.checksum)} vs ${formatChecksum(remote.checksum)}`
+    );
   }
 
   if (local.unitCount !== remote.unitCount) {

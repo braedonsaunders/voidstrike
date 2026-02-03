@@ -5,7 +5,7 @@
  * for AI systems to offload micro decision computation.
  */
 
-import { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { World } from '../ecs/World';
 import { debugAI } from '@/utils/debugLogger';
 import { Transform } from '../components/Transform';
@@ -70,7 +70,7 @@ export class AIWorkerManager {
 
   private worker: Worker | null = null;
   private workerReady: boolean = false;
-  private game: Game;
+  private game: IGameInstance;
   private world: World | null = null;
 
   // Track pending micro requests
@@ -80,7 +80,7 @@ export class AIWorkerManager {
   // Track AI players
   private aiPlayerIds: Set<string> = new Set();
 
-  private constructor(game: Game) {
+  private constructor(game: IGameInstance) {
     this.game = game;
     this.initializeWorker();
   }
@@ -88,7 +88,7 @@ export class AIWorkerManager {
   /**
    * Get or create the singleton instance
    */
-  public static getInstance(game: Game): AIWorkerManager {
+  public static getInstance(game: IGameInstance): AIWorkerManager {
     if (!AIWorkerManager.instance) {
       AIWorkerManager.instance = new AIWorkerManager(game);
     }
@@ -116,10 +116,9 @@ export class AIWorkerManager {
 
     try {
       // Create worker as ES module (required for Next.js 16+ Turbopack)
-      this.worker = new Worker(
-        new URL('../../workers/ai-decisions.worker.ts', import.meta.url),
-        { type: 'module' }
-      );
+      this.worker = new Worker(new URL('../../workers/ai-decisions.worker.ts', import.meta.url), {
+        type: 'module',
+      });
 
       this.worker.onmessage = this.handleWorkerMessage.bind(this);
       this.worker.onerror = (error) => {
@@ -245,6 +244,7 @@ export class AIWorkerManager {
       mapWidth: this.game.config.mapWidth,
       mapHeight: this.game.config.mapHeight,
       tick: currentTick,
+      seed: 12345 + currentTick,
     });
 
     return resultPromise;
@@ -310,6 +310,7 @@ export class AIWorkerManager {
       mapWidth: this.game.config.mapWidth,
       mapHeight: this.game.config.mapHeight,
       tick: currentTick,
+      seed: 12345 + currentTick,
     });
   }
 

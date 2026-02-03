@@ -1,5 +1,5 @@
 import { System } from '../ecs/System';
-import { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { distance, clamp } from '@/utils/math';
 import type { IWorldProvider } from '../ecs/IWorldProvider';
 
@@ -17,7 +17,9 @@ export class SelectionSystem extends System {
   private controlGroups: Map<number, number[]> = new Map();
 
   // Screen-space selection callback (set by canvas)
-  private worldToScreenFn: ((x: number, z: number, y?: number) => { x: number; y: number } | null) | null = null;
+  private worldToScreenFn:
+    | ((x: number, z: number, y?: number) => { x: number; y: number } | null)
+    | null = null;
 
   // Terrain height lookup function (set by canvas)
   private getTerrainHeightFn: ((x: number, z: number) => number) | null = null;
@@ -35,7 +37,7 @@ export class SelectionSystem extends System {
   // Current player ID for selection sync
   private currentPlayerId: string | null = null;
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
@@ -66,7 +68,9 @@ export class SelectionSystem extends System {
   /**
    * Set the world-to-screen projection function for accurate screen-space selection
    */
-  public setWorldToScreen(fn: (x: number, z: number, y?: number) => { x: number; y: number } | null): void {
+  public setWorldToScreen(
+    fn: (x: number, z: number, y?: number) => { x: number; y: number } | null
+  ): void {
     this.worldToScreenFn = fn;
   }
 
@@ -191,7 +195,9 @@ export class SelectionSystem extends System {
       // Convert entity world position to screen space
       if (!this.worldToScreenFn) continue;
 
-      const terrainHeight = this.getTerrainHeightFn ? this.getTerrainHeightFn(transform.x, transform.y) : 0;
+      const terrainHeight = this.getTerrainHeightFn
+        ? this.getTerrainHeightFn(transform.x, transform.y)
+        : 0;
       const visualHeight = selectable.visualHeight ?? 0;
       const worldY = terrainHeight + visualHeight;
       const screenPos = this.worldToScreenFn(transform.x, transform.y, worldY);
@@ -218,7 +224,15 @@ export class SelectionSystem extends System {
       const clickRadius = isSmallBox ? screenRadius * 1.5 : screenRadius;
 
       const finalInBox = isSmallBox
-        ? this.circleIntersectsRect(screenPos.x, screenPos.y, clickRadius, screenMinX, screenMinY, screenMaxX, screenMaxY)
+        ? this.circleIntersectsRect(
+            screenPos.x,
+            screenPos.y,
+            clickRadius,
+            screenMinX,
+            screenMinY,
+            screenMaxX,
+            screenMaxY
+          )
         : isInBox;
 
       if (finalInBox) {
@@ -284,7 +298,13 @@ export class SelectionSystem extends System {
     }
 
     const entities = world.getEntitiesWith('Transform', 'Selectable');
-    let closestEntity: { id: number; distance: number; priority: number; unitId?: string; buildingId?: string } | null = null;
+    let closestEntity: {
+      id: number;
+      distance: number;
+      priority: number;
+      unitId?: string;
+      buildingId?: string;
+    } | null = null;
 
     // Find closest entity to click point in screen space
     for (const entity of entities) {
@@ -312,7 +332,9 @@ export class SelectionSystem extends System {
       if (!this.isInViewport(transform.x, transform.y)) continue;
 
       // Convert entity to screen space
-      const terrainHeight = this.getTerrainHeightFn ? this.getTerrainHeightFn(transform.x, transform.y) : 0;
+      const terrainHeight = this.getTerrainHeightFn
+        ? this.getTerrainHeightFn(transform.x, transform.y)
+        : 0;
       const visualHeight = selectable.visualHeight ?? 0;
       const worldY = terrainHeight + visualHeight;
       const screenPos = this.worldToScreenFn(transform.x, transform.y, worldY);
@@ -330,7 +352,8 @@ export class SelectionSystem extends System {
         if (
           !closestEntity ||
           selectable.selectionPriority > closestEntity.priority ||
-          (selectable.selectionPriority === closestEntity.priority && screenDistance < closestEntity.distance)
+          (selectable.selectionPriority === closestEntity.priority &&
+            screenDistance < closestEntity.distance)
         ) {
           closestEntity = {
             id: entity.id,
@@ -363,7 +386,7 @@ export class SelectionSystem extends System {
         const isAlreadySelected = current.includes(closestEntity.id);
         if (isAlreadySelected) {
           // Deselect if already selected
-          selectedIds = current.filter(id => id !== closestEntity!.id);
+          selectedIds = current.filter((id) => id !== closestEntity!.id);
         } else {
           // Add to selection
           selectedIds = [...current, closestEntity.id];

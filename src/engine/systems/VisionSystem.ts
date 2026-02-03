@@ -5,7 +5,7 @@ import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
 import { Selectable } from '../components/Selectable';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { WatchTower } from '@/data/maps/MapTypes';
 // GPU vision imports are lazy-loaded to avoid breaking worker context
 // (WebGPU APIs are not available in Web Workers)
@@ -114,7 +114,7 @@ export class VisionSystem extends System {
   // Track entity cell positions for boundary detection
   private entityCellPositions: Map<number, { cellX: number; cellY: number }> = new Map();
 
-  constructor(game: Game, mapWidth: number, mapHeight: number, cellSize: number = 2) {
+  constructor(game: IGameInstance, mapWidth: number, mapHeight: number, cellSize: number = 2) {
     super(game);
     this.mapWidth = mapWidth;
     this.mapHeight = mapHeight;

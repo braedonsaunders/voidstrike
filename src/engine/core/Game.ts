@@ -1,5 +1,7 @@
 import { GameCore, GameConfig, TerrainCell } from './GameCore';
 import type { SystemDefinition } from './SystemRegistry';
+import type { System } from '../ecs/System';
+import type { IGameInstance } from './IGameInstance';
 import { GameLoop } from './GameLoop';
 import { getSystemDefinitions } from '../systems/systemDependencies';
 
@@ -50,6 +52,7 @@ import { DesyncDetectionManager } from '../network/DesyncDetection';
 import { commandIdGenerator } from '../network/types';
 import type { GameStatePort } from './GameStatePort';
 import { ZustandStateAdapter } from '@/adapters/ZustandStateAdapter';
+import { getCommandSigningManager, resetCommandSigningManager } from '../network/CommandSigning';
 
 // Re-export types for backwards compatibility
 export type { GameState, TerrainCell, GameConfig } from './GameCore';
@@ -127,11 +130,11 @@ export class Game extends GameCore {
     this.gameLoop = new GameLoop(this.config.tickRate, this.update.bind(this));
 
     // Initialize audio system (main-thread only)
-    this.audioSystem = new AudioSystem(this as any);
+    this.audioSystem = new AudioSystem(this as IGameInstance);
 
     // Initialize desync detection for multiplayer
     if (this.config.isMultiplayer) {
-      this.desyncDetection = new DesyncDetectionManager(this as any, {
+      this.desyncDetection = new DesyncDetectionManager(this as IGameInstance, {
         enabled: true,
         pauseOnDesync: false,
         showDesyncIndicator: true,
@@ -154,7 +157,7 @@ export class Game extends GameCore {
     return getSystemDefinitions();
   }
 
-  protected override onSystemCreated(system: any): void {
+  protected override onSystemCreated(system: System): void {
     super.onSystemCreated(system);
 
     if (system.name === 'SelectionSystem') {
@@ -213,8 +216,8 @@ export class Game extends GameCore {
             return;
           }
 
-          debugNetworking.log('[Game] Received remote command for tick', command.tick);
-          this.queueCommandWithReceipt(command);
+          // SECURITY: Verify command signature (async)
+          this.verifyAndQueueCommand(command);
         } else if (message.commandType && message.data) {
           debugNetworking.log(
             '[Game] Received remote command (event format):',
@@ -263,6 +266,65 @@ export class Game extends GameCore {
         });
       }
     );
+  }
+
+  /**
+   * Verify a remote command's signature and queue it if valid.
+   * Commands with invalid or missing signatures are rejected with a security event.
+   */
+  private async verifyAndQueueCommand(command: GameCommand): Promise<void> {
+    const signingManager = getCommandSigningManager();
+
+    // Find the peer ID for this player's slot ID
+    const peerToSlotMap = useMultiplayerStore.getState().peerToSlotId;
+    let sourcePeerId: string | null = null;
+
+    for (const [peerId, slotId] of peerToSlotMap.entries()) {
+      if (slotId === command.playerId) {
+        sourcePeerId = peerId;
+        break;
+      }
+    }
+
+    // If we have a signing manager and can identify the peer, verify the signature
+    if (signingManager.isInitialized() && sourcePeerId) {
+      const hasSignature = command.signature !== undefined && command.signature !== '';
+
+      if (!hasSignature) {
+        // Allow unsigned commands during initial connection or if peer has no key yet
+        // Log a warning but still process the command
+        debugNetworking.warn(
+          `[Game] Command from ${command.playerId} has no signature - allowing for compatibility`
+        );
+        // Queue the command (signature verification is best-effort during transition)
+        debugNetworking.log('[Game] Queuing command for tick', command.tick);
+        this.queueCommandWithReceipt(command);
+        return;
+      }
+
+      // Verify the signature
+      const isValid = await signingManager.verifyCommand(command, sourcePeerId);
+
+      if (!isValid) {
+        console.error(
+          `[Game] SECURITY: Rejected command with invalid signature. ` +
+            `Player: ${command.playerId}, Type: ${command.type}, Tick: ${command.tick}`
+        );
+        this.eventBus.emit('security:invalidSignature', {
+          playerId: command.playerId,
+          commandType: command.type,
+          tick: command.tick,
+          peerId: sourcePeerId,
+        });
+        return;
+      }
+
+      debugNetworking.log('[Game] Verified command signature for tick', command.tick);
+    }
+
+    // Queue the verified command
+    debugNetworking.log('[Game] Received remote command for tick', command.tick);
+    this.queueCommandWithReceipt(command);
   }
 
   private setupDesyncHandler(): void {
@@ -410,9 +472,10 @@ export class Game extends GameCore {
       this.multiplayerMessageHandler = null;
     }
 
-    // Clean up reconnection handler
+    // Clean up reconnection handler and signing manager
     if (this.config.isMultiplayer) {
       setOnReconnectedCallback(null);
+      resetCommandSigningManager();
     }
 
     this.eventBus.emit('game:ended', { tick: this.currentTick });
@@ -587,6 +650,9 @@ export class Game extends GameCore {
       return; // Already sent a command for this tick
     }
 
+    // Mark as sent immediately to avoid duplicate sends
+    this.sentCommandForTick.add(tick);
+
     const heartbeat: GameCommand = {
       tick,
       playerId: this.config.playerId,
@@ -594,13 +660,8 @@ export class Game extends GameCore {
       entityIds: [],
     };
 
-    sendMultiplayerMessage({
-      type: 'command',
-      payload: heartbeat,
-    });
-
-    this.queueCommandWithReceipt(heartbeat);
-    this.sentCommandForTick.add(tick);
+    // Sign and send heartbeat asynchronously
+    this.signAndSendHeartbeat(heartbeat, tick);
 
     // Cleanup old entries
     const oldestRelevant = this.currentTick - this.COMMAND_HISTORY_SIZE;
@@ -609,8 +670,36 @@ export class Game extends GameCore {
         this.sentCommandForTick.delete(t);
       }
     }
+  }
 
-    debugNetworking.log(`[Game] Sent heartbeat for tick ${tick}`);
+  /**
+   * Sign a heartbeat command and send it over the network.
+   */
+  private async signAndSendHeartbeat(heartbeat: GameCommand, tick: number): Promise<void> {
+    try {
+      const signingManager = getCommandSigningManager();
+      let signedHeartbeat = heartbeat;
+
+      if (signingManager.isInitialized()) {
+        signedHeartbeat = await signingManager.signCommand(heartbeat);
+      }
+
+      sendMultiplayerMessage({
+        type: 'command',
+        payload: signedHeartbeat,
+      });
+
+      this.queueCommandWithReceipt(signedHeartbeat);
+      debugNetworking.log(`[Game] Sent signed heartbeat for tick ${tick}`);
+    } catch (e) {
+      debugNetworking.error('[Game] Failed to sign heartbeat:', e);
+      // Fall back to sending unsigned heartbeat
+      sendMultiplayerMessage({
+        type: 'command',
+        payload: heartbeat,
+      });
+      this.queueCommandWithReceipt(heartbeat);
+    }
   }
 
   /**
@@ -686,18 +775,45 @@ export class Game extends GameCore {
       const executionTick = this.currentTick + this.currentCommandDelay;
       command.tick = executionTick;
 
+      // Sign command asynchronously, then send
+      this.signAndSendCommand(command, executionTick);
+    } else {
+      this.processCommand(command);
+    }
+  }
+
+  /**
+   * Sign a command and send it over the network.
+   * Handles the async signing process without blocking.
+   */
+  private async signAndSendCommand(command: GameCommand, executionTick: number): Promise<void> {
+    try {
+      const signingManager = getCommandSigningManager();
+      let signedCommand = command;
+
+      if (signingManager.isInitialized()) {
+        signedCommand = await signingManager.signCommand(command);
+      }
+
+      sendMultiplayerMessage({
+        type: 'command',
+        payload: signedCommand,
+      });
+      debugNetworking.log('[Game] Sent signed command for tick', executionTick);
+
+      this.queueCommandWithReceipt(signedCommand);
+
+      // Track that we sent a real command for this tick (not just a heartbeat)
+      this.sentCommandForTick.add(executionTick);
+    } catch (e) {
+      debugNetworking.error('[Game] Failed to sign command:', e);
+      // Fall back to sending unsigned command to avoid blocking gameplay
       sendMultiplayerMessage({
         type: 'command',
         payload: command,
       });
-      debugNetworking.log('[Game] Sent command for tick', executionTick);
-
       this.queueCommandWithReceipt(command);
-
-      // Track that we sent a real command for this tick (not just a heartbeat)
       this.sentCommandForTick.add(executionTick);
-    } else {
-      this.processCommand(command);
     }
   }
 

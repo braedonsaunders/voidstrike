@@ -1,5 +1,5 @@
 import { SystemDefinition } from '../core/SystemRegistry';
-import { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 
 // System imports
 import { SelectionSystem } from './SelectionSystem';
@@ -51,7 +51,7 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
   {
     name: 'SelectionSystem',
     dependencies: [],
-    factory: (game: Game) => new SelectionSystem(game),
+    factory: (game: IGameInstance) => new SelectionSystem(game),
   },
 
   // ============================================================================
@@ -60,7 +60,7 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
   {
     name: 'SpawnSystem',
     dependencies: [],
-    factory: (game: Game) => new SpawnSystem(game),
+    factory: (game: IGameInstance) => new SpawnSystem(game),
   },
 
   // ============================================================================
@@ -69,12 +69,12 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
   {
     name: 'BuildingPlacementSystem',
     dependencies: ['SelectionSystem'], // Placement responds to selection
-    factory: (game: Game) => new BuildingPlacementSystem(game),
+    factory: (game: IGameInstance) => new BuildingPlacementSystem(game),
   },
   {
     name: 'PathfindingSystem',
     dependencies: ['BuildingPlacementSystem'], // Needs building grid populated
-    factory: (game: Game) => game.pathfindingSystem,
+    factory: (game: IGameInstance) => game.pathfindingSystem,
   },
 
   // ============================================================================
@@ -83,17 +83,17 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
   {
     name: 'BuildingMechanicsSystem',
     dependencies: ['BuildingPlacementSystem'], // Needs buildings placed
-    factory: (game: Game) => new BuildingMechanicsSystem(game),
+    factory: (game: IGameInstance) => new BuildingMechanicsSystem(game),
   },
   {
     name: 'WallSystem',
     dependencies: ['BuildingPlacementSystem'], // Wall connections after placement
-    factory: (game: Game) => new WallSystem(game),
+    factory: (game: IGameInstance) => new WallSystem(game),
   },
   {
     name: 'UnitMechanicsSystem',
     dependencies: ['SelectionSystem'], // Responds to unit commands
-    factory: (game: Game) => new UnitMechanicsSystem(game),
+    factory: (game: IGameInstance) => new UnitMechanicsSystem(game),
   },
 
   // ============================================================================
@@ -102,7 +102,7 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
   {
     name: 'MovementSystem',
     dependencies: ['PathfindingSystem', 'UnitMechanicsSystem'],
-    factory: (game: Game) => new MovementSystem(game),
+    factory: (game: IGameInstance) => new MovementSystem(game),
   },
 
   // ============================================================================
@@ -112,7 +112,7 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
   {
     name: 'VisionSystem',
     dependencies: ['MovementSystem'], // CRITICAL: vision updates after units move
-    factory: (game: Game) => game.visionSystem,
+    factory: (game: IGameInstance) => game.visionSystem,
   },
 
   // ============================================================================
@@ -121,17 +121,17 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
   {
     name: 'CombatSystem',
     dependencies: ['MovementSystem', 'VisionSystem'], // Combat after positioning
-    factory: (game: Game) => new CombatSystem(game),
+    factory: (game: IGameInstance) => new CombatSystem(game),
   },
   {
     name: 'ProjectileSystem',
     dependencies: ['CombatSystem'], // Projectiles created by combat
-    factory: (game: Game) => new ProjectileSystem(game),
+    factory: (game: IGameInstance) => new ProjectileSystem(game),
   },
   {
     name: 'AbilitySystem',
     dependencies: ['CombatSystem'], // Abilities may depend on combat state
-    factory: (game: Game) => new AbilitySystem(game),
+    factory: (game: IGameInstance) => new AbilitySystem(game),
   },
 
   // ============================================================================
@@ -140,17 +140,17 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
   {
     name: 'ResourceSystem',
     dependencies: ['MovementSystem'], // Workers need to move to gather
-    factory: (game: Game) => new ResourceSystem(game),
+    factory: (game: IGameInstance) => new ResourceSystem(game),
   },
   {
     name: 'ProductionSystem',
     dependencies: ['ResourceSystem'], // Production consumes resources
-    factory: (game: Game) => new ProductionSystem(game),
+    factory: (game: IGameInstance) => new ProductionSystem(game),
   },
   {
     name: 'ResearchSystem',
     dependencies: ['ProductionSystem'], // Research after production queues
-    factory: (game: Game) => new ResearchSystem(game),
+    factory: (game: IGameInstance) => new ResearchSystem(game),
   },
 
   // ============================================================================
@@ -159,20 +159,20 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
   {
     name: 'EnhancedAISystem',
     dependencies: ['CombatSystem', 'ResourceSystem'], // AI reacts to game state
-    factory: (game: Game) => new EnhancedAISystem(game, game.config.aiDifficulty),
-    condition: (game: Game) => game.config.aiEnabled,
+    factory: (game: IGameInstance) => new EnhancedAISystem(game, game.config.aiDifficulty),
+    condition: (game: IGameInstance) => game.config.aiEnabled,
   },
   {
     name: 'AIEconomySystem',
     dependencies: ['EnhancedAISystem'], // Economy metrics after AI decisions
-    factory: (game: Game) => new AIEconomySystem(game),
-    condition: (game: Game) => game.config.aiEnabled,
+    factory: (game: IGameInstance) => new AIEconomySystem(game),
+    condition: (game: IGameInstance) => game.config.aiEnabled,
   },
   {
     name: 'AIMicroSystem',
     dependencies: ['EnhancedAISystem', 'CombatSystem'], // Micro after strategic AI
-    factory: (game: Game) => game.aiMicroSystem,
-    condition: (game: Game) => game.config.aiEnabled,
+    factory: (game: IGameInstance) => game.aiMicroSystem,
+    condition: (game: IGameInstance) => game.config.aiEnabled,
   },
 
   // ============================================================================
@@ -181,7 +181,8 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
   {
     name: 'AudioSystem',
     dependencies: ['CombatSystem'], // Audio responds to combat events
-    factory: (game: Game) => game.audioSystem,
+    factory: (game: IGameInstance) => game.audioSystem!,
+    condition: (game: IGameInstance) => game.audioSystem !== null,
   },
 
   // ============================================================================
@@ -189,17 +190,13 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
   // ============================================================================
   {
     name: 'GameStateSystem',
-    dependencies: [
-      'CombatSystem',
-      'ProductionSystem',
-      'ResourceSystem',
-    ], // Victory/defeat after gameplay
-    factory: (game: Game) => game.gameStateSystem,
+    dependencies: ['CombatSystem', 'ProductionSystem', 'ResourceSystem'], // Victory/defeat after gameplay
+    factory: (game: IGameInstance) => game.gameStateSystem,
   },
   {
     name: 'ChecksumSystem',
     dependencies: ['GameStateSystem'], // Checksum after all game state settled
-    factory: (game: Game) => {
+    factory: (game: IGameInstance) => {
       // ChecksumSystem is created in Game constructor for multiplayer
       // Return the existing instance
       if (!game.checksumSystem) {
@@ -207,12 +204,12 @@ export const SYSTEM_DEFINITIONS: SystemDefinition[] = [
       }
       return game.checksumSystem;
     },
-    condition: (game: Game) => game.config.isMultiplayer,
+    condition: (game: IGameInstance) => game.config.isMultiplayer,
   },
   {
     name: 'SaveLoadSystem',
     dependencies: ['GameStateSystem'], // Save after game state is final
-    factory: (game: Game) => game.saveLoadSystem,
+    factory: (game: IGameInstance) => game.saveLoadSystem,
   },
 ];
 

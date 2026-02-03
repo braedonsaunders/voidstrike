@@ -3,23 +3,25 @@
 // WebRTC P2P multiplayer infrastructure types
 // =============================================================================
 
+import type { GameCommand } from '../core/GameCommand';
+
 // -----------------------------------------------------------------------------
 // Lobby Types
 // -----------------------------------------------------------------------------
 
 export type LobbyStatus =
-  | 'waiting'      // Waiting for players
-  | 'ready'        // All players ready, can start
-  | 'signaling'    // WebRTC handshake in progress
-  | 'connecting'   // Establishing P2P connections
-  | 'in_game'      // Game active
-  | 'finished';    // Game ended
+  | 'waiting' // Waiting for players
+  | 'ready' // All players ready, can start
+  | 'signaling' // WebRTC handshake in progress
+  | 'connecting' // Establishing P2P connections
+  | 'in_game' // Game active
+  | 'finished'; // Game ended
 
 export interface LobbySettings {
   mapId: string;
   mapName: string;
   maxPlayers: number;
-  gameSpeed: number;           // 0.5 = slower, 1 = normal, 1.5 = faster, 2 = fastest
+  gameSpeed: number; // 0.5 = slower, 1 = normal, 1.5 = faster, 2 = fastest
   startingResources: 'normal' | 'high' | 'insane';
   fogOfWar: boolean;
   isRanked: boolean;
@@ -28,10 +30,10 @@ export interface LobbySettings {
 export interface LobbyPlayer {
   id: string;
   username: string;
-  slot: number;                 // 0-7
-  faction: string;              // 'dominion' | 'synthesis' | 'swarm'
-  color: number;                // Color index 0-7
-  team: number;                 // 0 = FFA, 1-4 = teams
+  slot: number; // 0-7
+  faction: string; // 'dominion' | 'synthesis' | 'swarm'
+  color: number; // Color index 0-7
+  team: number; // 0 = FFA, 1-4 = teams
   isReady: boolean;
   isHost: boolean;
   eloRating: number;
@@ -39,7 +41,7 @@ export interface LobbyPlayer {
 
 export interface Lobby {
   id: string;
-  code: string;                 // 6-char join code
+  code: string; // 6-char join code
   hostId: string;
   status: LobbyStatus;
   settings: LobbySettings;
@@ -52,17 +54,12 @@ export interface Lobby {
 // WebRTC Signaling Types
 // -----------------------------------------------------------------------------
 
-export type SignalingMessageType =
-  | 'offer'
-  | 'answer'
-  | 'ice-candidate'
-  | 'ready'
-  | 'error';
+export type SignalingMessageType = 'offer' | 'answer' | 'ice-candidate' | 'ready' | 'error';
 
 export interface SignalingMessage {
   type: SignalingMessageType;
-  from: string;                 // Sender player ID
-  to: string;                   // Recipient player ID or 'all'
+  from: string; // Sender player ID
+  to: string; // Recipient player ID or 'all'
   payload: RTCSessionDescriptionInit | RTCIceCandidateInit | string;
   timestamp: number;
 }
@@ -72,51 +69,51 @@ export interface SignalingMessage {
 // -----------------------------------------------------------------------------
 
 export type GameMessageType =
-  | 'input'                     // Player input commands for a tick
-  | 'input-ack'                 // Acknowledgement of received inputs
-  | 'checksum'                  // State checksum for desync detection
-  | 'desync'                    // Desync notification with details
-  | 'state-dump-request'        // Request full state dump for debugging
-  | 'state-dump-response'       // Full state dump data
-  | 'ping'                      // Latency measurement request
-  | 'pong'                      // Latency measurement response
-  | 'sync-request'              // Request state sync (reconnection)
-  | 'sync-response'             // State sync data
-  | 'pause'                     // Request pause
-  | 'resume'                    // Request resume
-  | 'forfeit'                   // Player forfeits
-  | 'chat';                     // In-game chat
+  | 'input' // Player input commands for a tick
+  | 'input-ack' // Acknowledgement of received inputs
+  | 'checksum' // State checksum for desync detection
+  | 'desync' // Desync notification with details
+  | 'state-dump-request' // Request full state dump for debugging
+  | 'state-dump-response' // Full state dump data
+  | 'ping' // Latency measurement request
+  | 'pong' // Latency measurement response
+  | 'sync-request' // Request state sync (reconnection)
+  | 'sync-response' // State sync data
+  | 'pause' // Request pause
+  | 'resume' // Request resume
+  | 'forfeit' // Player forfeits
+  | 'chat'; // In-game chat
 
 export interface GameMessage {
   type: GameMessageType;
-  tick: number;                 // Game tick this message relates to
-  senderId: string;             // Player who sent this message
-  data: unknown;                // Type-specific payload
-  timestamp: number;            // When the message was created
-  sequence: number;             // Sequence number for ordering
+  tick: number; // Game tick this message relates to
+  senderId: string; // Player who sent this message
+  data: unknown; // Type-specific payload
+  timestamp: number; // When the message was created
+  sequence: number; // Sequence number for ordering
 }
 
 // Input message data
 export interface InputMessageData {
-  commands: GameCommand[];      // Commands for this tick
+  commands: GameCommand[]; // Commands for this tick
 }
 
 // Checksum message data (enhanced for determinism debugging)
 export interface ChecksumMessageData {
-  checksum: number;             // Primary state hash (computed from all entity states)
-  unitCount: number;            // Total alive units
-  buildingCount: number;        // Total alive buildings
-  resourceSum: number;          // Sum of all resource amounts
-  unitPositionHash: number;     // Hash of all unit positions (for quick position divergence check)
-  healthSum: number;            // Sum of all health values
+  checksum: number; // Primary state hash (computed from all entity states)
+  unitCount: number; // Total alive units
+  buildingCount: number; // Total alive buildings
+  resourceSum: number; // Sum of all resource amounts
+  unitPositionHash: number; // Hash of all unit positions (for quick position divergence check)
+  healthSum: number; // Sum of all health values
 }
 
 // Desync notification data
 export interface DesyncMessageData {
-  tick: number;                 // Tick where desync was detected
-  localChecksum: number;        // Local client's checksum
-  remoteChecksum: number;       // Remote client's checksum
-  requestStateDump: boolean;    // Whether to request full state dump for debugging
+  tick: number; // Tick where desync was detected
+  localChecksum: number; // Local client's checksum
+  remoteChecksum: number; // Remote client's checksum
+  requestStateDump: boolean; // Whether to request full state dump for debugging
 }
 
 // Ping/pong message data
@@ -138,88 +135,10 @@ export interface SyncResponseData {
 
 // -----------------------------------------------------------------------------
 // Game Command Types (for lockstep synchronization)
+// Re-export from core for consistency across the codebase
 // -----------------------------------------------------------------------------
 
-export type GameCommandType =
-  | 'MOVE'
-  | 'ATTACK'
-  | 'ATTACK_MOVE'
-  | 'PATROL'
-  | 'HOLD'
-  | 'STOP'
-  | 'BUILD'
-  | 'TRAIN'
-  | 'RESEARCH'
-  | 'ABILITY'
-  | 'TRANSFORM'
-  | 'LOAD'
-  | 'UNLOAD'
-  | 'LOAD_BUNKER'
-  | 'UNLOAD_BUNKER'
-  | 'RALLY'
-  | 'GATHER'
-  | 'REPAIR'
-  | 'HEAL'
-  | 'CLOAK'
-  | 'CANCEL';
-
-export interface GameCommand {
-  id: string;                   // Unique command ID
-  type: GameCommandType;
-  playerId: string;             // Player who issued the command
-  tick: number;                 // Tick this command executes on
-  entityIds: number[];          // Entities this command affects
-  data: GameCommandData;        // Command-specific data
-}
-
-export type GameCommandData =
-  | MoveCommandData
-  | AttackCommandData
-  | BuildCommandData
-  | TrainCommandData
-  | ResearchCommandData
-  | AbilityCommandData
-  | GenericCommandData;
-
-export interface MoveCommandData {
-  targetX: number;
-  targetY: number;
-  formation?: string;
-  queued?: boolean;
-}
-
-export interface AttackCommandData {
-  targetEntityId?: number;
-  targetX?: number;
-  targetY?: number;
-  queued?: boolean;
-}
-
-export interface BuildCommandData {
-  buildingType: string;
-  x: number;
-  y: number;
-}
-
-export interface TrainCommandData {
-  unitType: string;
-  count: number;
-}
-
-export interface ResearchCommandData {
-  upgradeId: string;
-}
-
-export interface AbilityCommandData {
-  abilityId: string;
-  targetEntityId?: number;
-  targetX?: number;
-  targetY?: number;
-}
-
-export interface GenericCommandData {
-  [key: string]: unknown;
-}
+export type { GameCommand, GameCommandType } from '../core/GameCommand';
 
 // -----------------------------------------------------------------------------
 // Connection State Types
@@ -237,8 +156,8 @@ export interface PeerState {
   username: string;
   connectionState: ConnectionState;
   dataChannelState: RTCDataChannelState | null;
-  latency: number;              // RTT in milliseconds
-  lastSeen: number;             // Timestamp of last message
+  latency: number; // RTT in milliseconds
+  lastSeen: number; // Timestamp of last message
 }
 
 export interface NetworkState {
@@ -253,12 +172,7 @@ export interface NetworkState {
 // Matchmaking Types
 // -----------------------------------------------------------------------------
 
-export type MatchmakingStatus =
-  | 'idle'
-  | 'searching'
-  | 'found'
-  | 'cancelled'
-  | 'error';
+export type MatchmakingStatus = 'idle' | 'searching' | 'found' | 'cancelled' | 'error';
 
 export interface MatchmakingState {
   status: MatchmakingStatus;
@@ -304,7 +218,12 @@ export interface NetworkEvents {
   'peer:disconnected': { peerId: string; reason?: string };
   'peer:message': { peerId: string; message: GameMessage };
   'connection:quality-changed': { quality: NetworkState['connectionQuality'] };
-  'sync:desync-detected': { tick: number; localChecksum: number; remoteChecksum: number; peerId: string };
+  'sync:desync-detected': {
+    tick: number;
+    localChecksum: number;
+    remoteChecksum: number;
+    peerId: string;
+  };
   'sync:waiting': { tick: number; waitingFor: string[] };
   'game:paused': { requesterId: string };
   'game:resumed': { requesterId: string };

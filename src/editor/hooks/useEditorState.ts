@@ -20,6 +20,118 @@ import type {
 } from '../config/EditorConfig';
 import { clamp } from '@/utils/math';
 
+/**
+ * Represents a single cell change in the undo preview
+ */
+export interface TerrainDiffCell {
+  x: number;
+  y: number;
+  /** Current value (will be changed FROM this) */
+  oldType: string;
+  /** Previous value (will be restored TO this) */
+  newType: string;
+  /** Current elevation */
+  oldElevation: number;
+  /** Previous elevation */
+  newElevation: number;
+  /** Current walkable state */
+  oldWalkable: boolean;
+  /** Previous walkable state */
+  newWalkable: boolean;
+}
+
+/**
+ * Represents the diff between current state and the previous undo state
+ */
+export interface TerrainDiff {
+  /** Array of cells that will change */
+  cells: TerrainDiffCell[];
+  /** Total number of cells that will change */
+  cellCount: number;
+  /** Whether objects will change */
+  hasObjectChanges: boolean;
+  /** Number of objects that will be added/removed/modified */
+  objectChangeCount: number;
+}
+
+/**
+ * Computes the diff between current map data and the previous state in undo stack
+ */
+function computeTerrainDiff(currentData: EditorMapData, previousData: EditorMapData): TerrainDiff {
+  const cells: TerrainDiffCell[] = [];
+
+  // Compare terrain cells
+  const minHeight = Math.min(currentData.height, previousData.height);
+  const minWidth = Math.min(currentData.width, previousData.width);
+
+  for (let y = 0; y < minHeight; y++) {
+    for (let x = 0; x < minWidth; x++) {
+      const currentCell = currentData.terrain[y][x];
+      const previousCell = previousData.terrain[y][x];
+
+      // Check if anything changed
+      const elevationChanged = currentCell.elevation !== previousCell.elevation;
+      const featureChanged = currentCell.feature !== previousCell.feature;
+      const walkableChanged = currentCell.walkable !== previousCell.walkable;
+
+      if (elevationChanged || featureChanged || walkableChanged) {
+        cells.push({
+          x,
+          y,
+          oldType: currentCell.feature,
+          newType: previousCell.feature,
+          oldElevation: currentCell.elevation,
+          newElevation: previousCell.elevation,
+          oldWalkable: currentCell.walkable,
+          newWalkable: previousCell.walkable,
+        });
+      }
+    }
+  }
+
+  // Compare objects
+  const currentObjIds = new Set(currentData.objects.map((o) => o.id));
+  const previousObjIds = new Set(previousData.objects.map((o) => o.id));
+
+  let objectChangeCount = 0;
+
+  // Objects added in current state (will be removed by undo)
+  for (const id of currentObjIds) {
+    if (!previousObjIds.has(id)) {
+      objectChangeCount++;
+    }
+  }
+
+  // Objects removed in current state (will be restored by undo)
+  for (const id of previousObjIds) {
+    if (!currentObjIds.has(id)) {
+      objectChangeCount++;
+    }
+  }
+
+  // Objects that exist in both but may have changed
+  for (const currentObj of currentData.objects) {
+    const previousObj = previousData.objects.find((o) => o.id === currentObj.id);
+    if (previousObj) {
+      if (
+        currentObj.x !== previousObj.x ||
+        currentObj.y !== previousObj.y ||
+        currentObj.radius !== previousObj.radius ||
+        JSON.stringify(currentObj.properties) !== JSON.stringify(previousObj.properties)
+      ) {
+        objectChangeCount++;
+      }
+    }
+  }
+
+  return {
+    cells,
+    cellCount: cells.length,
+    hasObjectChanges: objectChangeCount > 0,
+    objectChangeCount,
+  };
+}
+
 // Initial state factory
 function createInitialState(config: EditorConfig): EditorState {
   return {
@@ -191,8 +303,22 @@ export interface UseEditorStateReturn {
   canUndo: boolean;
   canRedo: boolean;
 
+  // Undo preview actions
+  /** Current undo preview (null if not previewing) */
+  undoPreview: TerrainDiff | null;
+  /** Preview what undo will change without applying */
+  previewUndo: () => TerrainDiff | null;
+  /** Clear the undo preview */
+  clearUndoPreview: () => void;
+  /** Toggle undo preview on/off */
+  toggleUndoPreview: () => void;
+  /** Whether undo preview is currently active */
+  isUndoPreviewActive: boolean;
+
   // Map metadata
-  updateMapMetadata: (updates: Partial<Pick<EditorMapData, 'name' | 'width' | 'height' | 'biomeId'>>) => void;
+  updateMapMetadata: (
+    updates: Partial<Pick<EditorMapData, 'name' | 'width' | 'height' | 'biomeId'>>
+  ) => void;
 
   // Dirty state
   markClean: () => void;
@@ -203,19 +329,36 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
   const batchStateRef = useRef<EditorMapData | null>(null);
   const isBatchingRef = useRef(false);
 
+  // Undo preview state
+  const [undoPreview, setUndoPreview] = useState<TerrainDiff | null>(null);
+  const [isUndoPreviewActive, setIsUndoPreviewActive] = useState(false);
+
   const maxUndoHistory = config.features?.maxUndoHistory ?? 50;
 
-  // Save current state to undo stack (unused but kept for potential future use)
-  const _pushToUndoStack = useCallback(() => {
-    if (!state.mapData) return;
+  // Undo preview functions
+  const previewUndo = useCallback((): TerrainDiff | null => {
+    if (state.undoStack.length === 0 || !state.mapData) {
+      return null;
+    }
+    const previousState = state.undoStack[state.undoStack.length - 1];
+    const diff = computeTerrainDiff(state.mapData, previousState);
+    setUndoPreview(diff);
+    setIsUndoPreviewActive(true);
+    return diff;
+  }, [state.undoStack, state.mapData]);
 
-    setState((prev) => ({
-      ...prev,
-      undoStack: [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData!)],
-      redoStack: [], // Clear redo stack on new action
-      isDirty: true,
-    }));
-  }, [state.mapData, maxUndoHistory]);
+  const clearUndoPreview = useCallback(() => {
+    setUndoPreview(null);
+    setIsUndoPreviewActive(false);
+  }, []);
+
+  const toggleUndoPreview = useCallback(() => {
+    if (isUndoPreviewActive) {
+      clearUndoPreview();
+    } else {
+      previewUndo();
+    }
+  }, [isUndoPreviewActive, clearUndoPreview, previewUndo]);
 
   // Tool actions
   const setActiveTool = useCallback((toolId: string) => {
@@ -239,10 +382,13 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
   }, []);
 
   // View actions
-  const setZoom = useCallback((zoom: number) => {
-    const clampedZoom = clamp(zoom, config.canvas.minZoom, config.canvas.maxZoom);
-    setState((prev) => ({ ...prev, zoom: clampedZoom }));
-  }, [config.canvas.minZoom, config.canvas.maxZoom]);
+  const setZoom = useCallback(
+    (zoom: number) => {
+      const clampedZoom = clamp(zoom, config.canvas.minZoom, config.canvas.maxZoom);
+      setState((prev) => ({ ...prev, zoom: clampedZoom }));
+    },
+    [config.canvas.minZoom, config.canvas.maxZoom]
+  );
 
   const setOffset = useCallback((offset: { x: number; y: number }) => {
     setState((prev) => ({ ...prev, offset }));
@@ -289,29 +435,35 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     }));
   }, []);
 
-  const updateCell = useCallback((x: number, y: number, updates: Partial<EditorCell>) => {
-    setState((prev) => {
-      if (!prev.mapData) return prev;
-      if (y < 0 || y >= prev.mapData.height || x < 0 || x >= prev.mapData.width) return prev;
+  const updateCell = useCallback(
+    (x: number, y: number, updates: Partial<EditorCell>) => {
+      setState((prev) => {
+        if (!prev.mapData) return prev;
+        if (y < 0 || y >= prev.mapData.height || x < 0 || x >= prev.mapData.width) return prev;
 
-      // Push to undo before modification
-      const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData)];
+        // Push to undo before modification
+        const newUndoStack = [
+          ...prev.undoStack.slice(-maxUndoHistory + 1),
+          cloneMapData(prev.mapData),
+        ];
 
-      const newTerrain = prev.mapData.terrain.map((row, rowY) =>
-        rowY === y
-          ? row.map((cell, cellX) => (cellX === x ? { ...cell, ...updates } : cell))
-          : row
-      );
+        const newTerrain = prev.mapData.terrain.map((row, rowY) =>
+          rowY === y
+            ? row.map((cell, cellX) => (cellX === x ? { ...cell, ...updates } : cell))
+            : row
+        );
 
-      return {
-        ...prev,
-        mapData: { ...prev.mapData, terrain: newTerrain },
-        undoStack: newUndoStack,
-        redoStack: [],
-        isDirty: true,
-      };
-    });
-  }, [maxUndoHistory]);
+        return {
+          ...prev,
+          mapData: { ...prev.mapData, terrain: newTerrain },
+          undoStack: newUndoStack,
+          redoStack: [],
+          isDirty: true,
+        };
+      });
+    },
+    [maxUndoHistory]
+  );
 
   const updateCells = useCallback(
     (updates: Array<{ x: number; y: number; cell: Partial<EditorCell> }>) => {
@@ -319,7 +471,10 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
         if (!prev.mapData) return prev;
 
         // Push to undo before modification
-        const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData)];
+        const newUndoStack = [
+          ...prev.undoStack.slice(-maxUndoHistory + 1),
+          cloneMapData(prev.mapData),
+        ];
 
         // Create a map of updates for efficient lookup
         const updateMap = new Map<string, Partial<EditorCell>>();
@@ -460,7 +615,10 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
         if (cellsToUpdate.length === 0) return prev;
 
         // Push to undo
-        const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData)];
+        const newUndoStack = [
+          ...prev.undoStack.slice(-maxUndoHistory + 1),
+          cloneMapData(prev.mapData),
+        ];
 
         // Apply updates
         const newTerrain = terrain.map((row) => row.map((cell) => ({ ...cell })));
@@ -481,117 +639,147 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
   );
 
   // Object actions
-  const addObject = useCallback((obj: Omit<EditorObject, 'id'>): string => {
-    const id = `obj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const addObject = useCallback(
+    (obj: Omit<EditorObject, 'id'>): string => {
+      const id = `obj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    setState((prev) => {
-      if (!prev.mapData) return prev;
+      setState((prev) => {
+        if (!prev.mapData) return prev;
 
-      const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData)];
+        const newUndoStack = [
+          ...prev.undoStack.slice(-maxUndoHistory + 1),
+          cloneMapData(prev.mapData),
+        ];
 
-      return {
-        ...prev,
-        mapData: {
-          ...prev.mapData,
-          objects: [...prev.mapData.objects, { ...obj, id }],
-        },
-        undoStack: newUndoStack,
-        redoStack: [],
-        isDirty: true,
-      };
-    });
+        return {
+          ...prev,
+          mapData: {
+            ...prev.mapData,
+            objects: [...prev.mapData.objects, { ...obj, id }],
+          },
+          undoStack: newUndoStack,
+          redoStack: [],
+          isDirty: true,
+        };
+      });
 
-    return id;
-  }, [maxUndoHistory]);
+      return id;
+    },
+    [maxUndoHistory]
+  );
 
-  const updateObject = useCallback((id: string, updates: Partial<EditorObject>) => {
-    setState((prev) => {
-      if (!prev.mapData) return prev;
+  const updateObject = useCallback(
+    (id: string, updates: Partial<EditorObject>) => {
+      setState((prev) => {
+        if (!prev.mapData) return prev;
 
-      const objIndex = prev.mapData.objects.findIndex((o) => o.id === id);
-      if (objIndex === -1) return prev;
+        const objIndex = prev.mapData.objects.findIndex((o) => o.id === id);
+        if (objIndex === -1) return prev;
 
-      const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData)];
+        const newUndoStack = [
+          ...prev.undoStack.slice(-maxUndoHistory + 1),
+          cloneMapData(prev.mapData),
+        ];
 
-      const newObjects = prev.mapData.objects.map((obj, i) =>
-        i === objIndex ? { ...obj, ...updates } : obj
-      );
+        const newObjects = prev.mapData.objects.map((obj, i) =>
+          i === objIndex ? { ...obj, ...updates } : obj
+        );
 
-      return {
-        ...prev,
-        mapData: { ...prev.mapData, objects: newObjects },
-        undoStack: newUndoStack,
-        redoStack: [],
-        isDirty: true,
-      };
-    });
-  }, [maxUndoHistory]);
+        return {
+          ...prev,
+          mapData: { ...prev.mapData, objects: newObjects },
+          undoStack: newUndoStack,
+          redoStack: [],
+          isDirty: true,
+        };
+      });
+    },
+    [maxUndoHistory]
+  );
 
-  const updateObjectProperty = useCallback((id: string, key: string, value: unknown) => {
-    setState((prev) => {
-      if (!prev.mapData) return prev;
+  const updateObjectProperty = useCallback(
+    (id: string, key: string, value: unknown) => {
+      setState((prev) => {
+        if (!prev.mapData) return prev;
 
-      const objIndex = prev.mapData.objects.findIndex((o) => o.id === id);
-      if (objIndex === -1) return prev;
+        const objIndex = prev.mapData.objects.findIndex((o) => o.id === id);
+        if (objIndex === -1) return prev;
 
-      const obj = prev.mapData.objects[objIndex];
-      const newProperties = { ...obj.properties, [key]: value };
+        const obj = prev.mapData.objects[objIndex];
+        const newProperties = { ...obj.properties, [key]: value };
 
-      const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData)];
+        const newUndoStack = [
+          ...prev.undoStack.slice(-maxUndoHistory + 1),
+          cloneMapData(prev.mapData),
+        ];
 
-      const newObjects = prev.mapData.objects.map((o, i) =>
-        i === objIndex ? { ...o, properties: newProperties } : o
-      );
+        const newObjects = prev.mapData.objects.map((o, i) =>
+          i === objIndex ? { ...o, properties: newProperties } : o
+        );
 
-      return {
-        ...prev,
-        mapData: { ...prev.mapData, objects: newObjects },
-        undoStack: newUndoStack,
-        redoStack: [],
-        isDirty: true,
-      };
-    });
-  }, [maxUndoHistory]);
+        return {
+          ...prev,
+          mapData: { ...prev.mapData, objects: newObjects },
+          undoStack: newUndoStack,
+          redoStack: [],
+          isDirty: true,
+        };
+      });
+    },
+    [maxUndoHistory]
+  );
 
-  const removeObject = useCallback((id: string) => {
-    setState((prev) => {
-      if (!prev.mapData) return prev;
+  const removeObject = useCallback(
+    (id: string) => {
+      setState((prev) => {
+        if (!prev.mapData) return prev;
 
-      const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData)];
+        const newUndoStack = [
+          ...prev.undoStack.slice(-maxUndoHistory + 1),
+          cloneMapData(prev.mapData),
+        ];
 
-      return {
-        ...prev,
-        mapData: {
-          ...prev.mapData,
-          objects: prev.mapData.objects.filter((o) => o.id !== id),
-        },
-        selectedObjects: prev.selectedObjects.filter((oid) => oid !== id),
-        undoStack: newUndoStack,
-        redoStack: [],
-        isDirty: true,
-      };
-    });
-  }, [maxUndoHistory]);
+        return {
+          ...prev,
+          mapData: {
+            ...prev.mapData,
+            objects: prev.mapData.objects.filter((o) => o.id !== id),
+          },
+          selectedObjects: prev.selectedObjects.filter((oid) => oid !== id),
+          undoStack: newUndoStack,
+          redoStack: [],
+          isDirty: true,
+        };
+      });
+    },
+    [maxUndoHistory]
+  );
 
-  const replaceObjects = useCallback((objects: EditorObject[]) => {
-    setState((prev) => {
-      if (!prev.mapData) return prev;
+  const replaceObjects = useCallback(
+    (objects: EditorObject[]) => {
+      setState((prev) => {
+        if (!prev.mapData) return prev;
 
-      const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData)];
+        const newUndoStack = [
+          ...prev.undoStack.slice(-maxUndoHistory + 1),
+          cloneMapData(prev.mapData),
+        ];
 
-      return {
-        ...prev,
-        mapData: {
-          ...prev.mapData,
-          objects,
-        },
-        selectedObjects: [],
-        undoStack: newUndoStack,
-        redoStack: [],
-        isDirty: true,
-      };
-    });
-  }, [maxUndoHistory]);
+        return {
+          ...prev,
+          mapData: {
+            ...prev.mapData,
+            objects,
+          },
+          selectedObjects: [],
+          undoStack: newUndoStack,
+          redoStack: [],
+          isDirty: true,
+        };
+      });
+    },
+    [maxUndoHistory]
+  );
 
   const selectObjects = useCallback((ids: string[]) => {
     setState((prev) => ({ ...prev, selectedObjects: ids }));
@@ -650,7 +838,10 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
           const newHeight = updates.height ?? prev.mapData.height;
 
           // Push to undo
-          const newUndoStack = [...prev.undoStack.slice(-maxUndoHistory + 1), cloneMapData(prev.mapData)];
+          const newUndoStack = [
+            ...prev.undoStack.slice(-maxUndoHistory + 1),
+            cloneMapData(prev.mapData),
+          ];
 
           // Resize terrain
           const newTerrain: EditorCell[][] = [];
@@ -733,6 +924,11 @@ export function useEditorState(config: EditorConfig): UseEditorStateReturn {
     redo,
     canUndo,
     canRedo,
+    undoPreview,
+    previewUndo,
+    clearUndoPreview,
+    toggleUndoPreview,
+    isUndoPreviewActive,
     updateMapMetadata,
     markClean,
   };

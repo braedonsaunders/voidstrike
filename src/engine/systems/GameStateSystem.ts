@@ -1,6 +1,5 @@
 import { System } from '../ecs/System';
-// Use type-only import to avoid pulling in browser-only deps from Game.ts in worker context
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { Building } from '../components/Building';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
@@ -44,7 +43,7 @@ export class GameStateSystem extends System {
   private victoryCheckInterval: number = 1; // Check every 1 second
   private eliminatedPlayers: Set<string> = new Set(); // Track eliminated players
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
     this.cachePlayerTeams();
@@ -107,45 +106,57 @@ export class GameStateSystem extends System {
     });
 
     // Track building destruction
-    this.game.eventBus.on('building:destroyed', (data: { playerId: string; destroyedBy?: string }) => {
-      const stats = this.playerStats.get(data.playerId);
-      if (stats) stats.buildingsLost++;
+    this.game.eventBus.on(
+      'building:destroyed',
+      (data: { playerId: string; destroyedBy?: string }) => {
+        const stats = this.playerStats.get(data.playerId);
+        if (stats) stats.buildingsLost++;
 
-      if (data.destroyedBy) {
-        const destroyerStats = this.playerStats.get(data.destroyedBy);
-        if (destroyerStats) destroyerStats.buildingsDestroyed++;
+        if (data.destroyedBy) {
+          const destroyerStats = this.playerStats.get(data.destroyedBy);
+          if (destroyerStats) destroyerStats.buildingsDestroyed++;
+        }
       }
-    });
+    );
 
     // Track resources gathered
-    this.game.eventBus.on('resources:gathered', (data: { playerId: string; minerals?: number; plasma?: number }) => {
-      const stats = this.playerStats.get(data.playerId);
-      if (stats) {
-        stats.resourcesGathered.minerals += data.minerals || 0;
-        stats.resourcesGathered.plasma += data.plasma || 0;
+    this.game.eventBus.on(
+      'resources:gathered',
+      (data: { playerId: string; minerals?: number; plasma?: number }) => {
+        const stats = this.playerStats.get(data.playerId);
+        if (stats) {
+          stats.resourcesGathered.minerals += data.minerals || 0;
+          stats.resourcesGathered.plasma += data.plasma || 0;
+        }
       }
-    });
+    );
 
     // Track resources spent
-    this.game.eventBus.on('resources:spent', (data: { playerId: string; minerals?: number; plasma?: number }) => {
-      const stats = this.playerStats.get(data.playerId);
-      if (stats) {
-        stats.resourcesSpent.minerals += data.minerals || 0;
-        stats.resourcesSpent.plasma += data.plasma || 0;
+    this.game.eventBus.on(
+      'resources:spent',
+      (data: { playerId: string; minerals?: number; plasma?: number }) => {
+        const stats = this.playerStats.get(data.playerId);
+        if (stats) {
+          stats.resourcesSpent.minerals += data.minerals || 0;
+          stats.resourcesSpent.plasma += data.plasma || 0;
+        }
       }
-    });
+    );
 
     // Track damage dealt
-    this.game.eventBus.on('combat:damage', (data: { attackerPlayerId?: string; defenderPlayerId?: string; damage: number }) => {
-      if (data.attackerPlayerId) {
-        const stats = this.playerStats.get(data.attackerPlayerId);
-        if (stats) stats.totalDamageDealt += data.damage;
+    this.game.eventBus.on(
+      'combat:damage',
+      (data: { attackerPlayerId?: string; defenderPlayerId?: string; damage: number }) => {
+        if (data.attackerPlayerId) {
+          const stats = this.playerStats.get(data.attackerPlayerId);
+          if (stats) stats.totalDamageDealt += data.damage;
+        }
+        if (data.defenderPlayerId) {
+          const stats = this.playerStats.get(data.defenderPlayerId);
+          if (stats) stats.totalDamageTaken += data.damage;
+        }
       }
-      if (data.defenderPlayerId) {
-        const stats = this.playerStats.get(data.defenderPlayerId);
-        if (stats) stats.totalDamageTaken += data.damage;
-      }
-    });
+    );
 
     // Track player actions (for APM)
     this.game.eventBus.on('command:received', (data: { playerId: string }) => {
@@ -269,7 +280,7 @@ export class GameStateSystem extends System {
     if (teamsWithActivePlayers.size === 1 && players.size > 1) {
       const [_teamId, teamPlayers] = [...teamsWithActivePlayers.entries()][0];
       const winner = teamPlayers[0]; // First player of winning team
-      const losers = [...players].filter(p => !teamPlayers.includes(p));
+      const losers = [...players].filter((p) => !teamPlayers.includes(p));
 
       this.declareVictory(winner, losers[0] ?? 'none', 'elimination');
     } else if (teamsWithActivePlayers.size === 0 && players.size > 0) {
@@ -286,13 +297,17 @@ export class GameStateSystem extends System {
       players.add(selectable.playerId);
     }
 
-    const remainingPlayers = [...players].filter(p => p !== playerId);
+    const remainingPlayers = [...players].filter((p) => p !== playerId);
     if (remainingPlayers.length === 1) {
       this.declareVictory(remainingPlayers[0], playerId, 'surrender');
     }
   }
 
-  private declareVictory(winner: string, loser: string, reason: 'elimination' | 'surrender' | 'disconnect' | 'timeout'): void {
+  private declareVictory(
+    winner: string,
+    loser: string,
+    reason: 'elimination' | 'surrender' | 'disconnect' | 'timeout'
+  ): void {
     if (this.isGameOver) return;
 
     this.isGameOver = true;

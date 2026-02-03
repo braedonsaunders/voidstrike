@@ -621,15 +621,15 @@ VOIDSTRIKE uses a **fully data-driven architecture** that separates game-specifi
 
 ### Configuration Modules (`src/data/`)
 
-| Module | File | Purpose |
-|--------|------|---------|
-| **Combat** | `combat/combat.ts` | Damage types, armor types, damage multipliers |
-| **Resources** | `resources/resources.ts` | Resource types, gather rates, starting amounts |
-| **Categories** | `units/categories.ts` | Unit categories, subcategories, target priorities |
-| **Abilities** | `abilities/abilities.ts` | All unit/building abilities with effects |
-| **Formations** | `formations/formations.ts` | Unit formation patterns and positioning |
-| **AI** | `ai/buildOrders.ts` | AI difficulty config, build orders, unit compositions |
-| **AI** | `ai/factions/*.ts` | Faction macro rules, roles, and economic thresholds |
+| Module         | File                       | Purpose                                               |
+| -------------- | -------------------------- | ----------------------------------------------------- |
+| **Combat**     | `combat/combat.ts`         | Damage types, armor types, damage multipliers         |
+| **Resources**  | `resources/resources.ts`   | Resource types, gather rates, starting amounts        |
+| **Categories** | `units/categories.ts`      | Unit categories, subcategories, target priorities     |
+| **Abilities**  | `abilities/abilities.ts`   | All unit/building abilities with effects              |
+| **Formations** | `formations/formations.ts` | Unit formation patterns and positioning               |
+| **AI**         | `ai/buildOrders.ts`        | AI difficulty config, build orders, unit compositions |
+| **AI**         | `ai/factions/*.ts`         | Faction macro rules, roles, and economic thresholds   |
 
 AI macro rules are cost-sensitive and should stay aligned with building definitions to avoid economic deadlocks (for example, supply-building rules should require at least the building's mineral cost).
 
@@ -670,12 +670,10 @@ All data modules are re-exported from a single index:
 
 ```typescript
 // Import everything from one place
-import {
-  getDamageMultiplier,
-  RESOURCE_TYPES,
-  getFormation,
-  getAIConfig,
-} from '@/data';
+import { getDamageMultiplier, RESOURCE_TYPES, getFormation, getBuildOrders } from '@/data';
+
+// Import AI configuration from aiConfig module
+import { getFactionAIConfig } from '@/data/ai/aiConfig';
 
 // Or import specific modules
 import { COMBAT_CONFIG } from '@/data/combat/combat';
@@ -738,19 +736,19 @@ Systems are executed in dependency order, determined by the `SystemRegistry` (`s
 
 **Execution Layers:**
 
-| Layer | Systems | Purpose |
-|-------|---------|---------|
-| **Input** | SelectionSystem | Handle player input |
-| **Spawn** | SpawnSystem | Create new entities |
-| **Placement** | BuildingPlacementSystem, PathfindingSystem | Building grid, navmesh |
-| **Mechanics** | BuildingMechanicsSystem, WallSystem, UnitMechanicsSystem | Unit/building mechanics |
-| **Movement** | MovementSystem | Unit movement with collision avoidance |
-| **Vision** | VisionSystem | Fog of war (runs AFTER movement) |
-| **Combat** | CombatSystem, ProjectileSystem, AbilitySystem | Combat resolution |
-| **Economy** | ResourceSystem, ProductionSystem, ResearchSystem | Resource gathering, production |
-| **AI** | EnhancedAISystem, AIEconomySystem, AIMicroSystem | AI decision making |
-| **Output** | AudioSystem | Audio feedback |
-| **Meta** | GameStateSystem, ChecksumSystem, SaveLoadSystem | Victory/defeat, sync, persistence |
+| Layer         | Systems                                                  | Purpose                                |
+| ------------- | -------------------------------------------------------- | -------------------------------------- |
+| **Input**     | SelectionSystem                                          | Handle player input                    |
+| **Spawn**     | SpawnSystem                                              | Create new entities                    |
+| **Placement** | BuildingPlacementSystem, PathfindingSystem               | Building grid, navmesh                 |
+| **Mechanics** | BuildingMechanicsSystem, WallSystem, UnitMechanicsSystem | Unit/building mechanics                |
+| **Movement**  | MovementSystem                                           | Unit movement with collision avoidance |
+| **Vision**    | VisionSystem                                             | Fog of war (runs AFTER movement)       |
+| **Combat**    | CombatSystem, ProjectileSystem, AbilitySystem            | Combat resolution                      |
+| **Economy**   | ResourceSystem, ProductionSystem, ResearchSystem         | Resource gathering, production         |
+| **AI**        | EnhancedAISystem, AIEconomySystem, AIMicroSystem         | AI decision making                     |
+| **Output**    | AudioSystem                                              | Audio feedback                         |
+| **Meta**      | GameStateSystem, ChecksumSystem, SaveLoadSystem          | Victory/defeat, sync, persistence      |
 
 **Adding New Systems:**
 
@@ -925,14 +923,14 @@ const path = recast.findPath(startX, startY, endX, endY);
 // Returns: { success: boolean, path: { x: number, y: number }[] }
 
 // Point queries
-recast.findNearestPoint(x, y);  // Snap to navmesh
-recast.isWalkable(x, y);        // Check walkability
+recast.findNearestPoint(x, y); // Snap to navmesh
+recast.isWalkable(x, y); // Check walkability
 
 // Crowd simulation (replaces custom RVO)
 const agentId = recast.addAgent(entityId, x, y, radius, maxSpeed);
 recast.setAgentTarget(entityId, targetX, targetY);
-recast.updateCrowd(deltaTime);  // Run ORCA collision avoidance
-const state = recast.getAgentState(entityId);  // { x, y, vx, vy }
+recast.updateCrowd(deltaTime); // Run ORCA collision avoidance
+const state = recast.getAgentState(entityId); // { x, y, vx, vy }
 
 // Dynamic obstacles for buildings (TileCache)
 recast.addBoxObstacle(buildingId, centerX, centerY, width, height);
@@ -940,6 +938,7 @@ recast.removeObstacle(buildingId);
 ```
 
 Key Components:
+
 - **NavMesh**: Navigation mesh generated from terrain walkable geometry
 - **NavMeshQuery**: O(1) path lookups with string-pulling path smoothing
 - **DetourCrowd**: RVO/ORCA-based local collision avoidance
@@ -956,13 +955,13 @@ VOIDSTRIKE uses a **fully serverless peer-to-peer architecture** with Nostr-base
 
 #### Protocol Stack
 
-| Layer | Technology | Location |
-|-------|------------|----------|
-| Transport | WebRTC DataChannels | `src/hooks/useMultiplayer.ts` |
-| Signaling | Nostr Protocol | `src/engine/network/p2p/NostrMatchmaking.ts` |
-| NAT Traversal | STUN (Google) | ICE servers in useMultiplayer |
-| Synchronization | Lockstep | `src/engine/network/types.ts` |
-| Desync Detection | Checksums | `src/engine/network/DesyncDetection.ts` |
+| Layer            | Technology          | Location                                     |
+| ---------------- | ------------------- | -------------------------------------------- |
+| Transport        | WebRTC DataChannels | `src/hooks/useMultiplayer.ts`                |
+| Signaling        | Nostr Protocol      | `src/engine/network/p2p/NostrMatchmaking.ts` |
+| NAT Traversal    | STUN (Google)       | ICE servers in useMultiplayer                |
+| Synchronization  | Lockstep            | `src/engine/network/types.ts`                |
+| Desync Detection | Checksums           | `src/engine/network/DesyncDetection.ts`      |
 
 #### Lobby System (`src/hooks/useMultiplayer.ts`)
 
@@ -977,12 +976,12 @@ The `useLobby` hook manages multiplayer connections:
 // 5. Direct P2P DataChannel established
 
 const {
-  status,        // 'initializing' | 'hosting' | 'joining' | 'connected' | 'error'
-  lobbyCode,     // 4-char lobby code (e.g., "ABCD")
-  guests,        // Connected guest connections
+  status, // 'initializing' | 'hosting' | 'joining' | 'connected' | 'error'
+  lobbyCode, // 4-char lobby code (e.g., "ABCD")
+  guests, // Connected guest connections
   hostConnection, // DataChannel to host (when guest)
   isHost,
-  joinLobby,     // (code, playerName) => Promise<void>
+  joinLobby, // (code, playerName) => Promise<void>
   leaveLobby,
   kickGuest,
 } = useLobby(onGuestJoin, onGuestLeave);
@@ -990,12 +989,12 @@ const {
 
 #### Nostr Signaling Events
 
-| Kind | Name | Purpose |
-|------|------|---------|
-| 30430 | `LOBBY_HOST` | Host announces lobby with code |
-| 30431 | `LOBBY_JOIN` | Guest requests to join |
-| 30433 | `WEBRTC_OFFER` | Host sends WebRTC offer |
-| 30434 | `WEBRTC_ANSWER` | Guest sends WebRTC answer |
+| Kind  | Name            | Purpose                        |
+| ----- | --------------- | ------------------------------ |
+| 30430 | `LOBBY_HOST`    | Host announces lobby with code |
+| 30431 | `LOBBY_JOIN`    | Guest requests to join         |
+| 30433 | `WEBRTC_OFFER`  | Host sends WebRTC offer        |
+| 30434 | `WEBRTC_ANSWER` | Guest sends WebRTC answer      |
 
 Public relays used: `relay.damus.io`, `nos.lol`, `relay.nostr.band`, etc.
 
@@ -1026,7 +1025,7 @@ interface GameInput {
 // Every N ticks, broadcast checksum for desync detection
 interface StateChecksum {
   tick: number;
-  checksum: number;      // Primary state hash
+  checksum: number; // Primary state hash
   unitCount: number;
   buildingCount: number;
   resourceSum: number;
@@ -1108,6 +1107,7 @@ The game uses Three.js WebGPU Renderer with automatic WebGL fallback, powered by
 ```
 
 Key Components:
+
 - `WebGPUGameCanvas.tsx` - Main game canvas (WebGPU with WebGL fallback)
 - `OverlayScene.ts` - Phaser 4 scene for 2D effects overlay
 
@@ -1158,6 +1158,7 @@ Located in `src/rendering/tsl/`:
 ### Selection System (`SelectionSystem.ts`)
 
 Selection with multiple improvements:
+
 - **Screen-space selection** - Box/click selection done in screen coordinates for perspective-accurate selection
 - **Selection radius buffer** - Uses circle-rectangle intersection so partial overlaps count as selected
 - **Visual height support** - Flying units can be selected at their visual position (8 units above ground)
@@ -1183,7 +1184,7 @@ Selection with multiple improvements:
    - GTAO, SSR, SSGI, Volumetric Fog
    - FXAA/TRAA anti-aliasing
 
-4. **VehicleEffectsSystem.ts** - Continuous vehicle visual effects
+3. **VehicleEffectsSystem.ts** - Continuous vehicle visual effects
    - Configuration-driven via assets.json (per-unit effect definitions)
    - State-aware emission (moving, idle, attacking, flying conditions)
    - LOD-aware (reduced/skipped effects beyond 120 units distance)
@@ -1199,7 +1200,7 @@ Selection with multiple improvements:
    - Speed-scaled emission for dynamic effects
    - Integrates with AdvancedParticleSystem for GPU-instanced rendering
 
-5. **tsl/TerrainMaterial.ts** - TSL terrain material (WebGPU + WebGL compatible)
+4. **tsl/TerrainMaterial.ts** - TSL terrain material (WebGPU + WebGL compatible)
    - 4-texture blending (grass, dirt, rock, cliff) with PBR support
    - Slope-based weight calculation from vertex attributes
    - RTS-style terrain type system (ground, ramp, unwalkable, platform)
@@ -1207,7 +1208,7 @@ Selection with multiple improvements:
    - Biome-aware texture loading (grassland, desert, frozen, volcanic, void, jungle)
    - Shared blend weight helper to avoid code duplication
 
-6. **Terrain.ts** - Enhanced terrain geometry with THREE.Terrain-style algorithms
+5. **Terrain.ts** - Enhanced terrain geometry with THREE.Terrain-style algorithms
    - **256-level elevation system** (0-255, classic RTS-style height precision)
    - Proper Perlin noise with gradient interpolation
    - Fractal Brownian Motion (fBM) for multi-octave noise
@@ -1355,19 +1356,20 @@ All models and animation mappings are configured via a single JSON file, making 
 
 **Key Configuration Options:**
 
-| Field | Description |
-|-------|-------------|
-| `model` | Path to GLB file relative to `public/` |
-| `height` | Target height in game units - models are scaled so their bounding box height matches this value |
-| `scale` | Optional scale multiplier applied after height normalization (default: 1.0) |
-| `airborneHeight` | For flying units: height above terrain in game units (default: 8) |
-| `animationSpeed` | Playback speed multiplier (default: 1.0) |
-| `rotation` | Y-axis rotation offset in degrees to fix model facing direction |
-| `animations` | Map of game actions to animation clip names |
+| Field            | Description                                                                                     |
+| ---------------- | ----------------------------------------------------------------------------------------------- |
+| `model`          | Path to GLB file relative to `public/`                                                          |
+| `height`         | Target height in game units - models are scaled so their bounding box height matches this value |
+| `scale`          | Optional scale multiplier applied after height normalization (default: 1.0)                     |
+| `airborneHeight` | For flying units: height above terrain in game units (default: 8)                               |
+| `animationSpeed` | Playback speed multiplier (default: 1.0)                                                        |
+| `rotation`       | Y-axis rotation offset in degrees to fix model facing direction                                 |
+| `animations`     | Map of game actions to animation clip names                                                     |
 
 **Model Sizing vs Flight Altitude:**
 
 The system separates visual size from flight altitude:
+
 - `height` controls how big the model appears (scales the model's bounding box to this height)
 - `airborneHeight` controls how high flying units hover above terrain (doesn't affect size)
 
@@ -1403,6 +1405,7 @@ Built-in procedural mesh generation for all unit types (fallback when GLB not fo
 - **Decorations**: Trees, rocks, grass
 
 Each procedural mesh:
+
 - Applies player team colors dynamically
 - Casts and receives shadows
 - Uses optimized geometry
@@ -1431,14 +1434,15 @@ To add custom 3D models:
 
 Animations are loaded from GLB files and mapped to game actions:
 
-| Game Action | Used When | Fallback |
-|-------------|-----------|----------|
-| `idle` | Unit stationary | First non-death animation |
-| `walk` | Unit moving | `idle` |
-| `attack` | Unit attacking (and stationary) | `idle` |
-| `death` | Unit dying | None |
+| Game Action | Used When                       | Fallback                  |
+| ----------- | ------------------------------- | ------------------------- |
+| `idle`      | Unit stationary                 | First non-death animation |
+| `walk`      | Unit moving                     | `idle`                    |
+| `attack`    | Unit attacking (and stationary) | `idle`                    |
+| `death`     | Unit dying                      | None                      |
 
 **Blender Export Tips:**
+
 - Name animations clearly (e.g., `idle`, `walk`, `attack`)
 - The system strips `Armature|` prefixes automatically
 - Use lowercase names for best matching
@@ -1479,6 +1483,7 @@ src/engine/wasm/
 ```
 
 **Architecture:**
+
 - **SoA Layout**: Positions, velocities stored in contiguous arrays for cache-friendly SIMD access
 - **f32x4 Operations**: 4 units processed per SIMD instruction (separation, cohesion, alignment)
 - **Batch Processing**: Forces computed for all units in single WASM call
@@ -1486,6 +1491,7 @@ src/engine/wasm/
 - **Graceful Fallback**: Auto-uses JS when SIMD unavailable or <20 units
 
 **Build Pipeline:**
+
 - GitHub Actions builds WASM on push to `wasm/boids/**`
 - Pre-built WASM committed to `public/wasm/` for Vercel
 - Local build: `./scripts/build-wasm.sh` (requires Rust + wasm-pack)
@@ -1522,6 +1528,7 @@ for (const n of neighbors) {
 ```
 
 **Key Optimizations:**
+
 - **Flat Array Cells**: `Int32Array` instead of `Map<number, Set>` for direct indexing
 - **Hierarchical Grid**: Fine (8x8) + coarse (32x32) cells for multi-scale queries
 - **Inline Entity Data**: Position, state, player ID stored in grid to avoid lookups
@@ -1543,14 +1550,15 @@ MovementSystem.ts (thin wrapper)
 
 **Module Responsibilities:**
 
-| Module | Responsibility |
-|--------|----------------|
-| **FlockingBehavior** | Separation, cohesion, alignment, physics push, velocity smoothing, stuck detection |
-| **PathfindingMovement** | Crowd agent management, path requests, building avoidance (3-tier), terrain speed modifiers |
-| **FormationMovement** | Magic box detection, group formations, move command handling |
-| **MovementOrchestrator** | Main update loop, spatial grid updates, WASM boids integration, attack-move/patrol |
+| Module                   | Responsibility                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------- |
+| **FlockingBehavior**     | Separation, cohesion, alignment, physics push, velocity smoothing, stuck detection          |
+| **PathfindingMovement**  | Crowd agent management, path requests, building avoidance (3-tier), terrain speed modifiers |
+| **FormationMovement**    | Magic box detection, group formations, move command handling                                |
+| **MovementOrchestrator** | Main update loop, spatial grid updates, WASM boids integration, attack-move/patrol          |
 
 **Key Design Decisions:**
+
 - **Separation cache re-enabled**: Now that code is isolated, the separation force cache is re-enabled for performance
 - **Deterministic behavior preserved**: All modules maintain determinism for multiplayer sync
 - **Per-frame entity cache**: Component lookups cached for alignment force calculations
@@ -1582,6 +1590,7 @@ for (const other of nearbyData) {
 ```
 
 **Key Optimizations:**
+
 - **Dirty-Flag Updates**: Only update grid when unit moves > 0.5 units
 - **Single Pass**: Merged spatial grid update + entity caching in one loop
 - **Inline Data Steering**: Separation, cohesion, physics push use grid data directly
@@ -1613,6 +1622,7 @@ while (this.heapPeek().nextAttackTime <= gameTime) {
 ```
 
 **Key Optimizations:**
+
 - **Combat-Active List**: Only iterate units in combat zones, not all 500
 - **Hot Cell Detection**: Skip target acquisition for units in "cold" cells
 - **hasEnemyInRadius()**: O(nearby) enemy detection with inline data
@@ -1637,6 +1647,7 @@ calculateSeparationForce(self, others);
 ```
 
 Features:
+
 - **Smooth acceleration**: Units ramp up to max speed naturally
 - **Separation steering**: Units avoid overlapping via boids algorithm
 - **Command queuing**: Shift-click to queue move/attack/patrol/gather commands
@@ -1663,6 +1674,7 @@ unit.executeNextCommand();   // Called when current action completes
 ```
 
 Visual feedback via `CommandQueueRenderer.ts`:
+
 - Green waypoint markers at each queued destination
 - Green lines connecting unit position → current target → queued waypoints
 - Only shown for selected units owned by the player
@@ -1688,10 +1700,10 @@ Priority-based target selection:
 
 ```typescript
 const TARGET_PRIORITY = {
-  devastator: 100,    // High-value targets first
+  devastator: 100, // High-value targets first
   dreadnought: 95,
   trooper: 50,
-  fabricator: 10,     // Workers last
+  fabricator: 10, // Workers last
 };
 
 // Area of effect damage
@@ -1706,9 +1718,7 @@ UI component + F1 hotkey for fast worker management:
 
 ```typescript
 // IdleWorkerButton.tsx
-const idleWorkers = workers.filter(
-  w => w.unit.isWorker && w.unit.state === 'idle'
-);
+const idleWorkers = workers.filter((w) => w.unit.isWorker && w.unit.state === 'idle');
 
 // On click: select and center camera on idle worker
 selectUnits([worker.id]);
@@ -1745,15 +1755,15 @@ function elevationToZone(elevation: Elevation): 'low' | 'mid' | 'high';
 
 // Terrain features overlay terrain types
 type TerrainFeature =
-  | 'none'           // Normal terrain
-  | 'water_shallow'  // 0.6x speed, unbuildable
-  | 'water_deep'     // Impassable
-  | 'forest_light'   // 0.85x speed, partial vision
-  | 'forest_dense'   // 0.5x speed, blocks vision
-  | 'mud'            // 0.4x speed
-  | 'road'           // 1.25x speed
-  | 'void'           // Impassable
-  | 'cliff';         // Impassable, blocks vision
+  | 'none' // Normal terrain
+  | 'water_shallow' // 0.6x speed, unbuildable
+  | 'water_deep' // Impassable
+  | 'forest_light' // 0.85x speed, partial vision
+  | 'forest_dense' // 0.5x speed, blocks vision
+  | 'mud' // 0.4x speed
+  | 'road' // 1.25x speed
+  | 'void' // Impassable
+  | 'cliff'; // Impassable, blocks vision
 
 // Feature configuration
 interface TerrainFeatureConfig {
@@ -1788,7 +1798,17 @@ createRoad(grid, x1, y1, x2, y2, width);
 createMudArea(grid, centerX, centerY, radius);
 
 // Procedural forest scattering
-scatterForests(grid, mapWidth, mapHeight, count, minRadius, maxRadius, exclusionZones, seed, denseChance);
+scatterForests(
+  grid,
+  mapWidth,
+  mapHeight,
+  count,
+  minRadius,
+  maxRadius,
+  exclusionZones,
+  seed,
+  denseChance
+);
 ```
 
 ### Pathfinding Integration (AStar.ts)
@@ -1796,7 +1816,7 @@ scatterForests(grid, mapWidth, mapHeight, count, minRadius, maxRadius, exclusion
 ```typescript
 // Movement costs per cell
 interface PathNode {
-  moveCost: number;  // 1.0 = normal, <1 = faster (road), >1 = slower (mud/forest)
+  moveCost: number; // 1.0 = normal, <1 = faster (road), >1 = slower (mud/forest)
 }
 
 // Cost calculation
@@ -1917,8 +1937,8 @@ const MY_MAP = generateMap({
   // Paint commands execute in order
   paint: [
     // Create high-ground main bases
-    plateau({ x: 40, y: 100 }, 25, 200),   // Player 1 main
-    plateau({ x: 160, y: 100 }, 25, 200),  // Player 2 main
+    plateau({ x: 40, y: 100 }, 25, 200), // Player 1 main
+    plateau({ x: 160, y: 100 }, 25, 200), // Player 2 main
 
     // Create ramps connecting to mid-ground
     ramp({ x: 40, y: 100 }, { x: 60, y: 100 }, 8),
@@ -1929,14 +1949,12 @@ const MY_MAP = generateMap({
   ],
 
   // Base locations with resources
-  bases: [
-    mainBase({ x: 40, y: 100 }, 1),
-    mainBase({ x: 160, y: 100 }, 2),
-  ],
+  bases: [mainBase({ x: 40, y: 100 }, 1), mainBase({ x: 160, y: 100 }, 2)],
 });
 ```
 
 **Available paint commands:**
+
 - `fill(elevation)` - Fill entire map
 - `plateau(center, radius, elevation)` - Circular elevated area
 - `rect(x, y, width, height, elevation)` - Rectangular area
@@ -1958,10 +1976,10 @@ interface EditorMapData {
   name: string;
   width: number;
   height: number;
-  terrain: EditorCell[][];  // Per-cell elevation, feature, walkability
-  objects: EditorObject[];  // Bases, towers, destructibles
+  terrain: EditorCell[][]; // Per-cell elevation, feature, walkability
+  objects: EditorObject[]; // Bases, towers, destructibles
   biomeId: string;
-  metadata: { author, description, playerCount };
+  metadata: { author; description; playerCount };
 }
 
 // TerrainBrush tools
@@ -2024,8 +2042,8 @@ The terrain generates walkable geometry for Recast NavMesh:
 const NAVMESH_CONFIG = {
   cs: 0.5,
   ch: 0.3,
-  walkableSlopeAngle: 85,  // Very permissive
-  walkableClimb: 5.0,      // High climb for steep ramps
+  walkableSlopeAngle: 85, // Very permissive
+  walkableClimb: 5.0, // High climb for steep ramps
   walkableRadius: 0.6,
 };
 
@@ -2091,6 +2109,7 @@ The critical insight preserved from the original architecture:
 > **Walkability must be explicitly validated, not inferred from geometry.**
 
 Whether you paint terrain by hand or define it in code, the connectivity validation layer ensures:
+
 1. All player bases can reach each other
 2. Ramps exist where needed between elevation levels
 3. No isolated regions exist that would trap units
@@ -2168,12 +2187,12 @@ class EditorTerrain {
   loadMap(mapData: EditorMapData): void;
 
   // Efficient partial updates via dirty chunks
-  markCellsDirty(cells: Array<{ x, y }>): void;
+  markCellsDirty(cells: Array<{ x; y }>): void;
   updateDirtyChunks(): void;
 
   // Height queries for tools
   getHeightAt(x: number, z: number): number;
-  worldToGrid(x: number, z: number): { x, y } | null;
+  worldToGrid(x: number, z: number): { x; y } | null;
 
   // Biome switching
   setBiome(biomeId: string): void;
@@ -2181,6 +2200,7 @@ class EditorTerrain {
 ```
 
 Features:
+
 - **Chunked updates** - Only rebuild geometry for modified regions
 - **Vertex colors** - Per-cell coloring based on elevation, feature, biome
 - **Heightmap** - Stored for accurate brush positioning
@@ -2216,7 +2236,7 @@ The editor is decoupled from game-specific data via providers:
 ```typescript
 interface EditorDataProvider {
   // Map management
-  getMapList(): Promise<Array<{ id, name, thumbnail }>>;
+  getMapList(): Promise<Array<{ id; name; thumbnail }>>;
   loadMap(id: string): Promise<EditorMapData>;
   saveMap(data: EditorMapData): Promise<void>;
   createMap(width, height, name): EditorMapData;
@@ -2258,16 +2278,17 @@ export default function EditorPage() {
 
 6 distinct biomes with unique visual characteristics:
 
-| Biome | Colors | Features | Particles |
-|-------|--------|----------|-----------|
-| Grassland | Greens, browns | Trees, grass, water | None |
-| Desert | Tans, oranges | Cacti, rocks, oases | Dust |
-| Frozen | Whites, blues | Dead trees, ice crystals, frozen lakes | Snow |
-| Volcanic | Blacks, reds | Charred stumps, lava rivers | Ash |
-| Void | Purples, blacks | Alien trees, crystals, energy pools | Spores |
-| Jungle | Dark greens | Dense trees, grass, murky water | Spores |
+| Biome     | Colors          | Features                               | Particles |
+| --------- | --------------- | -------------------------------------- | --------- |
+| Grassland | Greens, browns  | Trees, grass, water                    | None      |
+| Desert    | Tans, oranges   | Cacti, rocks, oases                    | Dust      |
+| Frozen    | Whites, blues   | Dead trees, ice crystals, frozen lakes | Snow      |
+| Volcanic  | Blacks, reds    | Charred stumps, lava rivers            | Ash       |
+| Void      | Purples, blacks | Alien trees, crystals, energy pools    | Spores    |
+| Jungle    | Dark greens     | Dense trees, grass, murky water        | Spores    |
 
 Each biome defines:
+
 - Ground/cliff/ramp color palettes
 - PBR material properties (roughness, metalness)
 - Decoration densities (trees, rocks, grass, crystals)
@@ -2321,6 +2342,7 @@ overlayManager.update(deltaTime);
 ```
 
 **Terrain Overlay** - Color-coded walkability and speed:
+
 - Green: Normal walkable terrain
 - Cyan: Roads (1.25x speed boost)
 - Yellow: Ramps, light forest (0.85x speed)
@@ -2328,18 +2350,21 @@ overlayManager.update(deltaTime);
 - Red: Impassable (deep water, void, cliffs)
 
 **Elevation Overlay** - Height zone visualization:
+
 - Blue: Low ground (elevation 0-85)
 - Yellow: Mid ground (elevation 86-170)
 - Red: High ground (elevation 171-255)
 - Gradient coloring within each zone
 
 **Threat Range Overlay** - Enemy attack coverage:
+
 - Red zones show areas within enemy attack range
 - Pulsing shader effect for visibility
 - Updates dynamically as enemies move
 - Considers both units and buildings with attack capability
 
 UI Integration:
+
 - Options menu "Overlays" submenu with toggle buttons
 - Keyboard shortcut: 'O' to cycle through overlays
 - Per-overlay opacity settings in uiStore
@@ -2447,7 +2472,7 @@ updateWallConnections(entity, wall, transform);
 
 // Gate state machine
 updateGateProximity(gateEntity, wall); // Auto-open for friendlies
-wall.updateGate(deltaTime);            // Animate open/close
+wall.updateGate(deltaTime); // Animate open/close
 
 // Wall upgrades
 handleWallUpgrade(entityIds, upgradeType, playerId);
@@ -2496,9 +2521,9 @@ Visual preview during wall line drawing:
 
 ```typescript
 class WallPlacementPreview {
-  startLine(worldX, worldY);    // Mouse down - start drawing
-  updateLine(worldX, worldY);   // Mouse move - update preview
-  finishLine(): { positions, cost }; // Mouse up - confirm placement
+  startLine(worldX, worldY); // Mouse down - start drawing
+  updateLine(worldX, worldY); // Mouse move - update preview
+  finishLine(): { positions; cost }; // Mouse up - confirm placement
 
   // Renders:
   // - Green/red boxes for valid/invalid positions
@@ -2539,28 +2564,29 @@ Handles Dominion-style construction (worker builds structure):
 ```typescript
 // Building states
 type BuildingState =
-  | 'waiting_for_worker'  // Blueprint placed, worker en route
-  | 'constructing'        // Worker present, construction progressing
-  | 'paused'              // Started but no worker present
-  | 'complete'            // Finished
-  | 'destroyed';          // Destroyed
+  | 'waiting_for_worker' // Blueprint placed, worker en route
+  | 'constructing' // Worker present, construction progressing
+  | 'paused' // Started but no worker present
+  | 'complete' // Finished
+  | 'destroyed'; // Destroyed
 
 // Construction flow
-handleBuildingPlace(buildingType, position, workerId);  // Place blueprint
-handleResumeConstruction(workerId, buildingId);         // Resume paused building
-updateBuildingConstruction(dt);                          // Progress/pause logic
-cancelOrphanedBlueprints();                              // Only cancel waiting_for_worker
+handleBuildingPlace(buildingType, position, workerId); // Place blueprint
+handleResumeConstruction(workerId, buildingId); // Resume paused building
+updateBuildingConstruction(dt); // Progress/pause logic
+cancelOrphanedBlueprints(); // Only cancel waiting_for_worker
 
 // Events emitted
-'building:placed'              // Building blueprint created
-'building:construction_started' // Worker arrived, construction begins
-'building:construction_paused'  // Worker left, construction paused
-'building:construction_resumed' // Worker resumed construction
-'building:complete'             // Construction finished
-'building:cancelled'            // Blueprint cancelled (refunded)
+('building:placed'); // Building blueprint created
+('building:construction_started'); // Worker arrived, construction begins
+('building:construction_paused'); // Worker left, construction paused
+('building:construction_resumed'); // Worker resumed construction
+('building:complete'); // Construction finished
+('building:cancelled'); // Blueprint cancelled (refunded)
 ```
 
 Key features:
+
 - **Pause/Resume**: Construction pauses when worker leaves, resumes when assigned
 - **Right-click Resume**: Workers can right-click paused buildings to resume
 - **No Auto-Cancel**: Paused buildings persist until manually resumed or destroyed
@@ -2590,10 +2616,10 @@ The `EnhancedAISystem.ts` wrapper provides backward compatibility by delegating 
 type AIDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'insane';
 
 interface DifficultySettings {
-  actionDelayTicks: number;       // 60 (easy) to 10 (insane)
-  targetWorkers: number;          // 16-40 workers
-  maxBases: number;               // 2-6 bases
-  miningSpeedMultiplier: number;  // 1.0 (normal) to 1.5 (insane)
+  actionDelayTicks: number; // 60 (easy) to 10 (insane)
+  targetWorkers: number; // 16-40 workers
+  maxBases: number; // 2-6 bases
+  miningSpeedMultiplier: number; // 1.0 (normal) to 1.5 (insane)
   buildSpeedMultiplier: number;
   scoutingEnabled: boolean;
   microEnabled: boolean;
@@ -2601,19 +2627,18 @@ interface DifficultySettings {
 }
 
 // State machine
-type AIState = 'building' | 'expanding' | 'attacking' |
-               'defending' | 'scouting' | 'harassing';
+type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting' | 'harassing';
 ```
 
 #### Subsystem Responsibilities
 
-| Subsystem | Responsibilities |
-|-----------|------------------|
-| **AICoordinator** | AI player state, subsystem coordination, entity query caching |
-| **AIEconomyManager** | Worker gathering, repair assignment, incomplete building resumption |
-| **AIBuildOrderExecutor** | Build order steps, macro rules, research initiation, expansion |
-| **AITacticsManager** | Tactical state, attack/defend/harass phase execution |
-| **AIScoutingManager** | Scout selection, target determination, enemy intel |
+| Subsystem                | Responsibilities                                                    |
+| ------------------------ | ------------------------------------------------------------------- |
+| **AICoordinator**        | AI player state, subsystem coordination, entity query caching       |
+| **AIEconomyManager**     | Worker gathering, repair assignment, incomplete building resumption |
+| **AIBuildOrderExecutor** | Build order steps, macro rules, research initiation, expansion      |
+| **AITacticsManager**     | Tactical state, attack/defend/harass phase execution                |
+| **AIScoutingManager**    | Scout selection, target determination, enemy intel                  |
 
 #### Simulation-Based Economy
 
@@ -2643,11 +2668,11 @@ researchInProgress: Map<string, number>; // researchId -> buildingId
 ```typescript
 interface AIPlayer {
   // Worker tracking
-  previousWorkerIds: Set<number>;       // For death detection
-  lastWorkerDeathTick: number;          // Harassment detection
-  recentWorkerDeaths: number;           // Decays over time
-  workerReplacementPriority: number;    // 0-1, triggers emergency production
-  depletedPatchesNearBases: number;     // Informs expansion decisions
+  previousWorkerIds: Set<number>; // For death detection
+  lastWorkerDeathTick: number; // Harassment detection
+  recentWorkerDeaths: number; // Decays over time
+  workerReplacementPriority: number; // 0-1, triggers emergency production
+  depletedPatchesNearBases: number; // Informs expansion decisions
 }
 ```
 
@@ -2788,18 +2813,19 @@ The game uses **recast-navigation-js**, a WASM port of the industry-standard Rec
 
 Units have a `movementDomain` that determines which navmesh they use:
 
-| Domain | Description | Navmesh |
-|--------|-------------|---------|
-| `ground` | Standard land units | Ground navmesh (walkable terrain) |
-| `water` | Naval units (ships, submarines) | Water navmesh (water cells) |
-| `amphibious` | Can use both land and water | Tries water first, falls back to ground |
-| `air` | Flying units | No navmesh (direct paths) |
+| Domain       | Description                     | Navmesh                                 |
+| ------------ | ------------------------------- | --------------------------------------- |
+| `ground`     | Standard land units             | Ground navmesh (walkable terrain)       |
+| `water`      | Naval units (ships, submarines) | Water navmesh (water cells)             |
+| `amphibious` | Can use both land and water     | Tries water first, falls back to ground |
+| `air`        | Flying units                    | No navmesh (direct paths)               |
 
 **Worker note:** The pathfinding Web Worker is optimized for the ground navmesh and receives a cached terrain heightmap for elevation-aware queries. Water/amphibious pathing stays on the main thread so naval units never query the land navmesh by accident.
 
 ### Water Navmesh
 
 Naval units use a separate water navmesh where:
+
 - **water_deep** and **water_shallow** terrain features are walkable
 - Land cells are blocked with barrier walls
 - Generated via `Terrain.generateWaterGeometry()`
@@ -2849,7 +2875,7 @@ export class RecastNavigation {
   public removeAgent(entityId): void;
   public setAgentTarget(entityId, targetX, targetY): boolean;
   public updateAgentPosition(entityId, x, y): void;
-  public getAgentState(entityId): { x, y, vx, vy } | null;
+  public getAgentState(entityId): { x; y; vx; vy } | null;
   public updateCrowd(deltaTime): void;
 
   // Dynamic obstacles for buildings
@@ -2874,7 +2900,7 @@ or zero crowd velocities.
 // In WebGPUGameCanvas - set terrain height BEFORE navmesh init
 // This ensures crowd agents are placed ON the navmesh surface
 game.pathfindingSystem.setTerrainHeightFunction((x: number, z: number) => {
-  return terrain.getNavmeshHeightAt(x, z);  // Matches navmesh vertex heights (ramps included)
+  return terrain.getNavmeshHeightAt(x, z); // Matches navmesh vertex heights (ramps included)
 });
 
 // Then initialize navmesh - it will use the terrain height function above
@@ -2882,6 +2908,7 @@ await game.initializeNavMesh(walkableGeometry.positions, walkableGeometry.indice
 ```
 
 **Why this matters:**
+
 - NavMesh geometry uses the vertex heights computed during `Terrain.generateWalkableGeometry()`
 - If crowd agents are placed using a different height source (like raw `elevation * 0.04`),
   there can be small height differences near ramps/platforms
@@ -2889,6 +2916,7 @@ await game.initializeNavMesh(walkableGeometry.positions, walkableGeometry.indice
 - Result: units appear to move at "glacial pace" despite correct speed settings
 
 **Walkability checks:**
+
 - `isWalkable` uses both horizontal distance and vertical height tolerances to avoid
   marking cliff edges as valid ground when the closest polygon is on a different layer.
 - Navmesh queries use a tighter vertical search window when a terrain height provider
@@ -2919,8 +2947,7 @@ ECS system that wraps RecastNavigation for game integration:
 ```typescript
 // Dynamic obstacle updates on building changes
 eventBus.on('building:placed', (data) => {
-  recast.addBoxObstacle(data.entityId, data.position.x, data.position.y,
-                        data.width, data.height);
+  recast.addBoxObstacle(data.entityId, data.position.x, data.position.y, data.width, data.height);
 });
 
 eventBus.on('building:destroyed', (data) => {
@@ -2929,6 +2956,7 @@ eventBus.on('building:destroyed', (data) => {
 ```
 
 Features:
+
 - **NavMesh initialization** from terrain walkable geometry
 - **Building obstacle management** via TileCache
 - **Path request handling** for unit movement
@@ -2962,14 +2990,14 @@ Tuned for RTS gameplay with strict cliff handling:
 ```typescript
 const NAVMESH_CONFIG = {
   // Cell sizing
-  cs: 0.5,          // Cell size (0.5 units for Safari compatibility)
-  ch: 0.2,          // Cell height (finer vertical precision for cliffs)
+  cs: 0.5, // Cell size (0.5 units for Safari compatibility)
+  ch: 0.2, // Cell height (finer vertical precision for cliffs)
 
   // Agent parameters - STRICT for cliff blocking
-  walkableRadius: 0.6,     // Must exceed unit collision radius (0.5)
+  walkableRadius: 0.6, // Must exceed unit collision radius (0.5)
   walkableHeight: 2.0,
-  walkableClimb: 0.3,      // CRITICAL: Low value prevents stepping between elevations
-  walkableSlopeAngle: 50,  // Max 50° slopes (cliffs are 90°, ramps are 30-40°)
+  walkableClimb: 0.3, // CRITICAL: Low value prevents stepping between elevations
+  walkableSlopeAngle: 50, // Max 50° slopes (cliffs are 90°, ramps are 30-40°)
 
   // NavMesh quality - tighter for cliff edge precision
   maxSimplificationError: 0.5,
@@ -3020,9 +3048,9 @@ Three-tier avoidance in MovementSystem:
 
 ```typescript
 const BUILDING_AVOIDANCE_STRENGTH = 35.0;
-const BUILDING_AVOIDANCE_MARGIN = 0.6;      // > unit collision radius (0.5)
+const BUILDING_AVOIDANCE_MARGIN = 0.6; // > unit collision radius (0.5)
 const BUILDING_AVOIDANCE_SOFT_MARGIN = 1.5; // Early detection zone
-const BUILDING_PREDICTION_LOOKAHEAD = 0.5;  // Seconds ahead
+const BUILDING_PREDICTION_LOOKAHEAD = 0.5; // Seconds ahead
 ```
 
 ### RTS-Style Formation & Clumping System
@@ -3054,12 +3082,12 @@ if (isInsideBox) {
 
 Separation force strength varies based on unit state:
 
-| State | Strength | Behavior |
-|-------|----------|----------|
-| **Moving** | 1.2 (weak) | Allow clumping for faster group movement |
-| **Idle** | 2.5 (strong) | Spread out for anti-splash |
-| **Arriving** | 3.0 (strongest) | Natural spreading at destination |
-| **Gathering** | 0 | Workers can overlap at resources |
+| State         | Strength        | Behavior                                 |
+| ------------- | --------------- | ---------------------------------------- |
+| **Moving**    | 1.2 (weak)      | Allow clumping for faster group movement |
+| **Idle**      | 2.5 (strong)    | Spread out for anti-splash               |
+| **Arriving**  | 3.0 (strongest) | Natural spreading at destination         |
+| **Gathering** | 0               | Workers can overlap at resources         |
 
 #### Flocking Behaviors (FlockingBehavior module)
 
@@ -3131,7 +3159,7 @@ if (currentTarget.healthPercent > FOCUS_FIRE_THRESHOLD) {
 // Threat assessment
 interface ThreatInfo {
   entityId: number;
-  threatScore: number;    // Based on DPS, priority, distance
+  threatScore: number; // Based on DPS, priority, distance
   distance: number;
   healthPercent: number;
   dps: number;
@@ -3139,6 +3167,7 @@ interface ThreatInfo {
 ```
 
 Features:
+
 - **Kiting Logic**: Ranged units maintain distance from melee threats
 - **Focus Fire**: AI coordinates attacks on low-health or high-priority targets
 - **Threat Assessment**: Ranks nearby enemies by threat score
@@ -3183,18 +3212,18 @@ Composable behavior tree for unit AI decision making:
 type BehaviorStatus = 'success' | 'failure' | 'running';
 
 // Composite nodes
-selector(...children);   // OR - try until one succeeds
-sequence(...children);   // AND - try until one fails
-parallel(threshold, ...children);  // Run all, succeed if N succeed
+selector(...children); // OR - try until one succeeds
+sequence(...children); // AND - try until one fails
+parallel(threshold, ...children); // Run all, succeed if N succeed
 
 // Decorator nodes
-inverter(child);         // Invert result
-condition(predicate, child);  // Only run if condition true
-cooldown(ms, child);     // Rate limit execution
+inverter(child); // Invert result
+condition(predicate, child); // Only run if condition true
+cooldown(ms, child); // Rate limit execution
 
 // Action nodes
-action((ctx) => boolean);  // Execute and return success/failure
-wait(ms);                  // Wait for duration
+action((ctx) => boolean); // Execute and return success/failure
+wait(ms); // Wait for duration
 ```
 
 Example combat micro tree:
@@ -3203,20 +3232,21 @@ Example combat micro tree:
 const combatMicroTree = selector(
   // Priority 1: Kite from melee enemies
   sequence(
-    action(ctx => shouldKite(ctx)),
-    action(ctx => executeKite(ctx))
+    action((ctx) => shouldKite(ctx)),
+    action((ctx) => executeKite(ctx))
   ),
   // Priority 2: Retreat if in danger
   sequence(
-    action(ctx => isInDanger(ctx)),
-    action(ctx => retreat(ctx))
+    action((ctx) => isInDanger(ctx)),
+    action((ctx) => retreat(ctx))
   ),
   // Priority 3: Optimal positioning
-  action(ctx => positionForCombat(ctx))
+  action((ctx) => positionForCombat(ctx))
 );
 ```
 
 Features:
+
 - **Composable**: Build complex behaviors from simple nodes
 - **Stateful**: Blackboard stores per-unit decision data
 - **Reusable**: Same tree works for multiple units
@@ -3247,6 +3277,7 @@ MusicPlayer.setMuted(false);
 ```
 
 Features:
+
 - **Auto-discovery**: Scans `/audio/music/menu/` and `/audio/music/gameplay/` for MP3 files
 - **Shuffle playback**: Tracks play in random order, reshuffles when all played
 - **Crossfading**: 2-second crossfade between tracks
@@ -3255,6 +3286,7 @@ Features:
 ### Build-time Manifest (`scripts/generate-music-manifest.js`)
 
 Music track discovery is performed at build time to avoid serverless function size limits:
+
 - Runs automatically via `prebuild` script before `next build`
 - Scans folders defined in `public/audio/music.config.json`
 - Outputs to `src/data/music-manifest.json` which is statically imported
@@ -3262,6 +3294,7 @@ Music track discovery is performed at build time to avoid serverless function si
 ### SoundOptionsPanel (`src/components/game/SoundOptionsPanel.tsx`)
 
 In-game sound settings UI:
+
 - Music volume slider
 - Sound effects volume slider
 - Music on/off toggle
@@ -3272,6 +3305,7 @@ In-game sound settings UI:
 ### AudioManager Integration
 
 The AudioManager handles all game sound effects with category-based volume:
+
 - `music`: Background music (controlled separately by MusicPlayer)
 - `combat`: Weapon sounds, explosions, impacts
 - `ui`: Click, error, notification sounds
@@ -3284,6 +3318,7 @@ The AudioManager handles all game sound effects with category-based volume:
 ## Audio Asset Guidelines
 
 See `.claude/AUDIO_PROMPTS.md` for comprehensive audio generation prompts including:
+
 - Music tracks (menu, gameplay, events)
 - Unit sound effects
 - Building sounds
@@ -3363,6 +3398,7 @@ const HomeBackground = dynamic(() => import('@/components/home/HomeBackground'),
 ### UI Overlay
 
 The homepage uses glassmorphism design with:
+
 - Translucent faction cards with backdrop blur
 - Animated number counters for stats
 - Shimmer animation on title text
@@ -3444,6 +3480,7 @@ A world-class Three.js-powered loading screen that creates a cinematic experienc
 ### Progress Integration
 
 All visual effects respond to loading progress (0-100%):
+
 - Nebula brightness and wormhole distortion increase
 - Wormhole scale grows (1.0 → 1.3)
 - Energy ring rotation speed and opacity increase
@@ -3454,6 +3491,7 @@ All visual effects respond to loading progress (0-100%):
 ### UI Overlay
 
 Clean, futuristic loading UI:
+
 - Large "VOIDSTRIKE" title with gradient and drop-shadow glow
 - "Initializing Combat Systems" subtitle with tracking
 - 5 stage indicators (CORE, RENDER, WORLD, UNITS, SYNC) with active/complete states

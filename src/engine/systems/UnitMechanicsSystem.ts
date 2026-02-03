@@ -1,6 +1,6 @@
 import { System } from '../ecs/System';
 import { Entity } from '../ecs/Entity';
-import type { Game } from '../core/Game';
+import type { IGameInstance } from '../core/IGameInstance';
 import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
@@ -63,7 +63,7 @@ export class UnitMechanicsSystem extends System {
   // Track bunker data separately since Building component doesn't have it
   private bunkerData: Map<number, BunkerData> = new Map();
 
-  constructor(game: Game) {
+  constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
   }
@@ -87,7 +87,10 @@ export class UnitMechanicsSystem extends System {
     // Healing/Repair commands
     this.game.eventBus.on('command:heal', this.handleHealCommand.bind(this));
     this.game.eventBus.on('command:repair', this.handleRepairCommand.bind(this));
-    this.game.eventBus.on('command:toggleAutocastRepair', this.handleToggleAutocastRepair.bind(this));
+    this.game.eventBus.on(
+      'command:toggleAutocastRepair',
+      this.handleToggleAutocastRepair.bind(this)
+    );
     // Generic autocast setter for multiplayer sync
     this.game.eventBus.on('ability:setAutocast', this.handleSetAutocast.bind(this));
 
@@ -95,7 +98,12 @@ export class UnitMechanicsSystem extends System {
     this.game.eventBus.on('buff:apply', this.handleBuffApply.bind(this));
   }
 
-  private handleSetAutocast(data: { entityId: number; abilityId?: string; enabled: boolean; playerId?: string }): void {
+  private handleSetAutocast(data: {
+    entityId: number;
+    abilityId?: string;
+    enabled: boolean;
+    playerId?: string;
+  }): void {
     const entity = this.world.getEntity(data.entityId);
     if (!entity) return;
 
@@ -196,7 +204,8 @@ export class UnitMechanicsSystem extends System {
     const transportTransform = transport.get<Transform>('Transform');
     const transportSelectable = transport.get<Selectable>('Selectable');
 
-    if (!transportUnit || !transportUnit.isTransport || !transportTransform || !transportSelectable) return;
+    if (!transportUnit || !transportUnit.isTransport || !transportTransform || !transportSelectable)
+      return;
 
     for (const unitId of command.unitIds) {
       const entity = this.world.getEntity(unitId);
@@ -242,9 +251,7 @@ export class UnitMechanicsSystem extends System {
     if (!transportUnit || !transportUnit.isTransport || !transportTransform) return;
 
     // Calculate unload positions in a circle around the transport
-    const unloadUnits = command.unitId
-      ? [command.unitId]
-      : [...transportUnit.loadedUnits];
+    const unloadUnits = command.unitId ? [command.unitId] : [...transportUnit.loadedUnits];
 
     let angle = 0;
     const angleStep = (2 * Math.PI) / Math.max(unloadUnits.length, 1);
@@ -287,7 +294,8 @@ export class UnitMechanicsSystem extends System {
     const bunkerTransform = bunker.get<Transform>('Transform');
     const bunkerSelectable = bunker.get<Selectable>('Selectable');
 
-    if (!building || building.buildingId !== 'bunker' || !bunkerTransform || !bunkerSelectable) return;
+    if (!building || building.buildingId !== 'bunker' || !bunkerTransform || !bunkerSelectable)
+      return;
 
     // Initialize bunker data if needed
     if (!this.bunkerData.has(command.bunkerId)) {
@@ -338,9 +346,7 @@ export class UnitMechanicsSystem extends System {
     const data = this.bunkerData.get(command.bunkerId);
     if (!data) return;
 
-    const unloadUnits = command.unitId
-      ? [command.unitId]
-      : [...data.loadedUnits];
+    const unloadUnits = command.unitId ? [command.unitId] : [...data.loadedUnits];
 
     let angle = 0;
     const angleStep = (2 * Math.PI) / Math.max(unloadUnits.length, 1);
@@ -584,8 +590,16 @@ export class UnitMechanicsSystem extends System {
       // Calculate distance to building edge
       const halfW = building.width / 2;
       const halfH = building.height / 2;
-      const clampedX = clamp(repairerTransform.x, buildingTransform.x - halfW, buildingTransform.x + halfW);
-      const clampedY = clamp(repairerTransform.y, buildingTransform.y - halfH, buildingTransform.y + halfH);
+      const clampedX = clamp(
+        repairerTransform.x,
+        buildingTransform.x - halfW,
+        buildingTransform.x + halfW
+      );
+      const clampedY = clamp(
+        repairerTransform.y,
+        buildingTransform.y - halfH,
+        buildingTransform.y + halfH
+      );
       const dist = distance(repairerTransform.x, repairerTransform.y, clampedX, clampedY);
 
       if (dist <= autocastRange) {
@@ -626,7 +640,12 @@ export class UnitMechanicsSystem extends System {
       if (targetHealth.isDead()) continue;
 
       // Calculate distance
-      const dist = distance(targetTransform.x, targetTransform.y, repairerTransform.x, repairerTransform.y);
+      const dist = distance(
+        targetTransform.x,
+        targetTransform.y,
+        repairerTransform.x,
+        repairerTransform.y
+      );
 
       if (dist <= autocastRange) {
         if (!closestTarget || dist < closestTarget.distance) {
@@ -641,12 +660,7 @@ export class UnitMechanicsSystem extends System {
     }
   }
 
-  private processHealing(
-    entity: { id: number },
-    unit: Unit,
-    dt: number,
-    _gameTime: number
-  ): void {
+  private processHealing(entity: { id: number }, unit: Unit, dt: number, _gameTime: number): void {
     if (!unit.canHeal || unit.healTargetId === null) return;
 
     const healer = this.world.getEntity(entity.id);
@@ -685,7 +699,12 @@ export class UnitMechanicsSystem extends System {
     }
 
     // Check range
-    const dist = distance(targetTransform.x, targetTransform.y, healerTransform.x, healerTransform.y);
+    const dist = distance(
+      targetTransform.x,
+      targetTransform.y,
+      healerTransform.x,
+      healerTransform.y
+    );
 
     if (dist > unit.healRange) {
       // Move toward target
@@ -738,8 +757,7 @@ export class UnitMechanicsSystem extends System {
       return;
     }
 
-    const canRepairTarget =
-      targetBuilding || (targetUnit && targetUnit.isMechanical);
+    const canRepairTarget = targetBuilding || (targetUnit && targetUnit.isMechanical);
 
     if (!canRepairTarget) {
       unit.clearRepairTarget();
@@ -762,8 +780,16 @@ export class UnitMechanicsSystem extends System {
       // Calculate closest point on building edge
       const halfW = targetBuilding.width / 2;
       const halfH = targetBuilding.height / 2;
-      const clampedX = clamp(repairerTransform.x, targetTransform.x - halfW, targetTransform.x + halfW);
-      const clampedY = clamp(repairerTransform.y, targetTransform.y - halfH, targetTransform.y + halfH);
+      const clampedX = clamp(
+        repairerTransform.x,
+        targetTransform.x - halfW,
+        targetTransform.x + halfW
+      );
+      const clampedY = clamp(
+        repairerTransform.y,
+        targetTransform.y - halfH,
+        targetTransform.y + halfH
+      );
       effectiveDistance = distance(repairerTransform.x, repairerTransform.y, clampedX, clampedY);
 
       // Calculate move target at building edge with buffer
@@ -771,7 +797,12 @@ export class UnitMechanicsSystem extends System {
         // Direction from building center to repairer
         const dx = repairerTransform.x - targetTransform.x;
         const dy = repairerTransform.y - targetTransform.y;
-        const dist = distance(repairerTransform.x, repairerTransform.y, targetTransform.x, targetTransform.y);
+        const dist = distance(
+          repairerTransform.x,
+          repairerTransform.y,
+          targetTransform.x,
+          targetTransform.y
+        );
         if (dist > 0.01) {
           const dirX = dx / dist;
           const dirY = dy / dist;
@@ -782,7 +813,12 @@ export class UnitMechanicsSystem extends System {
       }
     } else {
       // For units, use center-to-center distance
-      effectiveDistance = distance(targetTransform.x, targetTransform.y, repairerTransform.x, repairerTransform.y);
+      effectiveDistance = distance(
+        targetTransform.x,
+        targetTransform.y,
+        repairerTransform.x,
+        repairerTransform.y
+      );
     }
 
     if (effectiveDistance > repairRange) {
@@ -847,7 +883,12 @@ export class UnitMechanicsSystem extends System {
 
         for (const enemy of enemies) {
           const enemyTransform = enemy.get<Transform>('Transform')!;
-          const dist = distance(enemyTransform.x, enemyTransform.y, bunkerTransform.x, bunkerTransform.y);
+          const dist = distance(
+            enemyTransform.x,
+            enemyTransform.y,
+            bunkerTransform.x,
+            bunkerTransform.y
+          );
           if (dist < closestDist) {
             closestDist = dist;
             closestEnemy = enemy;
@@ -871,12 +912,7 @@ export class UnitMechanicsSystem extends System {
     }
   }
 
-  private findEnemiesInRange(
-    x: number,
-    y: number,
-    range: number,
-    playerId: string
-  ): Entity[] {
+  private findEnemiesInRange(x: number, y: number, range: number, playerId: string): Entity[] {
     const enemies: Entity[] = [];
 
     // Use spatial grid for O(1) lookups - check both unit and building grids
