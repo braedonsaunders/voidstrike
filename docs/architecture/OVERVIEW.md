@@ -338,7 +338,6 @@ voidstrike/
 │   │   │   ├── vision/
 │   │   │   │   ├── index.ts
 │   │   │   │   ├── LineOfSight.ts
-│   │   │   │   ├── SDFVisionRenderer.ts
 │   │   │   │   └── VisionOptimizer.ts
 │   │   │   ├── AbilitySystem.ts
 │   │   │   ├── AIEconomySystem.ts
@@ -589,7 +588,6 @@ voidstrike/
     │   │   │   └── flockingBehavior.test.ts
     │   │   ├── vision/
     │   │   │   ├── LineOfSight.test.ts
-    │   │   │   ├── SDFVisionRenderer.test.ts
     │   │   │   └── VisionOptimizer.test.ts
     │   │   ├── abilitySystem.test.ts
     │   │   ├── buildingPlacementSystem.test.ts
