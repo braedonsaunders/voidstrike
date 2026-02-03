@@ -3,10 +3,6 @@
 @tailwind utilities;
 
 :root {
-  --void-glow: 0 0 20px rgba(132, 61, 255, 0.5);
-  --dominion-glow: 0 0 20px rgba(74, 144, 217, 0.5);
-  --synthesis-glow: 0 0 20px rgba(155, 89, 182, 0.5);
-  --swarm-glow: 0 0 20px rgba(139, 69, 19, 0.5);
 }
 
 * {
@@ -74,17 +70,6 @@ main {
            active:scale-[0.98];
   }
 
-  .resource-display {
-    @apply flex items-center gap-2 px-3 py-1.5 bg-black/50 border border-void-700/50 rounded-md;
-  }
-
-  .control-group-indicator {
-    @apply w-7 h-7 flex items-center justify-center
-           bg-gradient-to-b from-void-800 to-void-900
-           border border-void-600/50 rounded
-           text-xs font-mono text-void-200 shadow-inner;
-  }
-
   /* Minimap with modern border treatment */
   .minimap-container {
     @apply relative w-48 h-48 bg-black/90 rounded-lg overflow-hidden
@@ -94,38 +79,6 @@ main {
   .selection-box {
     @apply absolute border-2 border-blue-400/80 bg-blue-400/15 pointer-events-none
            shadow-[0_0_8px_rgba(59,130,246,0.3)];
-  }
-
-  .unit-health-bar {
-    @apply absolute -top-2 left-1/2 -translate-x-1/2 w-10 h-1.5
-           bg-black/80 rounded-full overflow-hidden border border-black/50;
-  }
-
-  .unit-health-fill {
-    @apply h-full bg-gradient-to-r from-green-600 to-green-400 transition-all duration-200;
-  }
-
-  /* Command card with improved grid styling */
-  .command-card {
-    @apply grid grid-cols-4 gap-1.5 p-3
-           bg-black/70 border border-void-700 rounded-lg backdrop-blur-sm;
-  }
-
-  .command-button {
-    @apply w-12 h-12 relative
-           bg-gradient-to-b from-void-800 to-void-900
-           hover:from-void-700 hover:to-void-800
-           border border-void-600/50 rounded-md
-           flex flex-col items-center justify-center gap-0.5
-           transition-all duration-150
-           hover:border-blue-500/50 hover:shadow-[0_0_8px_rgba(59,130,246,0.2)]
-           active:scale-95;
-  }
-
-  .command-button-disabled {
-    @apply opacity-40 cursor-not-allowed
-           hover:from-void-800 hover:to-void-900
-           hover:border-void-600/50 hover:shadow-none;
   }
 
   /* Tooltip styling */
@@ -138,26 +91,6 @@ main {
 }
 
 /* Animations */
-@keyframes pulse-glow {
-  0%, 100% {
-    box-shadow: 0 0 10px rgba(132, 61, 255, 0.3);
-  }
-  50% {
-    box-shadow: 0 0 20px rgba(132, 61, 255, 0.6);
-  }
-}
-
-@keyframes selection-pulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 0.7;
-  }
-}
-
 @keyframes shimmer {
   0% {
     background-position: 200% 0;
@@ -178,44 +111,6 @@ main {
   }
 }
 
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
-@keyframes glow-pulse {
-  0%, 100% {
-    filter: drop-shadow(0 0 10px rgba(132, 61, 255, 0.3));
-  }
-  50% {
-    filter: drop-shadow(0 0 25px rgba(132, 61, 255, 0.6));
-  }
-}
-
-@keyframes fade-in-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes rotate-slow {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 @keyframes scanline {
   0% {
     top: -5%;
@@ -233,36 +128,12 @@ main {
   }
 }
 
-.animate-pulse-glow {
-  animation: pulse-glow 2s ease-in-out infinite;
-}
-
-.animate-selection {
-  animation: selection-pulse 1s ease-in-out infinite;
-}
-
 .animate-shimmer {
   animation: shimmer 8s linear infinite;
 }
 
 .animate-pulse-slow {
   animation: pulse-slow 4s ease-in-out infinite;
-}
-
-.animate-float {
-  animation: float 3s ease-in-out infinite;
-}
-
-.animate-glow-pulse {
-  animation: glow-pulse 2s ease-in-out infinite;
-}
-
-.animate-fade-in-up {
-  animation: fade-in-up 0.6s ease-out forwards;
-}
-
-.animate-rotate-slow {
-  animation: rotate-slow 20s linear infinite;
 }
 
 /* Prevent text selection during gameplay */

@@ -64,10 +64,3 @@ export const VOICE_COOLDOWN_CONFIG = {
   attack: VOICE_COOLDOWN_ATTACK,
   ready: VOICE_COOLDOWN_READY,
 } as const;
-
-/**
- * All command audio parameters grouped together.
- */
-export const COMMAND_AUDIO_CONFIG = {
-  debounceWindow: COMMAND_DEBOUNCE_WINDOW,
-} as const;
