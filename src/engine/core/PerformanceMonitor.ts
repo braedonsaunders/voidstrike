@@ -7,7 +7,11 @@
  * - Entity counts by type
  * - Memory usage (Chrome only)
  * - Network latency (multiplayer)
+ * - GPU timing (WebGPU timestamp queries)
+ * - GPU memory usage (aggregated from all rendering systems)
  */
+
+import { getGPUMemoryTracker } from './GPUMemoryTracker';
 
 export interface SystemTiming {
   name: string;
@@ -50,6 +54,21 @@ export interface RenderMetrics {
   triangles: number;       // Triangles rendered this frame
   drawCallsPerSecond: number; // Estimated draw calls per second (drawCalls * fps)
   trianglesPerSecond: number; // Estimated triangles per second (triangles * fps)
+  // GPU timing (from timestamp queries)
+  gpuFrameTimeMs: number;    // Actual GPU execution time in milliseconds
+  gpuFrameTimeAvgMs: number; // Average GPU frame time over recent frames
+  gpuTimingAvailable: boolean; // Whether GPU timing is supported/active
+}
+
+export interface GPUMemorySnapshot {
+  totalMB: number;
+  budgetMB: number;
+  usagePercent: number;
+  categories: Array<{
+    name: string;
+    currentMB: number;
+    breakdown: Record<string, number>;
+  }>;
 }
 
 export interface PerformanceSnapshot {
@@ -62,6 +81,7 @@ export interface PerformanceSnapshot {
   memory: MemoryMetrics;
   network: NetworkMetrics;
   render: RenderMetrics;
+  gpuMemory: GPUMemorySnapshot;
 }
 
 // History buffer size (at 60fps, 300 = 5 seconds of history)
@@ -166,6 +186,9 @@ class PerformanceMonitorClass {
     triangles: 0,
     drawCallsPerSecond: 0,
     trianglesPerSecond: 0,
+    gpuFrameTimeMs: 0,
+    gpuFrameTimeAvgMs: 0,
+    gpuTimingAvailable: false,
   };
 
   // Animation frame for continuous monitoring
@@ -379,6 +402,19 @@ class PerformanceMonitorClass {
   }
 
   /**
+   * Update GPU timing metrics (called by the render loop with timestamp query results)
+   * @param frameTimeMs - GPU frame time from timestamp queries (in milliseconds)
+   * @param averageMs - Rolling average GPU frame time
+   * @param available - Whether GPU timing is active/supported
+   */
+  public updateGPUTiming(frameTimeMs: number, averageMs: number, available: boolean): void {
+    if (!this.collectingEnabled) return;
+    this.renderMetrics.gpuFrameTimeMs = frameTimeMs;
+    this.renderMetrics.gpuFrameTimeAvgMs = averageMs;
+    this.renderMetrics.gpuTimingAvailable = available;
+  }
+
+  /**
    * Get current FPS (averaged over recent frames)
    */
   public getFPS(): number {
@@ -473,6 +509,10 @@ class PerformanceMonitorClass {
    * Get a complete performance snapshot
    */
   public getSnapshot(): PerformanceSnapshot {
+    // Get GPU memory snapshot from the central tracker
+    const memoryTracker = getGPUMemoryTracker();
+    const memSnapshot = memoryTracker.getSnapshot();
+
     return {
       timestamp: performance.now(),
       fps: this.getFPS(),
@@ -483,6 +523,16 @@ class PerformanceMonitorClass {
       memory: { ...this.memoryMetrics },
       network: { ...this.networkMetrics },
       render: { ...this.renderMetrics },
+      gpuMemory: {
+        totalMB: memSnapshot.totalMB,
+        budgetMB: memSnapshot.budgetMB,
+        usagePercent: memSnapshot.usagePercent,
+        categories: memSnapshot.categories.map((cat) => ({
+          name: cat.name,
+          currentMB: cat.currentMB,
+          breakdown: cat.breakdown,
+        })),
+      },
     };
   }
 

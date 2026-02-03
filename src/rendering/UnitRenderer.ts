@@ -45,6 +45,7 @@ import { cloneGeometryForGPU } from './utils/geometryUtils';
 import { CullingService, EntityCategory } from './services/CullingService';
 import { LODConfig } from './compute/UnifiedCullingCompute';
 import { GPUIndirectRenderer } from './compute/GPUIndirectRenderer';
+import { getGPUMemoryTracker, estimateGeometryMemory } from '@/engine/core/GPUMemoryTracker';
 
 // Instance data for a single unit type + player combo at a specific LOD level
 interface InstancedUnitGroup {
@@ -213,6 +214,44 @@ export class UnitRenderer {
     // Load custom GLB models (async, runs in background)
     AssetManager.loadCustomModels().catch((err) => {
       debugAssets.warn('[UnitRenderer] Error loading custom models:', err);
+    });
+  }
+
+  /**
+   * Calculate and report unit renderer memory usage to the central GPU memory tracker.
+   * Called periodically during update to track dynamic instance allocations.
+   */
+  private updateMemoryUsage(): void {
+    let instancedMB = 0;
+    let animatedMB = 0;
+    let overlayMB = 0;
+
+    // Instanced mesh groups (geometry + instance buffers)
+    for (const group of this.instancedGroups.values()) {
+      instancedMB += estimateGeometryMemory(group.mesh.geometry);
+      // Instance matrix buffer: 16 floats * 4 bytes * maxInstances
+      instancedMB += (group.maxInstances * 16 * 4) / (1024 * 1024);
+    }
+
+    // Animated unit meshes (estimate based on count - geometry is shared with asset cache)
+    // Materials are per-instance, estimate ~1KB per animated unit for materials
+    animatedMB = (this.animatedUnits.size * 1024) / (1024 * 1024);
+
+    // Team marker groups
+    for (const group of this.teamMarkerGroups.values()) {
+      overlayMB += estimateGeometryMemory(group.mesh.geometry);
+      overlayMB += (group.maxInstances * 16 * 4) / (1024 * 1024);
+    }
+
+    // Team marker shared geometry
+    overlayMB += estimateGeometryMemory(this.teamMarkerGeometry);
+
+    const totalMB = instancedMB + animatedMB + overlayMB;
+
+    getGPUMemoryTracker().updateUsage('units', totalMB, {
+      instanced: instancedMB,
+      animated: animatedMB,
+      overlays: overlayMB,
     });
   }
 
@@ -1245,6 +1284,11 @@ export class UnitRenderer {
       }
     }
 
+    // PERF: Update memory tracking every 60 frames (~1 second) to avoid overhead
+    if (this.frameCount % 60 === 0) {
+      this.updateMemoryUsage();
+    }
+
     const updateElapsed = performance.now() - updateStart;
     if (updateElapsed > 16) {
       debugPerformance.warn(
@@ -1403,5 +1447,8 @@ export class UnitRenderer {
     this.webgpuRenderer = null;
     this.gpuCullingInitialized = false;
     this.gpuIndirectInitialized = false;
+
+    // Clear units memory from GPU tracker
+    getGPUMemoryTracker().updateUsage('units', 0, {});
   }
 }

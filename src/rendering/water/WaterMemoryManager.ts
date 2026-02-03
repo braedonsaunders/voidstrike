@@ -5,6 +5,7 @@
  * - Estimating memory usage per quality tier
  * - Selecting optimal quality within budget constraints
  * - Monitoring runtime usage and triggering degradation
+ * - Reporting usage to the central GPUMemoryTracker
  *
  * Memory is allocated for:
  * - Water mesh geometry (vertices, normals, UVs)
@@ -14,6 +15,7 @@
  */
 
 import type { WaterQuality } from './UnifiedWaterMesh';
+import { getGPUMemoryTracker } from '@/engine/core/GPUMemoryTracker';
 
 /**
  * Memory estimate breakdown for a water configuration
@@ -119,8 +121,13 @@ class WaterMemoryManagerClass {
   /** Listeners for quality change events */
   private qualityChangeListeners: Set<(quality: WaterQuality) => void> = new Set();
 
+  /** Last computed memory estimate (for breakdown reporting) */
+  private lastEstimate: MemoryEstimate | null = null;
+
   private constructor() {
     // Private constructor for singleton
+    // Register with the central GPU memory tracker
+    getGPUMemoryTracker().registerCategory('water', WaterMemoryManagerClass.WATER_MEMORY_BUDGET_MB);
   }
 
   /**
@@ -251,9 +258,20 @@ class WaterMemoryManagerClass {
    * Call this after water mesh creation/destruction
    *
    * @param usageMB - Current actual memory usage in megabytes
+   * @param estimate - Optional detailed memory estimate for breakdown reporting
    */
-  public updateCurrentUsage(usageMB: number): void {
+  public updateCurrentUsage(usageMB: number, estimate?: MemoryEstimate): void {
     this.currentUsageMB = usageMB;
+    if (estimate) {
+      this.lastEstimate = estimate;
+    }
+
+    // Report to the central GPU memory tracker
+    getGPUMemoryTracker().updateUsage('water', usageMB, {
+      geometry: this.lastEstimate?.geometryMB ?? 0,
+      textures: this.lastEstimate?.textureMB ?? 0,
+      shore: this.lastEstimate?.shoreMB ?? 0,
+    });
   }
 
   /**

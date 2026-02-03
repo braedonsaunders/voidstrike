@@ -24,6 +24,7 @@ import {
   viewportCoordinate,
   instancedBufferAttribute,
 } from 'three/tsl';
+import { getGPUMemoryTracker, estimateTextureMemory, estimateGeometryMemory } from '@/engine/core/GPUMemoryTracker';
 
 // ============================================
 // PARTICLE TYPES
@@ -423,6 +424,46 @@ export class AdvancedParticleSystem {
     }
 
     this.scene.add(this.instancedMesh);
+
+    // Report memory usage to central GPU memory tracker
+    this.updateMemoryUsage();
+  }
+
+  /**
+   * Calculate and report particle system memory usage to the central GPU memory tracker.
+   */
+  private updateMemoryUsage(): void {
+    let geometryMB = 0;
+    let texturesMB = 0;
+    let buffersMB = 0;
+
+    // Particle geometry (PlaneGeometry)
+    geometryMB = estimateGeometryMemory(this.geometry);
+
+    // Instance matrix buffer: 16 floats * 4 bytes * maxParticles
+    buffersMB += (this.maxParticles * 16 * 4) / (1024 * 1024);
+
+    // Instance color buffer: 3 floats * 4 bytes * maxParticles
+    buffersMB += (this.maxParticles * 3 * 4) / (1024 * 1024);
+
+    // Custom buffers (position, color, customData, particleType)
+    buffersMB += this.positionBuffer.byteLength / (1024 * 1024);
+    buffersMB += this.colorBuffer.byteLength / (1024 * 1024);
+    buffersMB += this.customDataBuffer.byteLength / (1024 * 1024);
+    buffersMB += this.particleTypeBuffer.byteLength / (1024 * 1024);
+
+    // Textures
+    texturesMB += estimateTextureMemory(this.fireTexture);
+    texturesMB += estimateTextureMemory(this.smokeTexture);
+    texturesMB += estimateTextureMemory(this.glowTexture);
+
+    const totalMB = geometryMB + texturesMB + buffersMB;
+
+    getGPUMemoryTracker().updateUsage('effects', totalMB, {
+      geometry: geometryMB,
+      textures: texturesMB,
+      buffers: buffersMB,
+    });
   }
 
   /**
@@ -1026,5 +1067,8 @@ export class AdvancedParticleSystem {
     this.fireTexture.dispose();
     this.smokeTexture.dispose();
     this.glowTexture.dispose();
+
+    // Clear effects memory from GPU tracker
+    getGPUMemoryTracker().updateUsage('effects', 0, {});
   }
 }
