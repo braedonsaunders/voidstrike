@@ -175,8 +175,18 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
       eventBusRef.current = bridge.eventBus;
 
       // Create main thread event handler for audio/effects
-      const eventHandler = new MainThreadEventHandler(bridge, localPlayerId ?? 'player1');
+      // Pass localPlayerId directly - null means spectator mode (no local-only audio)
+      const eventHandler = new MainThreadEventHandler(bridge, localPlayerId);
       eventHandlerRef.current = eventHandler;
+
+      // Subscribe to localPlayerId changes to handle spectator mode transitions
+      const unsubscribeLocalPlayer = useGameSetupStore.subscribe(
+        (state) => state.localPlayerId,
+        (newLocalPlayerId) => {
+          eventHandler.setLocalPlayerId(newLocalPlayerId);
+        }
+      );
+      eventUnsubscribersRef.current.push(unsubscribeLocalPlayer);
 
       // Initialize the worker
       await bridge.initialize();
