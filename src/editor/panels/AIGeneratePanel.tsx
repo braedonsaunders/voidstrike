@@ -308,11 +308,13 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
             if (selectedPresetId) setSelectedPresetId(null);
           }}
           placeholder="Describe terrain, layout, strategic elements..."
-          className="flex-1 w-full px-2 py-1.5 rounded text-[10px] leading-relaxed resize-none focus:outline-none min-h-[60px]"
+          className="w-full px-2 py-1.5 rounded text-[10px] leading-relaxed resize-y focus:outline-none"
           style={{
             backgroundColor: theme.surface,
             border: `1px solid ${theme.border}`,
             color: theme.text.primary,
+            flex: '1 1 auto',
+            minHeight: '80px',
           }}
         />
       </div>
