@@ -107,9 +107,9 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
   }
 
   // Ensure normal coordinates exist - required for proper lighting and SSAO
-  // Some models from Tripo/Meshy AI lack normals, causing GTAO to reconstruct
-  // normals from depth gradients which creates visible triangular artifacts
-  if (!cloned.attributes.normal && cloned.attributes.position) {
+  // ALWAYS recompute normals - AI models from Tripo/Meshy often have incorrect
+  // or flat normals that cause dark triangular artifacts, especially with GTAO
+  if (cloned.attributes.position) {
     cloned.computeVertexNormals();
   }
 
@@ -196,6 +196,15 @@ function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Materi
   // Apply rendering hints for MeshStandardMaterial
   if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
     const stdMaterial = material as THREE.MeshStandardMaterial;
+
+    // Fix AI model artifacts - disable vertex colors and clear baked maps
+    // AI-generated models bake ambient occlusion into vertex colors causing triangles
+    stdMaterial.vertexColors = false;
+    stdMaterial.aoMap = null;
+    stdMaterial.aoMapIntensity = 0;
+    stdMaterial.lightMap = null;
+    stdMaterial.lightMapIntensity = 0;
+
     const hints = assetId ? AssetManager.getRenderingHints(assetId) : null;
 
     if (hints) {
