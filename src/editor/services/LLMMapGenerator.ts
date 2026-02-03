@@ -10,9 +10,16 @@ import type {
   MapBlueprint,
   BiomeType,
   DecorationStyle,
+  BaseLocation,
+  ResourceDirection,
 } from '@/data/maps/core/ElevationMap';
 import { generateMap } from '@/data/maps/core/ElevationMapGenerator';
 import type { MapData } from '@/data/maps/MapTypes';
+import {
+  createBaseResources,
+  DIR,
+  MINERAL_DISTANCE_NATURAL,
+} from '@/data/maps/MapTypes';
 
 // ============================================================================
 // TYPES
@@ -973,6 +980,200 @@ function calculateRampPosition(
   };
 }
 
+// ============================================================================
+// MINERAL PLACEMENT VALIDATION
+// ============================================================================
+
+/** All possible mineral directions */
+const ALL_MINERAL_DIRECTIONS: ResourceDirection[] = [
+  'up', 'down', 'left', 'right',
+  'up_left', 'up_right', 'down_left', 'down_right',
+];
+
+/** Convert ResourceDirection string to radians */
+function directionToRadians(dir: ResourceDirection): number {
+  switch (dir) {
+    case 'up': return DIR.UP;
+    case 'down': return DIR.DOWN;
+    case 'left': return DIR.LEFT;
+    case 'right': return DIR.RIGHT;
+    case 'up_left': return DIR.UP_LEFT;
+    case 'up_right': return DIR.UP_RIGHT;
+    case 'down_left': return DIR.DOWN_LEFT;
+    case 'down_right': return DIR.DOWN_RIGHT;
+    default: return DIR.DOWN;
+  }
+}
+
+/** Minimum buildable radius around mineral center */
+const MIN_MINERAL_BUILDABLE_RADIUS = 12;
+
+/**
+ * Get all mineral and geyser positions for a base with given direction
+ */
+function getMineralPositions(
+  baseX: number,
+  baseY: number,
+  direction: ResourceDirection,
+  isNatural: boolean
+): Array<{ x: number; y: number }> {
+  const dirRadians = directionToRadians(direction);
+  const mineralDistance = isNatural ? MINERAL_DISTANCE_NATURAL : 7;
+  const resources = createBaseResources(baseX, baseY, dirRadians, 1500, 2250, false, mineralDistance);
+
+  const positions: Array<{ x: number; y: number }> = [];
+  for (const mineral of resources.minerals) {
+    positions.push({ x: mineral.x, y: mineral.y });
+  }
+  for (const plasma of resources.plasma) {
+    positions.push({ x: plasma.x, y: plasma.y });
+  }
+
+  // Also include the mineral center for space validation
+  const mineralCenterX = baseX + Math.cos(dirRadians) * mineralDistance;
+  const mineralCenterY = baseY + Math.sin(dirRadians) * mineralDistance;
+  positions.push({ x: mineralCenterX, y: mineralCenterY });
+
+  return positions;
+}
+
+/**
+ * Check if a position is inside a water or void feature
+ */
+function isPositionInWaterOrVoid(
+  x: number,
+  y: number,
+  paintCommands: MapBlueprint['paint']
+): boolean {
+  for (const cmd of paintCommands) {
+    if (cmd.cmd === 'water' || cmd.cmd === 'void') {
+      if (cmd.radius !== undefined) {
+        // Circular water/void
+        const dx = x - cmd.x;
+        const dy = y - cmd.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist <= cmd.radius) {
+          return true;
+        }
+      } else if (cmd.width !== undefined && cmd.height !== undefined) {
+        // Rectangular water/void
+        if (x >= cmd.x && x <= cmd.x + cmd.width &&
+            y >= cmd.y && y <= cmd.y + cmd.height) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Check if minerals would be placed in water/void with given direction
+ */
+function checkMineralsInWater(
+  baseX: number,
+  baseY: number,
+  direction: ResourceDirection,
+  isNatural: boolean,
+  paintCommands: MapBlueprint['paint']
+): boolean {
+  const positions = getMineralPositions(baseX, baseY, direction, isNatural);
+
+  for (const pos of positions) {
+    if (isPositionInWaterOrVoid(pos.x, pos.y, paintCommands)) {
+      return true; // Found minerals in water
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Check if there's sufficient buildable space around minerals
+ * Returns the percentage of cells within radius that are NOT water/void
+ */
+function checkMineralSpaceAvailable(
+  baseX: number,
+  baseY: number,
+  direction: ResourceDirection,
+  isNatural: boolean,
+  paintCommands: MapBlueprint['paint'],
+  radius: number = MIN_MINERAL_BUILDABLE_RADIUS
+): number {
+  const dirRadians = directionToRadians(direction);
+  const mineralDistance = isNatural ? MINERAL_DISTANCE_NATURAL : 7;
+  const mineralCenterX = baseX + Math.cos(dirRadians) * mineralDistance;
+  const mineralCenterY = baseY + Math.sin(dirRadians) * mineralDistance;
+
+  let totalCells = 0;
+  let clearCells = 0;
+
+  // Sample points in the circular area around mineral center
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist <= radius) {
+        totalCells++;
+        const px = mineralCenterX + dx;
+        const py = mineralCenterY + dy;
+        if (!isPositionInWaterOrVoid(px, py, paintCommands)) {
+          clearCells++;
+        }
+      }
+    }
+  }
+
+  return totalCells > 0 ? clearCells / totalCells : 0;
+}
+
+/**
+ * Find a valid mineral direction for a base that avoids water/void
+ * Returns the best direction, or null if none are suitable
+ */
+function findValidMineralDirection(
+  baseX: number,
+  baseY: number,
+  preferredDirection: ResourceDirection | undefined,
+  isNatural: boolean,
+  paintCommands: MapBlueprint['paint']
+): { direction: ResourceDirection; clearPercent: number } | null {
+  // Start with preferred direction, then try others
+  const directionsToTry: ResourceDirection[] = preferredDirection
+    ? [preferredDirection, ...ALL_MINERAL_DIRECTIONS.filter(d => d !== preferredDirection)]
+    : ALL_MINERAL_DIRECTIONS;
+
+  let bestDirection: ResourceDirection | null = null;
+  let bestClearPercent = 0;
+
+  for (const dir of directionsToTry) {
+    // Skip if minerals would be directly in water
+    if (checkMineralsInWater(baseX, baseY, dir, isNatural, paintCommands)) {
+      continue;
+    }
+
+    // Check space availability
+    const clearPercent = checkMineralSpaceAvailable(baseX, baseY, dir, isNatural, paintCommands);
+
+    // Need at least 80% clear space
+    if (clearPercent >= 0.8) {
+      return { direction: dir, clearPercent };
+    }
+
+    // Track best option in case none meet threshold
+    if (clearPercent > bestClearPercent) {
+      bestClearPercent = clearPercent;
+      bestDirection = dir;
+    }
+  }
+
+  // Return best option if we have one with at least 50% space
+  if (bestDirection && bestClearPercent >= 0.5) {
+    return { direction: bestDirection, clearPercent: bestClearPercent };
+  }
+
+  return null;
+}
+
 /**
  * Validate and fix common issues with LLM-generated blueprints
  */
@@ -1102,6 +1303,51 @@ function validateAndFixBlueprint(
 
     // Insert elevation first, then ramps (order matters - ramps read elevation)
     fixed.paint.splice(insertIndex, 0, ...elevationCommands, ...rampCommands);
+  }
+
+  // ============================================================================
+  // VALIDATE AND FIX MINERAL PLACEMENT
+  // ============================================================================
+
+  // Check each base's mineral placement against water/void features
+  for (const base of fixed.bases) {
+    const isNatural = base.type === 'natural';
+    const currentDirection = base.mineralDirection || 'down';
+
+    // Check if current mineral direction would place minerals in water/void
+    const inWater = checkMineralsInWater(base.x, base.y, currentDirection, isNatural, fixed.paint);
+    const clearPercent = checkMineralSpaceAvailable(base.x, base.y, currentDirection, isNatural, fixed.paint);
+
+    if (inWater || clearPercent < 0.8) {
+      // Try to find a better direction
+      const validResult = findValidMineralDirection(
+        base.x,
+        base.y,
+        currentDirection,
+        isNatural,
+        fixed.paint
+      );
+
+      if (validResult) {
+        if (validResult.direction !== currentDirection) {
+          debugInitialization.warn(
+            `Base at (${base.x}, ${base.y}) minerals rotated from '${currentDirection}' to '${validResult.direction}' to avoid water/void`
+          );
+          base.mineralDirection = validResult.direction;
+        }
+        if (validResult.clearPercent < 0.8) {
+          debugInitialization.warn(
+            `Base at (${base.x}, ${base.y}) has limited buildable space around minerals (${Math.round(validResult.clearPercent * 100)}% clear)`
+          );
+        }
+      } else {
+        // No valid direction found - warn user
+        debugInitialization.warn(
+          `WARNING: Base at (${base.x}, ${base.y}) cannot place minerals without overlapping water/void. ` +
+          `Consider moving this base or adjusting nearby water features.`
+        );
+      }
+    }
   }
 
   // ============================================================================
