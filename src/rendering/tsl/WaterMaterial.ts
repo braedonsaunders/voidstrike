@@ -2,15 +2,20 @@
 /**
  * TSL Water Material
  *
- * WebGPU-compatible water material with procedural waves, depth-based coloring,
- * and optional reflections. Designed to work with UnifiedWaterMesh.
+ * WebGPU-compatible water material using physically-based rendering.
+ * Designed to work with UnifiedWaterMesh.
  *
  * Features:
- * - Procedural Gerstner wave animation
- * - Depth-based shallow/deep color blending (via vertex attribute)
- * - Normal map animation for surface detail
- * - Fresnel reflections with optional environment map
- * - Quality-based feature scaling
+ * - Physically-correct fresnel via IOR (no manual calculation)
+ * - Animated multi-layer normal maps for wave detail
+ * - Depth-based shallow/deep color blending
+ * - Quality-scaled wave distortion
+ *
+ * Architecture:
+ * - Uses MeshPhysicalNodeMaterial for proper PBR with IOR support
+ * - colorNode provides BASE color only (no manual lighting)
+ * - normalNode provides actual normals in [-1,1] range
+ * - PBR pipeline handles fresnel, specular, environment reflections
  */
 
 import * as THREE from 'three';
@@ -18,27 +23,21 @@ import {
   Fn,
   vec2,
   vec3,
-  vec4,
   float,
   uniform,
   texture,
   uv,
-  normalWorld,
   positionWorld,
-  cameraPosition,
   normalize,
   clamp,
   mix,
-  dot,
-  pow,
   sin,
   cos,
   attribute,
-  add,
   time,
   type ShaderNodeObject,
 } from 'three/tsl';
-import { MeshStandardNodeMaterial } from 'three/webgpu';
+import { MeshPhysicalNodeMaterial } from 'three/webgpu';
 import type { WaterQuality } from '@/rendering/water/UnifiedWaterMesh';
 
 /**
@@ -47,7 +46,7 @@ import type { WaterQuality } from '@/rendering/water/UnifiedWaterMesh';
 export interface WaterMaterialConfig {
   /** Water quality tier - affects wave detail and animation */
   quality: WaterQuality;
-  /** Sun/light direction for specular highlights */
+  /** Sun/light direction (used for environment, not manual specular) */
   sunDirection: THREE.Vector3;
   /** Shallow water color */
   shallowColor: THREE.Color;
@@ -66,81 +65,71 @@ export interface WaterMaterialConfig {
 /**
  * Quality-based configuration for water rendering
  *
- * textureSize matches the original WaterMesh addon's `size` parameter:
- * - Higher values = larger/coarser waves (texture stretched more)
- * - Lower values = smaller/finer waves (texture repeated more)
- *
- * distortionScale controls the wave normal intensity
+ * Uses PBR properties - fresnel is handled automatically via IOR.
+ * Water IOR = 1.33 gives physically-correct fresnel response:
+ * - 0° (looking down): ~2% reflectance
+ * - 90° (grazing): ~100% reflectance
  */
 interface QualitySettings {
+  /** Wave amplitude for vertex displacement (if used) */
   waveAmplitude: number;
+  /** Wave animation speed multiplier */
   waveFrequency: number;
-  /** Texture size - matches original WaterMesh 'size' (25-50 range) */
+  /** Texture size - larger = coarser waves */
   textureSize: number;
-  /** Distortion scale - matches original WaterMesh 'distortionScale' */
+  /** Normal distortion intensity (0.3-0.85) */
   distortionScale: number;
-  fresnelPower: number;
-  reflectionStrength: number;
-  opacity: number;
+  /** Surface roughness (lower = sharper reflections) */
+  roughness: number;
 }
 
 const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
   low: {
     waveAmplitude: 0.02,
     waveFrequency: 1.0,
-    textureSize: 50.0, // Coarser waves, calmer appearance
-    distortionScale: 0.5,
-    fresnelPower: 5.0, // Higher = narrower fresnel at grazing angles
-    reflectionStrength: 0.15,
-    opacity: 0.85,
+    textureSize: 50.0,
+    distortionScale: 0.3,
+    roughness: 0.25,
   },
   medium: {
     waveAmplitude: 0.04,
     waveFrequency: 1.5,
     textureSize: 40.0,
-    distortionScale: 0.75,
-    fresnelPower: 5.0,
-    reflectionStrength: 0.2,
-    opacity: 0.88,
+    distortionScale: 0.5,
+    roughness: 0.18,
   },
   high: {
     waveAmplitude: 0.06,
     waveFrequency: 2.0,
     textureSize: 30.0,
-    distortionScale: 1.0,
-    fresnelPower: 5.0,
-    reflectionStrength: 0.25,
-    opacity: 0.9,
+    distortionScale: 0.7,
+    roughness: 0.12,
   },
   ultra: {
     waveAmplitude: 0.08,
     waveFrequency: 2.5,
-    textureSize: 25.0, // Finer waves, more visible detail
-    distortionScale: 1.25,
-    fresnelPower: 5.0,
-    reflectionStrength: 0.3,
-    opacity: 0.92,
+    textureSize: 25.0,
+    distortionScale: 0.85,
+    roughness: 0.08,
   },
 };
 
+// Water Index of Refraction - physically correct value
+const WATER_IOR = 1.33;
+
 /**
  * TSL Water Material class
- * Provides animated water surface with depth-based coloring and reflections
+ * Provides animated water surface with physically-based rendering
  */
 export class TSLWaterMaterial {
-  public material: MeshStandardNodeMaterial;
+  public material: MeshPhysicalNodeMaterial;
 
   // Uniforms for runtime updates
-  private uTime = uniform(0);
   private uTimeScale = uniform(1.0);
-  private uSunDirection = uniform(new THREE.Vector3(0.5, 0.8, 0.5).normalize());
   private uShallowColor = uniform(new THREE.Color(0x40a0c0));
   private uDeepColor = uniform(new THREE.Color(0x004488));
-  private uWaveAmplitude = uniform(0.06);
-  private uWaveFrequency = uniform(2.0);
-  private uFresnelPower = uniform(5.0);
-  private uReflectionStrength = uniform(0.25);
-  private uOpacity = uniform(0.9);
+  private uDistortionScale = uniform(0.7);
+  private uRoughness = uniform(0.12);
 
   // Store textures for disposal
   private textures: THREE.Texture[] = [];
@@ -151,14 +140,10 @@ export class TSLWaterMaterial {
     const settings = QUALITY_SETTINGS[config.quality];
 
     // Set initial uniform values
-    this.uSunDirection.value.copy(config.sunDirection);
     this.uShallowColor.value.copy(config.shallowColor);
     this.uDeepColor.value.copy(config.deepColor);
-    this.uWaveAmplitude.value = settings.waveAmplitude;
-    this.uWaveFrequency.value = settings.waveFrequency;
-    this.uFresnelPower.value = settings.fresnelPower;
-    this.uReflectionStrength.value = settings.reflectionStrength;
-    this.uOpacity.value = settings.opacity;
+    this.uDistortionScale.value = settings.distortionScale;
+    this.uRoughness.value = settings.roughness;
     this.uTimeScale.value = config.timeScale ?? 1.0;
 
     // Track textures for disposal
@@ -172,83 +157,49 @@ export class TSLWaterMaterial {
   private createMaterial(
     config: WaterMaterialConfig,
     settings: QualitySettings
-  ): MeshStandardNodeMaterial {
-    const material = new MeshStandardNodeMaterial();
+  ): MeshPhysicalNodeMaterial {
+    // Use MeshPhysicalNodeMaterial for IOR support (proper fresnel)
+    const material = new MeshPhysicalNodeMaterial();
 
-    // Scaled time for animation - applies uTimeScale uniform to global time
-    // This allows callers to control animation speed via setTimeScale()
+    // Scaled time for animation
     const scaledTime = time.mul(this.uTimeScale);
 
-    // Water data attribute: vec3(regionId, isDeep, elevation)
-    // isDeep: 0 = shallow, 1 = deep
-    const hasWaterDataAttr = true; // UnifiedWaterMesh always provides this
-
-    // Color node - depth-based color blending with procedural variation
+    // =========================================================================
+    // COLOR NODE - Base water color only, NO manual lighting
+    // PBR pipeline handles fresnel, specular, environment reflections
+    // =========================================================================
     const colorNode = Fn(() => {
-      const worldPos = positionWorld;
-      const worldNormal = normalWorld;
-
       // Get depth from vertex attribute (0 = shallow, 1 = deep)
-      let depthFactor: ShaderNodeObject<any>;
-      if (hasWaterDataAttr) {
-        const waterData = attribute('aWaterData', 'vec3');
-        depthFactor = waterData.y; // isDeep component
-      } else {
-        depthFactor = float(0.5); // Fallback to mid-blend
-      }
+      const waterData = attribute('aWaterData', 'vec3');
+      const depthFactor = waterData.y;
 
       // Base color blend between shallow and deep
       const baseColor = mix(this.uShallowColor, this.uDeepColor, depthFactor);
 
-      // Add subtle wave-based color variation
-      const wavePhase = worldPos.x.mul(0.1).add(worldPos.z.mul(0.15)).add(scaledTime.mul(0.3));
-      const colorWave = sin(wavePhase).mul(0.03).add(1.0);
-      const variedColor = baseColor.mul(colorWave);
+      // Subtle procedural color variation for natural look
+      const worldPos = positionWorld;
+      const phase1 = worldPos.x.mul(0.08).add(worldPos.z.mul(0.12)).add(scaledTime.mul(0.25));
+      const phase2 = worldPos.x.mul(0.15).sub(worldPos.z.mul(0.1)).add(scaledTime.mul(0.15));
+      const variation = sin(phase1).mul(0.015).add(sin(phase2).mul(0.01)).add(1.0);
 
-      // Fresnel effect for edge highlighting - very subtle
-      const viewDir = normalize(cameraPosition.sub(worldPos));
-      const fresnel = float(1.0).sub(clamp(dot(viewDir, worldNormal), 0.0, 1.0));
-      // Higher power (8) = even narrower effect, only at extreme grazing angles
-      const fresnelFactor = pow(fresnel, float(8.0)).mul(this.uReflectionStrength);
-
-      // Specular highlight from sun - reduced intensity
-      const reflectDir = normalize(
-        this.uSunDirection
-          .negate()
-          .add(worldNormal.mul(dot(worldNormal, this.uSunDirection).mul(2.0)))
-      );
-      const specular = pow(clamp(dot(viewDir, reflectDir), 0.0, 1.0), float(64.0));
-      // Much dimmer specular - subtle glint, not white-out
-      const specularColor = vec3(0.8, 0.85, 0.9).mul(specular).mul(0.15);
-
-      // Combine: base color + subtle fresnel brightening + specular glint
-      // Keep brightening very subtle to prevent white-out
-      const brightenedColor = variedColor.mul(float(1.0).add(fresnelFactor.mul(0.15)));
-      const combinedColor = add(brightenedColor, specularColor);
-      // Clamp to prevent any color channel exceeding 1.0 (causes white-out)
-      const finalColor = vec3(
-        clamp(combinedColor.x, 0.0, 1.0),
-        clamp(combinedColor.y, 0.0, 1.0),
-        clamp(combinedColor.z, 0.0, 1.0)
-      );
-
-      return vec4(finalColor, this.uOpacity);
+      return baseColor.mul(variation);
     })();
 
-    // Normal node - animated normal map for surface detail
-    // Uses texture-based normals matching the original WaterMesh addon
+    // =========================================================================
+    // NORMAL NODE - Returns actual normals in [-1,1] range
+    // NO .mul(0.5).add(0.5) encoding - that's for textures, not normalNode
+    // =========================================================================
     const normalNode = Fn(() => {
-      // Get world-space UV from geometry (1:1 world coordinates)
       const worldUV = uv();
+      const distortion = this.uDistortionScale;
 
       if (!config.normalMap) {
-        // Procedural fallback - multi-scale wave normals
-        // Scale by textureSize to match texture behavior
+        // Procedural multi-scale wave normals
         const uvScale = float(1.0 / settings.textureSize);
         const scaledX = worldUV.x.mul(uvScale);
         const scaledY = worldUV.y.mul(uvScale);
 
-        // Multi-scale wave normals
+        // Three wave layers at different frequencies for natural look
         const wave1 = sin(scaledX.mul(50.0).add(scaledTime.mul(1.2))).mul(
           cos(scaledY.mul(40.0).add(scaledTime.mul(0.8)))
         );
@@ -257,25 +208,19 @@ export class TSLWaterMaterial {
         );
         const wave3 = sin(scaledX.mul(25.0).add(scaledY.mul(30.0)).add(scaledTime.mul(0.5)));
 
-        const distortion = float(settings.distortionScale);
-        const nx = wave1.mul(0.03).add(wave2.mul(0.015)).mul(distortion);
-        const ny = wave2.mul(0.03).add(wave3.mul(0.015)).mul(distortion);
+        // Combine waves with distortion scaling
+        const nx = wave1.mul(0.025).add(wave2.mul(0.012)).mul(distortion);
+        const ny = wave2.mul(0.025).add(wave3.mul(0.012)).mul(distortion);
         const nz = float(1.0);
 
-        return normalize(vec3(nx, ny, nz))
-          .mul(0.5)
-          .add(0.5);
+        // Return actual normal vector in [-1,1] range
+        return normalize(vec3(nx, ny, nz));
       }
 
-      // TEXTURE-BASED NORMALS - matches original WaterMesh addon
-      // textureSize controls wave scale (larger = coarser waves)
-      // UV is divided by textureSize to control texture repeat rate
+      // Texture-based normals with two scrolling layers
       const texScale = float(1.0 / settings.textureSize);
-
-      // Two scrolling normal map layers at different scales and speeds
-      // This creates the characteristic animated water surface
-      const scroll1 = scaledTime.mul(0.03); // Layer 1 scroll speed
-      const scroll2 = scaledTime.mul(0.02); // Layer 2 scroll speed (slower)
+      const scroll1 = scaledTime.mul(0.03);
+      const scroll2 = scaledTime.mul(0.02);
 
       // Layer 1: Primary wave direction
       const uv1 = vec2(
@@ -284,57 +229,71 @@ export class TSLWaterMaterial {
       );
 
       // Layer 2: Secondary wave at different angle and scale
-      const texScale2 = texScale.mul(0.5); // Larger waves for layer 2
+      const texScale2 = texScale.mul(0.5);
       const uv2 = vec2(
         worldUV.x.mul(texScale2).sub(scroll2.mul(0.7)),
         worldUV.y.mul(texScale2).add(scroll2)
       );
 
-      // Sample normal map at both UVs
+      // Sample and decode normal maps (textures are [0,1] encoded)
       const normal1 = texture(config.normalMap!, uv1).rgb.mul(2.0).sub(1.0);
       const normal2 = texture(config.normalMap!, uv2).rgb.mul(2.0).sub(1.0);
 
-      // Blend normals using partial derivative blending (better than simple add)
-      // This preserves detail from both layers
+      // Blend normals using partial derivative method
       const blendedXY = normal1.xy.add(normal2.xy);
       const blendedZ = normal1.z.mul(normal2.z);
       const blended = normalize(vec3(blendedXY.x, blendedXY.y, blendedZ));
 
-      // Apply distortion scale to control wave intensity
-      const distortion = float(settings.distortionScale);
-      const scaledNormal = vec3(blended.x.mul(distortion), blended.y.mul(distortion), blended.z);
+      // Apply distortion scale
+      const scaled = vec3(
+        blended.x.mul(distortion),
+        blended.y.mul(distortion),
+        blended.z
+      );
 
-      return normalize(scaledNormal).mul(0.5).add(0.5);
+      // Return actual normal vector in [-1,1] range
+      return normalize(scaled);
     })();
 
-    // Roughness - low for reflective water surface
+    // =========================================================================
+    // ROUGHNESS NODE - Low for reflective water, with subtle sparkle
+    // =========================================================================
     const roughnessNode = Fn(() => {
-      // Vary roughness slightly with waves for subtle sparkle
       const worldPos = positionWorld;
-      const sparkle = sin(worldPos.x.mul(10.0).add(scaledTime.mul(5.0)))
-        .mul(sin(worldPos.z.mul(10.0).sub(scaledTime.mul(4.0))))
-        .mul(0.05);
+      // Subtle sparkle variation
+      const sparkle = sin(worldPos.x.mul(8.0).add(scaledTime.mul(4.0)))
+        .mul(sin(worldPos.z.mul(8.0).sub(scaledTime.mul(3.0))))
+        .mul(0.03);
 
-      // Base roughness varies by quality
-      const baseRoughness = this.quality === 'ultra' ? 0.1 : this.quality === 'high' ? 0.15 : 0.2;
-      return clamp(float(baseRoughness).add(sparkle), 0.05, 0.4);
+      return clamp(this.uRoughness.add(sparkle), 0.02, 0.35);
     })();
 
-    // Metalness - slight metallic quality for better reflections
-    const metalnessNode = float(0.1);
-
+    // =========================================================================
+    // MATERIAL CONFIGURATION
+    // =========================================================================
     material.colorNode = colorNode;
     material.normalNode = normalNode;
     material.roughnessNode = roughnessNode;
-    material.metalnessNode = metalnessNode;
 
-    // CRITICAL: Water must be OPAQUE for proper depth sorting with terrain
-    // With transparent=true, Three.js renders water in the transparent pass AFTER
-    // all opaque objects (terrain), causing water to appear on top of elevated terrain
-    // even with depthTest=true - the depth test passes because terrain already rendered.
-    // Using opaque rendering ensures water participates in normal depth sorting.
+    // Water is a dielectric (non-metallic)
+    material.metalnessNode = float(0.0);
+
+    // IOR for physically-correct fresnel (water = 1.33)
+    // This replaces manual fresnel calculation entirely
+    material.iorNode = float(WATER_IOR);
+
+    // Optional: slight specular tint for ocean water
+    material.specularColorNode = vec3(0.95, 0.97, 1.0);
+
+    // Environment map for reflections (if provided)
+    if (config.envMap) {
+      material.envMap = config.envMap;
+      material.envMapIntensity = 0.8;
+    }
+
+    // Opaque rendering for proper depth sorting with terrain
     material.transparent = false;
-    material.side = THREE.DoubleSide;
+    material.side = THREE.FrontSide; // Water viewed from above
     material.depthWrite = true;
     material.depthTest = true;
 
@@ -342,18 +301,19 @@ export class TSLWaterMaterial {
   }
 
   /**
-   * Update time-based animation
-   * Call this each frame with deltaTime
+   * Update time-based animation (currently handled by TSL time node)
    */
-  public update(deltaTime: number): void {
-    this.uTime.value += deltaTime;
+  public update(_deltaTime: number): void {
+    // Time is handled by the TSL `time` node automatically
+    // This method kept for API compatibility
   }
 
   /**
-   * Set sun direction for specular highlights
+   * Set sun direction for environment lighting
    */
-  public setSunDirection(direction: THREE.Vector3): void {
-    this.uSunDirection.value.copy(direction).normalize();
+  public setSunDirection(_direction: THREE.Vector3): void {
+    // Sun direction affects scene lighting, not the material directly
+    // PBR handles this via the scene's directional light
   }
 
   /**
@@ -370,11 +330,8 @@ export class TSLWaterMaterial {
   public setQuality(quality: WaterQuality): void {
     this.quality = quality;
     const settings = QUALITY_SETTINGS[quality];
-    this.uWaveAmplitude.value = settings.waveAmplitude;
-    this.uWaveFrequency.value = settings.waveFrequency;
-    this.uFresnelPower.value = settings.fresnelPower;
-    this.uReflectionStrength.value = settings.reflectionStrength;
-    this.uOpacity.value = settings.opacity;
+    this.uDistortionScale.value = settings.distortionScale;
+    this.uRoughness.value = settings.roughness;
   }
 
   /**
@@ -387,7 +344,7 @@ export class TSLWaterMaterial {
   /**
    * Get the underlying Three.js material
    */
-  public getMaterial(): MeshStandardNodeMaterial {
+  public getMaterial(): MeshPhysicalNodeMaterial {
     return this.material;
   }
 
@@ -402,7 +359,6 @@ export class TSLWaterMaterial {
 
 /**
  * Create a TSL water material with the specified configuration
- * Factory function for convenient material creation
  */
 export function createWaterMaterial(config: WaterMaterialConfig): TSLWaterMaterial {
   return new TSLWaterMaterial(config);
@@ -410,7 +366,6 @@ export function createWaterMaterial(config: WaterMaterialConfig): TSLWaterMateri
 
 /**
  * Update the water material's time uniform
- * Call this each frame for animation
  */
 export function updateWaterMaterial(material: TSLWaterMaterial, deltaTime: number): void {
   material.update(deltaTime);
@@ -436,14 +391,14 @@ export async function loadWaterNormalsTexture(): Promise<THREE.Texture> {
     const loader = new THREE.TextureLoader();
     loader.load(
       '/textures/waternormals.jpg',
-      (texture: THREE.Texture) => {
-        texture.wrapS = THREE.RepeatWrapping;
-        texture.wrapT = THREE.RepeatWrapping;
-        texture.minFilter = THREE.LinearMipmapLinearFilter;
-        texture.magFilter = THREE.LinearFilter;
-        texture.generateMipmaps = true;
-        cachedWaterNormalsTexture = texture;
-        resolve(texture);
+      (loadedTexture: THREE.Texture) => {
+        loadedTexture.wrapS = THREE.RepeatWrapping;
+        loadedTexture.wrapT = THREE.RepeatWrapping;
+        loadedTexture.minFilter = THREE.LinearMipmapLinearFilter;
+        loadedTexture.magFilter = THREE.LinearFilter;
+        loadedTexture.generateMipmaps = true;
+        cachedWaterNormalsTexture = loadedTexture;
+        resolve(loadedTexture);
       },
       undefined,
       () => {
@@ -460,7 +415,6 @@ export async function loadWaterNormalsTexture(): Promise<THREE.Texture> {
 
 /**
  * Get the cached water normals texture synchronously
- * Returns null if not yet loaded
  */
 export function getWaterNormalsTextureSync(): THREE.Texture | null {
   return cachedWaterNormalsTexture;
@@ -468,7 +422,7 @@ export function getWaterNormalsTextureSync(): THREE.Texture | null {
 
 /**
  * Generate fallback water normals texture
- * Used when the texture file cannot be loaded
+ * Normals are stored in [0,1] texture encoding (shader decodes to [-1,1])
  */
 function generateFallbackNormals(): THREE.DataTexture {
   const size = 256;
@@ -489,6 +443,7 @@ function generateFallbackNormals(): THREE.DataTexture {
       const nz = 1.0;
       const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
 
+      // Encode to [0,1] for texture storage
       data[idx] = Math.floor(((nx / len) * 0.5 + 0.5) * 255);
       data[idx + 1] = Math.floor(((ny / len) * 0.5 + 0.5) * 255);
       data[idx + 2] = Math.floor(((nz / len) * 0.5 + 0.5) * 255);
@@ -496,9 +451,9 @@ function generateFallbackNormals(): THREE.DataTexture {
     }
   }
 
-  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.needsUpdate = true;
-  return texture;
+  const fallbackTexture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  fallbackTexture.wrapS = THREE.RepeatWrapping;
+  fallbackTexture.wrapT = THREE.RepeatWrapping;
+  fallbackTexture.needsUpdate = true;
+  return fallbackTexture;
 }
