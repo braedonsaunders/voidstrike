@@ -227,7 +227,13 @@ export async function publishPublicLobby(
   // Publish to relays
   const results = await Promise.allSettled(
     relays.map(r =>
-      Promise.all(pool.publish([r], event)).catch(() => [])
+      Promise.all(pool.publish([r], event)).catch((err) => {
+        // Log non-rate-limit errors for debugging
+        if (!err?.message?.includes('rate-limit')) {
+          debugNetworking.warn(`[LobbyBrowser] Relay publish failed for ${r}:`, err);
+        }
+        return [];
+      })
     )
   );
 

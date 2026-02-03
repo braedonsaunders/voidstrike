@@ -32,15 +32,14 @@ import {
 import { generateTileCache, generateSoloNavMesh } from '@recast-navigation/generators';
 import { distance } from '@/utils/math';
 import { NAVMESH_CONFIG, SOLO_NAVMESH_CONFIG } from '@/data/pathfinding.config';
+import { debugPathfinding, setWorkerDebugSettings } from '@/utils/debugLogger';
+import type { DebugSettings } from '@/store/uiStore';
 
 const WALKABLE_DISTANCE_TOLERANCE = Math.max(
   NAVMESH_CONFIG.walkableRadius * 1.5,
   NAVMESH_CONFIG.cs * 1.5
 );
 const WALKABLE_HEIGHT_TOLERANCE = NAVMESH_CONFIG.walkableClimb * 2;
-
-// Debug flag for worker logging (workers can't access UI store)
-const DEBUG = false;
 
 // Message types
 interface InitMessage {
@@ -130,6 +129,11 @@ interface IsWaterWalkableMessage {
   y: number;
 }
 
+interface SetDebugSettingsMessage {
+  type: 'setDebugSettings';
+  settings: DebugSettings;
+}
+
 type WorkerMessage =
   | InitMessage
   | LoadNavMeshMessage
@@ -141,7 +145,8 @@ type WorkerMessage =
   | FindNearestPointMessage
   | LoadWaterNavMeshMessage
   | FindWaterPathMessage
-  | IsWaterWalkableMessage;
+  | IsWaterWalkableMessage
+  | SetDebugSettingsMessage;
 
 // Ground navmesh state
 let navMesh: NavMesh | null = null;
@@ -174,7 +179,7 @@ async function initialize(): Promise<boolean> {
     initialized = true;
     return true;
   } catch (error) {
-    console.error('[PathfindingWorker] WASM init failed:', error);
+    debugPathfinding.error('[PathfindingWorker] WASM init failed:', error);
     return false;
   }
 }
@@ -184,14 +189,14 @@ async function initialize(): Promise<boolean> {
  */
 function loadNavMesh(data: Uint8Array): boolean {
   if (!initialized) {
-    console.error('[PathfindingWorker] WASM not initialized');
+    debugPathfinding.error('[PathfindingWorker] WASM not initialized');
     return false;
   }
 
   try {
     const result = importNavMesh(data);
     if (!result.navMesh) {
-      console.error('[PathfindingWorker] Failed to import navmesh');
+      debugPathfinding.error('[PathfindingWorker] Failed to import navmesh');
       return false;
     }
 
@@ -211,7 +216,7 @@ function loadNavMesh(data: Uint8Array): boolean {
 
     return true;
   } catch (error) {
-    console.error('[PathfindingWorker] Error loading navmesh:', error);
+    debugPathfinding.error('[PathfindingWorker] Error loading navmesh:', error);
     return false;
   }
 }
@@ -227,19 +232,16 @@ function loadNavMeshFromGeometry(
   heightMapH?: number
 ): boolean {
   if (!initialized) {
-    console.error('[PathfindingWorker] WASM not initialized');
+    debugPathfinding.error('[PathfindingWorker] WASM not initialized');
     return false;
   }
 
-  if (DEBUG) {
-    // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
-    console.log('[PathfindingWorker] Generating navmesh from geometry:', {
-      vertices: positions.length / 3,
-      triangles: indices.length / 3,
-      positionsType: positions.constructor.name,
-      indicesType: indices.constructor.name,
-    });
-  }
+  debugPathfinding.log('[PathfindingWorker] Generating navmesh from geometry:', {
+    vertices: positions.length / 3,
+    triangles: indices.length / 3,
+    positionsType: positions.constructor.name,
+    indicesType: indices.constructor.name,
+  });
 
   if (heightMapData && heightMapW && heightMapH) {
     heightMap = heightMapData;
@@ -264,17 +266,13 @@ function loadNavMeshFromGeometry(
         heightMapWidth = heightMapW;
         heightMapHeight = heightMapH;
       }
-      // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
-      if (DEBUG) console.log('[PathfindingWorker] TileCache navmesh generated successfully');
+      debugPathfinding.log('[PathfindingWorker] TileCache navmesh generated successfully');
       return true;
     }
 
     // TileCache failed - try solo navmesh fallback
-    if (DEBUG) {
-      console.warn('[PathfindingWorker] TileCache generation failed:', (result as { error?: string }).error);
-      // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
-      console.log('[PathfindingWorker] Trying solo navmesh fallback...');
-    }
+    debugPathfinding.warn('[PathfindingWorker] TileCache generation failed:', (result as { error?: string }).error);
+    debugPathfinding.log('[PathfindingWorker] Trying solo navmesh fallback...');
 
     // Solo navmesh fallback (no dynamic obstacles but more robust)
     const soloResult = generateSoloNavMesh(positions, indices, SOLO_NAVMESH_CONFIG);
@@ -288,15 +286,14 @@ function loadNavMeshFromGeometry(
         heightMapWidth = heightMapW;
         heightMapHeight = heightMapH;
       }
-      // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
-      if (DEBUG) console.log('[PathfindingWorker] Solo navmesh generated successfully');
+      debugPathfinding.log('[PathfindingWorker] Solo navmesh generated successfully');
       return true;
     }
 
-    console.error('[PathfindingWorker] Solo navmesh also failed:', (soloResult as { error?: string }).error);
+    debugPathfinding.error('[PathfindingWorker] Solo navmesh also failed:', (soloResult as { error?: string }).error);
     return false;
   } catch (error) {
-    console.error('[PathfindingWorker] Error generating navmesh:', error);
+    debugPathfinding.error('[PathfindingWorker] Error generating navmesh:', error);
     return false;
   }
 }
@@ -552,17 +549,14 @@ function removeObstacle(entityId: number): boolean {
  */
 function loadWaterNavMesh(positions: Float32Array, indices: Uint32Array): boolean {
   if (!initialized) {
-    console.error('[PathfindingWorker] WASM not initialized');
+    debugPathfinding.error('[PathfindingWorker] WASM not initialized');
     return false;
   }
 
-  if (DEBUG) {
-    // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
-    console.log('[PathfindingWorker] Generating water navmesh:', {
-      vertices: positions.length / 3,
-      triangles: indices.length / 3,
-    });
-  }
+  debugPathfinding.log('[PathfindingWorker] Generating water navmesh:', {
+    vertices: positions.length / 3,
+    triangles: indices.length / 3,
+  });
 
   try {
     // Use solo navmesh for water (no dynamic obstacles needed on water)
@@ -571,15 +565,14 @@ function loadWaterNavMesh(positions: Float32Array, indices: Uint32Array): boolea
     if (result.success && result.navMesh) {
       waterNavMesh = result.navMesh;
       waterNavMeshQuery = new NavMeshQuery(waterNavMesh);
-      // eslint-disable-next-line no-console -- Debug logging gated by DEBUG flag
-      if (DEBUG) console.log('[PathfindingWorker] Water navmesh generated successfully');
+      debugPathfinding.log('[PathfindingWorker] Water navmesh generated successfully');
       return true;
     }
 
-    console.error('[PathfindingWorker] Water navmesh generation failed');
+    debugPathfinding.error('[PathfindingWorker] Water navmesh generation failed');
     return false;
   } catch (error) {
-    console.error('[PathfindingWorker] Error generating water navmesh:', error);
+    debugPathfinding.error('[PathfindingWorker] Error generating water navmesh:', error);
     return false;
   }
 }
@@ -769,6 +762,11 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         requestId: message.requestId,
         walkable,
       });
+      break;
+    }
+
+    case 'setDebugSettings': {
+      setWorkerDebugSettings(message.settings);
       break;
     }
   }

@@ -7,6 +7,7 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 ## Current Implementation
 
 ### Renderer
+
 - **WebGPU Renderer** with WebGL2 fallback
 - **TSL (Three.js Shading Language)** for shader authoring
 - Post-processing pipeline using `three/webgpu` PostProcessing class
@@ -14,19 +15,19 @@ VOIDSTRIKE uses Three.js with WebGPU renderer and TSL (Three.js Shading Language
 
 ### Post-Processing Effects (Implemented)
 
-| Effect | Status | Description |
-|--------|--------|-------------|
-| **GTAO** | ✅ Implemented | Ground Truth Ambient Occlusion for contact shadows |
-| **Bloom** | ✅ Implemented | HDR glow effect with threshold/strength/radius controls |
-| **FXAA** | ✅ Implemented | Fast Approximate Anti-Aliasing |
-| **TRAA** | ✅ Implemented | Temporal Reprojection Anti-Aliasing with MRT velocity buffers |
-| **SSR** | ✅ Implemented | Screen Space Reflections for metallic surfaces |
-| **FSR 1.0 EASU** | ✅ Implemented | FidelityFX Super Resolution upscaling with Lanczos2 kernel |
-| **RCAS Sharpening** | ✅ Implemented | Robust Contrast-Adaptive Sharpening |
-| **Vignette** | ✅ Implemented | Cinematic edge darkening |
-| **Color Grading** | ✅ Implemented | Exposure, saturation, contrast with ACES Filmic tone mapping |
-| **Volumetric Fog** | ✅ Implemented | Raymarched atmospheric scattering with quality presets |
-| **Fog of War** | ✅ Implemented | Classic RTS-style vision with soft edges, desaturation, animated clouds |
+| Effect              | Status         | Description                                                             |
+| ------------------- | -------------- | ----------------------------------------------------------------------- |
+| **GTAO**            | ✅ Implemented | Ground Truth Ambient Occlusion for contact shadows                      |
+| **Bloom**           | ✅ Implemented | HDR glow effect with threshold/strength/radius controls                 |
+| **FXAA**            | ✅ Implemented | Fast Approximate Anti-Aliasing                                          |
+| **TRAA**            | ✅ Implemented | Temporal Reprojection Anti-Aliasing with MRT velocity buffers           |
+| **SSR**             | ✅ Implemented | Screen Space Reflections for metallic surfaces                          |
+| **FSR 1.0 EASU**    | ✅ Implemented | FidelityFX Super Resolution upscaling with Lanczos2 kernel              |
+| **RCAS Sharpening** | ✅ Implemented | Robust Contrast-Adaptive Sharpening                                     |
+| **Vignette**        | ✅ Implemented | Cinematic edge darkening                                                |
+| **Color Grading**   | ✅ Implemented | Exposure, saturation, contrast with ACES Filmic tone mapping            |
+| **Volumetric Fog**  | ✅ Implemented | Raymarched atmospheric scattering with quality presets                  |
+| **Fog of War**      | ✅ Implemented | Classic RTS-style vision with soft edges, desaturation, animated clouds |
 
 ### Post-Processing Architecture (Modular Design)
 
@@ -60,6 +61,7 @@ src/rendering/tsl/
 ```
 
 **Design Principles:**
+
 - `PostProcessing.ts` owns pipeline orchestration and public API
 - `EffectPasses.ts` contains pure functions for creating individual effects
 - `TemporalManager.ts` handles quarter-resolution temporal reprojection
@@ -68,6 +70,7 @@ src/rendering/tsl/
 ### Anti-Aliasing Details
 
 #### TRAA (Temporal Reprojection Anti-Aliasing)
+
 - Uses **per-instance velocity** via MRT for proper motion vectors
 - Optional RCAS sharpening to counter temporal blur
 - TRAANode handles camera jitter internally (Halton sequence)
@@ -76,28 +79,30 @@ src/rendering/tsl/
 **Per-Instance Velocity (AAA Optimization):**
 Three.js's built-in VelocityNode doesn't work for InstancedMesh (only tracks per-object, not per-instance). Our solution:
 
-| Renderer | Velocity | Cost |
-|----------|----------|------|
-| UnitRenderer | Full per-instance | ~5-10% overhead |
-| BuildingRenderer | Zero (static) | None |
-| ResourceRenderer | Zero (static) | None |
+| Renderer         | Velocity          | Cost            |
+| ---------------- | ----------------- | --------------- |
+| UnitRenderer     | Full per-instance | ~5-10% overhead |
+| BuildingRenderer | Zero (static)     | None            |
+| ResourceRenderer | Zero (static)     | None            |
 
 **Key Insight:** Floating-point precision differences between code paths caused micro-jitter. By storing BOTH current and previous instance matrices as attributes and reading them identically, we eliminate precision issues.
 
 See: [GitHub Issue #31892](https://github.com/mrdoob/three.js/issues/31892)
 
 **Implementation:**
+
 ```typescript
 // UnitRenderer: Full velocity tracking
-setupInstancedVelocity(mesh);      // Add 8 vec4 attributes (curr + prev matrices)
-swapInstanceMatrices(mesh);        // At frame START: prev = curr
-commitInstanceMatrices(mesh);      // After updates: curr = mesh.instanceMatrix
+setupInstancedVelocity(mesh); // Add 8 vec4 attributes (curr + prev matrices)
+swapInstanceMatrices(mesh); // At frame START: prev = curr
+commitInstanceMatrices(mesh); // After updates: curr = mesh.instanceMatrix
 
 // BuildingRenderer/ResourceRenderer: No velocity (static objects)
 // Velocity node returns zero for meshes without attributes
 ```
 
 **Velocity Node Architecture:**
+
 ```
 createInstancedVelocityNode()
 ├── Read currInstanceMatrix0-3 (current frame transforms)
@@ -108,6 +113,7 @@ createInstancedVelocityNode()
 ```
 
 #### SSR (Screen Space Reflections)
+
 - Real-time reflections on metallic surfaces
 - Uses MRT to output view-space normals
 - Configurable parameters:
@@ -124,6 +130,7 @@ renderPipeline.applyConfig({ ssrEnabled: true });
 **Note:** SSR uses MRT for normals which works correctly with InstancedMesh (unlike velocity).
 
 #### FSR 1.0 EASU Upscaling
+
 - Proper FSR 1.0 (FidelityFX Super Resolution) implementation
 - 12-tap edge-adaptive filter with Lanczos2 kernel
 - Directional filtering: filters ALONG edges, not across them
@@ -131,6 +138,7 @@ renderPipeline.applyConfig({ ssrEnabled: true });
 - Configurable render scale (50%-100%)
 
 **Algorithm:**
+
 1. Sample 12 texels in cross pattern around target pixel
 2. Compute luminance gradients for edge direction detection
 3. Apply Lanczos2-weighted directional filtering based on edge orientation
@@ -142,11 +150,13 @@ The internal render target uses `LinearSRGBColorSpace` because the post-processi
 
 **Critical: Dual-Pipeline Color Space Fix:**
 When rendering the internal pipeline to `internalRenderTarget`, the renderer's `outputColorSpace` must be temporarily set to `LinearSRGBColorSpace`. This is because:
+
 1. ACES tone mapping already outputs display-referred (gamma-corrected) SDR values
 2. If `outputColorSpace = SRGBColorSpace` (the default), Three.js applies ANOTHER gamma conversion
 3. This caused washed out colors (double gamma correction)
 
 The fix in `PostProcessing.render()`:
+
 ```typescript
 // Save original color space
 const originalColorSpace = this.renderer.outputColorSpace;
@@ -158,6 +168,7 @@ this.renderer.outputColorSpace = originalColorSpace;
 ```
 
 **Tone Mapping Architecture:**
+
 - `renderer.toneMapping = ACESFilmicToneMapping` (Three.js renderer)
 - `renderer.toneMappingExposure = 1.0`
 - PostProcessing also applies ACES Filmic in color grading pass
@@ -188,28 +199,33 @@ The render pipeline uses a dual-pipeline architecture like AAA games:
 ```
 
 **Implementation:**
+
 1. Set renderer to render resolution
 2. Create internal PostProcessing (all buffers at render res)
 3. Restore renderer to display resolution
 4. Create display PostProcessing (EASU only)
 
 **Render Order:**
+
 1. Temporarily set renderer to render resolution
 2. Render internal pipeline (scene + effects + TAA)
 3. Restore renderer to display resolution
 4. Render display pipeline (EASU upscale to canvas)
 
 This solves:
+
 - **WebGPU depth copy errors** - All depths match (no cross-resolution copies)
 - **Camera shake with FSR** - TAA jitter at render resolution
 - **Proper temporal accumulation** - History buffer at correct resolution
 
 **SSR/SSGI Normal Texture Fix:**
+
 - Pass raw encoded normal texture from MRT (has `.sample()` method)
 - Do NOT use `colorToDirection()` before passing - returns Fn node without `.sample()`
 - SSR/SSGI handle decoding internally during ray marching
 
 **Volumetric Fog Input Type Fix (January 2026):**
+
 - Volumetric fog must handle both texture nodes AND Fn nodes as input
 - When SSGI/SSR are enabled (ultra preset), previous effects transform `outputNode` from a texture node to a Fn node via `.mul()` and `.add()` operations
 - Fn nodes do NOT have `.sample()` method - only texture nodes do
@@ -220,6 +236,7 @@ This solves:
 ### Effect Pipeline Order
 
 **Internal Pipeline (render resolution):**
+
 1. **Scene Pass** - Render scene with MRT (output, normals, velocity)
 2. **SSGI** - Global illumination + AO (if enabled)
 3. **GTAO** - Ambient occlusion (if SSGI disabled)
@@ -231,6 +248,7 @@ This solves:
 9. **TAA/FXAA** - Anti-aliasing
 
 **Display Pipeline (display resolution):**
+
 1. **EASU** - Edge-adaptive upscaling from internal output
 
 ---
@@ -244,6 +262,7 @@ This solves:
 Fully GPU-accelerated vision and fog of war computation using Three.js r182 compute shaders.
 
 **Architecture (GPU-Only Path - Option A):**
+
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │  VisionCompute  │───→│  StorageTexture  │───→│   FogOfWar      │
@@ -254,6 +273,7 @@ Fully GPU-accelerated vision and fog of war computation using Three.js r182 comp
 ```
 
 **Key Features:**
+
 - **No CPU readback**: FogOfWar shader samples StorageTexture directly
 - **Storage buffer**: Caster positions packed as `vec4(x, y, sightRange, playerId)`
 - **Storage texture**: RGBA per cell (R=explored, G=visible) per player
@@ -261,11 +281,13 @@ Fully GPU-accelerated vision and fog of war computation using Three.js r182 comp
 - **Workgroup size**: 64 threads per workgroup
 
 **Benefits:**
+
 - 1000+ vision casters at 60Hz (vs. hundreds at 2Hz with worker)
 - Zero CPU↔GPU texture upload overhead
 - Version tracking for dirty checking
 
 **Usage:**
+
 ```typescript
 // In VisionSystem
 this.gpuVisionCompute = new VisionCompute(renderer, {
@@ -288,17 +310,20 @@ fogOfWar.setGPUVisionCompute(gpuVisionCompute);
 Quarter-resolution rendering with history reprojection reduces GPU cost by 75%.
 
 **GTAO Temporal Reprojection:**
+
 - Render GTAO at quarter resolution (width/2 × height/2)
 - Reproject previous frame's AO using velocity buffer
 - Blend: 90% reprojected + 10% new quarter-res sample
 - Depth-based rejection prevents disocclusion ghosting
 
 **SSR Temporal Reprojection:**
+
 - Render SSR at quarter resolution
 - Neighborhood clamping (3×3) reduces ghosting
 - Blend: 85% reprojected + 15% new (lower for reflection parallax)
 
 **Configuration:**
+
 ```typescript
 renderPipeline.applyConfig({
   temporalAOEnabled: true,
@@ -315,6 +340,7 @@ renderPipeline.applyConfig({
 The culling system provides unified frustum culling for all entities (units and buildings) with proper sphere-frustum intersection.
 
 **Architecture:**
+
 ```
 ┌─────────────────┐    ┌────────────────────────┐    ┌─────────────────────┐
 │  CullingService │───→│  UnifiedCullingCompute │───→│ GPUIndirectRenderer │
@@ -328,12 +354,14 @@ The culling system provides unified frustum culling for all entities (units and 
 ```
 
 **File Structure:**
+
 - `CullingService.ts` - High-level interface for renderers
 - `GPUEntityBuffer.ts` - Unified transform/metadata storage for units + buildings
 - `UnifiedCullingCompute.ts` - GPU/CPU frustum culling with sphere intersection
 - `GPUIndirectRenderer.ts` - Indirect draw manager
 
 **Key Features:**
+
 1. **Unified Entity Buffer** - Single buffer handles both units and buildings
 2. **Proper Sphere-Frustum Intersection** - Fixes disappearing objects at close zoom
 3. **Category-Aware Culling** - Separate indirect args for units vs buildings
@@ -341,6 +369,7 @@ The culling system provides unified frustum culling for all entities (units and 
 5. **GPU/CPU Fallback** - WebGPU when available, CPU fallback for WebGL
 
 **GPUEntityBuffer:**
+
 - Slot allocation with category (Unit/Building) support
 - Transform buffer with velocity tracking (prev/curr matrices)
 - Metadata buffer: `vec4(entityId, packedTypeAndCategory, playerId, boundingRadius)`
@@ -349,6 +378,7 @@ The culling system provides unified frustum culling for all entities (units and 
 - Quarantine system for safe GPU buffer reclamation
 
 **UnifiedCullingCompute (r182 Patterns):**
+
 - **Two-pass compute**: Reset pass + Cull pass for deterministic results
 - **Sphere-Frustum Intersection**: `if (distance_to_plane < -radius)` instead of point test
 - TSL `Fn().compute()` shader with WORKGROUP_SIZE=64
@@ -360,6 +390,7 @@ The culling system provides unified frustum culling for all entities (units and 
 - CPU fallback using `THREE.Frustum.intersectsSphere()`
 
 **CullingService (High-Level API):**
+
 ```typescript
 // Create service (typically in UnitRenderer.enableGPUDrivenRendering())
 const cullingService = new CullingService({ maxEntities: 8192 });
@@ -382,6 +413,7 @@ if (cullingService.isVisible(entityId)) {
 ```
 
 **Renderer Integration:**
+
 - `UnitRenderer` creates and owns the CullingService
 - `BuildingRenderer` receives the shared CullingService via `setCullingService()`
 - Both renderers use `isVisible()` for frustum culling instead of point-in-frustum tests
@@ -389,6 +421,7 @@ if (cullingService.isVisible(entityId)) {
 ### GPU-Driven Indirect Draw
 
 **GPUIndirectRenderer (r174+ API):**
+
 - One IndirectMesh per (unitType, LOD) pair
 - **r174+ indirect draw**: `geometry.setIndirect(IndirectStorageBufferAttribute)`
 - **Per-mesh offset**: `geometry.drawIndirectOffset` for shared buffer
@@ -398,6 +431,7 @@ if (cullingService.isVisible(entityId)) {
 - Single drawIndexedIndirect call per unit type/LOD
 
 **Usage:**
+
 ```typescript
 // Enable GPU-driven mode (UnitRenderer)
 unitRenderer.enableGPUDrivenRendering();
@@ -412,10 +446,65 @@ console.log(stats.visibleEntities, stats.totalIndirectDrawCalls);
 ```
 
 **WebGPU Indirect Draw Status (2026):**
+
 - `geometry.setIndirect()` - Standardized API in Three.js r174+
 - `drawIndirectOffset` - Per-geometry byte offset for shared buffers
 - `multiDrawIndexedIndirect()` - Still experimental via `chromium-experimental-multi-draw-indirect`
 - Our implementation uses single shared buffer with per-geometry offsets
+
+### LOD Hysteresis
+
+**Problem:** Without hysteresis, entities near LOD distance boundaries flicker rapidly between detail levels as the camera makes small movements.
+
+**Solution:** LOD hysteresis adds a "dead zone" around distance thresholds to prevent flickering:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    LOD HYSTERESIS                               │
+│                                                                 │
+│  LOD0 (High)    │    LOD0→1 @ 55    LOD1→0 @ 45    │   LOD1     │
+│  ───────────────[───────]───────────────[───────]───────────────│
+│                45      50              50       55              │
+│                │       │               │        │               │
+│                │  10% hysteresis       │  10% hysteresis        │
+│                │                       │                        │
+│                └── Switch DOWN here ───┘── Switch UP here       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Thresholds with 10% hysteresis (default):**
+| Transition | Standard | With Hysteresis |
+|------------|----------|-----------------|
+| LOD0 → LOD1 | 50 | 55 (switch UP at 50 _ 1.10) |
+| LOD1 → LOD0 | 50 | 45 (switch DOWN at 50 _ 0.90) |
+| LOD1 → LOD2 | 120 | 132 (switch UP at 120 _ 1.10) |
+| LOD2 → LOD1 | 120 | 108 (switch DOWN at 120 _ 0.90) |
+
+**Implementation:**
+
+- `AssetManager.getBestLODWithHysteresis()` - Central hysteresis calculation
+- `UnitRenderer.entityCurrentLOD` - Tracks current LOD per entity
+- `BuildingRenderer.entityCurrentLOD` - Same for buildings
+- `UnifiedCullingCompute.previousLODAssignments` - CPU fallback path tracking
+
+**Configuration:**
+
+```typescript
+// Graphics settings (uiStore.ts)
+lodEnabled: true,
+lodDistance0: 50,    // LOD0 threshold (world units)
+lodDistance1: 120,   // LOD1 threshold (world units)
+lodHysteresis: 0.1,  // 10% hysteresis margin
+
+// LODConfig interface (UnifiedCullingCompute.ts)
+interface LODConfig {
+  LOD0_MAX: number;
+  LOD1_MAX: number;
+  hysteresis?: number; // Default 0.1 (10%)
+}
+```
+
+**Note:** GPU-driven rendering path (WebGPU compute shader) does not currently support hysteresis due to the complexity of per-entity LOD state tracking in GPU memory. The standard CPU-side rendering paths fully support hysteresis.
 
 ---
 
@@ -424,13 +513,16 @@ console.log(stats.visibleEntities, stats.totalIndirectDrawCalls);
 ### High Priority (Easy to Add)
 
 #### 1. Motion Blur
+
 **Status:** Now possible with custom velocity implementation!
 
 **Benefits:**
+
 - Cinematic feel for fast-moving units/projectiles
 - Per-pixel blur based on motion vectors
 
 **Implementation:**
+
 ```typescript
 import { motionBlur } from 'three/tsl';
 // Use our custom velocity from MRT
@@ -441,6 +533,7 @@ const blurredNode = motionBlur(outputNode, scenePassVelocity);
 **Note:** Our custom per-instance velocity now enables proper motion blur with InstancedMesh objects.
 
 #### 2. Depth of Field (Bokeh DoF)
+
 ```typescript
 import { dof } from 'three/tsl';
 // dof(node, viewZNode, focusDistance, focalLength, bokehScale)
@@ -448,11 +541,13 @@ const dofNode = dof(outputNode, scenePassDepth, 10, 50, 2.0);
 ```
 
 **Use Cases:**
+
 - Auto-focus on selected units
 - Dramatic cutscene moments
 - Menu/pause screen background blur
 
 #### 3. Film Grain & Chromatic Aberration
+
 ```typescript
 import { film, chromaticAberration } from 'three/tsl';
 const grainNode = film(outputNode, intensity, grayscale);
@@ -460,6 +555,7 @@ const caNode = chromaticAberration(outputNode, offset);
 ```
 
 #### 4. Anamorphic Lens Flares
+
 ```typescript
 import { anamorphic, lensflare } from 'three/tsl';
 const flareNode = anamorphic(outputNode, threshold, scale, samples);
@@ -470,9 +566,11 @@ const flareNode = anamorphic(outputNode, threshold, scale, samples);
 ### Medium Priority (More Work, Big Impact)
 
 #### 5. Screen Space Global Illumination (SSGI)
+
 [Anderson Mancini's SSGI demo](https://ssgi-webgpu-demo.vercel.app/) shows this working with Three.js WebGPU + TSL.
 
 **Features:**
+
 - Real-time color bleeding
 - Dynamic emissive lighting
 - Realistic light bounces
@@ -480,9 +578,11 @@ const flareNode = anamorphic(outputNode, threshold, scale, samples);
 **Impact:** Buildings casting colored light, explosions illuminating surroundings - would set VOIDSTRIKE apart from any browser game.
 
 #### 6. Volumetric Lighting / God Rays
+
 [Official Three.js example](https://threejs.org/examples/webgpu_volume_lighting.html) available.
 
 **Features:**
+
 - Atmospheric light shafts through fog/dust
 - Compatible with native lights and shadows
 - Post-processing based
@@ -490,17 +590,21 @@ const flareNode = anamorphic(outputNode, threshold, scale, samples);
 **Impact:** Perfect for battlefield atmosphere, smoke, dust effects.
 
 #### 7. PCSS Soft Shadows
+
 Percentage-Closer Soft Shadows with variable penumbra.
 
 **Features:**
+
 - Soft shadow edges based on distance from caster
 - More realistic than hard shadows
 - Vogel disk sampling for quality
 
 #### 8. Atmospheric Scattering
+
 Based on [Epic's Sebastian Hillaire paper](https://discourse.threejs.org/t/volumetric-lighting-in-webgpu/87959).
 
 **Features:**
+
 - Realistic sky rendering
 - Proper light scattering
 - Day/night cycle support
@@ -510,22 +614,27 @@ Based on [Epic's Sebastian Hillaire paper](https://discourse.threejs.org/t/volum
 ### Cutting-Edge (Research Required)
 
 #### 9. Temporal Super Resolution (TSR/DLSS-like)
+
 Use MRT velocity data for frame interpolation and temporal upscaling beyond EASU.
 
 **Potential:** True industry-first for browsers - neural-network-free temporal upscaling using motion vectors for reconstruction.
 
 #### 10. GPU Particle Systems with Collision
+
 Compute shader particles that interact with depth buffer.
 
 **Features:**
+
 - Debris, smoke, sparks
 - Scene collision via depth testing
 - Thousands of particles at 60fps
 
 #### 11. Deferred Decals
+
 Project damage marks, tire tracks, blast craters onto any surface.
 
 **Features:**
+
 - No texture modification needed
 - Screen-space projection
 - Dynamic application
@@ -552,6 +661,7 @@ const DESIRED_LIMITS = {
 ```
 
 **How it works:**
+
 1. Query the GPU adapter's maximum supported limits
 2. Request the minimum of desired and adapter-supported limits
 3. Create a custom `WebGPUBackend` with `requiredLimits`
@@ -561,6 +671,7 @@ const DESIRED_LIMITS = {
 Most modern GPUs (Vulkan/D3D12/Metal backends) support 16+ vertex buffers.
 
 **Fallback Behavior:**
+
 - If limits can't be raised, `setupInstancedVelocity()` checks attribute count
 - Velocity setup skipped if it would exceed device limit
 - TAA uses depth-only reprojection (slight ghosting on fast objects)
@@ -571,6 +682,7 @@ Most modern GPUs (Vulkan/D3D12/Metal backends) support 16+ vertex buffers.
 **Additional Safety:** `AssetManager.ts` also cleans excess attributes from AI-generated models:
 
 The `cleanupModelAttributes()` function removes:
+
 - Extra UV layers (`uv1`, `uv2`, `texcoord_1`)
 - Extra color layers (`color_0`, `_color_1`)
 - Morph targets
@@ -586,6 +698,7 @@ The `cleanupModelAttributes()` function removes:
 **Total with velocity:** 13-14 attributes (within 16 limit)
 
 ### TSL Type Definitions
+
 Some TSL exports aren't in `@types/three` yet. Workaround:
 
 ```typescript
@@ -595,11 +708,13 @@ const cameraProjectionMatrix = (TSL as any).cameraProjectionMatrix;
 ```
 
 ### MRT Requirements
+
 - Requires `antialias: false` on WebGPURenderer
 - Custom velocity node handles InstancedMesh correctly
 - Normals output for SSR works with all materials
 
 ### Performance Considerations
+
 - **GTAO:** ~1-2ms per frame - disable for low-end devices
 - **EASU:** 75% render scale provides ~1.8x performance boost
 - **TAA:** ~0.5-1ms overhead with custom velocity - excellent quality/cost ratio
@@ -719,6 +834,7 @@ Edit `public/config/graphics-presets.json` to add new presets:
 ### Implementation Details
 
 **Store Integration** (`uiStore.ts`):
+
 - `currentGraphicsPreset: GraphicsPresetName` - Tracks active preset
 - `graphicsPresetsConfig: GraphicsPresetsConfig | null` - Loaded presets JSON
 - `loadGraphicsPresets()` - Fetches presets from JSON file
@@ -726,6 +842,7 @@ Edit `public/config/graphics-presets.json` to add new presets:
 - `detectCurrentPreset()` - Checks if current settings match any preset
 
 **UI Integration** (`GraphicsOptionsPanel.tsx`):
+
 - Preset selector buttons at top of panel
 - "Modified" badge when custom
 - Description text below buttons
@@ -735,31 +852,33 @@ Edit `public/config/graphics-presets.json` to add new presets:
 
 Each preset controls all `GraphicsSettings` values:
 
-| Category | Settings |
-|----------|----------|
-| **Core** | postProcessingEnabled |
-| **Shadows** | shadowsEnabled, shadowQuality, shadowDistance |
-| **Ambient Occlusion** | ssaoEnabled, ssaoRadius, ssaoIntensity |
-| **Bloom** | bloomEnabled, bloomStrength, bloomThreshold, bloomRadius |
-| **Anti-Aliasing** | antiAliasingMode, taaSharpeningEnabled, taaSharpeningIntensity |
-| **Reflections** | ssrEnabled, ssrOpacity, ssrMaxRoughness |
-| **Global Illumination** | ssgiEnabled, ssgiRadius, ssgiIntensity |
-| **Resolution** | resolutionMode, resolutionScale, maxPixelRatio |
-| **Frame Rate** | maxFPS (Off/60/120/144) |
-| **Upscaling** | upscalingMode, renderScale, easuSharpness |
-| **Fog** | fogEnabled, fogDensity, volumetricFogEnabled, volumetricFogQuality |
-| **Lighting** | shadowFill, dynamicLightsEnabled, maxDynamicLights |
-| **Effects** | emissiveDecorationsEnabled, particlesEnabled, particleDensity |
-| **Color** | toneMappingExposure, saturation, contrast |
-| **Vignette** | vignetteEnabled, vignetteIntensity |
-| **Environment** | environmentMapEnabled |
+| Category                | Settings                                                           |
+| ----------------------- | ------------------------------------------------------------------ |
+| **Core**                | postProcessingEnabled                                              |
+| **Shadows**             | shadowsEnabled, shadowQuality, shadowDistance                      |
+| **Ambient Occlusion**   | ssaoEnabled, ssaoRadius, ssaoIntensity                             |
+| **Bloom**               | bloomEnabled, bloomStrength, bloomThreshold, bloomRadius           |
+| **Anti-Aliasing**       | antiAliasingMode, taaSharpeningEnabled, taaSharpeningIntensity     |
+| **Reflections**         | ssrEnabled, ssrOpacity, ssrMaxRoughness                            |
+| **Global Illumination** | ssgiEnabled, ssgiRadius, ssgiIntensity                             |
+| **Resolution**          | resolutionMode, resolutionScale, maxPixelRatio                     |
+| **Frame Rate**          | maxFPS (Off/60/120/144)                                            |
+| **Upscaling**           | upscalingMode, renderScale, easuSharpness                          |
+| **Fog**                 | fogEnabled, fogDensity, volumetricFogEnabled, volumetricFogQuality |
+| **Lighting**            | shadowFill, dynamicLightsEnabled, maxDynamicLights                 |
+| **Effects**             | emissiveDecorationsEnabled, particlesEnabled, particleDensity      |
+| **Color**               | toneMappingExposure, saturation, contrast                          |
+| **Vignette**            | vignetteEnabled, vignetteIntensity                                 |
+| **Environment**         | environmentMapEnabled                                              |
 
 ---
 
 ## Graphics Settings Audit (January 2025)
 
 ### Connected Settings
+
 All working and wired up:
+
 - Post-processing master toggle
 - Tone mapping (exposure, saturation, contrast)
 - Shadows (enabled, quality, distance)
@@ -781,13 +900,14 @@ All working and wired up:
 - Shadow fill
 
 ### Disconnected Settings (Not Wired)
+
 These exist in `uiStore.ts` but have no effect:
 
-| Setting | In Store | Has UI | Wired to Code |
-|---------|----------|--------|---------------|
-| `outlineEnabled` | ✅ | ❌ | ❌ |
-| `outlineStrength` | ✅ | ❌ | ❌ |
-| `taaHistoryBlendRate` | ✅ | ❌ | ❌ (comment says "kept for UI compatibility") |
+| Setting               | In Store | Has UI | Wired to Code                                 |
+| --------------------- | -------- | ------ | --------------------------------------------- |
+| `outlineEnabled`      | ✅       | ❌     | ❌                                            |
+| `outlineStrength`     | ✅       | ❌     | ❌                                            |
+| `taaHistoryBlendRate` | ✅       | ❌     | ❌ (comment says "kept for UI compatibility") |
 
 **Recommendation:** Either implement these features or remove from store to avoid confusion.
 
@@ -800,6 +920,7 @@ These exist in `uiStore.ts` but have no effect:
 **Status:** Fully implemented and integrated into the PostProcessing pipeline (January 2025).
 
 **Implementation Details:**
+
 - Raymarched volumetric fog with Henyey-Greenstein phase function for light scattering
 - Quality presets: Low (16 steps), Medium (32), High (64), Ultra (128)
 - Configurable density and scattering intensity
@@ -807,6 +928,7 @@ These exist in `uiStore.ts` but have no effect:
 - Integrated into post-processing between Bloom and Color Grading
 
 **Files:**
+
 - `src/rendering/tsl/VolumetricFog.ts` - TSL implementation
 - `src/rendering/tsl/PostProcessing.ts` - Pipeline orchestration (RenderPipeline class)
 - `src/rendering/tsl/effects/EffectPasses.ts` - Individual effect creation functions (SSGI, GTAO, SSR, Bloom, etc.)
@@ -836,6 +958,7 @@ The fog of war system has been completely redesigned from a simple overlay mesh 
 7. **Quality Presets** - Low (1 sample, 1 octave), Medium (5 samples, 2 octaves), High (9 samples, 3 octaves), Ultra (13 samples, 3+ octaves)
 
 **Architecture:**
+
 ```
 VisionSystem (game logic)
     ↓ caster positions
@@ -849,12 +972,14 @@ Bloom → Volumetric Fog → Color Grading → TAA
 ```
 
 **Vision Texture Format (RGBA):**
+
 - **R channel:** Explored flag (0 or 1) - persists once seen
 - **G channel:** Visible flag (0 or 1) - current frame binary
 - **B channel:** Velocity (0.5 = no change, <0.5 = hiding, >0.5 = revealing)
 - **A channel:** Smooth visibility (0-1, temporally filtered for transitions)
 
 **Files:**
+
 - `src/rendering/tsl/effects/EffectPasses.ts` - `createFogOfWarPass()` function
 - `src/rendering/compute/VisionCompute.ts` - GPU compute with temporal smoothing
 - `src/rendering/tsl/FogOfWar.ts` - Vision texture provider (removed mesh)
@@ -862,6 +987,7 @@ Bloom → Volumetric Fog → Color Grading → TAA
 - `src/store/uiStore.ts` - Quality settings (edge blur, desaturation, cloud speed, etc.)
 
 **Performance:**
+
 - GPU path: Zero CPU overhead, StorageTexture direct sampling
 - CPU fallback: 50ms throttling with temporal smoothing
 - Post-process cost: ~0.5-1ms depending on quality preset
@@ -919,14 +1045,15 @@ const volumetricFog = Fn(({ sceneColor, depth, lightPos, fogDensity }) => {
 
 #### Performance Impact
 
-| Quality | Steps | Performance Hit | Visual Quality |
-|---------|-------|-----------------|----------------|
-| Low | 16 | ~1-2ms | Basic depth fog |
-| Medium | 32 | ~2-4ms | Good volume feel |
-| High | 64 | ~4-8ms | Cinematic quality |
-| Ultra | 128 | ~8-15ms | Film-quality scattering |
+| Quality | Steps | Performance Hit | Visual Quality          |
+| ------- | ----- | --------------- | ----------------------- |
+| Low     | 16    | ~1-2ms          | Basic depth fog         |
+| Medium  | 32    | ~2-4ms          | Good volume feel        |
+| High    | 64    | ~4-8ms          | Cinematic quality       |
+| Ultra   | 128   | ~8-15ms         | Film-quality scattering |
 
 **Optimization Strategies:**
+
 1. **Half-resolution rendering** - Render fog at 50% res, bilateral upsample
 2. **Temporal reprojection** - Spread samples across frames
 3. **Frustum-aligned volumes** - Only raymarch visible area
@@ -934,12 +1061,12 @@ const volumetricFog = Fn(({ sceneColor, depth, lightPos, fogDensity }) => {
 
 #### Use Cases for VOIDSTRIKE
 
-| Effect | Implementation | Performance |
-|--------|----------------|-------------|
+| Effect                    | Implementation                              | Performance           |
+| ------------------------- | ------------------------------------------- | --------------------- |
 | Production building smoke | Local density volumes at building positions | Low cost if localized |
-| Plasma geyser gas | Animated noise-based density | Medium cost |
-| Battlefield dust/haze | Full-screen low-density fog | Medium cost |
-| Explosion smoke clouds | Temporary high-density spheres | Low (transient) |
+| Plasma geyser gas         | Animated noise-based density                | Medium cost           |
+| Battlefield dust/haze     | Full-screen low-density fog                 | Medium cost           |
+| Explosion smoke clouds    | Temporary high-density spheres              | Low (transient)       |
 
 #### Proposed UI (Graphics Panel → Atmosphere Section)
 
@@ -961,6 +1088,7 @@ const volumetricFog = Fn(({ sceneColor, depth, lightPos, fogDensity }) => {
 **Status:** Full implementation with centralized manager and animation support (January 2025).
 
 **Features:**
+
 - `emissiveDecorationsEnabled` - Toggle emissive glow on/off
 - `emissiveIntensityMultiplier` - Control glow intensity (0.5x - 2.0x)
 - **Pulsing animation** - Per-biome pulse speed and amplitude
@@ -974,13 +1102,17 @@ const volumetricFog = Fn(({ sceneColor, depth, lightPos, fogDensity }) => {
 // Supports both individual meshes and InstancedMesh batches
 
 // For individual decorations (with optional light attachment):
-emissiveManager.registerDecoration(mesh, {
-  emissive: '#00ff88',
-  emissiveIntensity: 2.0,
-  pulseSpeed: 0.5,
-  pulseAmplitude: 0.2,
-  attachLight: { color: '#00ff88', intensity: 1.5, distance: 8 }
-}, position);
+emissiveManager.registerDecoration(
+  mesh,
+  {
+    emissive: '#00ff88',
+    emissiveIntensity: 2.0,
+    pulseSpeed: 0.5,
+    pulseAmplitude: 0.2,
+    attachLight: { color: '#00ff88', intensity: 1.5, distance: 8 },
+  },
+  position
+);
 
 // For InstancedMesh (shared material, uniform animation):
 emissiveManager.registerInstancedDecoration(crystalMesh, {
@@ -996,13 +1128,14 @@ emissiveManager.update(deltaTime);
 
 **Biome-Specific Crystal Effects:**
 
-| Biome | Color | Pulse Speed | Amplitude |
-|-------|-------|-------------|-----------|
-| Frozen | Ice blue (#204060) | 0.3 (subtle) | 0.15 |
-| Void | Purple (#4020a0) | 0.5 (ethereal) | 0.25 |
-| Volcanic | Orange (#802010) | 0.8 (flickering) | 0.3 |
+| Biome    | Color              | Pulse Speed      | Amplitude |
+| -------- | ------------------ | ---------------- | --------- |
+| Frozen   | Ice blue (#204060) | 0.3 (subtle)     | 0.15      |
+| Void     | Purple (#4020a0)   | 0.5 (ethereal)   | 0.25      |
+| Volcanic | Orange (#802010)   | 0.8 (flickering) | 0.3       |
 
 **Files:**
+
 - `src/rendering/EmissiveDecorationManager.ts` - Manager with animation and light support
 - `src/rendering/GroundDetail.ts` - CrystalField exposes InstancedMesh for registration
 - `src/rendering/EnvironmentManager.ts` - Creates manager, registers decorations
@@ -1017,20 +1150,25 @@ To add emissive behavior to new decoration types:
 const alienTower = new THREE.Mesh(geometry, material);
 
 // 2. Register with the manager
-emissiveDecorationManager.registerDecoration(alienTower, {
-  emissive: '#ff4400',
-  emissiveIntensity: 3.0,
-  pulseSpeed: 0.5,
-  pulseAmplitude: 0.3,
-  attachLight: {
-    color: '#ff4400',
-    intensity: 2.0,
-    distance: 10,
+emissiveDecorationManager.registerDecoration(
+  alienTower,
+  {
+    emissive: '#ff4400',
+    emissiveIntensity: 3.0,
+    pulseSpeed: 0.5,
+    pulseAmplitude: 0.3,
+    attachLight: {
+      color: '#ff4400',
+      intensity: 2.0,
+      distance: 10,
+    },
   },
-}, alienTower.position);
+  alienTower.position
+);
 ```
 
 **Design Notes:**
+
 - Individual decorations can have attached point lights via LightPool
 - InstancedMesh decorations share one material, so per-instance lights aren't supported
 - Use DecorationLightManager for clustered/distance-sorted decoration lights at scale
@@ -1044,17 +1182,20 @@ emissiveDecorationManager.registerDecoration(alienTower, {
 #### Solutions
 
 **Option A: Hemisphere Light Boost (Already Have)**
+
 ```typescript
 // Current setup (EnvironmentManager.ts:121-126)
 this.hemiLight = new THREE.HemisphereLight(
-  skyColor,    // From above
+  skyColor, // From above
   groundColor, // From below (THIS IS FILL LIGHT)
-  0.5          // Intensity
+  0.5 // Intensity
 );
 ```
+
 **Quick fix:** Increase intensity to 0.7-0.8, use brighter ground color.
 
 **Option B: Secondary Ambient from Below**
+
 ```typescript
 // Add second ambient light with upward bias
 const groundAmbient = new THREE.AmbientLight(0x404050, 0.3);
@@ -1064,6 +1205,7 @@ groundFill.position.set(0, -1, 0); // From below
 ```
 
 **Option C: Per-Material Ambient Boost**
+
 ```typescript
 // In decoration material setup (InstancedDecorations.ts)
 if (instancedMaterial instanceof THREE.MeshStandardMaterial) {
@@ -1073,6 +1215,7 @@ if (instancedMaterial instanceof THREE.MeshStandardMaterial) {
 ```
 
 **Option D: TSL Custom Fill Light Node**
+
 ```typescript
 // In post-processing, add fill light based on surface orientation
 const fillLight = Fn(({ color, normal }) => {
@@ -1083,6 +1226,7 @@ const fillLight = Fn(({ color, normal }) => {
 ```
 
 #### Recommended Approach
+
 1. **Immediate:** Increase `envMapIntensity` on rock materials from 0 to 0.2-0.3
 2. **Quick win:** Boost hemisphere light ground color brightness
 3. **Long-term:** Add UI slider for "Shadow Fill" that controls ground ambient
@@ -1138,6 +1282,7 @@ const fillLight = Fn(({ color, normal }) => {
 ```
 
 **Implementation:**
+
 ```typescript
 // AssetManager.ts - Apply rendering hints when loading
 function applyRenderingHints(mesh: THREE.Mesh, hints: RenderingHints) {
@@ -1157,21 +1302,25 @@ function applyRenderingHints(mesh: THREE.Mesh, hints: RenderingHints) {
 ### 5. Lighting System Recommendations
 
 #### Current State
+
 5 static lights (ambient, key, fill, back, hemisphere) - traditional 3-point + additions.
 
 #### Recommended Improvements
 
 **Tier 1: Easy Wins (Low Effort)**
+
 - [ ] Increase hemisphere ground color brightness (+20% for shadow fill)
 - [ ] Re-enable partial envMapIntensity on decorations (0.2-0.3)
 - [ ] Add UI exposure slider range expansion (0.5-2.5 instead of 0.5-2.0)
 
 **Tier 2: Moderate Effort**
+
 - [x] **Light Pool System** - Reusable point/spot lights for effects ✅ Implemented
 - [x] **Emissive decoration manager** - Crystals/towers that glow ✅ Implemented with animation
 - [ ] **Per-biome light color presets** - More dramatic biome lighting
 
 **Tier 3: Advanced (High Impact)**
+
 - [ ] **Clustered lighting** - Efficient many-lights for WebGPU
 - [ ] **Light probes** - Baked indirect lighting for performance
 - [ ] **Dynamic time-of-day** - Moving sun, changing shadows
@@ -1204,8 +1353,14 @@ class LightPool {
     }
   }
 
-  spawn(id: string, position: THREE.Vector3, color: THREE.Color, intensity: number, duration: number): void {
-    const light = this.pool.find(l => !l.visible);
+  spawn(
+    id: string,
+    position: THREE.Vector3,
+    color: THREE.Color,
+    intensity: number,
+    duration: number
+  ): void {
+    const light = this.pool.find((l) => !l.visible);
     if (!light) return; // Pool exhausted
 
     light.position.copy(position);
@@ -1265,6 +1420,7 @@ lightPool.spawn('laser_hit', impactPos, new THREE.Color(0x00ffff), 3.0, 100);
 ### Overview
 
 VOIDSTRIKE features a world-class battle effects system with:
+
 - **Three.js 3D effects**: Projectile trails, explosions, impact decals, ground effects
 - **Phaser 2D overlay**: Damage numbers, screen effects, kill streaks
 - **Proper depth ordering**: Ground effects are now correctly occluded by units
@@ -1328,27 +1484,55 @@ VOIDSTRIKE features a unified water rendering system that replaces the old per-r
 
 ### Quality Tiers
 
-The water system automatically selects quality based on available memory:
+| Feature                   | Description                                                      |
+| ------------------------- | ---------------------------------------------------------------- |
+| **Texture-Based Normals** | 4-sample animated normal map (generated procedurally at startup) |
+| **Fixed Depth Coloring**  | Distance-based color variation instead of wave-height mixing     |
+| **Clean Fresnel**         | Schlick approximation for angle-dependent reflectivity           |
+| **Subtle Gerstner Waves** | 3 overlapping waves for gentle vertex displacement               |
+| **Stable Sky Reflection** | Consistent sky color blending, no oscillating gradients          |
+| **Subtle Caustics**       | Low-intensity underwater light shimmer                           |
+| **Lava Support**          | Volcanic biomes render as animated lava with glow                |
 
-| Quality | Cell Merge | Texture Size | Reflections | Memory |
-|---------|------------|--------------|-------------|--------|
-| Low | 4x4 | 50 | Cubemap only | ~5MB |
-| Medium | 2x2 | 40 | SSR | ~10MB |
-| High | 1x1 | 30 | SSR | ~15MB |
-| Ultra | 1x1 | 25 | SSR + Planar | ~80MB |
+**Key Differences from Previous OceanWater:**
 
-**Cell Merge**: Higher merge factors reduce vertex count by grouping adjacent water cells into single quads, trading some detail for better performance.
+| Aspect            | OceanWater (Old)                   | OceanWater (New)           |
+| ----------------- | ---------------------------------- | -------------------------- |
+| Normal generation | Procedural sin/cos                 | 4-sample texture animation |
+| Color mixing      | Wave-height based (gradient issue) | Distance-based (stable)    |
+| Reflectivity      | 0.35                               | 0.25 (less reflective)     |
+| Wave height       | 0.12                               | 0.08 (subtler)             |
+| Fresnel power     | 3.5                                | 3.0 (softer)               |
 
-**Texture Size**: World-space texture tiling frequency (lower = larger, more detailed tiles).
+**Normal Map Generation:**
 
-**Reflections**:
-- Cubemap: Static environment map
-- SSR: Screen-space reflections from post-processing
-- Planar: Real-time planar reflection render target
+```typescript
+// Procedurally generated at startup (512x512)
+// Multiple sine waves with irrational ratios prevent tiling
+const wave1 = Math.sin(u * 12.7 + v * 8.3) * 0.3;
+const wave2 = Math.sin(u * 23.1 - v * 17.9) * 0.2;
+// ... combined for natural wave patterns
+```
 
-### Device Lost Recovery
+**Gerstner Wave Configuration (RTS-Scale):**
 
-The water system handles WebGPU device loss gracefully:
+```typescript
+const waves = [
+  { direction: (1.0, 0.15), steepness: 0.035, wavelength: 47.0 },
+  { direction: (0.2, 1.0), steepness: 0.028, wavelength: 31.0 },
+  { direction: (0.7, 0.7), steepness: 0.02, wavelength: 19.0 },
+];
+```
+
+**Configurable Parameters:**
+
+- Wave height and speed
+- Water colors (shallow/deep/sky)
+- Reflectivity (0-1)
+- Distortion scale
+- Fresnel power
+- Specular power
+- Opacity
 
 1. **Detection**: Monitors `GPUDevice.lost` promise
 2. **Recovery**: Automatically reduces quality tier and recreates resources
@@ -1379,26 +1563,20 @@ async handleDeviceLost(device: GPUDevice) {
 
 **TSLWaterMaterial** provides high-quality water rendering using Three.js Shading Language:
 
-| Feature | Description |
-|---------|-------------|
-| **Dual-Layer Normals** | Two animated normal maps at different scales/speeds |
-| **Depth-Based Coloring** | Shallow water (turquoise) → deep water (dark blue) |
-| **Fresnel Reflections** | Angle-dependent reflectivity (Schlick approximation) |
-| **Specular Highlights** | Phong-style highlights for sunlight glints |
-| **Wave Animation** | Time-based UV scrolling for both normal layers |
-| **Per-Region Data** | Vertex attribute stores region ID, depth flag, elevation |
+| Feature                   | Description                                                |
+| ------------------------- | ---------------------------------------------------------- |
+| **Flood-Fill Regions**    | Groups connected water cells into efficient batched meshes |
+| **Depth-Aware Materials** | Separate materials for shallow vs deep water               |
+| **Animated Waves**        | Multi-layer sine wave animation                            |
+| **Fresnel Effect**        | Angle-dependent reflectivity                               |
+| **Caustic Highlights**    | Light pattern simulation on water surface                  |
+| **Ripple Effects**        | High-frequency surface detail animation                    |
 
-**Vertex Attributes:**
-```glsl
-// aWaterData components:
-// x: regionId (0-255)
-// y: isDeep (0.0 or 1.0)
-// z: elevation (-1.0 to 1.0)
-```
+**Terrain Integration:**
 
-### Memory Budget System
-
-**WaterMemoryManager** enforces a 100MB memory budget:
+- Renders at `elevation * HEIGHT_SCALE + 0.15` (offset above terrain)
+- Distinguishes `water_shallow` (0.65 opacity) and `water_deep` (0.8 opacity)
+- Supports both game and editor coordinate systems
 
 ```typescript
 const budgets = {
@@ -1415,28 +1593,22 @@ const uvBytes = vertexCount * 2 * 4;
 const waterDataBytes = vertexCount * 3 * 4;
 const indexBytes = indexCount * 4;
 
-const geometryMemory = positionBytes + normalBytes + uvBytes + waterDataBytes + indexBytes;
+The map editor renders water with proper orientation:
 
-// Add texture memory
-const normalMapMemory = 1024 * 1024 * 4 * 2;  // 2x RGBA 1024x1024
-
-// Add reflection memory (if ultra)
-const reflectionMemory = quality === 'ultra' ? 1024 * 1024 * 4 : 0;
-
-const totalMemory = geometryMemory + normalMapMemory + reflectionMemory;
-```
+- WaterMesh added as child of terrain mesh
+- Counter-rotation applied to compensate for terrain rotation: `waterMesh.group.rotation.x = Math.PI / 2`
 
 ### Biome Water Configuration
 
-| Biome | hasWater | Water Level | Water Color | Notes |
-|-------|----------|-------------|-------------|-------|
-| Grassland | ✓ | -0.5 | 0x3080c0 | Standard ocean |
-| Desert | ✗ | -1 | - | Disabled |
-| Frozen | ✗ | -1 | - | Disabled (artifact issues) |
-| Volcanic | ✓ | -0.3 | 0xff4010 | Renders as lava |
-| Void | ✗ | -1 | - | Disabled |
-| Jungle | ✗ | -1 | - | Disabled |
-| Ocean | ✓ | 0.5 | 0x1060a0 | Deep ocean for naval |
+| Biome     | hasWater | Water Level | Water Color | Notes                      |
+| --------- | -------- | ----------- | ----------- | -------------------------- |
+| Grassland | ✓        | -0.5        | 0x3080c0    | Standard ocean             |
+| Desert    | ✗        | -1          | -           | Disabled                   |
+| Frozen    | ✗        | -1          | -           | Disabled (artifact issues) |
+| Volcanic  | ✓        | -0.3        | 0xff4010    | Renders as lava            |
+| Void      | ✗        | -1          | -           | Disabled                   |
+| Jungle    | ✗        | -1          | -           | Disabled                   |
+| Ocean     | ✓        | 0.5         | 0x1060a0    | Deep ocean for naval       |
 
 ### Files
 
@@ -1471,18 +1643,18 @@ const totalMemory = geometryMemory + normalMapMemory + reflectionMemory;
 
 ### Render Order
 
-| Order | Layer | Description |
-|-------|-------|-------------|
-| 0-9 | Terrain | Ground geometry |
-| 10-19 | Ground Decals | Scorch marks, impact craters |
+| Order | Layer          | Description                               |
+| ----- | -------------- | ----------------------------------------- |
+| 0-9   | Terrain        | Ground geometry                           |
+| 10-19 | Ground Decals  | Scorch marks, impact craters              |
 | 20-29 | Ground Effects | Hit rings, shockwaves (`depthTest: true`) |
-| 30-39 | Unit Shadows | Ground shadows |
-| 40-59 | Ground Units | Marines, tanks, buildings |
-| 60-69 | Projectiles | Tracers, plasma bolts, trails |
-| 70-79 | Air Units | Wraiths, carriers |
-| 80-89 | Air Effects | Hit effects at flying unit height |
-| 90-99 | Glow Effects | Additive bloom-interacting effects |
-| 100+ | UI | Damage numbers, indicators |
+| 30-39 | Unit Shadows   | Ground shadows                            |
+| 40-59 | Ground Units   | Marines, tanks, buildings                 |
+| 60-69 | Projectiles    | Tracers, plasma bolts, trails             |
+| 70-79 | Air Units      | Wraiths, carriers                         |
+| 80-89 | Air Effects    | Hit effects at flying unit height         |
+| 90-99 | Glow Effects   | Additive bloom-interacting effects        |
+| 100+  | UI             | Damage numbers, indicators                |
 
 ### Projectile System
 
@@ -1494,6 +1666,7 @@ const totalMemory = geometryMemory + normalMapMemory + reflectionMemory;
 | Zerg | Acid green | Dark green | Bright green |
 
 **Features:**
+
 - Ribbon trail geometry that follows projectile path
 - Glow sprites with bloom interaction
 - Muzzle flash at attack origin
@@ -1501,20 +1674,21 @@ const totalMemory = geometryMemory + normalMapMemory + reflectionMemory;
 
 ### Particle Types
 
-| Type | Use Case | Features |
-|------|----------|----------|
-| FIRE | Explosions | Animated sprite, rises, orange→black |
-| SMOKE | Aftermath | Large soft sprites, slow rise, fades |
-| SPARK | Impacts | Small bright dots, arcs with gravity |
-| DEBRIS | Destruction | Tumbling geometry, bounces on ground |
-| ENERGY | Psionic | Pulsing, blue/purple |
-| PLASMA | Acid | Dripping, green glow |
-| DUST | Movement | Ground cloud, soft edges |
-| ELECTRICITY | Shields | Rapid pulse, branching |
+| Type        | Use Case    | Features                             |
+| ----------- | ----------- | ------------------------------------ |
+| FIRE        | Explosions  | Animated sprite, rises, orange→black |
+| SMOKE       | Aftermath   | Large soft sprites, slow rise, fades |
+| SPARK       | Impacts     | Small bright dots, arcs with gravity |
+| DEBRIS      | Destruction | Tumbling geometry, bounces on ground |
+| ENERGY      | Psionic     | Pulsing, blue/purple                 |
+| PLASMA      | Acid        | Dripping, green glow                 |
+| DUST        | Movement    | Ground cloud, soft edges             |
+| ELECTRICITY | Shields     | Rapid pulse, branching               |
 
 ### Damage Numbers (Phaser 2D)
 
 **Consolidation Logic:**
+
 - Max one damage number per entity
 - Hits within 500ms consolidate into existing number
 - Total damage accumulates, number grows with intensity
@@ -1531,16 +1705,17 @@ const totalMemory = geometryMemory + normalMapMemory + reflectionMemory;
 
 ### Screen Effects (Phaser 2D)
 
-| Effect | Trigger | Description |
-|--------|---------|-------------|
-| Chromatic Aberration | Heavy damage | RGB channel separation at screen edges |
-| Directional Indicators | Damage received | Arrow pointing toward damage source |
-| Kill Streak | 3/5/10/15/25 kills | "TRIPLE KILL", "RAMPAGE", etc. |
-| Screen Cracks | Health < 30% | Fracture lines from screen edges |
-| Explosion Rings | Building destroyed | Expanding white circles |
-| Screen Flash | Major events | Brief color flash |
+| Effect                 | Trigger            | Description                            |
+| ---------------------- | ------------------ | -------------------------------------- |
+| Chromatic Aberration   | Heavy damage       | RGB channel separation at screen edges |
+| Directional Indicators | Damage received    | Arrow pointing toward damage source    |
+| Kill Streak            | 3/5/10/15/25 kills | "TRIPLE KILL", "RAMPAGE", etc.         |
+| Screen Cracks          | Health < 30%       | Fracture lines from screen edges       |
+| Explosion Rings        | Building destroyed | Expanding white circles                |
+| Screen Flash           | Major events       | Brief color flash                      |
 
 **Kill Streak Thresholds:**
+
 1. 3 kills: "TRIPLE KILL" (orange)
 2. 5 kills: "KILLING SPREE" (red-orange)
 3. 10 kills: "RAMPAGE" (red)
@@ -1557,13 +1732,13 @@ const totalMemory = geometryMemory + normalMapMemory + reflectionMemory;
 
 ### Files
 
-| File | Purpose |
-|------|---------|
-| `src/rendering/effects/BattleEffectsRenderer.ts` | Core 3D battle effects |
-| `src/rendering/effects/AdvancedParticleSystem.ts` | GPU particle system |
-| `src/phaser/systems/DamageNumberSystem.ts` | Phaser damage numbers |
-| `src/phaser/systems/ScreenEffectsSystem.ts` | Phaser screen effects |
-| `src/engine/systems/CombatSystem.ts` | Emits `damage:dealt` event |
+| File                                              | Purpose                    |
+| ------------------------------------------------- | -------------------------- |
+| `src/rendering/effects/BattleEffectsRenderer.ts`  | Core 3D battle effects     |
+| `src/rendering/effects/AdvancedParticleSystem.ts` | GPU particle system        |
+| `src/phaser/systems/DamageNumberSystem.ts`        | Phaser damage numbers      |
+| `src/phaser/systems/ScreenEffectsSystem.ts`       | Phaser screen effects      |
+| `src/engine/systems/CombatSystem.ts`              | Emits `damage:dealt` event |
 
 ### Event Flow
 
@@ -1627,29 +1802,31 @@ VOIDSTRIKE features a comprehensive overlay system for strategic information dis
 
 #### Strategic Overlays (3D)
 
-| Overlay | Type | Update | Description |
-|---------|------|--------|-------------|
-| **Terrain** | Static | Cached | Walkability by terrain type (green=walk, red=blocked) |
-| **Elevation** | Static | Cached | Elevation zones (yellow=high, blue=mid, green=low) |
-| **Threat** | Dynamic | 500ms | Enemy attack ranges as red heatmap |
-| **Navmesh** | Static | Progressive | Pathfinding connectivity (green=connected, magenta=disconnected ramps) |
-| **Buildable** | Dynamic | On request | Building placement grid (green=buildable, red=blocked, gray=occupied) |
+| Overlay       | Type    | Update      | Description                                                            |
+| ------------- | ------- | ----------- | ---------------------------------------------------------------------- |
+| **Terrain**   | Static  | Cached      | Walkability by terrain type (green=walk, red=blocked)                  |
+| **Elevation** | Static  | Cached      | Elevation zones (yellow=high, blue=mid, green=low)                     |
+| **Threat**    | Dynamic | 500ms       | Enemy attack ranges as red heatmap                                     |
+| **Navmesh**   | Static  | Progressive | Pathfinding connectivity (green=connected, magenta=disconnected ramps) |
+| **Buildable** | Dynamic | On request  | Building placement grid (green=buildable, red=blocked, gray=occupied)  |
 
 #### Tactical Overlays (2D - RTS Style)
 
-| Overlay | Activation | Description |
-|---------|------------|-------------|
-| **Attack Range** | Hold R | Red circles showing selected units' weapon range |
-| **Vision Range** | Hold V | Blue circles showing selected units' sight range |
-| **Resource** | Toggle | Highlights resource nodes with remaining amounts |
-| **Tactical View** | Backtick (`) | Grid overlay with "TACTICAL" label |
+| Overlay           | Activation   | Description                                      |
+| ----------------- | ------------ | ------------------------------------------------ |
+| **Attack Range**  | Hold R       | Red circles showing selected units' weapon range |
+| **Vision Range**  | Hold V       | Blue circles showing selected units' sight range |
+| **Resource**      | Toggle       | Highlights resource nodes with remaining amounts |
+| **Tactical View** | Backtick (`) | Grid overlay with "TACTICAL" label               |
 
 ### Performance Optimizations
 
 #### Navmesh Progressive Computation
+
 **Problem**: Original navmesh overlay froze game for 30+ seconds (65,536 pathfinding queries synchronously).
 
 **Solution**:
+
 ```typescript
 // Process in batches with yielding
 const BATCH_SIZE = 1024;
@@ -1663,7 +1840,7 @@ const processBatch = async (): Promise<void> => {
   this.navmeshTexture.needsUpdate = true;
 
   // Yield to main thread
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
   await processBatch();
 };
 ```
@@ -1671,14 +1848,17 @@ const processBatch = async (): Promise<void> => {
 **Result**: Overlay appears progressively in <2 seconds, game remains responsive.
 
 #### Threat Overlay Worker Offloading
+
 **Problem**: Threat overlay caused frame drops every 200ms with many units.
 
 **Solution**:
+
 - Increased update interval from 200ms to 500ms
 - Moved computation to `overlay.worker.ts`
 - Only updates when threat overlay is visible
 
 #### IndexedDB Caching
+
 Static overlays (terrain, elevation, navmesh) are computed once and cached:
 
 ```typescript
@@ -1696,40 +1876,42 @@ await setOverlayCache(mapHash, 'navmesh', textureData, width, height);
 
 ### Keyboard Shortcuts
 
-| Key | Overlay | Mode |
-|-----|---------|------|
-| `` ` `` | Tactical view | Toggle |
-| `O` | Cycle strategic overlays | Toggle |
-| `R` | Attack range | Hold |
-| `V` | Vision range | Hold |
+| Key     | Overlay                  | Mode   |
+| ------- | ------------------------ | ------ |
+| `` ` `` | Tactical view            | Toggle |
+| `O`     | Cycle strategic overlays | Toggle |
+| `R`     | Attack range             | Hold   |
+| `V`     | Vision range             | Hold   |
 
 ### Color Coding Reference
 
 #### Navmesh Overlay
-| Color | Meaning |
-|-------|---------|
-| Green | Connected to reference point (pathable) |
-| Cyan/Green | Connected ramp |
-| Yellow/Orange | On navmesh but disconnected |
-| Magenta | **Disconnected ramp (critical issue!)** |
-| Red | Should be walkable but not on navmesh |
-| Dark Gray | Correctly unwalkable |
+
+| Color         | Meaning                                 |
+| ------------- | --------------------------------------- |
+| Green         | Connected to reference point (pathable) |
+| Cyan/Green    | Connected ramp                          |
+| Yellow/Orange | On navmesh but disconnected             |
+| Magenta       | **Disconnected ramp (critical issue!)** |
+| Red           | Should be walkable but not on navmesh   |
+| Dark Gray     | Correctly unwalkable                    |
 
 #### Threat Overlay
-| Intensity | Meaning |
-|-----------|---------|
-| Transparent | No threat |
-| Light Red | Light threat (1-2 units) |
-| Bright Red | Heavy threat (multiple units/buildings) |
+
+| Intensity   | Meaning                                 |
+| ----------- | --------------------------------------- |
+| Transparent | No threat                               |
+| Light Red   | Light threat (1-2 units)                |
+| Bright Red  | Heavy threat (multiple units/buildings) |
 
 ### Files
 
-| File | Purpose |
-|------|---------|
-| `src/rendering/tsl/GameOverlay.ts` | TSL-based 3D strategic overlays |
-| `src/rendering/OverlayManager.ts` | Unified overlay manager (alternative) |
-| `src/phaser/scenes/OverlayScene.ts` | Phaser 2D tactical overlays |
-| `src/workers/overlay.worker.ts` | Overlay computation worker |
-| `src/workers/pathfinding.worker.ts` | Batch pathfinding queries |
-| `src/utils/overlayCache.ts` | IndexedDB caching |
-| `src/store/uiStore.ts` | Overlay state management |
+| File                                | Purpose                               |
+| ----------------------------------- | ------------------------------------- |
+| `src/rendering/tsl/GameOverlay.ts`  | TSL-based 3D strategic overlays       |
+| `src/rendering/OverlayManager.ts`   | Unified overlay manager (alternative) |
+| `src/phaser/scenes/OverlayScene.ts` | Phaser 2D tactical overlays           |
+| `src/workers/overlay.worker.ts`     | Overlay computation worker            |
+| `src/workers/pathfinding.worker.ts` | Batch pathfinding queries             |
+| `src/utils/overlayCache.ts`         | IndexedDB caching                     |
+| `src/store/uiStore.ts`              | Overlay state management              |

@@ -6,7 +6,6 @@ import {
   VOICE_COOLDOWN_READY,
   COMMAND_DEBOUNCE_WINDOW,
   VOICE_COOLDOWN_CONFIG,
-  COMMAND_AUDIO_CONFIG,
 } from '@/data/audio.config';
 
 describe('Audio Configuration', () => {
@@ -81,16 +80,6 @@ describe('Audio Configuration', () => {
       expect(VOICE_COOLDOWN_CONFIG.move).toBe(VOICE_COOLDOWN_MOVE);
       expect(VOICE_COOLDOWN_CONFIG.attack).toBe(VOICE_COOLDOWN_ATTACK);
       expect(VOICE_COOLDOWN_CONFIG.ready).toBe(VOICE_COOLDOWN_READY);
-    });
-  });
-
-  describe('COMMAND_AUDIO_CONFIG', () => {
-    it('contains debounce window', () => {
-      expect(COMMAND_AUDIO_CONFIG).toHaveProperty('debounceWindow', COMMAND_DEBOUNCE_WINDOW);
-    });
-
-    it('value matches individual constant', () => {
-      expect(COMMAND_AUDIO_CONFIG.debounceWindow).toBe(COMMAND_DEBOUNCE_WINDOW);
     });
   });
 
