@@ -1091,9 +1091,8 @@ export class AssetManager {
                   // Disable vertex colors and ensure smooth shading
                   stdMat.vertexColors = false;
                   stdMat.flatShading = false;
-                  // Clear ALL texture maps that could cause triangular artifacts
-                  // AI-generated models often bake AO/lighting into textures
-                  stdMat.map = null; // Base color texture often has baked lighting
+                  // Clear secondary texture maps that could cause artifacts
+                  // Keep base map (diffuse texture) - confirmed not the cause
                   stdMat.aoMap = null;
                   stdMat.aoMapIntensity = 0;
                   stdMat.lightMap = null;
@@ -1204,9 +1203,8 @@ export class AssetManager {
                   // Disable vertex colors and ensure smooth shading
                   stdMat.vertexColors = false;
                   stdMat.flatShading = false;
-                  // Clear ALL texture maps that could cause triangular artifacts
-                  // AI-generated models often bake AO/lighting into textures
-                  stdMat.map = null; // Base color texture often has baked lighting
+                  // Clear secondary texture maps that could cause artifacts
+                  // Keep base map (diffuse texture) - confirmed not the cause
                   stdMat.aoMap = null;
                   stdMat.aoMapIntensity = 0;
                   stdMat.lightMap = null;

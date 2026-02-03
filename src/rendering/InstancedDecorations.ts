@@ -106,10 +106,13 @@ function cloneGeometryForGPU(source: THREE.BufferGeometry): THREE.BufferGeometry
     cloned.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
   }
 
-  // Ensure normal coordinates exist - required for proper lighting and SSAO
-  // Only compute if missing - don't overwrite GLTF normals as they may be
-  // intentionally hard-edged or optimized for the model
-  if (!cloned.attributes.normal && cloned.attributes.position) {
+  // ALWAYS recompute smooth vertex normals - AI-generated models often have
+  // faceted/flat normals that cause triangular artifacts visible at higher resolutions.
+  // The original GLTF normals may look fine at low res but show per-triangle
+  // variations at native resolution.
+  if (cloned.attributes.position) {
+    // Delete existing normals so computeVertexNormals generates fresh smooth ones
+    cloned.deleteAttribute('normal');
     cloned.computeVertexNormals();
   }
   // Ensure normals are uploaded to GPU
@@ -218,9 +221,7 @@ function extractMaterial(object: THREE.Object3D, assetId?: string): THREE.Materi
     stdMaterial.displacementMap = null;
     stdMaterial.alphaMap = null;
     stdMaterial.bumpMap = null;
-    // Clear base color map - AI models often bake AO/lighting into diffuse texture
-    // which creates triangular artifacts following mesh topology
-    stdMaterial.map = null;
+    // Keep base color map (diffuse texture) - confirmed not the cause of artifacts
 
     const hints = assetId ? AssetManager.getRenderingHints(assetId) : null;
 
