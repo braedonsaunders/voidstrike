@@ -425,9 +425,7 @@ export function getFormatBytesPerPixel(format: THREE.PixelFormat | THREE.Compres
       return 3;
     case THREE.RedFormat:
     case THREE.AlphaFormat:
-    case THREE.LuminanceFormat:
       return 1;
-    case THREE.LuminanceAlphaFormat:
     case THREE.RGFormat:
       return 2;
 
