@@ -13,6 +13,7 @@ import {
 import { findBuildingTarget } from '../combat/TargetAcquisition';
 import { distance } from '@/utils/math';
 import { validateEntityAlive } from '@/utils/EntityValidator';
+import { deterministicSqrt } from '@/utils/FixedPoint';
 
 interface LiftOffCommand {
   buildingId: number;
@@ -477,8 +478,8 @@ export class BuildingMechanicsSystem extends System {
 
             let targetSpeed: number;
             if (dist <= stoppingDistance + 0.5) {
-              // Decelerate as we approach
-              targetSpeed = Math.max(0.3, Math.sqrt(2 * deceleration * dist));
+              // Decelerate as we approach (deterministic for multiplayer)
+              targetSpeed = Math.max(0.3, deterministicSqrt(2 * deceleration * dist));
             } else {
               // Accelerate toward max speed
               targetSpeed = maxSpeed;

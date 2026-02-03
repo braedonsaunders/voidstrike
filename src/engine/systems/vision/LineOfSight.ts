@@ -11,6 +11,7 @@
  */
 
 import { debugPathfinding } from '@/utils/debugLogger';
+import { deterministicMagnitude } from '@/utils/FixedPoint';
 
 export interface LOSConfig {
   gridWidth: number;
@@ -143,7 +144,7 @@ export class LineOfSight {
 
     const dx = endX - startX;
     const dy = endY - startY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
+    const distance = deterministicMagnitude(dx, dy);
 
     if (distance < this.config.cellSize) {
       // Target is in same or adjacent cell - always visible

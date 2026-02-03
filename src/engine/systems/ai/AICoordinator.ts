@@ -28,6 +28,7 @@ import { Selectable } from '../../components/Selectable';
 import type { IGameInstance } from '../../core/IGameInstance';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { debugAI } from '@/utils/debugLogger';
+import { deterministicMagnitude } from '@/utils/FixedPoint';
 import { SeededRandom } from '@/utils/math';
 import { getRandomBuildOrder, type AIDifficulty, type BuildOrderStep } from '@/data/ai/buildOrders';
 import {
@@ -333,7 +334,7 @@ export class AICoordinator extends System {
           for (const basePos of basePositions) {
             const dx = data.position.x - basePos.x;
             const dy = data.position.y - basePos.y;
-            const distance = Math.sqrt(dx * dx + dy * dy);
+            const distance = deterministicMagnitude(dx, dy);
             if (distance <= 30) {
               ai.depletedPatchesNearBases++;
               ai.lastDepletionTick = currentTick;

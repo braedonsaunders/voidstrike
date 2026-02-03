@@ -25,6 +25,7 @@ import { Resource } from '../../components/Resource';
 import type { IGameInstance } from '../../core/IGameInstance';
 import { debugAI } from '@/utils/debugLogger';
 import type { AICoordinator, AIPlayer } from './AICoordinator';
+import { deterministicMagnitude } from '@/utils/FixedPoint';
 
 export class AIEconomyManager {
   private game: IGameInstance;
@@ -404,7 +405,7 @@ export class AIEconomyManager {
       for (const base of basePositions) {
         const dx = transform.x - base.x;
         const dy = transform.y - base.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const distance = deterministicMagnitude(dx, dy);
         if (distance < 30 && (!nearestBase || distance < nearestBase.distance)) {
           nearestBase = { entityId: base.entityId, distance };
         }
@@ -453,7 +454,7 @@ export class AIEconomyManager {
       for (const base of basePositions) {
         const dx = transform.x - base.x;
         const dy = transform.y - base.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const distance = deterministicMagnitude(dx, dy);
         if (distance < 30 && (!nearestBase || distance < nearestBase.distance)) {
           nearestBase = { entityId: base.entityId, distance };
         }
@@ -586,7 +587,7 @@ export class AIEconomyManager {
       for (const base of basePositions) {
         const dx = worker.x - base.x;
         const dy = worker.y - base.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const distance = deterministicMagnitude(dx, dy);
         if (!nearestBase || distance < nearestBase.distance) {
           nearestBase = { entityId: base.entityId, distance };
         }
@@ -694,7 +695,7 @@ export class AIEconomyManager {
       for (const basePos of basePositions) {
         const dx = transform.x - basePos.x;
         const dy = transform.y - basePos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const distance = deterministicMagnitude(dx, dy);
 
         if (distance < 30) {
           if (!closestGeyser || distance < closestGeyser.distance) {
@@ -745,7 +746,7 @@ export class AIEconomyManager {
       for (const basePos of basePositions) {
         const dx = transform.x - basePos.x;
         const dy = transform.y - basePos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        const distance = deterministicMagnitude(dx, dy);
 
         if (distance < 30) {
           availableCount++;

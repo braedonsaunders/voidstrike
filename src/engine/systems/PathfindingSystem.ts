@@ -19,6 +19,7 @@ import type { IGameInstance } from '../core/IGameInstance';
 import { RecastNavigation, getRecastNavigation, PathResult } from '../pathfinding/RecastNavigation';
 import { debugPathfinding, debugPerformance } from '@/utils/debugLogger';
 import { distance, clamp } from '@/utils/math';
+import { deterministicMagnitude, deterministicNormalizeWithMagnitude } from '@/utils/FixedPoint';
 
 // Path request batching - increased since worker handles computation off-thread
 const MAX_PATHS_PER_FRAME = 16; // Worker can handle more without blocking main thread
@@ -1102,8 +1103,9 @@ export class PathfindingSystem extends System {
         const ticksSinceRepath = currentTick - state.lastRepathTick;
 
         if (ticksSinceMove > MAX_STUCK_TICKS && ticksSinceRepath > PATH_REQUEST_COOLDOWN) {
-          const distToDest = Math.sqrt(
-            (transform.x - state.destinationX) ** 2 + (transform.y - state.destinationY) ** 2
+          const distToDest = deterministicMagnitude(
+            transform.x - state.destinationX,
+            transform.y - state.destinationY
           );
 
           if (distToDest > 2) {
@@ -1258,10 +1260,10 @@ export class PathfindingSystem extends System {
     workerY: number,
     interactionRange: number = 2.0
   ): { x: number; y: number } | null {
-    // Calculate direction from target to worker
+    // Calculate direction from target to worker (deterministic)
     const dx = workerX - targetX;
     const dy = workerY - targetY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const { nx: dirX, ny: dirY, magnitude: dist } = deterministicNormalizeWithMagnitude(dx, dy);
 
     if (dist < 0.01) {
       // Worker is at center - pick arbitrary direction
@@ -1275,10 +1277,6 @@ export class PathfindingSystem extends System {
         interactionRange
       );
     }
-
-    // Normalize direction
-    const dirX = dx / dist;
-    const dirY = dy / dist;
 
     // First try: point on perimeter in direction of worker
     const result = this.findValidPerimeterPoint(

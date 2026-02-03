@@ -7,7 +7,11 @@ import { Unit, DamageType } from '../components/Unit';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Projectile, ProjectileDefinition } from '../components/Projectile';
-import { snapValue } from '@/utils/FixedPoint';
+import {
+  snapValue,
+  deterministicMagnitude3D,
+  deterministicNormalize3DWithMagnitude,
+} from '@/utils/FixedPoint';
 import { distance } from '@/utils/math';
 import { getDamageMultiplier } from '@/data/combat/combat';
 import { debugCombat as debugProjectile } from '@/utils/debugLogger';
@@ -146,11 +150,14 @@ export class ProjectileSystem extends System {
     const dy = projectile.targetY - transform.y;
     const dz = projectile.targetZ - transform.z;
 
-    // Use 3D distance for proper tracking
-    const dist3DSq = dx * dx + dy * dy + dz * dz;
-    if (dist3DSq < 0.0001) return; // Already at target
-
-    const distance3D = Math.sqrt(dist3DSq);
+    // Use 3D distance for proper tracking (deterministic)
+    const {
+      nx: dirX,
+      ny: dirY,
+      nz: dirZ,
+      magnitude: distance3D,
+    } = deterministicNormalize3DWithMagnitude(dx, dy, dz);
+    if (distance3D < 0.0001) return; // Already at target
 
     // Calculate movement for this tick
     const moveDistance = projectile.speed * this.TICK_DURATION;
@@ -161,11 +168,7 @@ export class ProjectileSystem extends System {
       transform.y = snapValue(projectile.targetY);
       transform.z = snapValue(projectile.targetZ);
     } else {
-      // Normalize and move in 3D
-      const dirX = dx / distance3D;
-      const dirY = dy / distance3D;
-      const dirZ = dz / distance3D;
-
+      // Move in 3D using normalized direction
       transform.x = snapValue(transform.x + dirX * moveDistance);
       transform.y = snapValue(transform.y + dirY * moveDistance);
       transform.z = snapValue(transform.z + dirZ * moveDistance);
@@ -543,12 +546,12 @@ export class ProjectileSystem extends System {
       const dx = projectile.targetX - transform.x;
       const dy = projectile.targetY - transform.y;
       const dz = projectile.targetZ - transform.z;
-      const distSq = dx * dx + dy * dy + dz * dz;
+      const dist = deterministicMagnitude3D(dx, dy, dz);
       debugProjectile.log(
         `Projectile ${entity.id} expired without impact (behavior: ${projectile.behavior}), ` +
           `pos: (${transform.x.toFixed(2)}, ${transform.y.toFixed(2)}, ${transform.z.toFixed(2)}), ` +
           `target: (${projectile.targetX.toFixed(2)}, ${projectile.targetY.toFixed(2)}, ${projectile.targetZ.toFixed(2)}), ` +
-          `dist: ${Math.sqrt(distSq).toFixed(2)}, targetEntityId: ${projectile.targetEntityId}`
+          `dist: ${dist.toFixed(2)}, targetEntityId: ${projectile.targetEntityId}`
       );
 
       // FIX: Emit impact event so visual effects are cleaned up (no damage, just cleanup)
@@ -606,12 +609,12 @@ export class ProjectileSystem extends System {
     const currentTick = this.game.getCurrentTick();
     const def = data.projectileType;
 
-    // Calculate 3D distance and travel time
+    // Calculate 3D distance and travel time (deterministic)
     const dx = data.targetX - data.startX;
     const dy = data.targetY - data.startY;
     const dz = data.targetZ - data.startZ;
-    // Use 3D distance for proper air unit timing
-    const distance3D = Math.sqrt(dx * dx + dy * dy + dz * dz);
+    // Use deterministic 3D distance for proper air unit timing
+    const distance3D = deterministicMagnitude3D(dx, dy, dz);
 
     // Calculate how many ticks to reach target
     const speedPerTick = def.speed * this.TICK_DURATION;

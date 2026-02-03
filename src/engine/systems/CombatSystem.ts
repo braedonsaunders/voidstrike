@@ -7,7 +7,12 @@ import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
 import { debugCombat } from '@/utils/debugLogger';
-import { deterministicDamage, quantize, QUANT_DAMAGE } from '@/utils/FixedPoint';
+import {
+  deterministicDamage,
+  quantize,
+  QUANT_DAMAGE,
+  deterministicMagnitude,
+} from '@/utils/FixedPoint';
 import { getDamageMultiplier, COMBAT_CONFIG } from '@/data/combat/combat';
 import AssetManager from '@/assets/AssetManager';
 import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/data/projectiles';
@@ -720,10 +725,7 @@ export class CombatSystem extends System {
           );
           const edgeDx = transform.x - clampedX;
           const edgeDy = transform.y - clampedY;
-          effectiveDistance = Math.max(
-            0,
-            Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius
-          );
+          effectiveDistance = Math.max(0, deterministicMagnitude(edgeDx, edgeDy) - attackerRadius);
         } else {
           // Distance between unit edges (center-to-center minus both visual radii)
           const centerDistance = transform.distanceTo(targetTransform);
@@ -1304,7 +1306,7 @@ export class CombatSystem extends System {
       const clampedY = clamp(impactPos.y, transform.y - halfH, transform.y + halfH);
       const edgeDx = impactPos.x - clampedX;
       const edgeDy = impactPos.y - clampedY;
-      const distance = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+      const distance = deterministicMagnitude(edgeDx, edgeDy);
 
       if (distance <= attacker.splashRadius) {
         const falloff = 1 - (distance / attacker.splashRadius) * 0.5;

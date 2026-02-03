@@ -23,6 +23,7 @@ import { TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
 import { RecastNavigation } from '../../pathfinding/RecastNavigation';
 import { debugPathfinding } from '@/utils/debugLogger';
 import { collisionConfig } from '@/data/collisionConfig';
+import { deterministicMagnitude, deterministicNormalizeWithMagnitude } from '@/utils/FixedPoint';
 import { PATH_REQUEST_COOLDOWN_TICKS, USE_RECAST_CROWD } from '@/data/movement.config';
 
 // PERF: Cached building query results to avoid double spatial grid lookups
@@ -76,11 +77,7 @@ export class PathfindingMovement {
   private crowdAgentFailLogCount = 0;
   private readonly MAX_CROWD_AGENT_FAIL_LOGS = 5;
 
-  constructor(
-    recast: RecastNavigation,
-    game: PathfindingGame,
-    world: PathfindingWorld
-  ) {
+  constructor(recast: RecastNavigation, game: PathfindingGame, world: PathfindingWorld) {
     this.recast = recast;
     this.game = game;
     this.world = world;
@@ -154,11 +151,7 @@ export class PathfindingMovement {
   /**
    * Ensure unit is registered with crowd
    */
-  public ensureAgentRegistered(
-    entityId: number,
-    transform: Transform,
-    unit: Unit
-  ): void {
+  public ensureAgentRegistered(entityId: number, transform: Transform, unit: Unit): void {
     if (!USE_RECAST_CROWD) return;
     if (unit.isFlying) return;
     if (this.crowdAgents.has(entityId)) return;
@@ -181,12 +174,14 @@ export class PathfindingMovement {
       if (this.crowdAgentFailLogCount < this.MAX_CROWD_AGENT_FAIL_LOGS) {
         debugPathfinding.warn(
           `[PathfindingMovement] Failed to add crowd agent for entity ${entityId}. ` +
-          `Crowd may be at capacity (500 agents). Current agents: ${this.crowdAgents.size}. ` +
-          `Unit will use fallback pathfinding without crowd avoidance.`
+            `Crowd may be at capacity (500 agents). Current agents: ${this.crowdAgents.size}. ` +
+            `Unit will use fallback pathfinding without crowd avoidance.`
         );
         this.crowdAgentFailLogCount++;
         if (this.crowdAgentFailLogCount === this.MAX_CROWD_AGENT_FAIL_LOGS) {
-          debugPathfinding.warn('[PathfindingMovement] Suppressing further crowd agent failure warnings...');
+          debugPathfinding.warn(
+            '[PathfindingMovement] Suppressing further crowd agent failure warnings...'
+          );
         }
       }
     }
@@ -296,7 +291,9 @@ export class PathfindingMovement {
   /**
    * Get agent state from crowd
    */
-  public getAgentState(entityId: number): { x: number; y: number; height: number; vx: number; vy: number } | null {
+  public getAgentState(
+    entityId: number
+  ): { x: number; y: number; height: number; vx: number; vy: number } | null {
     return this.recast.getAgentState(entityId);
   }
 
@@ -306,12 +303,7 @@ export class PathfindingMovement {
    * PERF: Get cached building query results - avoids duplicate spatial grid lookups
    * Both calculateBuildingAvoidanceForce and resolveHardBuildingCollision need nearby buildings
    */
-  private getCachedBuildingQuery(
-    entityId: number,
-    x: number,
-    y: number,
-    radius: number
-  ): number[] {
+  private getCachedBuildingQuery(entityId: number, x: number, y: number, radius: number): number[] {
     // Return cached results if same entity (called twice per frame for same entity)
     if (cachedBuildingQuery.entityId === entityId) {
       return cachedBuildingQuery.results;
@@ -368,30 +360,21 @@ export class PathfindingMovement {
     );
 
     const isCarryingResources =
-      selfUnit.isWorker &&
-      (selfUnit.carryingMinerals > 0 || selfUnit.carryingPlasma > 0);
+      selfUnit.isWorker && (selfUnit.carryingMinerals > 0 || selfUnit.carryingPlasma > 0);
 
     let gatheringExtractorId: number | null = null;
-    if (
-      selfUnit.isWorker &&
-      selfUnit.state === 'gathering' &&
-      selfUnit.gatherTargetId !== null
-    ) {
+    if (selfUnit.isWorker && selfUnit.state === 'gathering' && selfUnit.gatherTargetId !== null) {
       const resourceEntity = this.world.getEntity(selfUnit.gatherTargetId);
       if (resourceEntity) {
         const resource = resourceEntity.get<Resource>('Resource');
-        if (
-          resource &&
-          resource.resourceType === 'plasma' &&
-          resource.extractorEntityId !== null
-        ) {
+        if (resource && resource.resourceType === 'plasma' && resource.extractorEntityId !== null) {
           gatheringExtractorId = resource.extractorEntityId;
         }
       }
     }
 
-    // Calculate predicted position for predictive avoidance
-    const speed = Math.sqrt(velocityX * velocityX + velocityY * velocityY);
+    // Calculate predicted position for predictive avoidance (deterministic)
+    const speed = deterministicMagnitude(velocityX, velocityY);
     const predictionTime = collisionConfig.buildingAvoidancePredictionLookahead;
     const predictedX = selfTransform.x + velocityX * predictionTime;
     const predictedY = selfTransform.y + velocityY * predictionTime;
@@ -429,16 +412,18 @@ export class PathfindingMovement {
 
       const dx = selfTransform.x - clampedX;
       const dy = selfTransform.y - clampedY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
+      const {
+        nx: normalizedDx,
+        ny: normalizedDy,
+        magnitude: distance,
+      } = deterministicNormalizeWithMagnitude(dx, dy);
 
       const hardCollisionDist = selfUnit.collisionRadius + hardMargin;
 
       if (distance < hardCollisionDist && distance > 0.01) {
         // Push proportional to how deep we are
-        const penetration = 1 - (distance / hardCollisionDist);
+        const penetration = 1 - distance / hardCollisionDist;
         const strength = avoidStrength * penetration * penetration;
-        const normalizedDx = dx / distance;
-        const normalizedDy = dy / distance;
 
         forceX += normalizedDx * strength;
         forceY += normalizedDy * strength;
@@ -446,11 +431,15 @@ export class PathfindingMovement {
         // Inside building - emergency escape
         const toCenterX = selfTransform.x - buildingTransform.x;
         const toCenterY = selfTransform.y - buildingTransform.y;
-        const toCenterDist = Math.sqrt(toCenterX * toCenterX + toCenterY * toCenterY);
+        const {
+          nx: escapeDirX,
+          ny: escapeDirY,
+          magnitude: toCenterDist,
+        } = deterministicNormalizeWithMagnitude(toCenterX, toCenterY);
 
         if (toCenterDist > 0.01) {
-          forceX += (toCenterX / toCenterDist) * avoidStrength * 1.5;
-          forceY += (toCenterY / toCenterDist) * avoidStrength * 1.5;
+          forceX += escapeDirX * avoidStrength * 1.5;
+          forceY += escapeDirY * avoidStrength * 1.5;
         } else {
           forceX += avoidStrength * 1.5;
         }
@@ -472,7 +461,11 @@ export class PathfindingMovement {
 
       const softDx = selfTransform.x - softClampedX;
       const softDy = selfTransform.y - softClampedY;
-      const softDistance = Math.sqrt(softDx * softDx + softDy * softDy);
+      const {
+        nx: softNormalizedDx,
+        ny: softNormalizedDy,
+        magnitude: softDistance,
+      } = deterministicNormalizeWithMagnitude(softDx, softDy);
 
       const softCollisionDist = selfUnit.collisionRadius + softMargin;
 
@@ -480,11 +473,9 @@ export class PathfindingMovement {
         // Gentle steering force in soft zone
         const t = (softDistance - hardCollisionDist) / (softCollisionDist - hardCollisionDist);
         const softStrength = avoidStrength * 0.3 * (1 - t);
-        const normalizedDx = softDx / softDistance;
-        const normalizedDy = softDy / softDistance;
 
-        forceX += normalizedDx * softStrength;
-        forceY += normalizedDy * softStrength;
+        forceX += softNormalizedDx * softStrength;
+        forceY += softNormalizedDy * softStrength;
       }
 
       // === TIER 3: Predictive avoidance (steer away from future collision) ===
@@ -500,7 +491,7 @@ export class PathfindingMovement {
 
         const predDx = predictedX - predClampedX;
         const predDy = predictedY - predClampedY;
-        const predDistance = Math.sqrt(predDx * predDx + predDy * predDy);
+        const predDistance = deterministicMagnitude(predDx, predDy);
 
         // If predicted position would be inside collision zone, steer perpendicular to velocity
         if (predDistance < selfUnit.collisionRadius + hardMargin * 0.5) {
@@ -517,7 +508,8 @@ export class PathfindingMovement {
           const sign = dot > 0 ? -1 : 1;
 
           // Use configurable predictive strength multiplier
-          const predictiveStrength = avoidStrength * collisionConfig.buildingAvoidancePredictiveStrengthMultiplier;
+          const predictiveStrength =
+            avoidStrength * collisionConfig.buildingAvoidancePredictiveStrengthMultiplier;
           forceX += perpX * sign * predictiveStrength;
           forceY += perpY * sign * predictiveStrength;
         }
@@ -550,8 +542,7 @@ export class PathfindingMovement {
     );
 
     const isCarryingResources =
-      unit.isWorker &&
-      (unit.carryingMinerals > 0 || unit.carryingPlasma > 0);
+      unit.isWorker && (unit.carryingMinerals > 0 || unit.carryingPlasma > 0);
 
     for (const buildingId of nearbyBuildingIds) {
       if (unit.constructingBuildingId === buildingId) continue;
@@ -582,10 +573,8 @@ export class PathfindingMovement {
         const escapeUp = -(halfHeight + dy);
         const escapeDown = halfHeight - dy;
 
-        const escapeX =
-          Math.abs(escapeLeft) < Math.abs(escapeRight) ? escapeLeft : escapeRight;
-        const escapeY =
-          Math.abs(escapeUp) < Math.abs(escapeDown) ? escapeUp : escapeDown;
+        const escapeX = Math.abs(escapeLeft) < Math.abs(escapeRight) ? escapeLeft : escapeRight;
+        const escapeY = Math.abs(escapeUp) < Math.abs(escapeDown) ? escapeUp : escapeDown;
 
         // Push exactly to edge - no buffer to prevent oscillation
         // The navmesh path should keep units away from buildings; this is just a safety net
@@ -604,11 +593,7 @@ export class PathfindingMovement {
   /**
    * Get terrain speed modifier at position
    */
-  public getTerrainSpeedModifier(
-    x: number,
-    y: number,
-    isFlying: boolean
-  ): number {
+  public getTerrainSpeedModifier(x: number, y: number, isFlying: boolean): number {
     if (isFlying) return 1.0;
 
     const cell = this.game.getTerrainAt(x, y);
