@@ -763,10 +763,10 @@ export class WorkerGame extends GameCore {
       const health = entity.get<Health>('Health')!;
       const selectable = entity.get<Selectable>('Selectable')!;
 
-      // Filter enemy units based on fog of war visibility
+      // Filter enemy units based on fog of war visibility (if enabled)
       // Only send enemy units to renderer if they're currently visible to local player
       const isOwnedByLocalPlayer = selectable.playerId === localPlayerId;
-      if (!isOwnedByLocalPlayer) {
+      if (this.config.fogOfWar && !isOwnedByLocalPlayer) {
         const isVisible = this.visionSystem.isVisible(localPlayerId, transform.x, transform.y);
         if (!isVisible) {
           continue; // Skip enemy units not in line of sight
@@ -847,10 +847,10 @@ export class WorkerGame extends GameCore {
       const health = entity.get<Health>('Health')!;
       const selectable = entity.get<Selectable>('Selectable')!;
 
-      // Filter enemy buildings based on fog of war exploration
+      // Filter enemy buildings based on fog of war exploration (if enabled)
       // Buildings remain visible once explored (unlike units which require line of sight)
       const isOwnedByLocalPlayer = selectable.playerId === localPlayerId;
-      if (!isOwnedByLocalPlayer) {
+      if (this.config.fogOfWar && !isOwnedByLocalPlayer) {
         const isExplored = this.visionSystem.isExplored(localPlayerId, transform.x, transform.y);
         if (!isExplored) {
           continue; // Skip enemy buildings in unexplored areas

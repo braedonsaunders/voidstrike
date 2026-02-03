@@ -37,7 +37,6 @@ import {
 
 // GPU-driven rendering infrastructure
 import { CullingService, EntityCategory } from './services/CullingService';
-import { getConsoleEngineSync } from '@/engine/debug/ConsoleEngine';
 import { LODConfig } from './compute/UnifiedCullingCompute';
 import { GPUIndirectRenderer } from './compute/GPUIndirectRenderer';
 
@@ -1012,25 +1011,11 @@ export class UnitRenderer {
       const ownerId = selectable?.playerId ?? 'unknown';
       const isSpectating = isSpectatorMode() || !this.playerId;
       const isOwned = !isSpectating && ownerId === this.playerId;
-      const isEnemy = !isSpectating && selectable && ownerId !== this.playerId;
-
-      // Check visibility for enemy units (skip in spectator mode or if fog disabled - show all)
-      let shouldShow = true;
-      if (isEnemy && this.visionSystem && this.playerId) {
-        const fogDisabled = getConsoleEngineSync()?.getFlag('fogDisabled');
-        if (!fogDisabled) {
-          shouldShow = this.visionSystem.isVisible(this.playerId, transform.x, transform.y);
-        }
-      }
 
       // Skip dead units
       // Note: In worker mode, components are plain objects, not class instances
+      // Fog of war visibility filtering is handled by GameWorker before sending render state
       if (health && health.current <= 0) {
-        shouldShow = false;
-      }
-
-      if (!shouldShow) {
-        // Hide health bar if exists (selection rings and team markers are instanced)
         const overlay = this.unitOverlays.get(entity.id);
         if (overlay) {
           overlay.healthBar.visible = false;

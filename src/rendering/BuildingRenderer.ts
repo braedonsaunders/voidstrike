@@ -11,7 +11,6 @@ import { getPlayerColor, isSpectatorMode } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { debugMesh } from '@/utils/debugLogger';
 import { CullingService, EntityCategory } from './services/CullingService';
-import { getConsoleEngineSync } from '@/engine/debug/ConsoleEngine';
 import { BUILDING_RENDERER, BUILDING_SELECTION_RING, RENDER_ORDER } from '@/data/rendering.config';
 import {
   createConstructingMaterial,
@@ -647,16 +646,7 @@ export class BuildingRenderer {
       const ownerId = selectable?.playerId ?? 'unknown';
       const isSpectating = isSpectatorMode() || !this.playerId;
       const isOwned = !isSpectating && ownerId === this.playerId;
-      const isEnemy = !isSpectating && selectable && ownerId !== this.playerId;
-
-      // Check visibility for enemy buildings (skip in spectator mode or if fog disabled - show all)
-      let shouldShow = true;
-      if (isEnemy && this.visionSystem && this.playerId) {
-        const fogDisabled = getConsoleEngineSync()?.getFlag('fogDisabled');
-        if (!fogDisabled) {
-          shouldShow = this.visionSystem.isExplored(this.playerId, transform.x, transform.y);
-        }
-      }
+      // Fog of war visibility filtering is handled by GameWorker before sending render state
 
       // PERF: Get cached terrain height (buildings rarely move)
       let meshData = this.buildingMeshes.get(entity.id);
@@ -713,7 +703,7 @@ export class BuildingRenderer {
       }
 
       // PERFORMANCE: Try to use instanced rendering for completed static buildings
-      if (shouldShow && this.canUseInstancing(building, health, selectable)) {
+      if (this.canUseInstancing(building, health, selectable)) {
         // Calculate LOD level based on distance from camera
         let lodLevel: LODLevel = 0;
         const settings = useUIStore.getState().graphicsSettings;
@@ -828,15 +818,8 @@ export class BuildingRenderer {
         }
       }
 
-      // Update visibility
-      meshData.group.visible = shouldShow;
-
-      if (!shouldShow) {
-        meshData.selectionRing.visible = false;
-        meshData.healthBar.visible = false;
-        meshData.progressBar.visible = false;
-        continue;
-      }
+      // Update visibility (fog of war filtering is handled by GameWorker)
+      meshData.group.visible = true;
 
       // terrainHeight already computed above for frustum check
 
