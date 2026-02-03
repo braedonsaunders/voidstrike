@@ -1446,7 +1446,6 @@ const totalMemory = geometryMemory + normalMapMemory + reflectionMemory;
 | `src/rendering/water/WaterMemoryManager.ts` | Memory budget management and quality selection |
 | `src/rendering/water/PlanarReflection.ts` | Shared planar reflection render target |
 | `src/rendering/tsl/WaterMaterial.ts` | TSL water shader with dual-layer normals |
-| `src/rendering/WaterMesh.ts` | **DEPRECATED** (kept for reference) |
 
 ### Migration Notes
 
