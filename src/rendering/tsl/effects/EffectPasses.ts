@@ -1045,6 +1045,11 @@ export function createFogOfWarPass(
   };
 
   const updateCamera = (cam: THREE.PerspectiveCamera) => {
+    // Ensure camera matrices are current before copying
+    // (camera position may have changed but matrices not yet updated)
+    cam.updateMatrixWorld();
+    cam.updateProjectionMatrix();
+
     // Update camera parameters for world position reconstruction
     uCameraNear.value = cam.near;
     uCameraFar.value = cam.far;
@@ -1052,8 +1057,9 @@ export function createFogOfWarPass(
     uInverseProjection.value.copy(cam.projectionMatrixInverse);
     // Camera world matrix transforms view-space to world-space
     uCameraWorldMatrix.value.copy(cam.matrixWorld);
-    // Direct camera position for volumetric fog
-    uCameraPos.value.copy(cam.position);
+    // Extract world position from matrixWorld for consistency with world reconstruction
+    // (using camera.position directly would give local position if camera has a parent)
+    uCameraPos.value.setFromMatrixPosition(cam.matrixWorld);
   };
 
   const applyConfig = (config: Partial<FogOfWarConfig>) => {
