@@ -11,6 +11,7 @@ import * as THREE from 'three';
 
 import { Game } from '@/engine/core/Game';
 import { PerformanceMonitor } from '@/engine/core/PerformanceMonitor';
+import { GPUTimestampProfiler } from '@/engine/core/GPUTimestampProfiler';
 import type { IWorldProvider } from '@/engine/ecs/IWorldProvider';
 import type { EventBus } from '@/engine/core/EventBus';
 import { RTSCamera } from '@/rendering/Camera';
@@ -168,6 +169,9 @@ export function useWebGPURenderer({
   // Accumulators for per-frame render metrics (triangles/drawCalls reset each frame in WebGPU)
   const accumulatedTrianglesRef = useRef<number>(0);
   const accumulatedDrawCallsRef = useRef<number>(0);
+
+  // GPU timestamp profiler for actual GPU timing
+  const gpuTimestampProfilerRef = useRef<GPUTimestampProfiler | null>(null);
 
   // Device lost recovery state
   const isRecoveringRef = useRef(false);
@@ -456,6 +460,23 @@ export function useWebGPURenderer({
       useUIStore.getState().setRendererAPI(renderContext.isWebGPU ? 'WebGPU' : 'WebGL');
       useUIStore.getState().setGpuInfo(renderContext.gpuInfo);
       setMaxVertexBuffers(renderContext.deviceLimits.maxVertexBuffers);
+
+      // Initialize GPU timestamp profiler for accurate GPU timing
+      if (renderContext.supportsTimestampQuery && renderContext.gpuDevice) {
+        const profiler = GPUTimestampProfiler.getInstance();
+        const initialized = profiler.initialize(renderContext.gpuDevice);
+        if (initialized) {
+          gpuTimestampProfilerRef.current = profiler;
+          debugInitialization.log('[useWebGPURenderer] GPU timestamp profiler initialized');
+        } else {
+          debugInitialization.log('[useWebGPURenderer] GPU timestamp profiler initialization failed');
+        }
+      } else {
+        debugInitialization.log(
+          `[useWebGPURenderer] GPU timestamp queries not available ` +
+          `(supported: ${renderContext.supportsTimestampQuery}, device: ${!!renderContext.gpuDevice})`
+        );
+      }
 
       debugInitialization.log(
         `[useWebGPURenderer] Using ${renderContext.isWebGPU ? 'WebGPU' : 'WebGL'} backend`
@@ -1247,6 +1268,20 @@ export function useWebGPURenderer({
         const fps = frameElapsed > 0 ? 1000 / frameElapsed : 60;
         PerformanceMonitor.updateRenderMetrics(drawCallsThisSecond, trianglesThisSecond, fps);
 
+        // Update GPU timing from timestamp profiler
+        const gpuProfiler = gpuTimestampProfilerRef.current;
+        if (gpuProfiler) {
+          const gpuTiming = gpuProfiler.getLastFrameTime();
+          PerformanceMonitor.updateGPUTiming(
+            gpuTiming.frameTimeMs,
+            gpuProfiler.getAverageFrameTime(),
+            gpuTiming.available
+          );
+        } else {
+          // Report that GPU timing is not available
+          PerformanceMonitor.updateGPUTiming(0, 0, false);
+        }
+
         // Reset accumulators for next second
         accumulatedTrianglesRef.current = 0;
         accumulatedDrawCallsRef.current = 0;
@@ -1317,6 +1352,10 @@ export function useWebGPURenderer({
       overlayManagerRef.current?.dispose();
       commandQueueRendererRef.current?.dispose();
       lightPoolRef.current?.dispose();
+
+      // Clean up GPU timestamp profiler
+      GPUTimestampProfiler.resetInstance();
+      gpuTimestampProfilerRef.current = null;
 
       isInitializedRef.current = false;
     };

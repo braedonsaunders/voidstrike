@@ -91,6 +91,16 @@ export interface RenderContext {
     maxBufferSize: number;
   };
   /**
+   * Whether the GPU supports timestamp queries for accurate GPU timing.
+   * If true, GPUTimestampProfiler can be used to measure actual GPU execution time.
+   */
+  supportsTimestampQuery: boolean;
+  /**
+   * Direct access to the WebGPU device (null if WebGL fallback or not available).
+   * Use for advanced features like timestamp queries that need device access.
+   */
+  gpuDevice: GPUDevice | null;
+  /**
    * Register a callback to be notified when the WebGPU device is lost.
    * Multiple callbacks can be registered.
    */
@@ -126,7 +136,10 @@ interface AdapterInfo {
   };
   /** GPU adapter info for display */
   gpuInfo: GpuAdapterInfo | null;
+  /** Whether WebGPU adapter is available */
   supported: boolean;
+  /** Whether timestamp-query feature is available for GPU timing */
+  supportsTimestampQuery: boolean;
 }
 
 /**
@@ -210,7 +223,8 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
       requiredLimits: {},
       trackedLimits: { ...DEFAULT_LIMITS },
       gpuInfo: null,
-      supported: false
+      supported: false,
+      supportsTimestampQuery: false,
     };
   }
 
@@ -225,7 +239,8 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
         requiredLimits: {},
         trackedLimits: { ...DEFAULT_LIMITS },
         gpuInfo: null,
-        supported: false
+        supported: false,
+        supportsTimestampQuery: false,
       };
     }
 
@@ -279,12 +294,16 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
       }
     }
 
+    // Check for timestamp-query feature (for GPU timing profiling)
+    const supportsTimestampQuery = adapter.features.has('timestamp-query');
+
     debugInitialization.log(`[WebGPU] Adapter limits (copied to plain object):`, {
       maxVertexBuffers: requiredLimits.maxVertexBuffers,
       maxTextureDimension2D: requiredLimits.maxTextureDimension2D,
       maxStorageBufferBindingSize: requiredLimits.maxStorageBufferBindingSize,
       maxBufferSize: requiredLimits.maxBufferSize,
       totalLimitsCopied: Object.keys(requiredLimits).length,
+      supportsTimestampQuery,
     });
 
     return {
@@ -297,6 +316,7 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
       },
       gpuInfo,
       supported: true,
+      supportsTimestampQuery,
     };
   } catch (error) {
     debugInitialization.warn('[WebGPU] Error querying adapter:', error);
@@ -304,7 +324,8 @@ async function getWebGPUAdapterInfo(): Promise<AdapterInfo> {
       requiredLimits: {},
       trackedLimits: { ...DEFAULT_LIMITS },
       gpuInfo: null,
-      supported: false
+      supported: false,
+      supportsTimestampQuery: false,
     };
   }
 }
@@ -506,12 +527,16 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
   const deviceLostCallbacks: DeviceLostCallback[] = [];
   let deviceIsLost = false;
 
+  // Get the WebGPU device reference (needed for timestamp profiler and device lost handler)
+  let gpuDevice: GPUDevice | null = null;
+  const supportsTimestampQuery = isWebGPU && adapterInfo.supportsTimestampQuery;
+
   // Set up device lost handler if WebGPU is active
   if (isWebGPU) {
-    const device = getWebGPUDevice(renderer);
-    if (device) {
+    gpuDevice = getWebGPUDevice(renderer);
+    if (gpuDevice) {
       setupDeviceLostHandler(
-        device,
+        gpuDevice,
         adapterInfo.gpuInfo,
         deviceLostCallbacks,
         (lost: boolean) => { deviceIsLost = lost; }
@@ -524,6 +549,12 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
     }
   }
 
+  debugInitialization.log(`[WebGPU] Timestamp query support:`, {
+    adapterSupports: adapterInfo.supportsTimestampQuery,
+    deviceAvailable: gpuDevice !== null,
+    enabled: supportsTimestampQuery && gpuDevice !== null,
+  });
+
   // Create the render context with device lost API
   const context: RenderContext = {
     renderer,
@@ -532,6 +563,8 @@ export async function createWebGPURenderer(config: WebGPURendererConfig): Promis
     postProcessing: null,
     gpuInfo: isWebGPU ? adapterInfo.gpuInfo : null,
     deviceLimits: actualLimits,
+    supportsTimestampQuery,
+    gpuDevice,
 
     onDeviceLost: (callback: DeviceLostCallback) => {
       if (!deviceLostCallbacks.includes(callback)) {

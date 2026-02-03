@@ -58,6 +58,9 @@ import { VolumetricFogNode } from './VolumetricFog';
 import { TemporalAOManager } from './TemporalAO';
 import { TemporalSSRManager } from './TemporalSSR';
 
+// Import GPU memory tracking
+import { getGPUMemoryTracker, estimateRenderTargetMemory } from '@/engine/core/GPUMemoryTracker';
+
 // Import extracted effect modules
 import {
   // Effect creation
@@ -397,6 +400,9 @@ export class RenderPipeline {
       this.displayPostProcessing = null;
       this.internalRenderTarget = null;
     }
+
+    // Report initial render target memory usage
+    this.updateRenderTargetsMemory();
   }
 
   private createInternalPipeline(): PostProcessing {
@@ -1022,6 +1028,60 @@ export class RenderPipeline {
     this.temporalAOManager = null;
     this.temporalSSRManager?.dispose();
     this.temporalSSRManager = null;
+
+    // Clear render targets memory tracking
+    this.updateRenderTargetsMemory();
+  }
+
+  /**
+   * Estimate and report GPU memory usage for render targets.
+   * Called after pipeline setup and on dispose.
+   */
+  private updateRenderTargetsMemory(): void {
+    let totalMB = 0;
+    const breakdown: Record<string, number> = {};
+
+    // Main internal render target
+    if (this.internalRenderTarget) {
+      const mem = estimateRenderTargetMemory(this.internalRenderTarget);
+      breakdown['internal'] = mem;
+      totalMB += mem;
+    }
+
+    // Temporal AO has multiple render targets (quarter + history buffers)
+    if (this.temporalAOManager) {
+      // Estimate: quarter-res AO + quarter-res depth + 2x history + prevDepth
+      // Quarter res: 1/4 of render dimensions
+      const quarterW = this.quarterWidth;
+      const quarterH = this.quarterHeight;
+      const fullW = this.renderWidth;
+      const fullH = this.renderHeight;
+
+      // Quarter targets (RGBA16F = 8 bytes/pixel)
+      const quarterSize = (quarterW * quarterH * 8 * 2) / (1024 * 1024); // AO + depth
+      // Full-res history (2 ping-pong + prevDepth)
+      const historySize = (fullW * fullH * 4 * 3) / (1024 * 1024); // 3 RGBA8 targets
+      breakdown['temporalAO'] = quarterSize + historySize;
+      totalMB += quarterSize + historySize;
+    }
+
+    // Temporal SSR has similar structure
+    if (this.temporalSSRManager) {
+      const quarterW = this.quarterWidth;
+      const quarterH = this.quarterHeight;
+      const fullW = this.renderWidth;
+      const fullH = this.renderHeight;
+
+      // Quarter targets (SSR + color + depth + normal)
+      const quarterSize = (quarterW * quarterH * 8 * 4) / (1024 * 1024);
+      // Full-res history (2 ping-pong)
+      const historySize = (fullW * fullH * 4 * 2) / (1024 * 1024);
+      breakdown['temporalSSR'] = quarterSize + historySize;
+      totalMB += quarterSize + historySize;
+    }
+
+    // Report to central tracker
+    getGPUMemoryTracker().updateUsage('renderTargets', totalMB, breakdown);
   }
 }
 

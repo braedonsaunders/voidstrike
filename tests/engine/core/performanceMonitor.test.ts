@@ -212,3 +212,73 @@ describe('RingBuffer behavior (via PerformanceMonitor)', () => {
     expect(history.length).toBeLessThanOrEqual(300);
   });
 });
+
+describe('PerformanceMonitor - GPU timing', () => {
+  afterEach(() => {
+    PerformanceMonitor.setCollecting(false);
+  });
+
+  it('updateGPUTiming updates render metrics with GPU timing data', () => {
+    PerformanceMonitor.setCollecting(true);
+    PerformanceMonitor.updateGPUTiming(8.5, 7.2, true);
+
+    const snapshot = PerformanceMonitor.getSnapshot();
+    expect(snapshot.render.gpuFrameTimeMs).toBe(8.5);
+    expect(snapshot.render.gpuFrameTimeAvgMs).toBe(7.2);
+    expect(snapshot.render.gpuTimingAvailable).toBe(true);
+  });
+
+  it('updateGPUTiming handles unavailable timing', () => {
+    PerformanceMonitor.setCollecting(true);
+    PerformanceMonitor.updateGPUTiming(0, 0, false);
+
+    const snapshot = PerformanceMonitor.getSnapshot();
+    expect(snapshot.render.gpuTimingAvailable).toBe(false);
+  });
+
+  it('updateGPUTiming is no-op when collection disabled', () => {
+    PerformanceMonitor.setCollecting(false);
+    // Should not throw
+    PerformanceMonitor.updateGPUTiming(10, 10, true);
+  });
+});
+
+describe('PerformanceMonitor - GPU memory snapshot', () => {
+  it('snapshot includes gpuMemory field', () => {
+    const snapshot = PerformanceMonitor.getSnapshot();
+
+    expect(snapshot).toHaveProperty('gpuMemory');
+    expect(snapshot.gpuMemory).toHaveProperty('totalMB');
+    expect(snapshot.gpuMemory).toHaveProperty('budgetMB');
+    expect(snapshot.gpuMemory).toHaveProperty('usagePercent');
+    expect(snapshot.gpuMemory).toHaveProperty('categories');
+    expect(Array.isArray(snapshot.gpuMemory.categories)).toBe(true);
+  });
+
+  it('gpuMemory categories have correct structure', () => {
+    const snapshot = PerformanceMonitor.getSnapshot();
+
+    for (const category of snapshot.gpuMemory.categories) {
+      expect(category).toHaveProperty('name');
+      expect(category).toHaveProperty('currentMB');
+      expect(category).toHaveProperty('breakdown');
+      expect(typeof category.name).toBe('string');
+      expect(typeof category.currentMB).toBe('number');
+      expect(typeof category.breakdown).toBe('object');
+    }
+  });
+});
+
+describe('PerformanceMonitor - render metrics structure', () => {
+  it('render metrics include GPU timing fields', () => {
+    const snapshot = PerformanceMonitor.getSnapshot();
+
+    expect(snapshot.render).toHaveProperty('drawCalls');
+    expect(snapshot.render).toHaveProperty('triangles');
+    expect(snapshot.render).toHaveProperty('drawCallsPerSecond');
+    expect(snapshot.render).toHaveProperty('trianglesPerSecond');
+    expect(snapshot.render).toHaveProperty('gpuFrameTimeMs');
+    expect(snapshot.render).toHaveProperty('gpuFrameTimeAvgMs');
+    expect(snapshot.render).toHaveProperty('gpuTimingAvailable');
+  });
+});
