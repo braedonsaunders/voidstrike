@@ -416,7 +416,9 @@ export type MainToWorkerMessage =
   | { type: 'setSelection'; entityIds: number[]; playerId: string }
   | { type: 'setControlGroup'; groupNumber: number; entityIds: number[] }
   | { type: 'spawnEntities'; mapData: SpawnMapData }
-  | { type: 'setPerformanceCollection'; enabled: boolean };
+  | { type: 'setPerformanceCollection'; enabled: boolean }
+  | { type: 'spawnUnit'; unitType: string; x: number; y: number; playerId: string }
+  | { type: 'destroyEntity'; entityId: number };
 
 /**
  * Player slot info for spawning

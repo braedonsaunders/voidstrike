@@ -538,6 +538,29 @@ export class WorkerBridge {
     this.eventBus.emit('selection:changed', { entityIds, playerId });
   }
 
+  /**
+   * Spawn a unit in the worker (for battle simulator)
+   */
+  public spawnUnit(unitType: string, x: number, y: number, playerId: string): void {
+    this.worker?.postMessage({
+      type: 'spawnUnit',
+      unitType,
+      x,
+      y,
+      playerId,
+    } satisfies MainToWorkerMessage);
+  }
+
+  /**
+   * Destroy an entity in the worker
+   */
+  public destroyEntity(entityId: number): void {
+    this.worker?.postMessage({
+      type: 'destroyEntity',
+      entityId,
+    } satisfies MainToWorkerMessage);
+  }
+
   public setControlGroup(groupNumber: number, entityIds: number[]): void {
     this.worker?.postMessage({
       type: 'setControlGroup',

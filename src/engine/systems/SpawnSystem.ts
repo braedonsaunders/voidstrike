@@ -66,6 +66,16 @@ export class SpawnSystem extends System {
 
     // Handle unit death (cleanup)
     this.game.eventBus.on('unit:died', this.handleUnitDeath.bind(this));
+
+    // Handle direct entity destruction (e.g., from battle simulator clear)
+    this.game.eventBus.on('entity:destroy', this.handleEntityDestroy.bind(this));
+  }
+
+  private handleEntityDestroy(data: { entityId: number }): void {
+    const entity = this.world.getEntity(data.entityId);
+    if (entity) {
+      this.world.destroyEntity(data.entityId);
+    }
   }
 
   private handleUnitSpawn(data: {
