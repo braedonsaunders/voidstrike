@@ -43,6 +43,13 @@ export interface DetailedValidationResult {
     connectedPairs: number;
     blockedPairs: number;
   };
+  navmeshStats?: {
+    navmeshGenerated: boolean;
+    pathsChecked: number;
+    pathsFound: number;
+    pathsBlocked: number;
+    blockedPaths?: Array<{ from: string; to: string }>;
+  };
   timestamp?: number;
 }
 
@@ -309,6 +316,24 @@ export function EditorCore({
       if (dataProvider?.validateMap) {
         const result = await dataProvider.validateMap(state.mapData);
 
+        // Extract extended result fields
+        const extendedResult = result as unknown as {
+          stats?: {
+            totalNodes: number;
+            totalEdges: number;
+            islandCount: number;
+            connectedPairs: number;
+            blockedPairs: number;
+          };
+          navmeshStats?: {
+            navmeshGenerated: boolean;
+            pathsChecked: number;
+            pathsFound: number;
+            pathsBlocked: number;
+            blockedPaths?: Array<{ from: string; to: string }>;
+          };
+        };
+
         // Convert to detailed result format
         setValidationResult({
           valid: result.valid,
@@ -322,17 +347,8 @@ export function EditorCore({
               issue as unknown as { suggestedFix?: { type: string; description: string } }
             ).suggestedFix,
           })),
-          stats: (
-            result as unknown as {
-              stats?: {
-                totalNodes: number;
-                totalEdges: number;
-                islandCount: number;
-                connectedPairs: number;
-                blockedPairs: number;
-              };
-            }
-          ).stats,
+          stats: extendedResult.stats,
+          navmeshStats: extendedResult.navmeshStats,
           timestamp: Date.now(),
         });
       }

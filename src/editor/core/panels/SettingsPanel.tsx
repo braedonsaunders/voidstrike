@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { EditorConfig, EditorState, EditorMapData, EditorObject } from '../../config/EditorConfig';
 import { Section, ToggleSwitch } from './shared';
 import {
@@ -40,7 +40,35 @@ export function SettingsPanel({
   // Border decoration state
   const [borderStyle, setBorderStyle] = useState<BorderDecorationStyle>('rocks');
   const [borderDensity, setBorderDensity] = useState(0.7);
+  const [borderScale, setBorderScale] = useState(2.0); // Average of scaleMin/scaleMax
   const [isGenerating, setIsGenerating] = useState(false);
+  const isInitialMount = useRef(true);
+
+  // Auto-regenerate border decorations when style, density, or scale changes (if decorations exist)
+  useEffect(() => {
+    // Skip on initial mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // Only auto-regenerate if there are existing border decorations
+    if (!state.mapData || !onUpdateObjects) return;
+    const currentCount = countBorderDecorations(state.mapData.objects);
+    if (currentCount === 0) return;
+
+    // Regenerate with new settings
+    const settings: BorderDecorationSettings = {
+      ...DEFAULT_BORDER_SETTINGS,
+      style: borderStyle,
+      density: borderDensity,
+      scaleMin: borderScale * 0.6,
+      scaleMax: borderScale * 1.4,
+    };
+
+    const newObjects = generateBorderDecorations(state.mapData, settings);
+    onUpdateObjects(newObjects);
+  }, [borderStyle, borderDensity, borderScale]);
 
   if (!state.mapData) return null;
 
@@ -55,6 +83,8 @@ export function SettingsPanel({
       ...DEFAULT_BORDER_SETTINGS,
       style: borderStyle,
       density: borderDensity,
+      scaleMin: borderScale * 0.6,
+      scaleMax: borderScale * 1.4,
     };
 
     const newObjects = generateBorderDecorations(state.mapData, settings);
@@ -196,15 +226,12 @@ export function SettingsPanel({
                   <button
                     key={style}
                     onClick={() => setBorderStyle(style)}
-                    className={`
-                      px-2 py-1.5 rounded text-[11px] transition-all capitalize
-                      ${borderStyle === style ? 'ring-1' : 'hover:bg-white/5'}
-                    `}
+                    className="px-2 py-1.5 rounded text-[11px] transition-all capitalize hover:bg-white/5"
                     style={{
                       backgroundColor: borderStyle === style ? `${theme.primary}20` : theme.surface,
                       color: borderStyle === style ? theme.text.primary : theme.text.muted,
-                      '--tw-ring-color': theme.primary,
-                    } as React.CSSProperties}
+                      border: borderStyle === style ? `1px solid ${theme.primary}` : '1px solid transparent',
+                    }}
                   >
                     {style.replace('_', ' ')}
                   </button>
@@ -228,6 +255,26 @@ export function SettingsPanel({
                 step="0.1"
                 value={borderDensity}
                 onChange={(e) => setBorderDensity(parseFloat(e.target.value))}
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-[10px] uppercase tracking-wider" style={{ color: theme.text.muted }}>
+                  Scale
+                </label>
+                <span className="text-[10px] font-mono" style={{ color: theme.text.secondary }}>
+                  {borderScale.toFixed(1)}x
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.5"
+                max="4"
+                step="0.5"
+                value={borderScale}
+                onChange={(e) => setBorderScale(parseFloat(e.target.value))}
                 className="w-full"
               />
             </div>

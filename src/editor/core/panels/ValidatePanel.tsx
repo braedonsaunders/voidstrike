@@ -23,6 +23,7 @@ export function ValidatePanel({
   const isValid = validationResult?.valid ?? true;
   const issues = validationResult?.issues ?? [];
   const stats = validationResult?.stats;
+  const navmeshStats = validationResult?.navmeshStats;
 
   const errors = issues.filter(i => i.severity === 'error');
   const warnings = issues.filter(i => i.severity === 'warning');
@@ -47,7 +48,7 @@ export function ValidatePanel({
         {isValidating ? (
           <>
             <span className="animate-spin">⟳</span>
-            Validating...
+            Building Navmesh...
           </>
         ) : (
           <>
@@ -62,7 +63,7 @@ export function ValidatePanel({
         className="text-[11px] leading-relaxed"
         style={{ color: theme.text.muted }}
       >
-        Checks that all bases are connected and expansions are reachable.
+        Uses Recast Navigation (same as game) to verify all bases are connected. Includes decoration obstacles.
       </div>
 
       {/* Results */}
@@ -95,13 +96,38 @@ export function ValidatePanel({
             </div>
           </div>
 
+          {/* Navmesh Status */}
+          {navmeshStats && (
+            <div
+              className="p-3 rounded-lg"
+              style={{
+                backgroundColor: navmeshStats.navmeshGenerated ? `${theme.success}10` : `${theme.warning}10`,
+                border: `1px solid ${navmeshStats.navmeshGenerated ? theme.success : theme.warning}20`,
+              }}
+            >
+              <div className="flex items-center gap-2 text-xs" style={{ color: theme.text.primary }}>
+                <span>{navmeshStats.navmeshGenerated ? '🗺️' : '⚠️'}</span>
+                <span className="font-medium">
+                  {navmeshStats.navmeshGenerated ? 'Navmesh Generated' : 'Navmesh Failed'}
+                </span>
+              </div>
+              {navmeshStats.navmeshGenerated && (
+                <div className="mt-2 text-[10px]" style={{ color: theme.text.muted }}>
+                  Paths checked: {navmeshStats.pathsChecked} |
+                  Found: <span style={{ color: theme.success }}>{navmeshStats.pathsFound}</span> |
+                  Blocked: <span style={{ color: navmeshStats.pathsBlocked > 0 ? theme.error : theme.text.muted }}>{navmeshStats.pathsBlocked}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Statistics */}
           {stats && (
-            <Section title="Statistics" icon="📊" theme={theme} defaultOpen={false}>
+            <Section title="Path Statistics" icon="📊" theme={theme} defaultOpen={false}>
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { label: 'Nodes', value: stats.totalNodes },
-                  { label: 'Islands', value: stats.islandCount, warn: stats.islandCount > 1 },
+                  { label: 'Bases', value: stats.totalNodes },
+                  { label: 'Paths Tested', value: stats.totalEdges },
                   { label: 'Connected', value: stats.connectedPairs, success: true },
                   { label: 'Blocked', value: stats.blockedPairs, error: stats.blockedPairs > 0 },
                 ].map((stat) => (
@@ -118,8 +144,6 @@ export function ValidatePanel({
                       style={{
                         color: stat.error
                           ? theme.error
-                          : stat.warn
-                          ? theme.warning
                           : stat.success
                           ? theme.success
                           : theme.text.primary,
@@ -205,7 +229,7 @@ export function ValidatePanel({
               className="text-center py-4 text-sm"
               style={{ color: theme.success }}
             >
-              All connectivity checks passed!
+              All paths verified! Map is ready for play.
             </div>
           )}
 
@@ -229,25 +253,31 @@ export function ValidatePanel({
       )}
 
       {/* Help section */}
-      <Section title="Validation Checks" icon="ℹ️" theme={theme} defaultOpen={false}>
+      <Section title="How It Works" icon="ℹ️" theme={theme} defaultOpen={false}>
         <ul className="space-y-1.5 text-[11px]" style={{ color: theme.text.muted }}>
           <li className="flex items-start gap-2">
             <span style={{ color: theme.success }}>✓</span>
-            <span>All main bases can reach each other</span>
+            <span>Builds navmesh using Recast Navigation (same as game)</span>
           </li>
           <li className="flex items-start gap-2">
             <span style={{ color: theme.success }}>✓</span>
-            <span>Natural expansions are accessible</span>
+            <span>Includes terrain, ramps, and decoration obstacles</span>
           </li>
           <li className="flex items-start gap-2">
             <span style={{ color: theme.success }}>✓</span>
-            <span>No important bases are isolated</span>
+            <span>Tests actual pathfinding between all bases</span>
           </li>
           <li className="flex items-start gap-2">
             <span style={{ color: theme.success }}>✓</span>
-            <span>Ramps connect elevation differences</span>
+            <span>If validation passes, game pathfinding will work</span>
           </li>
         </ul>
+        <div
+          className="mt-3 p-2 rounded text-[10px]"
+          style={{ backgroundColor: `${theme.primary}15`, color: theme.primary }}
+        >
+          💡 This uses the exact same navigation system as the game, ensuring validation accuracy.
+        </div>
       </Section>
     </div>
   );
