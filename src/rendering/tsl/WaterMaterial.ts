@@ -193,14 +193,13 @@ export class TSLWaterMaterial {
     const roughnessNode = float(0.15);
 
     // =========================================================================
-    // MATERIAL CONFIGURATION
+    // MATERIAL CONFIGURATION - Ultra minimal for testing
     // =========================================================================
     material.colorNode = colorNode;
-    material.normalNode = normalNode;
-    material.roughnessNode = roughnessNode;
-
-    // Water is a dielectric (non-metallic)
-    material.metalnessNode = float(0.0);
+    // Commenting out normalNode to test if that's causing the issue
+    // material.normalNode = normalNode;
+    // material.roughnessNode = roughnessNode;
+    // material.metalnessNode = float(0.0);
 
     // Transparent rendering with proper depth handling
     material.transparent = true;
