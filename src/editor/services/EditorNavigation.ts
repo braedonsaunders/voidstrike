@@ -24,7 +24,7 @@ import {
   SOLO_NAVMESH_CONFIG,
   ELEVATION_TO_HEIGHT_FACTOR,
 } from '@/data/pathfinding.config';
-import { TERRAIN_FEATURE_CONFIG } from '@/data/maps/MapTypes';
+import { TERRAIN_FEATURE_CONFIG, type TerrainFeature } from '@/data/maps/MapTypes';
 
 // Decoration radius mapping for obstacles (matches game's decoration configs)
 const DECORATION_OBSTACLE_RADII: Record<string, number> = {
@@ -194,7 +194,7 @@ export class EditorNavigation {
       const cell = terrain[cy]?.[cx];
       if (!cell) return false;
       if (!cell.walkable) return false;
-      const feature = cell.feature || 'none';
+      const feature = (cell.feature || 'none') as TerrainFeature;
       const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
       return featureConfig?.walkable ?? true;
     };
