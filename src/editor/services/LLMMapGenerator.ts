@@ -560,7 +560,17 @@ const SYSTEM_PROMPT = `You are an expert RTS map designer creating professional 
 - Place ramps FROM high ground TO low ground
 
 ### Water Features
-Water bodies should be created with LAYERED commands for realistic appearance:
+CRITICAL RULES FOR WATER:
+1. NEVER place water at or near base locations - bases need solid land
+2. Ensure at least 30 cells of land around each main base, 20 around naturals
+3. Water is for OBSTACLES and DECORATION, not where players build
+
+For island maps:
+1. First, paint LAND plateaus where bases will be (HIGH elevation for mains, MID for naturals)
+2. Then fill the REMAINING space with water (shallow first, deep on top)
+3. Islands must be large enough for bases + mining + production (radius 35+ for main, 25+ for natural)
+
+Water body construction (layered approach):
 1. First paint a LARGER shallow water area (the shoreline/edges)
 2. Then paint a SMALLER deep water area in the CENTER (this overwrites the inner shallow)
 This creates natural shores where shallow water surrounds deep water.
@@ -569,15 +579,12 @@ Example lake (radius 25 at position 100,100):
   { "cmd": "water", "x": 100, "y": 100, "radius": 25, "depth": "shallow" }  // Outer shore
   { "cmd": "water", "x": 100, "y": 100, "radius": 18, "depth": "deep" }     // Inner deep
 
-Example river (width 20, length 80):
-  { "cmd": "water", "x": 50, "y": 60, "width": 20, "height": 80, "depth": "shallow" }  // Full width
-  { "cmd": "water", "x": 53, "y": 60, "width": 14, "height": 80, "depth": "deep" }     // Center channel
-
 Properties:
 - shallow water: walkable at 0.6x speed, unbuildable (shore/edges)
 - deep water: impassable (center of lakes, deep rivers)
 - ALWAYS create shallow water FIRST, then deep water on top for proper transitions
 - Shore width should be 5-8 cells for good visual appearance
+- NEVER overlap water with base locations or mineral patches
 
 ### Strategic Features
 - Watch towers: Place at contested locations for vision control
@@ -803,22 +810,40 @@ function buildUserPrompt(settings: MapGenerationSettings, size: { width: number;
 
   if (settings.islandMap) {
     lines.push(
-      '**Map Type**: Island/Naval map',
-      '- Use deep water to separate land masses',
-      '- Create island bases connected by shallow water crossings or bridges',
-      '- IMPORTANT: Always paint shallow water FIRST (larger), then deep water on TOP (smaller)',
-      '- This creates natural shorelines where shallow water surrounds deep water',
+      '**Map Type**: Island/Naval map - CRITICAL INSTRUCTIONS:',
+      '',
+      'Paint order (THIS ORDER IS MANDATORY):',
+      '1. fill(60) - base ground level',
+      '2. plateau commands for EACH base location (radius 35+ for mains, 25+ for naturals)',
+      '3. THEN water commands to fill spaces BETWEEN islands',
+      '4. border command last',
+      '',
+      'Island requirements:',
+      '- Main base islands: radius 35-40 at HIGH elevation (220)',
+      '- Natural islands: radius 25-30 at MID elevation (140)',
+      '- Third/Gold base islands: radius 20-25 at LOW elevation (60)',
+      '- Water goes AROUND the islands, not on them',
+      '- Connect islands with shallow water crossings (walkable) or ramps',
+      '',
+      'Water layering (for ocean between islands):',
+      '- Paint shallow water FIRST covering ocean area',
+      '- Paint deep water on TOP (smaller area in center of ocean)',
+      '- Shallow water forms walkable shores/crossings',
       ''
     );
   } else if (settings.includeWater) {
     lines.push(
       '**Water Features**: Include lakes, rivers, or ponds',
-      '- IMPORTANT: Create water bodies in layers:',
+      '',
+      'CRITICAL: Place water AWAY from bases',
+      '- Keep at least 30 cells between water and main bases',
+      '- Keep at least 20 cells between water and natural bases',
+      '- Water is for map obstacles, not base areas',
+      '',
+      'Water layering:',
       '  1. Paint shallow water FIRST (larger area for shoreline)',
       '  2. Paint deep water on TOP (smaller, in center)',
-      '- This creates natural transitions (shallow shores around deep centers)',
       '- Shore width should be 5-8 cells',
-      '- Example lake: shallow radius 25, then deep radius 18 at same center',
       ''
     );
   }
@@ -1087,6 +1112,63 @@ function isPositionInWaterOrVoid(
 }
 
 /**
+ * Check if a circular area overlaps with water (any overlap, not just center)
+ */
+function doesCircleOverlapWater(
+  x: number,
+  y: number,
+  radius: number,
+  paintCommands: MapBlueprint['paint']
+): boolean {
+  for (const cmd of paintCommands) {
+    if (cmd.cmd === 'water') {
+      if (cmd.radius !== undefined) {
+        // Circle-circle intersection
+        const dx = x - cmd.x;
+        const dy = y - cmd.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < radius + cmd.radius) {
+          return true;
+        }
+      } else if (cmd.width !== undefined && cmd.height !== undefined) {
+        // Circle-rect intersection
+        const closestX = Math.max(cmd.x, Math.min(x, cmd.x + cmd.width));
+        const closestY = Math.max(cmd.y, Math.min(y, cmd.y + cmd.height));
+        const dx = x - closestX;
+        const dy = y - closestY;
+        if (dx * dx + dy * dy < radius * radius) {
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+/** Minimum land radius requirements for base types */
+const MIN_LAND_RADIUS = {
+  main: 35,     // Main bases need largest area
+  natural: 25,  // Naturals need medium area
+  third: 20,    // Expansion bases need smaller area
+  fourth: 20,
+  fifth: 20,
+  gold: 20,
+  pocket: 18,
+} as const;
+
+/** Get required elevation for base type */
+function getBaseElevation(type: string): number {
+  switch (type) {
+    case 'main':
+      return ELEVATION_HIGH;
+    case 'natural':
+      return ELEVATION_MID;
+    default:
+      return ELEVATION_LOW;
+  }
+}
+
+/**
  * Check if minerals would be placed in water/void with given direction
  */
 function checkMineralsInWater(
@@ -1325,6 +1407,85 @@ function validateAndFixBlueprint(
   }
 
   // ============================================================================
+  // ENSURE BASES HAVE ADEQUATE LAND (FIX REVERSED ISLAND MAPS)
+  // ============================================================================
+
+  // Check each base and ensure it has solid land underneath
+  const landPlateauCommands: MapBlueprint['paint'] = [];
+
+  for (const base of fixed.bases) {
+    const requiredRadius = MIN_LAND_RADIUS[base.type as keyof typeof MIN_LAND_RADIUS] || 20;
+    const requiredElevation = getBaseElevation(base.type);
+
+    // Check if the base center is in water
+    const baseInWater = isPositionInWaterOrVoid(base.x, base.y, fixed.paint);
+
+    // Check if the required land area overlaps with water
+    const landOverlapsWater = doesCircleOverlapWater(base.x, base.y, requiredRadius, fixed.paint);
+
+    if (baseInWater || landOverlapsWater) {
+      // Base is in water or doesn't have enough land - add a plateau to create land
+      // This plateau will be painted AFTER water, overwriting it with land
+      debugInitialization.warn(
+        `Base at (${base.x}, ${base.y}) type='${base.type}' is in water or lacks adequate land. ` +
+        `Adding land plateau with radius ${requiredRadius}.`
+      );
+
+      landPlateauCommands.push({
+        cmd: 'plateau',
+        x: base.x,
+        y: base.y,
+        radius: requiredRadius,
+        elevation: requiredElevation,
+      });
+    }
+  }
+
+  // Insert land plateaus AFTER water commands but BEFORE border
+  // This ensures land is painted over water where bases need to be
+  if (landPlateauCommands.length > 0) {
+    const borderIndex = fixed.paint.findIndex(cmd => cmd.cmd === 'border');
+    const insertIndex = borderIndex > 0 ? borderIndex : fixed.paint.length;
+    fixed.paint.splice(insertIndex, 0, ...landPlateauCommands);
+  }
+
+  // ============================================================================
+  // FILTER OUT WATER COMMANDS THAT COMPLETELY OVERLAP WITH BASES
+  // ============================================================================
+
+  // Build list of base protection zones
+  const baseProtectionZones = fixed.bases.map(base => ({
+    x: base.x,
+    y: base.y,
+    radius: MIN_LAND_RADIUS[base.type as keyof typeof MIN_LAND_RADIUS] || 20,
+  }));
+
+  // Remove water commands that are entirely within a base protection zone
+  fixed.paint = fixed.paint.filter(cmd => {
+    if (cmd.cmd !== 'water') return true;
+
+    // Check if this water command is entirely inside any base zone
+    for (const zone of baseProtectionZones) {
+      if (cmd.radius !== undefined) {
+        // Circular water - check if completely inside base zone
+        const dx = cmd.x - zone.x;
+        const dy = cmd.y - zone.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // If the entire water circle is inside the base zone, remove it
+        if (dist + cmd.radius < zone.radius) {
+          debugInitialization.warn(
+            `Removing water at (${cmd.x}, ${cmd.y}) r=${cmd.radius} - entirely within base zone`
+          );
+          return false;
+        }
+      }
+    }
+
+    return true;
+  });
+
+  // ============================================================================
   // VALIDATE AND FIX MINERAL PLACEMENT
   // ============================================================================
 
@@ -1406,6 +1567,33 @@ function validateAndFixBlueprint(
   // Add random seed if missing
   if (fixed.decorationRules.seed === undefined) {
     fixed.decorationRules.seed = Math.floor(Math.random() * 10000);
+  }
+
+  // ============================================================================
+  // FILTER EXPLICIT DECORATIONS IN WATER
+  // ============================================================================
+
+  // Remove any explicit decorations that were placed in water bodies
+  if (fixed.explicitDecorations && fixed.explicitDecorations.length > 0) {
+    const originalCount = fixed.explicitDecorations.length;
+
+    fixed.explicitDecorations = fixed.explicitDecorations.filter(deco => {
+      const inWater = isPositionInWaterOrVoid(deco.x, deco.y, fixed.paint);
+      if (inWater) {
+        debugInitialization.warn(
+          `Removing decoration '${deco.type}' at (${deco.x}, ${deco.y}) - placed in water/void`
+        );
+        return false;
+      }
+      return true;
+    });
+
+    const removedCount = originalCount - fixed.explicitDecorations.length;
+    if (removedCount > 0) {
+      debugInitialization.warn(
+        `Removed ${removedCount} decoration(s) that were placed in water/void areas`
+      );
+    }
   }
 
   return fixed;
