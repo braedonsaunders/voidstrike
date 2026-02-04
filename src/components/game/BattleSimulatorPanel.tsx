@@ -210,21 +210,13 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   }, [selectedUnit, selectedTeam, spawnQuantity]);
 
   const handleFight = useCallback(() => {
-    console.log('[BattleSimulator] handleFight called');
     const bridge = getWorkerBridge();
     const worldAdapter = RenderStateWorldAdapter.getInstance();
 
-    if (!worldAdapter) {
-      console.warn('[BattleSimulator] No world adapter available');
+    if (!worldAdapter || !bridge) {
       return;
     }
 
-    if (!bridge) {
-      console.warn('[BattleSimulator] No worker bridge available');
-      return;
-    }
-
-    console.log('[BattleSimulator] Registering AI for both players');
     // Register both players as AI-controlled so the AI takes over and fights
     const player1Faction = playerSlots[0]?.faction ?? 'dominion';
     const player2Faction = playerSlots[1]?.faction ?? 'dominion';
@@ -232,18 +224,9 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     bridge.registerAI('player2', player2Faction, 'medium');
 
     const currentTick = bridge.currentTick;
-    console.log('[BattleSimulator] Current tick:', currentTick);
 
     // Get all units from render state adapter
     const entities = worldAdapter.getEntitiesWith('Unit', 'Selectable', 'Transform', 'Health');
-    console.log('[BattleSimulator] Found entities:', entities.length);
-
-    let skippedNoComponents = 0;
-    let skippedDead = 0;
-    let skippedWorker = 0;
-    let skippedWrongPlayer = 0;
-    let attackCommands = 0;
-    let moveCommands = 0;
 
     for (const entity of entities) {
       const selectable = entity.get<{ playerId: string }>('Selectable');
@@ -259,29 +242,16 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       const transform = entity.get<{ x: number; y: number }>('Transform');
       const health = entity.get<{ isDead: () => boolean }>('Health');
 
-      if (!selectable || !unit || !transform || !health) {
-        skippedNoComponents++;
-        continue;
-      }
-      if (health.isDead()) {
-        skippedDead++;
-        continue;
-      }
-      if (unit.isWorker) {
-        skippedWorker++;
-        continue;
-      }
+      if (!selectable || !unit || !transform || !health) continue;
+      if (health.isDead()) continue;
+      if (unit.isWorker) continue;
 
       const playerId = selectable.playerId;
-      if (playerId !== 'player1' && playerId !== 'player2') {
-        skippedWrongPlayer++;
-        continue;
-      }
+      if (playerId !== 'player1' && playerId !== 'player2') continue;
 
       const targetId = findValidTarget(worldAdapter, entity.id, unit, transform, playerId);
 
       if (targetId !== null) {
-        attackCommands++;
         const attackCommand: GameCommand = {
           tick: currentTick,
           playerId,
@@ -293,7 +263,6 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       } else {
         const enemyCenter = findEnemyCenter(worldAdapter, unit, playerId);
         if (enemyCenter) {
-          moveCommands++;
           const moveCommand: GameCommand = {
             tick: currentTick,
             playerId,
@@ -306,21 +275,9 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       }
     }
 
-    console.log('[BattleSimulator] Entity processing stats:', {
-      total: entities.length,
-      skippedNoComponents,
-      skippedDead,
-      skippedWorker,
-      skippedWrongPlayer,
-      attackCommands,
-      moveCommands,
-    });
-
-    console.log('[BattleSimulator] Calling bridge.resume()');
     bridge.resume();
     setIsPaused(false);
     setSelectedUnit(null);
-    console.log('[BattleSimulator] handleFight completed');
   }, [playerSlots]);
 
   const handlePauseToggle = useCallback(() => {
