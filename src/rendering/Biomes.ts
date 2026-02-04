@@ -148,8 +148,8 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     treeDensity: 0.15, // Sparse dead trees
     rockDensity: 0.2,
     crystalDensity: 0.3, // Ice crystals
-    hasWater: true,   // Re-enabled - depth sorting fix resolves previous artifacts
-    waterLevel: 5,    // Frozen lakes at low elevation (elevation units, not world height)
+    hasWater: false,  // Disabled - water plane at 0.2 was visible over low-elevation terrain causing animated diagonal stripe artifacts
+    waterLevel: -1,
     particleType: 'snow', // Gentle snowfall
     groundRoughness: 0.3, // Icy smooth
     groundMetalness: 0.1,
@@ -232,9 +232,9 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     treeDensity: 0,
     rockDensity: 0.3,
     crystalDensity: 0.6, // Many crystals
-    hasWater: true,   // Re-enabled - depth sorting fix resolves previous artifacts
-    waterLevel: 0,    // Void energy pools at lowest elevation
-    particleType: 'spores', // Re-enabled floating spores
+    hasWater: false,  // Disabled - water plane at 0 was visible over elevation 0 terrain causing animated diagonal stripe artifacts
+    waterLevel: -1,
+    particleType: 'none',  // Disabled - was 'spores'
     groundRoughness: 0.6,
     groundMetalness: 0.3,
   },
@@ -274,8 +274,8 @@ export const BIOMES: Record<BiomeType, BiomeConfig> = {
     treeDensity: 0.7,
     rockDensity: 0.2,
     crystalDensity: 0.05,
-    hasWater: true,   // Re-enabled - depth sorting fix resolves previous artifacts
-    waterLevel: 3,    // Swamps and rivers at low elevation
+    hasWater: false,  // Disabled - water plane at 0.1 was visible over low-elevation terrain causing animated diagonal stripe artifacts
+    waterLevel: -1,
     particleType: 'spores', // Floating spores and pollen
     groundRoughness: 0.8,
     groundMetalness: 0.0,
