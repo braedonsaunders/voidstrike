@@ -20,7 +20,12 @@ import {
   type RenderState,
   type GameEvent,
 } from '@/engine/workers';
-import { useGameSetupStore, getLocalPlayerId, isBattleSimulatorMode, type GameSetupState } from '@/store/gameSetupStore';
+import {
+  useGameSetupStore,
+  getLocalPlayerId,
+  isBattleSimulatorMode,
+  type GameSetupState,
+} from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { useGameStore } from '@/store/gameStore';
 import { isMultiplayerMode } from '@/store/multiplayerStore';
@@ -158,7 +163,7 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
           tickRate: 20,
           isMultiplayer,
           playerId: localPlayerId ?? 'spectator',
-          aiEnabled: !isBattleSimulatorMode() && !isMultiplayer,
+          aiEnabled: !isMultiplayer,
           aiDifficulty: 'medium',
           fogOfWar,
         },

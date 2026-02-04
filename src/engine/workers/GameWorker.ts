@@ -1437,6 +1437,19 @@ if (typeof self !== 'undefined') {
           game.forceRenderStateUpdate();
           break;
         }
+
+        case 'registerAI': {
+          if (!game) return;
+          const enhancedAI = game.world.getSystem(EnhancedAISystem);
+          if (enhancedAI) {
+            enhancedAI.registerAI(
+              message.playerId,
+              message.faction,
+              message.difficulty ?? 'medium'
+            );
+          }
+          break;
+        }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
