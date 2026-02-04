@@ -174,7 +174,7 @@ export class TSLWaterMaterial {
 
   private createMaterial(
     config: WaterMaterialConfig,
-    settings: QualitySettings
+    _settings: QualitySettings
   ): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
 
