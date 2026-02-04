@@ -65,6 +65,9 @@ export interface SpatialEntityData {
   collisionRadius: number;
   isWorker: boolean;
   maxSpeed: number;
+  // True when unit is advancing toward enemies (attack-move, assault mode)
+  // These units should not yield to other moving units and should always seek targets
+  hasActiveAttackCommand: boolean;
 }
 
 /** Configuration for grid sizing */
@@ -203,6 +206,7 @@ export class SpatialGrid {
       id: 0, x: 0, y: 0, radius: 0,
       isFlying: false, state: SpatialUnitState.Idle, playerId: 0,
       collisionRadius: 0, isWorker: false, maxSpeed: 0,
+      hasActiveAttackCommand: false,
     };
 
     // Pre-allocate result data objects
@@ -211,6 +215,7 @@ export class SpatialGrid {
         id: 0, x: 0, y: 0, radius: 0,
         isFlying: false, state: SpatialUnitState.Idle, playerId: 0,
         collisionRadius: 0, isWorker: false, maxSpeed: 0,
+        hasActiveAttackCommand: false,
       });
     }
   }
@@ -360,7 +365,8 @@ export class SpatialGrid {
     playerId: number,
     collisionRadius: number,
     isWorker: boolean,
-    maxSpeed: number
+    maxSpeed: number,
+    hasActiveAttackCommand: boolean = false
   ): void {
     // Extract index from EntityId (handles both raw index and generational ID)
     const idx = getEntityIndex(id);
@@ -404,10 +410,11 @@ export class SpatialGrid {
     this.entityState[idx] = state;
     this.entityPlayerId[idx] = playerId;
 
-    // Pack flags: bit0=exists, bit1=isFlying, bit2=isWorker
+    // Pack flags: bit0=exists, bit1=isFlying, bit2=isWorker, bit3=hasActiveAttackCommand
     let flags = 1; // exists
     if (isFlying) flags |= 2;
     if (isWorker) flags |= 4;
+    if (hasActiveAttackCommand) flags |= 8;
     this.entityFlags[idx] = flags;
     this.entityExists[idx] = 1;
 
@@ -458,14 +465,16 @@ export class SpatialGrid {
     }
 
     // Cell changed - full update needed
+    const flags = this.entityFlags[idx];
     this.updateFull(
       idx, x, y, radius,
-      (this.entityFlags[idx] & 2) !== 0,  // isFlying
+      (flags & 2) !== 0,  // isFlying
       this.entityState[idx],
       this.entityPlayerId[idx],
       this.entityCollisionRadius[idx],
-      (this.entityFlags[idx] & 4) !== 0,  // isWorker
-      this.entityMaxSpeed[idx]
+      (flags & 4) !== 0,  // isWorker
+      this.entityMaxSpeed[idx],
+      (flags & 8) !== 0   // hasActiveAttackCommand
     );
     return true;
   }
@@ -671,6 +680,7 @@ export class SpatialGrid {
                 id: 0, x: 0, y: 0, radius: 0,
                 isFlying: false, state: SpatialUnitState.Idle, playerId: 0,
                 collisionRadius: 0, isWorker: false, maxSpeed: 0,
+                hasActiveAttackCommand: false,
               });
             }
             this.fillEntityData(entityId, resultArray[resultCount]);
@@ -707,6 +717,7 @@ export class SpatialGrid {
                 id: 0, x: 0, y: 0, radius: 0,
                 isFlying: false, state: SpatialUnitState.Idle, playerId: 0,
                 collisionRadius: 0, isWorker: false, maxSpeed: 0,
+                hasActiveAttackCommand: false,
               });
             }
             this.fillEntityData(entityId, resultArray[resultCount]);
@@ -742,6 +753,7 @@ export class SpatialGrid {
     const flags = this.entityFlags[id];
     out.isFlying = (flags & 2) !== 0;
     out.isWorker = (flags & 4) !== 0;
+    out.hasActiveAttackCommand = (flags & 8) !== 0;
   }
 
   /**
