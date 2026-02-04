@@ -294,31 +294,52 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
         </div>
       )}
 
-      {/* Entity Counts */}
+      {/* Entity Counts & GPU Memory by Category */}
       {expanded && (
         <div style={{ marginBottom: '12px' }}>
           <div style={{ fontWeight: 'bold', color: '#aaa', marginBottom: '6px' }}>Entities</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginBottom: '8px' }}>
             <EntityCountBadge label="Total" count={snapshot.entityCounts.total} color="#fff" />
             <EntityCountBadge label="Units" count={snapshot.entityCounts.units} color="#3b82f6" />
             <EntityCountBadge label="Buildings" count={snapshot.entityCounts.buildings} color="#f59e0b" />
             <EntityCountBadge label="Resources" count={snapshot.entityCounts.resources} color="#10b981" />
             <EntityCountBadge label="Projectiles" count={snapshot.entityCounts.projectiles} color="#ef4444" />
           </div>
+          {/* GPU Memory per category */}
+          {snapshot.gpuMemory.totalMB > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', fontSize: '9px' }}>
+              {snapshot.gpuMemory.categories
+                .filter(cat => cat.currentMB > 0.1)
+                .map(cat => (
+                  <div
+                    key={cat.name}
+                    style={{
+                      padding: '2px 5px',
+                      backgroundColor: 'rgba(59, 130, 246, 0.15)',
+                      borderRadius: '3px',
+                    }}
+                  >
+                    <span style={{ color: '#666' }}>{cat.name}: </span>
+                    <span style={{ color: '#6b9fdb' }}>{cat.currentMB.toFixed(1)}MB</span>
+                  </div>
+                ))
+              }
+            </div>
+          )}
         </div>
       )}
 
-      {/* Memory Usage (Chrome only) */}
+      {/* JS Heap Memory (Chrome only) */}
       {expanded && snapshot.memory.available && (
         <div style={{ marginBottom: '12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-            <span style={{ fontWeight: 'bold', color: '#aaa' }}>Memory</span>
+            <span style={{ fontWeight: 'bold', color: '#aaa' }}>JS Heap</span>
             <span style={{ fontSize: '10px', color: '#888' }}>
               {PerformanceMonitor.formatBytes(snapshot.memory.usedJSHeapSize)} /
               {PerformanceMonitor.formatBytes(snapshot.memory.jsHeapSizeLimit)}
             </span>
           </div>
-          <div style={{ height: '6px', backgroundColor: '#222', borderRadius: '3px', overflow: 'hidden' }}>
+          <div style={{ height: '4px', backgroundColor: '#222', borderRadius: '2px', overflow: 'hidden' }}>
             <div
               style={{
                 height: '100%',
@@ -333,83 +354,60 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
         </div>
       )}
 
-      {/* GPU Timing */}
+      {/* GPU (Timing + Memory combined) */}
       {expanded && (
         <div style={{ marginBottom: '12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
             <span style={{ fontWeight: 'bold', color: '#aaa' }}>GPU</span>
-            {snapshot.render.gpuTimingAvailable ? (
-              <span style={{
-                fontSize: '10px',
-                color: snapshot.render.gpuFrameTimeMs > 12 ? '#ef4444' :
-                       snapshot.render.gpuFrameTimeMs > 8 ? '#eab308' : '#22c55e',
-              }}>
-                {snapshot.render.gpuFrameTimeAvgMs.toFixed(2)}ms avg
-              </span>
-            ) : (
-              <span style={{ fontSize: '9px', color: '#666' }}>N/A</span>
-            )}
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {snapshot.render.gpuTimingAvailable && (
+                <span style={{
+                  fontSize: '10px',
+                  color: snapshot.render.gpuFrameTimeMs > 12 ? '#ef4444' :
+                         snapshot.render.gpuFrameTimeMs > 8 ? '#eab308' : '#22c55e',
+                }}>
+                  {snapshot.render.gpuFrameTimeAvgMs.toFixed(2)}ms
+                </span>
+              )}
+              {snapshot.gpuMemory.totalMB > 0 && (
+                <span style={{
+                  fontSize: '10px',
+                  color: snapshot.gpuMemory.usagePercent > 80 ? '#ef4444' :
+                         snapshot.gpuMemory.usagePercent > 60 ? '#eab308' : '#888',
+                }}>
+                  {snapshot.gpuMemory.totalMB.toFixed(0)}MB
+                </span>
+              )}
+            </div>
           </div>
+          {/* GPU Memory bar */}
+          {snapshot.gpuMemory.totalMB > 0 && (
+            <div style={{ height: '4px', backgroundColor: '#222', borderRadius: '2px', overflow: 'hidden', marginBottom: '6px' }}>
+              <div
+                style={{
+                  height: '100%',
+                  width: `${Math.min(snapshot.gpuMemory.usagePercent, 100)}%`,
+                  backgroundColor: snapshot.gpuMemory.usagePercent > 80 ? '#ef4444' :
+                                   snapshot.gpuMemory.usagePercent > 60 ? '#eab308' : '#3b82f6',
+                  transition: 'width 0.3s ease-out',
+                }}
+              />
+            </div>
+          )}
+          {/* Draw Calls & Triangles */}
           <div style={{ display: 'flex', gap: '12px', fontSize: '9px' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ color: '#666', marginBottom: '2px' }}>Draw Calls</div>
-              <div style={{ color: snapshot.render.drawCalls > 500 ? '#eab308' : '#aaa' }}>
+            <div>
+              <span style={{ color: '#666' }}>Draws: </span>
+              <span style={{ color: snapshot.render.drawCalls > 500 ? '#eab308' : '#aaa' }}>
                 {snapshot.render.drawCalls.toLocaleString()}
-              </div>
+              </span>
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ color: '#666', marginBottom: '2px' }}>Triangles</div>
-              <div style={{ color: '#aaa' }}>
+            <div>
+              <span style={{ color: '#666' }}>Tris: </span>
+              <span style={{ color: '#aaa' }}>
                 {(snapshot.render.triangles / 1000).toFixed(0)}K
-              </div>
+              </span>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* GPU Memory */}
-      {expanded && snapshot.gpuMemory.totalMB > 0 && (
-        <div style={{ marginBottom: '12px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-            <span style={{ fontWeight: 'bold', color: '#aaa' }}>GPU Memory</span>
-            <span style={{
-              fontSize: '10px',
-              color: snapshot.gpuMemory.usagePercent > 80 ? '#ef4444' :
-                     snapshot.gpuMemory.usagePercent > 60 ? '#eab308' : '#888',
-            }}>
-              {snapshot.gpuMemory.totalMB.toFixed(0)}MB / {snapshot.gpuMemory.budgetMB}MB
-            </span>
-          </div>
-          <div style={{ height: '6px', backgroundColor: '#222', borderRadius: '3px', overflow: 'hidden', marginBottom: '6px' }}>
-            <div
-              style={{
-                height: '100%',
-                width: `${Math.min(snapshot.gpuMemory.usagePercent, 100)}%`,
-                backgroundColor: snapshot.gpuMemory.usagePercent > 80 ? '#ef4444' :
-                                 snapshot.gpuMemory.usagePercent > 60 ? '#eab308' : '#3b82f6',
-                transition: 'width 0.3s ease-out',
-              }}
-            />
-          </div>
-          {/* Category breakdown */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', fontSize: '9px' }}>
-            {snapshot.gpuMemory.categories
-              .filter(cat => cat.currentMB > 0.1)
-              .slice(0, 4)
-              .map(cat => (
-                <div
-                  key={cat.name}
-                  style={{
-                    padding: '2px 5px',
-                    backgroundColor: 'rgba(0,0,0,0.3)',
-                    borderRadius: '3px',
-                  }}
-                >
-                  <span style={{ color: '#666' }}>{cat.name}: </span>
-                  <span style={{ color: '#aaa' }}>{cat.currentMB.toFixed(0)}MB</span>
-                </div>
-              ))
-            }
           </div>
         </div>
       )}
@@ -436,17 +434,6 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
         </div>
       )}
 
-      {/* Footer */}
-      <div style={{
-        marginTop: '12px',
-        paddingTop: '8px',
-        borderTop: '1px solid #333',
-        fontSize: '9px',
-        color: '#555',
-        textAlign: 'center',
-      }}>
-        Performance Dashboard v1.0
-      </div>
     </div>
   );
 });
