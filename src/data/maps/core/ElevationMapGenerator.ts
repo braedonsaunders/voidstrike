@@ -90,6 +90,7 @@ function createGrids(width: number, height: number, baseElevation: number): Gene
 
 /**
  * Paint a filled circle on the elevation grid
+ * Also clears any features (water, void, etc.) in the painted area
  */
 function paintCircle(
   grid: GenerationGrid,
@@ -106,6 +107,8 @@ function paintCircle(
         const dy = y - cy;
         if (dx * dx + dy * dy <= r2) {
           grid.elevation[y][x] = elevation;
+          // Clear any features (water, void, etc.) when painting land
+          grid.features[y][x] = 'none';
         }
       }
     }
@@ -114,6 +117,7 @@ function paintCircle(
 
 /**
  * Paint a filled rectangle on the elevation grid
+ * Also clears any features (water, void, etc.) in the painted area
  */
 function paintRect(
   grid: GenerationGrid,
@@ -127,6 +131,8 @@ function paintRect(
     for (let px = Math.floor(x); px < Math.ceil(x + width); px++) {
       if (py >= 0 && py < grid.height && px >= 0 && px < grid.width) {
         grid.elevation[py][px] = elevation;
+        // Clear any features (water, void, etc.) when painting land
+        grid.features[py][px] = 'none';
       }
     }
   }
@@ -191,6 +197,8 @@ function paintRamp(
       if (py >= 0 && py < grid.height && px >= 0 && px < grid.width) {
         grid.elevation[py][px] = elevation;
         grid.ramps[py][px] = true;
+        // Clear any features (water, void, etc.) when painting ramp
+        grid.features[py][px] = 'none';
       }
     }
   }
