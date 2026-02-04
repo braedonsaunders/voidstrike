@@ -715,7 +715,7 @@ export function EditorCore({
           />
 
           {/* 3D Canvas */}
-          <div className="flex-1 relative">
+          <div className="flex-1 relative overflow-hidden">
             <Editor3DCanvas
               config={config}
               state={state}
