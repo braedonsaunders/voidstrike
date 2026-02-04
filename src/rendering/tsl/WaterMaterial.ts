@@ -22,6 +22,7 @@ import {
   Fn,
   vec2,
   vec3,
+  vec4,
   float,
   uniform,
   texture,
@@ -79,6 +80,8 @@ interface QualitySettings {
   distortionScale: number;
   /** Surface roughness (lower = sharper reflections) */
   roughness: number;
+  /** Water opacity (0-1) */
+  opacity: number;
 }
 
 const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
@@ -88,6 +91,7 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
     textureSize: 50.0,
     distortionScale: 0.3,
     roughness: 0.25,
+    opacity: 0.85,
   },
   medium: {
     waveAmplitude: 0.04,
@@ -95,6 +99,7 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
     textureSize: 40.0,
     distortionScale: 0.5,
     roughness: 0.18,
+    opacity: 0.88,
   },
   high: {
     waveAmplitude: 0.06,
@@ -102,6 +107,7 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
     textureSize: 30.0,
     distortionScale: 0.7,
     roughness: 0.12,
+    opacity: 0.9,
   },
   ultra: {
     waveAmplitude: 0.08,
@@ -109,6 +115,7 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
     textureSize: 25.0,
     distortionScale: 0.85,
     roughness: 0.08,
+    opacity: 0.92,
   },
 };
 
@@ -125,6 +132,7 @@ export class TSLWaterMaterial {
   private uDeepColor = uniform(new THREE.Color(0x004488));
   private uDistortionScale = uniform(0.7);
   private uRoughness = uniform(0.12);
+  private uOpacity = uniform(0.9);
 
   // Store textures for disposal
   private textures: THREE.Texture[] = [];
@@ -139,6 +147,7 @@ export class TSLWaterMaterial {
     this.uDeepColor.value.copy(config.deepColor);
     this.uDistortionScale.value = settings.distortionScale;
     this.uRoughness.value = settings.roughness;
+    this.uOpacity.value = settings.opacity;
     this.uTimeScale.value = config.timeScale ?? 1.0;
 
     // Track textures for disposal
@@ -159,7 +168,7 @@ export class TSLWaterMaterial {
     const scaledTime = time.mul(this.uTimeScale);
 
     // =========================================================================
-    // COLOR NODE - Base water color only, NO manual lighting
+    // COLOR NODE - Base water color with opacity, NO manual lighting
     // PBR pipeline handles fresnel, specular, environment reflections
     // =========================================================================
     const colorNode = Fn(() => {
@@ -176,12 +185,13 @@ export class TSLWaterMaterial {
       const phase2 = worldPos.x.mul(0.15).sub(worldPos.z.mul(0.1)).add(scaledTime.mul(0.15));
       const variation = sin(phase1).mul(0.015).add(sin(phase2).mul(0.01)).add(1.0);
 
-      return baseColor.mul(variation);
+      const finalColor = baseColor.mul(variation);
+      return vec4(finalColor, this.uOpacity);
     })();
 
     // =========================================================================
-    // NORMAL NODE - Returns actual normals in [-1,1] range
-    // NO .mul(0.5).add(0.5) encoding - that's for textures, not normalNode
+    // NORMAL NODE - Procedural or texture-based surface normals
+    // TSL normalNode expects [0,1] encoded normals (same as normal map textures)
     // =========================================================================
     const normalNode = Fn(() => {
       const worldUV = uv();
@@ -272,10 +282,10 @@ export class TSLWaterMaterial {
     // Water is a dielectric (non-metallic)
     material.metalnessNode = float(0.0);
 
-    // Opaque rendering for proper depth sorting with terrain
-    material.transparent = false;
-    material.side = THREE.FrontSide; // Water viewed from above
-    material.depthWrite = true;
+    // Transparent rendering with proper depth handling
+    material.transparent = true;
+    material.side = THREE.DoubleSide;
+    material.depthWrite = false;
     material.depthTest = true;
 
     return material;
@@ -313,6 +323,7 @@ export class TSLWaterMaterial {
     const settings = QUALITY_SETTINGS[quality];
     this.uDistortionScale.value = settings.distortionScale;
     this.uRoughness.value = settings.roughness;
+    this.uOpacity.value = settings.opacity;
   }
 
   /**
