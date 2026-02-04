@@ -248,6 +248,13 @@ export class CombatSystem extends System {
       if (!unit || !health || !selectable || !transform) continue;
       if (health.isDead()) continue;
 
+      // Only mark idle units - moving/attackmoving units should not be affected
+      // This ensures pure move commands don't get pulled toward combat
+      if (unit.state !== 'idle') continue;
+      // Skip units already in assault mode (they have their own aggressive targeting)
+      if (unit.isInAssaultMode) continue;
+      // Skip units holding position (they shouldn't move toward combat)
+      if (unit.isHoldingPosition) continue;
       // Skip workers
       if (unit.isWorker) continue;
       // Skip units that can't attack
