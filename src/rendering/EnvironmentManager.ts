@@ -351,9 +351,10 @@ export class EnvironmentManager {
     }
 
     // Determine water colors based on biome
+    // Shallow color is darker and closer to deep to create more subtle transitions
     const isLava = this.biome.name === 'Volcanic';
-    const shallowColor = isLava ? new THREE.Color(0x802000) : new THREE.Color(0x40a0c0);
-    const deepColor = isLava ? new THREE.Color(0x400800) : new THREE.Color(0x004488);
+    const shallowColor = isLava ? new THREE.Color(0x802000) : new THREE.Color(0x1a6080);
+    const deepColor = isLava ? new THREE.Color(0x400800) : new THREE.Color(0x0a3050);
 
     // Calculate sun direction from directional light
     this._tempSunDirection.copy(this.directionalLight.position).normalize();

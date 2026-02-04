@@ -204,9 +204,50 @@ function paintRamp(
   }
 }
 
+/** Beach zone width around water features */
+const BEACH_WIDTH = 4;
+
+/**
+ * Paint a beach zone around a circular water area
+ * Creates a LOW elevation ring that provides walkable access to water
+ */
+function paintBeachCircle(
+  grid: GenerationGrid,
+  cx: number,
+  cy: number,
+  waterRadius: number
+): void {
+  const innerR2 = waterRadius * waterRadius;
+  const outerRadius = waterRadius + BEACH_WIDTH;
+  const outerR2 = outerRadius * outerRadius;
+
+  for (let y = Math.floor(cy - outerRadius); y <= Math.ceil(cy + outerRadius); y++) {
+    for (let x = Math.floor(cx - outerRadius); x <= Math.ceil(cx + outerRadius); x++) {
+      if (y >= 0 && y < grid.height && x >= 0 && x < grid.width) {
+        const dx = x - cx;
+        const dy = y - cy;
+        const distSq = dx * dx + dy * dy;
+
+        // Only paint in the beach ring (outside water, inside outer radius)
+        if (distSq > innerR2 && distSq <= outerR2) {
+          // Don't overwrite water, ramps, or existing low ground
+          if (!grid.ramps[y][x] &&
+              grid.features[y][x] !== 'water_deep' &&
+              grid.features[y][x] !== 'water_shallow' &&
+              grid.elevation[y][x] > ELEVATION.LOW) {
+            grid.elevation[y][x] = ELEVATION.LOW;
+            grid.features[y][x] = 'none'; // Clear any features
+          }
+        }
+      }
+    }
+  }
+}
+
 /**
  * Paint a feature (water, forest, etc.) on a circular area
  * Water features set elevation to ELEVATION.WATER - water surface is always level
+ * Shallow water also creates a beach zone around it for walkable access
  */
 function paintFeatureCircle(
   grid: GenerationGrid,
@@ -218,6 +259,12 @@ function paintFeatureCircle(
   const r2 = radius * radius;
   // Water surface is always at the same level (deep vs shallow is depth BELOW surface)
   const isWater = feature === 'water_deep' || feature === 'water_shallow';
+  const isShallowWater = feature === 'water_shallow';
+
+  // Paint beach zone around shallow water first (so water overwrites it in the center)
+  if (isShallowWater) {
+    paintBeachCircle(grid, cx, cy, radius);
+  }
 
   for (let y = Math.floor(cy - radius); y <= Math.ceil(cy + radius); y++) {
     for (let x = Math.floor(cx - radius); x <= Math.ceil(cx + radius); x++) {
@@ -240,8 +287,46 @@ function paintFeatureCircle(
 }
 
 /**
+ * Paint a beach zone around a rectangular water area
+ * Creates a LOW elevation border that provides walkable access to water
+ */
+function paintBeachRect(
+  grid: GenerationGrid,
+  x: number,
+  y: number,
+  width: number,
+  height: number
+): void {
+  // Beach extends BEACH_WIDTH cells outside the water rect
+  const beachX = x - BEACH_WIDTH;
+  const beachY = y - BEACH_WIDTH;
+  const beachWidth = width + BEACH_WIDTH * 2;
+  const beachHeight = height + BEACH_WIDTH * 2;
+
+  for (let py = Math.floor(beachY); py < Math.ceil(beachY + beachHeight); py++) {
+    for (let px = Math.floor(beachX); px < Math.ceil(beachX + beachWidth); px++) {
+      if (py >= 0 && py < grid.height && px >= 0 && px < grid.width) {
+        // Only paint cells outside the water rect
+        const inWaterRect = px >= x && px < x + width && py >= y && py < y + height;
+        if (!inWaterRect) {
+          // Don't overwrite water, ramps, or existing low ground
+          if (!grid.ramps[py][px] &&
+              grid.features[py][px] !== 'water_deep' &&
+              grid.features[py][px] !== 'water_shallow' &&
+              grid.elevation[py][px] > ELEVATION.LOW) {
+            grid.elevation[py][px] = ELEVATION.LOW;
+            grid.features[py][px] = 'none'; // Clear any features
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
  * Paint a feature on a rectangular area
  * Water features set elevation to ELEVATION.WATER - water surface is always level
+ * Shallow water also creates a beach zone around it for walkable access
  */
 function paintFeatureRect(
   grid: GenerationGrid,
@@ -253,6 +338,12 @@ function paintFeatureRect(
 ): void {
   // Water surface is always at the same level (deep vs shallow is depth BELOW surface)
   const isWater = feature === 'water_deep' || feature === 'water_shallow';
+  const isShallowWater = feature === 'water_shallow';
+
+  // Paint beach zone around shallow water first (so water overwrites it in the center)
+  if (isShallowWater) {
+    paintBeachRect(grid, x, y, width, height);
+  }
 
   for (let py = Math.floor(y); py < Math.ceil(y + height); py++) {
     for (let px = Math.floor(x); px < Math.ceil(x + width); px++) {
