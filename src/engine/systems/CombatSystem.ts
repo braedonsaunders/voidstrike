@@ -161,6 +161,7 @@ export class CombatSystem extends System {
         collisionRadius: 0,
         isWorker: false,
         maxSpeed: 0,
+        hasActiveAttackCommand: false,
       });
     }
   }
@@ -679,9 +680,13 @@ export class CombatSystem extends System {
               `[CombatSystem] Unit ${attacker.id} cleared assault mode after ${ASSAULT_IDLE_TIMEOUT} ticks idle`
             );
           }
+        } else if (unit.state === 'attackmoving') {
+          // Attack-moving units use aggressive sight-range search
+          // This ensures ALL units in an attack group find targets, not just front line
+          target = this.findBestTargetSpatial(attacker.id, transform, unit);
         } else if (this.unitsNearFriendlyCombat.has(attacker.id)) {
-          // RTS-STYLE: Units near friendly combat use aggressive sight-range search
-          // This enables SC2-style "join nearby combat" - all units engage, not just front line
+          // Units near friendly combat use aggressive sight-range search
+          // This enables "join nearby combat" - all units engage, not just front line
           target = this.findBestTargetSpatial(attacker.id, transform, unit);
         } else if (unit.state === 'idle' || unit.isHoldingPosition) {
           // For regular idle units, do a fast check for enemies within ATTACK range

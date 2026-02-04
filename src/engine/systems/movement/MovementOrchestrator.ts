@@ -461,6 +461,13 @@ export class MovementOrchestrator {
         const selectable = entity.get<Selectable>('Selectable');
         const playerId = selectable ? this.getPlayerIndex(selectable.playerId) : 0;
 
+        // Unit has active attack command if it's attack-moving or in assault mode
+        // These units should not yield to physics push and should always seek targets
+        const hasActiveAttackCommand =
+          unit.isInAssaultMode ||
+          unit.state === 'attackmoving' ||
+          (unit.state === 'attacking' && unit.targetEntityId !== null);
+
         this.world.unitGrid.updateFull(
           entity.id,
           transform.x,
@@ -471,7 +478,8 @@ export class MovementOrchestrator {
           playerId,
           unit.collisionRadius,
           unit.isWorker,
-          unit.maxSpeed
+          unit.maxSpeed,
+          hasActiveAttackCommand
         );
 
         this.lastGridPositions[posIdx] = transform.x;
