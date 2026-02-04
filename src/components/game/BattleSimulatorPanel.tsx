@@ -149,12 +149,26 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   const team1Color = PLAYER_COLORS.find((c) => c.id === playerSlots[0]?.colorId);
   const team2Color = PLAYER_COLORS.find((c) => c.id === playerSlots[1]?.colorId);
 
-  // Pause game on mount so user can place units
+  // Pause game after countdown completes so user can place units
+  // We need to wait for the countdown to complete before pausing,
+  // otherwise the game start will override our pause
   useEffect(() => {
-    const bridge = getWorkerBridge();
-    if (bridge) {
-      bridge.pause();
-    }
+    const game = Game.getInstance();
+
+    const handleCountdownComplete = () => {
+      // Small delay to ensure start() has been processed
+      setTimeout(() => {
+        const bridge = getWorkerBridge();
+        if (bridge) {
+          bridge.pause();
+        }
+      }, 50);
+    };
+
+    const unsubscribe = game.eventBus.on('game:countdownComplete', handleCountdownComplete);
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   // Listen for map clicks when a unit is selected
