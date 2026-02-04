@@ -739,26 +739,19 @@ export class AITacticsManager {
       const idleAssaultUnits = this.getIdleAssaultUnits(ai.playerId, armyUnits);
 
       if (idleAssaultUnits.length > 0) {
-        // Spread units around the target to prevent clumping
-        // Each unit gets a slightly different target position in a circle
-        const spreadRadius = 12;
-        for (let i = 0; i < idleAssaultUnits.length; i++) {
-          const angle = (i / idleAssaultUnits.length) * Math.PI * 2;
-          const spreadTarget = {
-            x: attackTarget.x + Math.cos(angle) * spreadRadius,
-            y: attackTarget.y + Math.sin(angle) * spreadRadius,
-          };
-          const command: GameCommand = {
-            tick: currentTick,
-            playerId: ai.playerId,
-            type: 'ATTACK',
-            entityIds: [idleAssaultUnits[i]],
-            targetPosition: spreadTarget,
-          };
-          this.game.issueAICommand(command);
-        }
+        // Re-command all idle assault units to attack the SAME target position
+        // Let combat system and flocking handle natural unit spreading during engagement
+        // Spreading units to different positions causes them to end up outside sight range
+        const command: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'ATTACK',
+          entityIds: idleAssaultUnits,
+          targetPosition: attackTarget,
+        };
+        this.game.issueAICommand(command);
         debugAI.log(
-          `[AITactics] ${ai.playerId}: Re-commanding ${idleAssaultUnits.length} idle assault units with spread positions`
+          `[AITactics] ${ai.playerId}: Re-commanding ${idleAssaultUnits.length} idle assault units to target`
         );
       }
 
@@ -769,28 +762,10 @@ export class AITacticsManager {
     if (ai.lastAttackTick === 0 || currentTick - ai.lastAttackTick >= ai.attackCooldown) {
       ai.lastAttackTick = currentTick;
 
-      if (inHuntMode && armyUnits.length > 1) {
-        // In hunt mode, spread units to surround the target and prevent clumping
-        const spreadRadius = 15;
-        for (let i = 0; i < armyUnits.length; i++) {
-          const angle = (i / armyUnits.length) * Math.PI * 2;
-          const spreadTarget = {
-            x: attackTarget.x + Math.cos(angle) * spreadRadius,
-            y: attackTarget.y + Math.sin(angle) * spreadRadius,
-          };
-          const command: GameCommand = {
-            tick: currentTick,
-            playerId: ai.playerId,
-            type: 'ATTACK',
-            entityIds: [armyUnits[i]],
-            targetPosition: spreadTarget,
-          };
-          this.game.issueAICommand(command);
-        }
-        debugAI.log(
-          `[AITactics] ${ai.playerId}: HUNT MODE - spreading ${armyUnits.length} units around target`
-        );
-      } else {
+      // Send all units to the same target position
+      // Let combat system and flocking handle natural spreading during engagement
+      // Spreading units to different positions causes them to end up outside sight range
+      {
         // Regular attack - send all units to same target
         const command: GameCommand = {
           tick: currentTick,

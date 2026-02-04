@@ -153,6 +153,7 @@ function createSpatialData(
     collisionRadius: unit.collisionRadius,
     isWorker: unit.isWorker ?? false,
     maxSpeed: unit.speed,
+    hasActiveAttackCommand: unit.isInAssaultMode || unit.state === 'attackmoving',
   };
 }
 

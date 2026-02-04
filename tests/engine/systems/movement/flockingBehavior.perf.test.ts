@@ -127,6 +127,7 @@ function createTestUnit(
     collisionRadius: 0.5,
     isWorker: false,
     maxSpeed: 3.0,
+    hasActiveAttackCommand: state === 'attackmoving' || state === 'attacking',
   };
 
   return { id, transform, unit, velocity, spatialData };
