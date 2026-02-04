@@ -193,7 +193,7 @@ export class EditorNavigation {
       if (cx < 0 || cx >= width || cy < 0 || cy >= height) return false;
       const cell = terrain[cy]?.[cx];
       if (!cell) return false;
-      if (cell.terrain === 'unwalkable') return false;
+      if (!cell.walkable) return false;
       const feature = cell.feature || 'none';
       const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
       return featureConfig?.walkable ?? true;
