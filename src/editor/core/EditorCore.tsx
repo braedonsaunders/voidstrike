@@ -762,7 +762,7 @@ export function EditorCore({
             />
 
             {/* Mini-map (bottom-right) */}
-            <div className="absolute bottom-14 right-3">
+            <div className="absolute bottom-14 right-3 z-20">
               <EditorMiniMap
                 config={config}
                 mapData={state.mapData}

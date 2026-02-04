@@ -189,7 +189,7 @@ export function EditorMiniMap({
   return (
     <div
       ref={containerRef}
-      className="absolute bottom-10 right-4 rounded-lg overflow-hidden shadow-2xl z-20"
+      className="rounded-lg overflow-hidden shadow-2xl"
       style={{
         border: `1px solid ${config.theme.border}`,
         backgroundColor: config.theme.background,
