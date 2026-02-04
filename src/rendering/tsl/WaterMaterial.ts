@@ -136,6 +136,10 @@ export class TSLWaterMaterial {
   private uFresnelPower = uniform(4.0);
   private uReflectionStrength = uniform(0.3);
   private uOpacity = uniform(0.9);
+  // Quality-dependent uniforms (must be uniforms to allow runtime quality changes)
+  private uDistortionScale = uniform(0.5);
+  private uTextureScale = uniform(1.0 / 30.0); // 1/textureSize
+  private uBaseRoughness = uniform(0.3);
 
   // Store textures for disposal
   private textures: THREE.Texture[] = [];
@@ -155,6 +159,10 @@ export class TSLWaterMaterial {
     this.uReflectionStrength.value = settings.reflectionStrength;
     this.uOpacity.value = settings.opacity;
     this.uTimeScale.value = config.timeScale ?? 1.0;
+    // Quality-dependent uniforms
+    this.uDistortionScale.value = settings.distortionScale;
+    this.uTextureScale.value = 1.0 / settings.textureSize;
+    this.uBaseRoughness.value = this.getBaseRoughness(config.quality);
 
     // Track textures for disposal
     if (config.normalMap) {
@@ -215,10 +223,9 @@ export class TSLWaterMaterial {
 
       if (!config.normalMap) {
         // Procedural fallback - multi-scale wave normals
-        // Scale by textureSize to match texture behavior
-        const uvScale = float(1.0 / settings.textureSize);
-        const scaledX = worldUV.x.mul(uvScale);
-        const scaledY = worldUV.y.mul(uvScale);
+        // Use uniform for texture scale to support runtime quality changes
+        const scaledX = worldUV.x.mul(this.uTextureScale);
+        const scaledY = worldUV.y.mul(this.uTextureScale);
 
         // Multi-scale wave normals
         const wave1 = sin(scaledX.mul(50.0).add(scaledTime.mul(1.2)))
@@ -227,9 +234,9 @@ export class TSLWaterMaterial {
           .mul(cos(scaledY.mul(80.0).add(scaledTime.mul(1.1))));
         const wave3 = sin(scaledX.mul(25.0).add(scaledY.mul(30.0)).add(scaledTime.mul(0.5)));
 
-        const distortion = float(settings.distortionScale);
-        const nx = wave1.mul(0.03).add(wave2.mul(0.015)).mul(distortion);
-        const ny = wave2.mul(0.03).add(wave3.mul(0.015)).mul(distortion);
+        // Use uniform for distortion to support runtime quality changes
+        const nx = wave1.mul(0.03).add(wave2.mul(0.015)).mul(this.uDistortionScale);
+        const ny = wave2.mul(0.03).add(wave3.mul(0.015)).mul(this.uDistortionScale);
         const nz = float(1.0);
 
         // Return normalized vector in -1..1 range (world-space normal)
@@ -237,9 +244,8 @@ export class TSLWaterMaterial {
       }
 
       // TEXTURE-BASED NORMALS - matches original WaterMesh addon
-      // textureSize controls wave scale (larger = coarser waves)
-      // UV is divided by textureSize to control texture repeat rate
-      const texScale = float(1.0 / settings.textureSize);
+      // Use uniform for texture scale to support runtime quality changes
+      const texScale = this.uTextureScale;
 
       // Two scrolling normal map layers at different scales and speeds
       // This creates the characteristic animated water surface
@@ -269,11 +275,10 @@ export class TSLWaterMaterial {
       const blendedZ = normal1.z.mul(normal2.z);
       const blended = normalize(vec3(blendedXY.x, blendedXY.y, blendedZ));
 
-      // Apply distortion scale to control wave intensity
-      const distortion = float(settings.distortionScale);
+      // Apply distortion scale to control wave intensity (use uniform)
       const scaledNormal = vec3(
-        blended.x.mul(distortion),
-        blended.y.mul(distortion),
+        blended.x.mul(this.uDistortionScale),
+        blended.y.mul(this.uDistortionScale),
         blended.z
       );
 
@@ -290,10 +295,9 @@ export class TSLWaterMaterial {
         .mul(sin(worldPos.z.mul(10.0).sub(scaledTime.mul(4.0))))
         .mul(0.03);
 
-      // Base roughness - higher values prevent white-out from PBR specular
+      // Base roughness from uniform - supports runtime quality changes
       // Water in reality has roughness ~0.3-0.5 due to micro-waves
-      const baseRoughness = this.quality === 'ultra' ? 0.25 : this.quality === 'high' ? 0.3 : 0.35;
-      return clamp(float(baseRoughness).add(sparkle), 0.15, 0.5);
+      return clamp(this.uBaseRoughness.add(sparkle), 0.15, 0.5);
     })();
 
     // Metalness - very low to avoid excessive reflections
@@ -341,6 +345,7 @@ export class TSLWaterMaterial {
 
   /**
    * Set quality settings
+   * All quality-dependent values are now uniforms to support runtime changes
    */
   public setQuality(quality: WaterQuality): void {
     this.quality = quality;
@@ -350,6 +355,23 @@ export class TSLWaterMaterial {
     this.uFresnelPower.value = settings.fresnelPower;
     this.uReflectionStrength.value = settings.reflectionStrength;
     this.uOpacity.value = settings.opacity;
+    // Update quality-dependent uniforms
+    this.uDistortionScale.value = settings.distortionScale;
+    this.uTextureScale.value = 1.0 / settings.textureSize;
+    this.uBaseRoughness.value = this.getBaseRoughness(quality);
+  }
+
+  /**
+   * Get base roughness value for a quality setting
+   */
+  private getBaseRoughness(quality: WaterQuality): number {
+    switch (quality) {
+      case 'ultra': return 0.25;
+      case 'high': return 0.3;
+      case 'medium': return 0.32;
+      case 'low': return 0.35;
+      default: return 0.3;
+    }
   }
 
   /**
