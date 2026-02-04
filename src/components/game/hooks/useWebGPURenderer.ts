@@ -1266,7 +1266,10 @@ export function useWebGPURenderer({
         });
 
         const fps = frameElapsed > 0 ? 1000 / frameElapsed : 60;
-        PerformanceMonitor.updateRenderMetrics(drawCallsThisSecond, trianglesThisSecond, fps);
+        // Convert accumulated per-second totals to per-frame values
+        const trianglesPerFrame = fps > 0 ? Math.round(trianglesThisSecond / fps) : trianglesThisSecond;
+        const drawCallsPerFrame = fps > 0 ? Math.round(drawCallsThisSecond / fps) : drawCallsThisSecond;
+        PerformanceMonitor.updateRenderMetrics(drawCallsPerFrame, trianglesPerFrame, fps);
 
         // Update GPU timing from timestamp profiler
         const gpuProfiler = gpuTimestampProfilerRef.current;
