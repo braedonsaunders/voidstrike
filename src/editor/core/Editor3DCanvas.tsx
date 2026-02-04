@@ -27,6 +27,7 @@ import { EditorUndoPreview } from '../rendering3d/EditorUndoPreview';
 import { TerrainBrush } from '../tools/TerrainBrush';
 import { ObjectPlacer } from '../tools/ObjectPlacer';
 import { RTSCamera } from '@/rendering/Camera';
+import { EditorMiniMap } from './EditorMiniMap';
 import { debugInitialization } from '@/utils/debugLogger';
 import { UndoPreviewOverlay } from './UndoPreviewOverlay';
 
@@ -130,6 +131,9 @@ export function Editor3DCanvas({
   const [isInitialized, setIsInitialized] = useState(false);
   const [mouseGridPos, setMouseGridPos] = useState<{ x: number; y: number } | null>(null);
   const [currentZoom, setCurrentZoom] = useState(45);
+  const [minimapViewport, setMinimapViewport] = useState<{
+    minX: number; maxX: number; minY: number; maxY: number;
+  } | null>(null);
   const hoveredObjectRef = useRef<EditorObject | null>(null);
 
   // Painting state
@@ -473,20 +477,20 @@ export function Editor3DCanvas({
     }
   }, [edgeScrollEnabled]);
 
-  // Expose navigate function for mini-map
+  // Navigate function for mini-map
+  const handleMinimapNavigate = useCallback((x: number, y: number) => {
+    rtsCameraRef.current?.setPosition(x, y);
+  }, []);
+
+  // Expose navigate function for external mini-map (legacy)
   useEffect(() => {
     if (!onNavigateRef || !rtsCameraRef.current) return;
-
-    const navigateTo = (x: number, y: number) => {
-      rtsCameraRef.current?.setPosition(x, y);
-    };
-
-    onNavigateRef(navigateTo);
-  }, [onNavigateRef, isInitialized]);
+    onNavigateRef(handleMinimapNavigate);
+  }, [onNavigateRef, isInitialized, handleMinimapNavigate]);
 
   // Track viewport bounds for mini-map
   useEffect(() => {
-    if (!onViewportChange || !rtsCameraRef.current || !mapData) return;
+    if (!rtsCameraRef.current || !mapData) return;
 
     const updateViewport = () => {
       if (!rtsCameraRef.current || !containerRef.current) return;
@@ -504,12 +508,20 @@ export function Editor3DCanvas({
       const halfWidth = visibleWidth / 2;
       const halfHeight = visibleHeight / 2;
 
-      onViewportChange({
+      const bounds = {
         minX: Math.max(0, camPos.x - halfWidth),
         maxX: Math.min(mapData.width, camPos.x + halfWidth),
         minY: Math.max(0, camPos.z - halfHeight),
         maxY: Math.min(mapData.height, camPos.z + halfHeight),
-      });
+      };
+
+      // Update local state for minimap
+      setMinimapViewport(bounds);
+
+      // Also call external callback if provided
+      if (onViewportChange) {
+        onViewportChange(bounds);
+      }
     };
 
     // Update on interval while mounted
@@ -1268,6 +1280,19 @@ export function Editor3DCanvas({
           }}
         >
           {mouseGridPos.x}, {mouseGridPos.y}
+        </div>
+      )}
+
+      {/* Mini-map */}
+      {mapData && (
+        <div className="absolute bottom-10 left-3 z-30">
+          <EditorMiniMap
+            config={config}
+            mapData={mapData}
+            objects={mapData.objects || []}
+            viewportBounds={minimapViewport}
+            onNavigate={handleMinimapNavigate}
+          />
         </div>
       )}
 
