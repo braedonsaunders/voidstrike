@@ -40,10 +40,11 @@ export function SettingsPanel({
   // Border decoration state
   const [borderStyle, setBorderStyle] = useState<BorderDecorationStyle>('rocks');
   const [borderDensity, setBorderDensity] = useState(0.7);
+  const [borderScale, setBorderScale] = useState(2.0); // Average of scaleMin/scaleMax
   const [isGenerating, setIsGenerating] = useState(false);
   const isInitialMount = useRef(true);
 
-  // Auto-regenerate border decorations when style or density changes (if decorations exist)
+  // Auto-regenerate border decorations when style, density, or scale changes (if decorations exist)
   useEffect(() => {
     // Skip on initial mount
     if (isInitialMount.current) {
@@ -61,11 +62,13 @@ export function SettingsPanel({
       ...DEFAULT_BORDER_SETTINGS,
       style: borderStyle,
       density: borderDensity,
+      scaleMin: borderScale * 0.6,
+      scaleMax: borderScale * 1.4,
     };
 
     const newObjects = generateBorderDecorations(state.mapData, settings);
     onUpdateObjects(newObjects);
-  }, [borderStyle, borderDensity]);
+  }, [borderStyle, borderDensity, borderScale]);
 
   if (!state.mapData) return null;
 
@@ -80,6 +83,8 @@ export function SettingsPanel({
       ...DEFAULT_BORDER_SETTINGS,
       style: borderStyle,
       density: borderDensity,
+      scaleMin: borderScale * 0.6,
+      scaleMax: borderScale * 1.4,
     };
 
     const newObjects = generateBorderDecorations(state.mapData, settings);
@@ -250,6 +255,26 @@ export function SettingsPanel({
                 step="0.1"
                 value={borderDensity}
                 onChange={(e) => setBorderDensity(parseFloat(e.target.value))}
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-[10px] uppercase tracking-wider" style={{ color: theme.text.muted }}>
+                  Scale
+                </label>
+                <span className="text-[10px] font-mono" style={{ color: theme.text.secondary }}>
+                  {borderScale.toFixed(1)}x
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.5"
+                max="4"
+                step="0.5"
+                value={borderScale}
+                onChange={(e) => setBorderScale(parseFloat(e.target.value))}
                 className="w-full"
               />
             </div>
