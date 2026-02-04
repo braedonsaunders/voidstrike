@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { WebGPURenderer } from 'three/webgpu';
 import { MapData } from '@/data/maps';
 import { BIOMES, BiomeConfig } from './Biomes';
 import { Terrain, MapDecorations } from './Terrain';
@@ -87,7 +88,7 @@ export class EnvironmentManager {
   private emissiveLightPool: LightPool | null = null;
 
   // Renderer reference for planar reflections
-  private renderer: THREE.WebGLRenderer | THREE.WebGPURenderer | null = null;
+  private renderer: THREE.WebGLRenderer | WebGPURenderer | null = null;
 
   // Lighting
   private ambientLight: THREE.AmbientLight;
@@ -233,7 +234,7 @@ export class EnvironmentManager {
    * Set the renderer reference for planar reflections
    * Must be called after construction if ultra quality water is desired
    */
-  public setRenderer(renderer: THREE.WebGLRenderer | THREE.WebGPURenderer): void {
+  public setRenderer(renderer: THREE.WebGLRenderer | WebGPURenderer): void {
     this.renderer = renderer;
 
     // If we're at ultra quality and reflections are enabled, create planar reflection
