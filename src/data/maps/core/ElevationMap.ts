@@ -105,6 +105,8 @@ export const BIOME_THEMES: Record<BiomeType, BiomeTheme> = {
 /** Standard elevation levels mapped to 0-255 range */
 export const ELEVATION = {
   VOID: 0,        // Below terrain (chasms)
+  WATER_DEEP: 10, // Deep water level (impassable)
+  WATER_SHALLOW: 30, // Shallow water level (walkable but slow)
   LOW: 60,        // Ground level
   MID: 140,       // Natural expansion level
   HIGH: 220,      // Main base level

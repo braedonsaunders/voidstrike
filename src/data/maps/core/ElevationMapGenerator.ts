@@ -198,6 +198,7 @@ function paintRamp(
 
 /**
  * Paint a feature (water, forest, etc.) on a circular area
+ * Water features also set elevation to ensure proper depth rendering
  */
 function paintFeatureCircle(
   grid: GenerationGrid,
@@ -207,6 +208,10 @@ function paintFeatureCircle(
   feature: TerrainFeature
 ): void {
   const r2 = radius * radius;
+  // Determine water elevation based on feature type
+  const waterElevation = feature === 'water_deep' ? ELEVATION.WATER_DEEP :
+    feature === 'water_shallow' ? ELEVATION.WATER_SHALLOW : null;
+
   for (let y = Math.floor(cy - radius); y <= Math.ceil(cy + radius); y++) {
     for (let x = Math.floor(cx - radius); x <= Math.ceil(cx + radius); x++) {
       if (y >= 0 && y < grid.height && x >= 0 && x < grid.width) {
@@ -216,6 +221,10 @@ function paintFeatureCircle(
           // Don't overwrite ramps
           if (!grid.ramps[y][x]) {
             grid.features[y][x] = feature;
+            // Set water elevation to ensure water renders below terrain
+            if (waterElevation !== null) {
+              grid.elevation[y][x] = waterElevation;
+            }
           }
         }
       }
@@ -225,6 +234,7 @@ function paintFeatureCircle(
 
 /**
  * Paint a feature on a rectangular area
+ * Water features also set elevation to ensure proper depth rendering
  */
 function paintFeatureRect(
   grid: GenerationGrid,
@@ -234,12 +244,20 @@ function paintFeatureRect(
   height: number,
   feature: TerrainFeature
 ): void {
+  // Determine water elevation based on feature type
+  const waterElevation = feature === 'water_deep' ? ELEVATION.WATER_DEEP :
+    feature === 'water_shallow' ? ELEVATION.WATER_SHALLOW : null;
+
   for (let py = Math.floor(y); py < Math.ceil(y + height); py++) {
     for (let px = Math.floor(x); px < Math.ceil(x + width); px++) {
       if (py >= 0 && py < grid.height && px >= 0 && px < grid.width) {
         // Don't overwrite ramps
         if (!grid.ramps[py][px]) {
           grid.features[py][px] = feature;
+          // Set water elevation to ensure water renders below terrain
+          if (waterElevation !== null) {
+            grid.elevation[py][px] = waterElevation;
+          }
         }
       }
     }
