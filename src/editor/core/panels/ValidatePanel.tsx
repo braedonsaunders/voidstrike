@@ -62,7 +62,7 @@ export function ValidatePanel({
         className="text-[11px] leading-relaxed"
         style={{ color: theme.text.muted }}
       >
-        Checks that all bases are connected and expansions are reachable.
+        Checks terrain connectivity between bases. Note: Does not check decoration objects (rocks, trees) which may block paths in-game.
       </div>
 
       {/* Results */}
@@ -248,6 +248,12 @@ export function ValidatePanel({
             <span>Ramps connect elevation differences</span>
           </li>
         </ul>
+        <div
+          className="mt-3 p-2 rounded text-[10px]"
+          style={{ backgroundColor: `${theme.warning}15`, color: theme.warning }}
+        >
+          ⚠️ Validation uses terrain grid only. Large decorations (rocks, crystals) may block paths in-game but won&apos;t be detected here. Test in-game for accurate pathfinding.
+        </div>
       </Section>
     </div>
   );

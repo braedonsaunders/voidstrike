@@ -196,15 +196,12 @@ export function SettingsPanel({
                   <button
                     key={style}
                     onClick={() => setBorderStyle(style)}
-                    className={`
-                      px-2 py-1.5 rounded text-[11px] transition-all capitalize
-                      ${borderStyle === style ? 'ring-1' : 'hover:bg-white/5'}
-                    `}
+                    className="px-2 py-1.5 rounded text-[11px] transition-all capitalize hover:bg-white/5"
                     style={{
                       backgroundColor: borderStyle === style ? `${theme.primary}20` : theme.surface,
                       color: borderStyle === style ? theme.text.primary : theme.text.muted,
-                      '--tw-ring-color': theme.primary,
-                    } as React.CSSProperties}
+                      border: borderStyle === style ? `1px solid ${theme.primary}` : '1px solid transparent',
+                    }}
                   >
                     {style.replace('_', ' ')}
                   </button>

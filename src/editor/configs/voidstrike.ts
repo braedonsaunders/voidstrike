@@ -725,10 +725,10 @@ export const VOIDSTRIKE_PANELS: PanelConfig[] = [
   { id: 'bases', name: 'Bases', icon: '🏠', type: 'objects' },
   { id: 'objects', name: 'Obj', icon: '📦', type: 'objects' },
   { id: 'decorations', name: 'Decor', icon: '🌲', type: 'objects' },
-  { id: 'selected', name: 'Edit', icon: '✎', type: 'selected' },
-  { id: 'settings', name: 'Set', icon: '⚙', type: 'settings' },
+  { id: 'selected', name: 'Edit', icon: '✏️', type: 'selected' },
+  { id: 'settings', name: 'Set', icon: '⚙️', type: 'settings' },
   { id: 'ai', name: 'AI', icon: '✨', type: 'ai' },
-  { id: 'validate', name: 'Val', icon: '✓', type: 'validate' },
+  { id: 'validate', name: 'Val', icon: '✅', type: 'validate' },
 ];
 
 // ============================================
