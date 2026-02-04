@@ -5,15 +5,15 @@
  * Designed to work with UnifiedWaterMesh.
  *
  * Features:
- * - Physically-correct fresnel via IOR (no manual calculation)
  * - Animated multi-layer normal maps for wave detail
  * - Depth-based shallow/deep color blending
  * - Quality-scaled wave distortion
+ * - PBR fresnel and specular via MeshStandardNodeMaterial
  *
  * Architecture:
- * - Uses MeshPhysicalNodeMaterial for proper PBR with IOR support
+ * - Uses MeshStandardNodeMaterial for consistent PBR rendering
  * - colorNode provides BASE color only (no manual lighting)
- * - normalNode provides actual normals in [-1,1] range
+ * - normalNode provides normals in [0,1] encoded range (TSL convention)
  * - PBR pipeline handles fresnel, specular, environment reflections
  */
 
@@ -35,7 +35,7 @@ import {
   attribute,
   time,
 } from 'three/tsl';
-import { MeshPhysicalNodeMaterial } from 'three/webgpu';
+import { MeshStandardNodeMaterial } from 'three/webgpu';
 import type { WaterQuality } from '@/rendering/water/UnifiedWaterMesh';
 
 /**
@@ -112,15 +112,12 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
   },
 };
 
-// Water Index of Refraction - physically correct value
-const WATER_IOR = 1.33;
-
 /**
  * TSL Water Material class
  * Provides animated water surface with physically-based rendering
  */
 export class TSLWaterMaterial {
-  public material: MeshPhysicalNodeMaterial;
+  public material: MeshStandardNodeMaterial;
 
   // Uniforms for runtime updates
   private uTimeScale = uniform(1.0);
@@ -155,9 +152,8 @@ export class TSLWaterMaterial {
   private createMaterial(
     config: WaterMaterialConfig,
     settings: QualitySettings
-  ): MeshPhysicalNodeMaterial {
-    // Use MeshPhysicalNodeMaterial for IOR support (proper fresnel)
-    const material = new MeshPhysicalNodeMaterial();
+  ): MeshStandardNodeMaterial {
+    const material = new MeshStandardNodeMaterial();
 
     // Scaled time for animation
     const scaledTime = time.mul(this.uTimeScale);
@@ -211,8 +207,8 @@ export class TSLWaterMaterial {
         const ny = wave2.mul(0.025).add(wave3.mul(0.012)).mul(distortion);
         const nz = float(1.0);
 
-        // Return actual normal vector in [-1,1] range
-        return normalize(vec3(nx, ny, nz));
+        // TSL normalNode expects [0,1] encoded normals (same as normal map textures)
+        return normalize(vec3(nx, ny, nz)).mul(0.5).add(0.5);
       }
 
       // Texture-based normals with two scrolling layers
@@ -249,8 +245,8 @@ export class TSLWaterMaterial {
         blended.z
       );
 
-      // Return actual normal vector in [-1,1] range
-      return normalize(scaled);
+      // TSL normalNode expects [0,1] encoded normals
+      return normalize(scaled).mul(0.5).add(0.5);
     })();
 
     // =========================================================================
@@ -275,14 +271,6 @@ export class TSLWaterMaterial {
 
     // Water is a dielectric (non-metallic)
     material.metalnessNode = float(0.0);
-
-    // IOR for physically-correct fresnel (water = 1.33)
-    // This replaces manual fresnel calculation entirely
-    // Note: ior is a regular property, not a node property
-    material.ior = WATER_IOR;
-
-    // Note: Environment map reflections are handled by the scene's environment
-    // rather than per-material envMap in TSL node materials
 
     // Opaque rendering for proper depth sorting with terrain
     material.transparent = false;
@@ -337,7 +325,7 @@ export class TSLWaterMaterial {
   /**
    * Get the underlying Three.js material
    */
-  public getMaterial(): MeshPhysicalNodeMaterial {
+  public getMaterial(): MeshStandardNodeMaterial {
     return this.material;
   }
 
