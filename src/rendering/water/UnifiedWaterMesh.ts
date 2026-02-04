@@ -811,11 +811,14 @@ export class UnifiedWaterMesh {
     this.shoreGeometry.computeVertexNormals();
 
     // Shore material (basic blending with vertex colors)
+    // depthWrite: true ensures shore is properly occluded by terrain
+    // depthTest: true ensures shore doesn't render over closer objects
     const shoreMaterial = new THREE.MeshBasicMaterial({
       vertexColors: true,
       transparent: true,
       side: THREE.DoubleSide,
-      depthWrite: false,
+      depthWrite: true,
+      depthTest: true,
       blending: THREE.NormalBlending,
     });
 
