@@ -228,6 +228,7 @@ voidstrike/
 │   │   │   ├── GuardrailMesh.ts
 │   │   │   └── index.ts
 │   │   ├── services/
+│   │   │   ├── EditorNavigation.ts
 │   │   │   └── LLMMapGenerator.ts
 │   │   ├── terrain/
 │   │   │   └── EdgeDetector.ts
