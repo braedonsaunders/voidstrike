@@ -6,16 +6,9 @@ import { PerformanceDashboard } from './PerformanceDashboard';
 import { PerformanceRecorder } from './PerformanceRecorder';
 import { BasePanel } from './BasePanel';
 
-// Format number with K/M suffix for large numbers
-function formatNumber(num: number): string {
-  if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(1)}M`;
-  if (num >= 1_000) return `${(num / 1_000).toFixed(1)}K`;
-  return num.toString();
-}
-
 /**
- * Performance Panel - Centralized performance monitoring and display settings
- * Combines FPS counter toggle, rendering metrics, and detailed performance dashboard
+ * Performance Panel - Centralized performance monitoring
+ * Contains settings toggle and the unified PerformanceDashboard
  * NOTE: Edge scrolling is now controlled centrally by HUD.tsx via isAnyMenuOpen selector
  */
 export const PerformancePanel = memo(function PerformancePanel() {
@@ -23,7 +16,6 @@ export const PerformancePanel = memo(function PerformancePanel() {
   const togglePerformancePanel = useUIStore((state) => state.togglePerformancePanel);
   const showFPS = useUIStore((state) => state.showFPS);
   const toggleFPS = useUIStore((state) => state.toggleFPS);
-  const performanceMetrics = useUIStore((state) => state.performanceMetrics);
 
   if (!showPerformancePanel) return null;
 
@@ -72,110 +64,11 @@ export const PerformancePanel = memo(function PerformancePanel() {
         </button>
       </div>
 
-      {/* Rendering Metrics */}
-      <div style={{
-        marginBottom: '12px',
-        padding: '10px',
-        backgroundColor: '#1a1a1c',
-        borderRadius: '6px',
-      }}>
-        <div style={{ fontSize: '11px', fontWeight: 600, color: '#888', marginBottom: '8px', textTransform: 'uppercase' }}>
-          Rendering
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-          <span style={{ color: '#888' }}>CPU Time</span>
-          <span style={{ fontFamily: 'monospace', color: '#22d3ee' }}>{performanceMetrics.cpuTime.toFixed(1)}ms</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-          <span style={{ color: '#888' }}>GPU Time</span>
-          <span style={{ fontFamily: 'monospace', color: '#fb923c' }}>{performanceMetrics.gpuTime.toFixed(1)}ms</span>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-          <span style={{ color: '#888' }}>Frame Time</span>
-          <span style={{ fontFamily: 'monospace', color: '#a3a3a3' }}>{performanceMetrics.frameTime.toFixed(1)}ms</span>
-        </div>
-        <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px' }}>
-          {/* Per-frame metrics (calculated from 1-second accumulated values) */}
-          {(() => {
-            // Clamp FPS to reasonable range (1-500) to handle initial/anomalous values
-            const rawFps = performanceMetrics.frameTime > 0 ? 1000 / performanceMetrics.frameTime : 60;
-            const fps = Math.min(500, Math.max(1, rawFps));
-            const trianglesPerFrame = Math.round(performanceMetrics.triangles / fps);
-            const drawCallsPerFrame = Math.round(performanceMetrics.drawCalls / fps);
-            return (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-                  <span style={{ color: '#888' }}>Triangles/Frame</span>
-                  <span style={{ fontFamily: 'monospace', color: '#c084fc' }}>{formatNumber(trianglesPerFrame)}</span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-                  <span style={{ color: '#888' }}>Draw Calls/Frame</span>
-                  <span style={{ fontFamily: 'monospace', color: drawCallsPerFrame > 1000 ? '#ef4444' : drawCallsPerFrame > 500 ? '#facc15' : '#22c55e' }}>
-                    {drawCallsPerFrame.toLocaleString()}
-                  </span>
-                </div>
-              </>
-            );
-          })()}
-        </div>
-        <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-            <span style={{ color: '#888' }}>Render Res</span>
-            <span style={{ fontFamily: 'monospace', color: '#a3a3a3' }}>
-              {performanceMetrics.renderWidth}×{performanceMetrics.renderHeight}
-            </span>
-          </div>
-          {performanceMetrics.renderWidth !== performanceMetrics.displayWidth && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-              <span style={{ color: '#888' }}>Display Res</span>
-              <span style={{ fontFamily: 'monospace', color: '#a3a3a3' }}>
-                {performanceMetrics.displayWidth}×{performanceMetrics.displayHeight}
-              </span>
-            </div>
-          )}
-        </div>
-        {/* GPU Indirect Rendering Status */}
-        <div style={{ borderTop: '1px solid #333', marginTop: '6px', paddingTop: '6px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-            <span style={{ color: '#888' }}>GPU Culling</span>
-            <span style={{
-              fontFamily: 'monospace',
-              color: performanceMetrics.gpuCullingActive ? '#22c55e' : '#888',
-            }}>
-              {performanceMetrics.gpuCullingActive ? 'ON' : 'OFF'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-            <span style={{ color: '#888' }}>GPU Indirect</span>
-            <span style={{
-              fontFamily: 'monospace',
-              color: performanceMetrics.gpuIndirectActive ? '#22c55e' : '#888',
-            }}>
-              {performanceMetrics.gpuIndirectActive ? 'ON' : 'OFF'}
-            </span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', padding: '3px 0' }}>
-            <span style={{ color: '#888' }}>GPU Units</span>
-            <span style={{ fontFamily: 'monospace', color: '#a3a3a3' }}>
-              {performanceMetrics.gpuManagedUnits}
-            </span>
-          </div>
-        </div>
-      </div>
+      {/* Unified Performance Dashboard */}
+      <PerformanceDashboard expanded={true} />
 
-      {/* Performance Dashboard */}
-      <div style={{
-        borderTop: '1px solid #222',
-        paddingTop: '12px',
-      }}>
-        <div style={{ marginBottom: '8px', fontWeight: 'bold', fontSize: '12px', color: '#4ade80' }}>
-          Performance Dashboard
-        </div>
-        <PerformanceDashboard expanded={true} />
-
-        {/* Performance Recorder */}
-        <PerformanceRecorder />
-      </div>
+      {/* Performance Recorder */}
+      <PerformanceRecorder />
     </BasePanel>
   );
 });

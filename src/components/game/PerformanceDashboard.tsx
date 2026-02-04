@@ -7,6 +7,7 @@ import {
   SystemTiming,
 } from '@/engine/core/PerformanceMonitor';
 import { getWorkerBridge } from '@/engine/workers/WorkerBridge';
+import { useUIStore } from '@/store/uiStore';
 
 // Mini sparkline graph component
 const Sparkline = memo(function Sparkline({
@@ -127,6 +128,9 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
   const [fpsHistory, setFpsHistory] = useState<number[]>([]);
   const [tickHistory, setTickHistory] = useState<number[]>([]);
   const [showSystemDetails, setShowSystemDetails] = useState(false);
+
+  // GPU pipeline status from uiStore
+  const renderMetrics = useUIStore((state) => state.performanceMetrics);
 
   // Throttle updates to ~10 fps for performance
   const lastUpdateRef = useRef<number>(0);
@@ -354,7 +358,7 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
         </div>
       )}
 
-      {/* GPU (Timing + Memory combined) */}
+      {/* GPU (Timing + Memory + Pipeline Status) */}
       {expanded && (
         <div style={{ marginBottom: '12px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -394,8 +398,8 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
               />
             </div>
           )}
-          {/* Draw Calls & Triangles */}
-          <div style={{ display: 'flex', gap: '12px', fontSize: '9px' }}>
+          {/* Draw Calls, Triangles, Resolution */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', fontSize: '9px', marginBottom: '4px' }}>
             <div>
               <span style={{ color: '#666' }}>Draws: </span>
               <span style={{ color: snapshot.render.drawCalls > 500 ? '#eab308' : '#aaa' }}>
@@ -408,6 +412,33 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
                 {(snapshot.render.triangles / 1000).toFixed(0)}K
               </span>
             </div>
+            <div>
+              <span style={{ color: '#666' }}>Res: </span>
+              <span style={{ color: '#aaa' }}>
+                {renderMetrics.renderWidth}×{renderMetrics.renderHeight}
+              </span>
+            </div>
+          </div>
+          {/* GPU Pipeline Status */}
+          <div style={{ display: 'flex', gap: '8px', fontSize: '9px' }}>
+            <div>
+              <span style={{ color: '#666' }}>Culling: </span>
+              <span style={{ color: renderMetrics.gpuCullingActive ? '#22c55e' : '#666' }}>
+                {renderMetrics.gpuCullingActive ? 'GPU' : 'CPU'}
+              </span>
+            </div>
+            <div>
+              <span style={{ color: '#666' }}>Indirect: </span>
+              <span style={{ color: renderMetrics.gpuIndirectActive ? '#22c55e' : '#666' }}>
+                {renderMetrics.gpuIndirectActive ? 'ON' : 'OFF'}
+              </span>
+            </div>
+            {renderMetrics.gpuManagedUnits > 0 && (
+              <div>
+                <span style={{ color: '#666' }}>Units: </span>
+                <span style={{ color: '#aaa' }}>{renderMetrics.gpuManagedUnits}</span>
+              </div>
+            )}
           </div>
         </div>
       )}
