@@ -18,24 +18,7 @@
  */
 
 import * as THREE from 'three';
-import {
-  Fn,
-  vec2,
-  vec3,
-  vec4,
-  float,
-  uniform,
-  texture,
-  uv,
-  positionWorld,
-  normalize,
-  clamp,
-  mix,
-  sin,
-  cos,
-  attribute,
-  time,
-} from 'three/tsl';
+import { Fn, vec3, uniform } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
 import type { WaterQuality } from '@/rendering/water/UnifiedWaterMesh';
 
@@ -159,51 +142,19 @@ export class TSLWaterMaterial {
   }
 
   private createMaterial(
-    config: WaterMaterialConfig,
-    settings: QualitySettings
+    _config: WaterMaterialConfig,
+    _settings: QualitySettings
   ): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
 
-    // Scaled time for animation
-    const scaledTime = time.mul(this.uTimeScale);
-
-    // =========================================================================
-    // COLOR NODE - Base water color, testing opaque rendering
-    // =========================================================================
+    // Ultra minimal test - just a solid color, no other nodes
     const colorNode = Fn(() => {
-      // Simple solid color - no alpha since we're testing opaque mode
       return vec3(0.2, 0.5, 0.7); // Solid blue
     })();
 
-    // =========================================================================
-    // NORMAL NODE - Simplified flat normal for testing
-    // TSL normalNode expects [0,1] encoded normals (same as normal map textures)
-    // =========================================================================
-    const normalNode = Fn(() => {
-      // Simple flat normal pointing up - encoded to [0,1] range
-      // Normal (0, 0, 1) encodes to (0.5, 0.5, 1.0)
-      return vec3(0.5, 0.5, 1.0);
-    })();
-
-    // =========================================================================
-    // ROUGHNESS NODE - Simple constant for testing
-    // =========================================================================
-    const roughnessNode = float(0.15);
-
-    // =========================================================================
-    // MATERIAL CONFIGURATION - Ultra minimal for testing
-    // =========================================================================
     material.colorNode = colorNode;
-    // Commenting out normalNode to test if that's causing the issue
-    // material.normalNode = normalNode;
-    // material.roughnessNode = roughnessNode;
-    // material.metalnessNode = float(0.0);
 
-    // Opaque rendering like terrain - testing if transparency is the issue
-    // material.transparent = true;
-    // material.side = THREE.DoubleSide;
-    // material.depthWrite = false;
-    // material.depthTest = true;
+    // Using all defaults like terrain material - no transparency
 
     return material;
   }
