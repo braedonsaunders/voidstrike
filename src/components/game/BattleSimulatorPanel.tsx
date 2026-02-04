@@ -8,6 +8,7 @@ import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
 import { useGameStore } from '@/store/gameStore';
 import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
 import { getWorkerBridge } from '@/engine/workers';
+import type { GameCommand } from '@/engine/core/GameCommand';
 
 type SpawnTeam = 'player1' | 'player2';
 type SpawnQuantity = 1 | 5 | 10 | 20;
@@ -150,8 +151,10 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
 
   // Pause game on mount so user can place units
   useEffect(() => {
-    const game = Game.getInstance();
-    game.pause();
+    const bridge = getWorkerBridge();
+    if (bridge) {
+      bridge.pause();
+    }
   }, []);
 
   // Listen for map clicks when a unit is selected
@@ -193,7 +196,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   }, [selectedUnit, selectedTeam, spawnQuantity]);
 
   const handleFight = useCallback(() => {
-    const game = Game.getInstance();
+    const bridge = getWorkerBridge();
     const worldAdapter = RenderStateWorldAdapter.getInstance();
 
     if (!worldAdapter) {
@@ -201,9 +204,12 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       return;
     }
 
-    // Register both players as AI-controlled
-    game.eventBus.emit('ai:registered', { playerId: 'player1' });
-    game.eventBus.emit('ai:registered', { playerId: 'player2' });
+    if (!bridge) {
+      console.warn('[BattleSimulator] No worker bridge available');
+      return;
+    }
+
+    const currentTick = bridge.currentTick;
 
     // Get all units from render state adapter
     const entities = worldAdapter.getEntitiesWith('Unit', 'Selectable', 'Transform', 'Health');
@@ -232,32 +238,45 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       const targetId = findValidTarget(worldAdapter, entity.id, unit, transform, playerId);
 
       if (targetId !== null) {
-        game.eventBus.emit('command:attack', {
+        const attackCommand: GameCommand = {
+          tick: currentTick,
+          playerId,
+          type: 'ATTACK',
           entityIds: [entity.id],
           targetEntityId: targetId,
-        });
+        };
+        bridge.issueCommand(attackCommand);
       } else {
         const enemyCenter = findEnemyCenter(worldAdapter, unit, playerId);
         if (enemyCenter) {
-          game.eventBus.emit('command:move', {
+          const moveCommand: GameCommand = {
+            tick: currentTick,
+            playerId,
+            type: 'MOVE',
             entityIds: [entity.id],
             targetPosition: enemyCenter,
-          });
+          };
+          bridge.issueCommand(moveCommand);
         }
       }
     }
 
-    game.resume();
+    bridge.resume();
     setIsPaused(false);
     setSelectedUnit(null);
   }, []);
 
   const handlePauseToggle = useCallback(() => {
-    const game = Game.getInstance();
+    const bridge = getWorkerBridge();
+    if (!bridge) {
+      console.warn('[BattleSimulator] No worker bridge available');
+      return;
+    }
+
     if (isPaused) {
-      game.resume();
+      bridge.resume();
     } else {
-      game.pause();
+      bridge.pause();
     }
     setIsPaused(!isPaused);
   }, [isPaused]);
@@ -284,9 +303,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   }, []);
 
   const handleSelectTeam = useCallback((team: 'player1' | 'player2') => {
-    const _game = Game.getInstance();
     const worldAdapter = RenderStateWorldAdapter.getInstance();
-
     if (!worldAdapter) return;
 
     const entities = worldAdapter.getEntitiesWith('Unit', 'Selectable');
