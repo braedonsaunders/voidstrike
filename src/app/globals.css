@@ -72,7 +72,7 @@ main {
 
   /* Minimap with modern border treatment */
   .minimap-container {
-    @apply relative w-48 h-48 bg-black/90 rounded-lg overflow-hidden
+    @apply relative w-52 h-52 bg-black/90 rounded-lg overflow-hidden
            border border-void-600 shadow-[0_0_20px_rgba(0,0,0,0.5)];
   }
 
