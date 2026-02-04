@@ -560,9 +560,24 @@ const SYSTEM_PROMPT = `You are an expert RTS map designer creating professional 
 - Place ramps FROM high ground TO low ground
 
 ### Water Features
-- shallow water: walkable at 0.6x speed, unbuildable
-- deep water: impassable (for island maps/lakes)
-- Use for naval maps, visual interest, or strategic slow zones
+Water bodies should be created with LAYERED commands for realistic appearance:
+1. First paint a LARGER shallow water area (the shoreline/edges)
+2. Then paint a SMALLER deep water area in the CENTER (this overwrites the inner shallow)
+This creates natural shores where shallow water surrounds deep water.
+
+Example lake (radius 25 at position 100,100):
+  { "cmd": "water", "x": 100, "y": 100, "radius": 25, "depth": "shallow" }  // Outer shore
+  { "cmd": "water", "x": 100, "y": 100, "radius": 18, "depth": "deep" }     // Inner deep
+
+Example river (width 20, length 80):
+  { "cmd": "water", "x": 50, "y": 60, "width": 20, "height": 80, "depth": "shallow" }  // Full width
+  { "cmd": "water", "x": 53, "y": 60, "width": 14, "height": 80, "depth": "deep" }     // Center channel
+
+Properties:
+- shallow water: walkable at 0.6x speed, unbuildable (shore/edges)
+- deep water: impassable (center of lakes, deep rivers)
+- ALWAYS create shallow water FIRST, then deep water on top for proper transitions
+- Shore width should be 5-8 cells for good visual appearance
 
 ### Strategic Features
 - Watch towers: Place at contested locations for vision control
@@ -791,14 +806,19 @@ function buildUserPrompt(settings: MapGenerationSettings, size: { width: number;
       '**Map Type**: Island/Naval map',
       '- Use deep water to separate land masses',
       '- Create island bases connected by shallow water crossings or bridges',
-      '- Consider naval gameplay with water-based choke points',
+      '- IMPORTANT: Always paint shallow water FIRST (larger), then deep water on TOP (smaller)',
+      '- This creates natural shorelines where shallow water surrounds deep water',
       ''
     );
   } else if (settings.includeWater) {
     lines.push(
-      '**Water Features**: Include water features',
-      '- Use shallow water for strategic slow zones',
-      '- Deep water for lakes or map boundaries',
+      '**Water Features**: Include lakes, rivers, or ponds',
+      '- IMPORTANT: Create water bodies in layers:',
+      '  1. Paint shallow water FIRST (larger area for shoreline)',
+      '  2. Paint deep water on TOP (smaller, in center)',
+      '- This creates natural transitions (shallow shores around deep centers)',
+      '- Shore width should be 5-8 cells',
+      '- Example lake: shallow radius 25, then deep radius 18 at same center',
       ''
     );
   }

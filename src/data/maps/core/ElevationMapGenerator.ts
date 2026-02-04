@@ -198,7 +198,7 @@ function paintRamp(
 
 /**
  * Paint a feature (water, forest, etc.) on a circular area
- * Water features also set elevation to ensure proper depth rendering
+ * Water features set elevation to ELEVATION.WATER - water surface is always level
  */
 function paintFeatureCircle(
   grid: GenerationGrid,
@@ -208,9 +208,8 @@ function paintFeatureCircle(
   feature: TerrainFeature
 ): void {
   const r2 = radius * radius;
-  // Determine water elevation based on feature type
-  const waterElevation = feature === 'water_deep' ? ELEVATION.WATER_DEEP :
-    feature === 'water_shallow' ? ELEVATION.WATER_SHALLOW : null;
+  // Water surface is always at the same level (deep vs shallow is depth BELOW surface)
+  const isWater = feature === 'water_deep' || feature === 'water_shallow';
 
   for (let y = Math.floor(cy - radius); y <= Math.ceil(cy + radius); y++) {
     for (let x = Math.floor(cx - radius); x <= Math.ceil(cx + radius); x++) {
@@ -221,9 +220,9 @@ function paintFeatureCircle(
           // Don't overwrite ramps
           if (!grid.ramps[y][x]) {
             grid.features[y][x] = feature;
-            // Set water elevation to ensure water renders below terrain
-            if (waterElevation !== null) {
-              grid.elevation[y][x] = waterElevation;
+            // Set water elevation - water surface is always level
+            if (isWater) {
+              grid.elevation[y][x] = ELEVATION.WATER;
             }
           }
         }
@@ -234,7 +233,7 @@ function paintFeatureCircle(
 
 /**
  * Paint a feature on a rectangular area
- * Water features also set elevation to ensure proper depth rendering
+ * Water features set elevation to ELEVATION.WATER - water surface is always level
  */
 function paintFeatureRect(
   grid: GenerationGrid,
@@ -244,9 +243,8 @@ function paintFeatureRect(
   height: number,
   feature: TerrainFeature
 ): void {
-  // Determine water elevation based on feature type
-  const waterElevation = feature === 'water_deep' ? ELEVATION.WATER_DEEP :
-    feature === 'water_shallow' ? ELEVATION.WATER_SHALLOW : null;
+  // Water surface is always at the same level (deep vs shallow is depth BELOW surface)
+  const isWater = feature === 'water_deep' || feature === 'water_shallow';
 
   for (let py = Math.floor(y); py < Math.ceil(y + height); py++) {
     for (let px = Math.floor(x); px < Math.ceil(x + width); px++) {
@@ -254,9 +252,9 @@ function paintFeatureRect(
         // Don't overwrite ramps
         if (!grid.ramps[py][px]) {
           grid.features[py][px] = feature;
-          // Set water elevation to ensure water renders below terrain
-          if (waterElevation !== null) {
-            grid.elevation[py][px] = waterElevation;
+          // Set water elevation - water surface is always level
+          if (isWater) {
+            grid.elevation[py][px] = ELEVATION.WATER;
           }
         }
       }
