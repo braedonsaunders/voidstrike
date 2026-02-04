@@ -1287,7 +1287,10 @@ export function Editor3DCanvas({
 
         {/* Mini-map */}
         {mapData && (
-          <div className="absolute bottom-10 left-3 z-30 pointer-events-auto">
+          <div
+            className="absolute z-30 pointer-events-auto"
+            style={{ bottom: '40px', left: '12px' }}
+          >
             <EditorMiniMap
               config={config}
               mapData={mapData}
@@ -1297,17 +1300,6 @@ export function Editor3DCanvas({
             />
           </div>
         )}
-
-        {/* Instructions */}
-        <div
-          className="absolute top-3 left-3 px-3 py-2 rounded text-xs pointer-events-auto"
-          style={{
-            backgroundColor: `${config.theme.surface}cc`,
-            color: config.theme.text.muted,
-          }}
-        >
-          Scroll zoom • Middle-drag rotate • Edge/arrows pan • Click paint
-        </div>
 
         {/* Undo preview overlay */}
         {isUndoPreviewActive && undoPreview && (
