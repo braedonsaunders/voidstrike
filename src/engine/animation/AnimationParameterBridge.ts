@@ -8,10 +8,11 @@
 import { AnimationController } from './AnimationController';
 
 /**
- * Velocity threshold for movement detection
- * Below this magnitude, unit is considered stationary
+ * Velocity threshold for movement detection.
+ * Below this magnitude, unit is considered stationary.
+ * Matches the velocity deadzone in MovementOrchestrator.
  */
-const VELOCITY_THRESHOLD = 0.01;
+const VELOCITY_THRESHOLD = 0.05;
 
 /**
  * Unit state interface (matches Unit component)

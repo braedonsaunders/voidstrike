@@ -4,11 +4,7 @@
  * Loads and validates animation configuration from JSON.
  */
 
-import {
-  AnimationConfig,
-  ParameterDefinition,
-  AnimationStateConfig,
-} from './AnimationTypes';
+import { AnimationConfig, ParameterDefinition, AnimationStateConfig } from './AnimationTypes';
 
 /**
  * Legacy animation config format (from current assets.json)
@@ -39,16 +35,15 @@ const DEFAULT_PARAMETERS: Record<string, ParameterDefinition> = {
 };
 
 /**
- * Default velocity threshold for walk detection
+ * Default velocity threshold for walk detection.
+ * Matches the velocity deadzone in MovementOrchestrator.
  */
-const VELOCITY_THRESHOLD = 0.01;
+const VELOCITY_THRESHOLD = 0.05;
 
 /**
  * Load animation config from asset configuration
  */
-export function loadAnimationConfig(
-  assetConfig: AssetAnimationConfig
-): AnimationConfig | null {
+export function loadAnimationConfig(assetConfig: AssetAnimationConfig): AnimationConfig | null {
   // Check for new format first
   if (assetConfig.animation) {
     return validateAndNormalizeConfig(assetConfig.animation);
@@ -56,10 +51,7 @@ export function loadAnimationConfig(
 
   // Convert legacy format
   if (assetConfig.animations) {
-    return convertLegacyConfig(
-      assetConfig.animations,
-      assetConfig.animationSpeed
-    );
+    return convertLegacyConfig(assetConfig.animations, assetConfig.animationSpeed);
   }
 
   return null;
@@ -213,9 +205,7 @@ function validateAndNormalizeConfig(config: AnimationConfig): AnimationConfig {
   // Validate each state machine
   for (const [name, sm] of Object.entries(config.stateMachines)) {
     if (!sm.states[sm.defaultState]) {
-      throw new Error(
-        `State machine "${name}" has invalid default state "${sm.defaultState}"`
-      );
+      throw new Error(`State machine "${name}" has invalid default state "${sm.defaultState}"`);
     }
 
     // Validate transitions reference valid states

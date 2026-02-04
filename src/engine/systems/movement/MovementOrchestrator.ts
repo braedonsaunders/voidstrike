@@ -42,6 +42,13 @@ import {
   UNIT_TURN_RATE,
   ATTACK_STANDOFF_MULTIPLIER,
 } from '@/data/movement.config';
+
+/**
+ * Velocity deadzone - velocities below this magnitude are zeroed.
+ * Prevents residual forces (separation nudges, smoothing artifacts) from
+ * producing micro-movements that trigger walk animation on stationary units.
+ */
+const VELOCITY_DEADZONE = 0.05;
 import { validateEntityAlive } from '@/utils/EntityValidator';
 
 import { FlockingBehavior, FlockingEntityCache, FlockingSpatialGrid } from './FlockingBehavior';
@@ -762,10 +769,12 @@ export class MovementOrchestrator {
             // Revert to pre-move position
             transform.x = preMovePosX;
             transform.y = preMovePosY;
-            velocity.x = 0;
-            velocity.y = 0;
           }
         }
+
+        // Zero velocity after position update - idle separation is a position
+        // adjustment, not intentional movement. Keeps idle animation playing.
+        velocity.zero();
         return;
       }
     }
@@ -890,15 +899,16 @@ export class MovementOrchestrator {
       } = deterministicNormalizeWithMagnitude(tempSeparation.x, tempSeparation.y);
 
       if (sepMag > collisionConfig.combatSeparationThreshold) {
-        velocity.x = sepNx * combatMoveSpeed;
-        velocity.y = sepNy * combatMoveSpeed;
+        // Use velocity temporarily for position delta
+        const spreadVx = sepNx * combatMoveSpeed;
+        const spreadVy = sepNy * combatMoveSpeed;
 
         // For naval units, save position before movement for potential revert
         const isNaval = unit.movementDomain === 'water' && !unit.isFlying;
         const preMovePosX = transform.x;
         const preMovePosY = transform.y;
 
-        transform.translate(velocity.x * dt, velocity.y * dt);
+        transform.translate(spreadVx * dt, spreadVy * dt);
         transform.x = snapValue(transform.x, QUANT_POSITION);
         transform.y = snapValue(transform.y, QUANT_POSITION);
         this.pathfinding.clampToMapBounds(transform);
@@ -916,13 +926,13 @@ export class MovementOrchestrator {
             // Revert to pre-move position
             transform.x = preMovePosX;
             transform.y = preMovePosY;
-            velocity.x = 0;
-            velocity.y = 0;
           }
         }
-      } else {
-        velocity.zero();
       }
+
+      // Zero velocity - combat separation is a position adjustment,
+      // not intentional movement. Keeps attack animation playing.
+      velocity.zero();
 
       unit.currentSpeed = Math.max(0, unit.currentSpeed - unit.deceleration * dt);
       return { handled: true, skipMovement: true, targetX: null, targetY: null };
@@ -1355,6 +1365,13 @@ export class MovementOrchestrator {
       );
       finalVx += tempStuckNudge.x;
       finalVy += tempStuckNudge.y;
+    }
+
+    // Velocity deadzone: zero out micro-velocities from residual forces
+    const finalMag = deterministicMagnitude(finalVx, finalVy);
+    if (finalMag < VELOCITY_DEADZONE) {
+      finalVx = 0;
+      finalVy = 0;
     }
 
     // Apply velocity

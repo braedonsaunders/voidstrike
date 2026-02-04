@@ -15,130 +15,6 @@ type SpawnQuantity = 1 | 5 | 10 | 20;
 
 const SPAWN_QUANTITIES: SpawnQuantity[] = [1, 5, 10, 20];
 
-/**
- * Find the best enemy target for a unit, respecting targeting restrictions.
- * Uses RenderStateWorldAdapter for entity queries in worker mode.
- */
-function findValidTarget(
-  worldAdapter: RenderStateWorldAdapter,
-  entityId: number,
-  unitData: {
-    sightRange: number;
-    isNaval: boolean;
-    isFlying: boolean;
-    canAttackAir: boolean;
-    canAttackGround: boolean;
-  },
-  transformData: { x: number; y: number },
-  myPlayerId: string
-): number | null {
-  const searchRange = unitData.sightRange * 1.5;
-  const isNavalUnit = unitData.isNaval;
-  const isAirUnit = unitData.isFlying;
-
-  const entities = worldAdapter.getEntitiesWith('Unit', 'Selectable', 'Transform', 'Health');
-  let bestTarget: { entityId: number; score: number } | null = null;
-
-  for (const entity of entities) {
-    if (entity.id === entityId) continue;
-
-    const targetUnit = entity.get<{ isFlying: boolean; isNaval: boolean }>('Unit');
-    const targetTransform = entity.get<{ x: number; y: number }>('Transform');
-    const targetSelectable = entity.get<{ playerId: string }>('Selectable');
-    const targetHealth = entity.get<{ current: number; max: number; isDead: () => boolean }>(
-      'Health'
-    );
-
-    if (!targetUnit || !targetTransform || !targetSelectable || !targetHealth) continue;
-    if (targetSelectable.playerId === myPlayerId) continue;
-    if (targetHealth.isDead()) continue;
-
-    const targetIsFlying = targetUnit.isFlying;
-    const targetIsNaval = targetUnit.isNaval;
-
-    // Check if this unit can attack the target type
-    const canAttack =
-      (targetIsFlying && unitData.canAttackAir) || (!targetIsFlying && unitData.canAttackGround);
-    if (!canAttack) continue;
-
-    // Naval units should prefer naval targets
-    if (isNavalUnit && !isAirUnit) {
-      if (!targetIsNaval && !targetIsFlying) continue;
-    } else if (!isNavalUnit && !isAirUnit) {
-      if (targetIsNaval) continue;
-    }
-
-    const dx = targetTransform.x - transformData.x;
-    const dy = targetTransform.y - transformData.y;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance > searchRange) continue;
-
-    const healthPercent = targetHealth.current / targetHealth.max;
-    const score = (1 - distance / searchRange) * 50 + (1 - healthPercent) * 30;
-
-    if (!bestTarget || score > bestTarget.score) {
-      bestTarget = { entityId: entity.id, score };
-    }
-  }
-
-  return bestTarget?.entityId ?? null;
-}
-
-/**
- * Find the average position of enemy units that this unit can attack.
- */
-function findEnemyCenter(
-  worldAdapter: RenderStateWorldAdapter,
-  unitData: {
-    isNaval: boolean;
-    isFlying: boolean;
-    canAttackAir: boolean;
-    canAttackGround: boolean;
-  },
-  myPlayerId: string
-): { x: number; y: number } | null {
-  const entities = worldAdapter.getEntitiesWith('Unit', 'Transform', 'Selectable', 'Health');
-
-  let sumX = 0;
-  let sumY = 0;
-  let count = 0;
-
-  const isNavalUnit = unitData.isNaval;
-  const isAirUnit = unitData.isFlying;
-
-  for (const entity of entities) {
-    const targetUnit = entity.get<{ isFlying: boolean; isNaval: boolean }>('Unit');
-    const targetTransform = entity.get<{ x: number; y: number }>('Transform');
-    const targetSelectable = entity.get<{ playerId: string }>('Selectable');
-    const targetHealth = entity.get<{ isDead: () => boolean }>('Health');
-
-    if (!targetUnit || !targetTransform || !targetSelectable || !targetHealth) continue;
-    if (targetSelectable.playerId === myPlayerId) continue;
-    if (targetHealth.isDead()) continue;
-
-    const targetIsFlying = targetUnit.isFlying;
-    const targetIsNaval = targetUnit.isNaval;
-
-    const canAttack =
-      (targetIsFlying && unitData.canAttackAir) || (!targetIsFlying && unitData.canAttackGround);
-    if (!canAttack) continue;
-
-    if (isNavalUnit && !isAirUnit) {
-      if (!targetIsNaval && !targetIsFlying) continue;
-    } else if (!isNavalUnit && !isAirUnit) {
-      if (targetIsNaval) continue;
-    }
-
-    sumX += targetTransform.x;
-    sumY += targetTransform.y;
-    count++;
-  }
-
-  if (count === 0) return null;
-  return { x: sumX / count, y: sumY / count };
-}
-
 export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   const [selectedUnit, setSelectedUnit] = useState<string | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<SpawnTeam>('player1');
@@ -225,20 +101,17 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
 
     const currentTick = bridge.currentTick;
 
-    // Get all units from render state adapter
+    // Collect units by team and compute team center positions
+    const player1Units: number[] = [];
+    const player2Units: number[] = [];
+    let p1SumX = 0, p1SumY = 0, p1Count = 0;
+    let p2SumX = 0, p2SumY = 0, p2Count = 0;
+
     const entities = worldAdapter.getEntitiesWith('Unit', 'Selectable', 'Transform', 'Health');
 
     for (const entity of entities) {
       const selectable = entity.get<{ playerId: string }>('Selectable');
-      const unit = entity.get<{
-        unitId: string;
-        isWorker: boolean;
-        sightRange: number;
-        isNaval: boolean;
-        isFlying: boolean;
-        canAttackAir: boolean;
-        canAttackGround: boolean;
-      }>('Unit');
+      const unit = entity.get<{ isWorker: boolean }>('Unit');
       const transform = entity.get<{ x: number; y: number }>('Transform');
       const health = entity.get<{ isDead: () => boolean }>('Health');
 
@@ -246,33 +119,44 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       if (health.isDead()) continue;
       if (unit.isWorker) continue;
 
-      const playerId = selectable.playerId;
-      if (playerId !== 'player1' && playerId !== 'player2') continue;
-
-      const targetId = findValidTarget(worldAdapter, entity.id, unit, transform, playerId);
-
-      if (targetId !== null) {
-        const attackCommand: GameCommand = {
-          tick: currentTick,
-          playerId,
-          type: 'ATTACK',
-          entityIds: [entity.id],
-          targetEntityId: targetId,
-        };
-        bridge.issueCommand(attackCommand);
-      } else {
-        const enemyCenter = findEnemyCenter(worldAdapter, unit, playerId);
-        if (enemyCenter) {
-          const moveCommand: GameCommand = {
-            tick: currentTick,
-            playerId,
-            type: 'MOVE',
-            entityIds: [entity.id],
-            targetPosition: enemyCenter,
-          };
-          bridge.issueCommand(moveCommand);
-        }
+      if (selectable.playerId === 'player1') {
+        player1Units.push(entity.id);
+        p1SumX += transform.x;
+        p1SumY += transform.y;
+        p1Count++;
+      } else if (selectable.playerId === 'player2') {
+        player2Units.push(entity.id);
+        p2SumX += transform.x;
+        p2SumY += transform.y;
+        p2Count++;
       }
+    }
+
+    const player1Center = p1Count > 0 ? { x: p1SumX / p1Count, y: p1SumY / p1Count } : null;
+    const player2Center = p2Count > 0 ? { x: p2SumX / p2Count, y: p2SumY / p2Count } : null;
+
+    // Issue attack-move commands to each team toward the enemy center
+    // Attack-move triggers assault mode: units continuously seek and engage enemies
+    if (player1Units.length > 0 && player2Center) {
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId: 'player1',
+        type: 'ATTACK',
+        entityIds: player1Units,
+        targetPosition: player2Center,
+      };
+      bridge.issueCommand(command);
+    }
+
+    if (player2Units.length > 0 && player1Center) {
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId: 'player2',
+        type: 'ATTACK',
+        entityIds: player2Units,
+        targetPosition: player1Center,
+      };
+      bridge.issueCommand(command);
     }
 
     bridge.resume();
