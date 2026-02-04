@@ -561,6 +561,22 @@ export class WorkerBridge {
     } satisfies MainToWorkerMessage);
   }
 
+  /**
+   * Register a player as AI-controlled (for battle simulator)
+   */
+  public registerAI(
+    playerId: string,
+    faction: string,
+    difficulty: 'easy' | 'medium' | 'hard' | 'insane' = 'medium'
+  ): void {
+    this.worker?.postMessage({
+      type: 'registerAI',
+      playerId,
+      faction,
+      difficulty,
+    } satisfies MainToWorkerMessage);
+  }
+
   public setControlGroup(groupNumber: number, entityIds: number[]): void {
     this.worker?.postMessage({
       type: 'setControlGroup',

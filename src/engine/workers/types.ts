@@ -358,7 +358,12 @@ export interface SelectionChangedEvent {
 
 export interface AlertEvent {
   type: 'alert';
-  alertType: 'under_attack' | 'unit_ready' | 'research_complete' | 'resources_low' | 'base_destroyed';
+  alertType:
+    | 'under_attack'
+    | 'unit_ready'
+    | 'research_complete'
+    | 'resources_low'
+    | 'base_destroyed';
   position?: { x: number; y: number };
   playerId: string;
   details?: string;
@@ -418,7 +423,13 @@ export type MainToWorkerMessage =
   | { type: 'spawnEntities'; mapData: SpawnMapData }
   | { type: 'setPerformanceCollection'; enabled: boolean }
   | { type: 'spawnUnit'; unitType: string; x: number; y: number; playerId: string }
-  | { type: 'destroyEntity'; entityId: number };
+  | { type: 'destroyEntity'; entityId: number }
+  | {
+      type: 'registerAI';
+      playerId: string;
+      faction: string;
+      difficulty?: 'easy' | 'medium' | 'hard' | 'insane';
+    };
 
 /**
  * Player slot info for spawning
@@ -503,7 +514,21 @@ export type { GameCommand } from '../core/GameCommand';
  */
 export const TRANSFORM_FLOATS_PER_ENTITY = 11;
 
-export function packTransforms(entities: Array<{ x: number; y: number; z: number; rotation: number; scaleX: number; scaleY: number; scaleZ: number; prevX: number; prevY: number; prevZ: number; prevRotation: number }>): Float32Array {
+export function packTransforms(
+  entities: Array<{
+    x: number;
+    y: number;
+    z: number;
+    rotation: number;
+    scaleX: number;
+    scaleY: number;
+    scaleZ: number;
+    prevX: number;
+    prevY: number;
+    prevZ: number;
+    prevRotation: number;
+  }>
+): Float32Array {
   const buffer = new Float32Array(entities.length * TRANSFORM_FLOATS_PER_ENTITY);
   let offset = 0;
   for (const e of entities) {
@@ -522,10 +547,21 @@ export function packTransforms(entities: Array<{ x: number; y: number; z: number
   return buffer;
 }
 
-export function unpackTransform(buffer: Float32Array, index: number): {
-  x: number; y: number; z: number; rotation: number;
-  scaleX: number; scaleY: number; scaleZ: number;
-  prevX: number; prevY: number; prevZ: number; prevRotation: number;
+export function unpackTransform(
+  buffer: Float32Array,
+  index: number
+): {
+  x: number;
+  y: number;
+  z: number;
+  rotation: number;
+  scaleX: number;
+  scaleY: number;
+  scaleZ: number;
+  prevX: number;
+  prevY: number;
+  prevZ: number;
+  prevRotation: number;
 } {
   const offset = index * TRANSFORM_FLOATS_PER_ENTITY;
   return {

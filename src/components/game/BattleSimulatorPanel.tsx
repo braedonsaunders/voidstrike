@@ -223,6 +223,12 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       return;
     }
 
+    // Register both players as AI-controlled so the AI takes over and fights
+    const player1Faction = playerSlots[0]?.faction ?? 'dominion';
+    const player2Faction = playerSlots[1]?.faction ?? 'dominion';
+    bridge.registerAI('player1', player1Faction, 'medium');
+    bridge.registerAI('player2', player2Faction, 'medium');
+
     const currentTick = bridge.currentTick;
 
     // Get all units from render state adapter
@@ -278,7 +284,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     bridge.resume();
     setIsPaused(false);
     setSelectedUnit(null);
-  }, []);
+  }, [playerSlots]);
 
   const handlePauseToggle = useCallback(() => {
     const bridge = getWorkerBridge();

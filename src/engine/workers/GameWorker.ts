@@ -655,6 +655,14 @@ export class WorkerGame extends GameCore {
     return this.gameTime;
   }
 
+  /**
+   * Force send a render state update to the main thread.
+   * Used when entities are spawned/destroyed while the game is paused.
+   */
+  public forceRenderStateUpdate(): void {
+    this.sendRenderState();
+  }
+
   // ============================================================================
   // RENDER STATE COLLECTION
   // ============================================================================
@@ -1417,12 +1425,29 @@ if (typeof self !== 'undefined') {
             y: message.y,
             playerId: message.playerId,
           });
+          // Send render state so main thread sees the new entity (even when paused)
+          game.forceRenderStateUpdate();
           break;
         }
 
         case 'destroyEntity': {
           if (!game) return;
           game.eventBus.emit('entity:destroy', { entityId: message.entityId });
+          // Send render state so main thread sees the entity removal (even when paused)
+          game.forceRenderStateUpdate();
+          break;
+        }
+
+        case 'registerAI': {
+          if (!game) return;
+          const enhancedAI = game.world.getSystem(EnhancedAISystem);
+          if (enhancedAI) {
+            enhancedAI.registerAI(
+              message.playerId,
+              message.faction,
+              message.difficulty ?? 'medium'
+            );
+          }
           break;
         }
       }
