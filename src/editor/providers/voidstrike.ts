@@ -22,8 +22,6 @@ import {
   createBaseResources,
   DIR,
   MINERAL_DISTANCE_NATURAL,
-  analyzeConnectivity,
-  validateConnectivity,
   autoFixConnectivity,
 } from '@/data/maps';
 import type { TerrainFeature } from '@/data/maps/MapTypes';
