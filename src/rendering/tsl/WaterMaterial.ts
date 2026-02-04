@@ -23,19 +23,13 @@ import {
   uniform,
   texture,
   uv,
-  normalWorld,
   positionWorld,
-  cameraPosition,
   normalize,
   clamp,
   mix,
-  dot,
-  pow,
   sin,
   cos,
   attribute,
-  mul,
-  add,
   time,
   type ShaderNodeObject,
 } from 'three/tsl';
@@ -90,36 +84,36 @@ const QUALITY_SETTINGS: Record<WaterQuality, QualitySettings> = {
     waveAmplitude: 0.02,
     waveFrequency: 1.0,
     textureSize: 50.0,      // Coarser waves, calmer appearance
-    distortionScale: 0.5,
-    fresnelPower: 2.0,
-    reflectionStrength: 0.2,
+    distortionScale: 0.3,   // Reduced - prevents overly strong normal perturbation
+    fresnelPower: 2.0,      // Not used (PBR handles fresnel)
+    reflectionStrength: 0.2, // Not used (PBR handles reflections)
     opacity: 0.85,
   },
   medium: {
     waveAmplitude: 0.04,
     waveFrequency: 1.5,
     textureSize: 40.0,
-    distortionScale: 0.75,
-    fresnelPower: 3.0,
-    reflectionStrength: 0.3,
+    distortionScale: 0.4,   // Reduced
+    fresnelPower: 3.0,      // Not used
+    reflectionStrength: 0.3, // Not used
     opacity: 0.88,
   },
   high: {
     waveAmplitude: 0.06,
     waveFrequency: 2.0,
     textureSize: 30.0,
-    distortionScale: 1.0,
-    fresnelPower: 4.0,
-    reflectionStrength: 0.4,
+    distortionScale: 0.5,   // Reduced - was 1.0
+    fresnelPower: 4.0,      // Not used
+    reflectionStrength: 0.4, // Not used
     opacity: 0.9,
   },
   ultra: {
     waveAmplitude: 0.08,
     waveFrequency: 2.5,
     textureSize: 25.0,      // Finer waves, more visible detail
-    distortionScale: 1.25,
-    fresnelPower: 5.0,
-    reflectionStrength: 0.5,
+    distortionScale: 0.6,   // Reduced - was 1.25
+    fresnelPower: 5.0,      // Not used
+    reflectionStrength: 0.5, // Not used
     opacity: 0.92,
   },
 };
@@ -184,9 +178,11 @@ export class TSLWaterMaterial {
     const hasWaterDataAttr = true; // UnifiedWaterMesh always provides this
 
     // Color node - depth-based color blending with procedural variation
+    // Note: We intentionally do NOT add manual specular/fresnel here because
+    // MeshStandardNodeMaterial already applies PBR lighting. Adding them manually
+    // causes double-lighting and white-out at certain camera angles.
     const colorNode = Fn(() => {
       const worldPos = positionWorld;
-      const worldNormal = normalWorld;
 
       // Get depth from vertex attribute (0 = shallow, 1 = deep)
       let depthFactor: ShaderNodeObject<any>;
@@ -200,31 +196,19 @@ export class TSLWaterMaterial {
       // Base color blend between shallow and deep
       const baseColor = mix(this.uShallowColor, this.uDeepColor, depthFactor);
 
-      // Add subtle wave-based color variation
+      // Add subtle wave-based color variation (purely aesthetic, not lighting)
       const wavePhase = worldPos.x.mul(0.1).add(worldPos.z.mul(0.15)).add(scaledTime.mul(0.3));
-      const colorWave = sin(wavePhase).mul(0.03).add(1.0);
+      const colorWave = sin(wavePhase).mul(0.02).add(1.0);
       const variedColor = baseColor.mul(colorWave);
 
-      // Fresnel effect for edge highlighting
-      const viewDir = normalize(cameraPosition.sub(worldPos));
-      const fresnel = float(1.0).sub(clamp(dot(viewDir, worldNormal), 0.0, 1.0));
-      const fresnelFactor = pow(fresnel, this.uFresnelPower);
-
-      // Specular highlight from sun
-      const reflectDir = normalize(this.uSunDirection.negate().add(worldNormal.mul(dot(worldNormal, this.uSunDirection).mul(2.0))));
-      const specular = pow(clamp(dot(viewDir, reflectDir), 0.0, 1.0), float(32.0));
-      const specularColor = vec3(1.0, 1.0, 0.95).mul(specular).mul(0.5);
-
-      // Combine: base color + fresnel rim + specular
-      const rimColor = vec3(0.7, 0.85, 0.95); // Light sky blue rim
-      const withFresnel = mix(variedColor, rimColor, fresnelFactor.mul(this.uReflectionStrength));
-      const finalColor = add(withFresnel, specularColor);
-
-      return vec4(finalColor, this.uOpacity);
+      // Let MeshStandardNodeMaterial handle all specular, fresnel, and reflections
+      // via its built-in PBR lighting model (controlled by roughness/metalness)
+      return vec4(variedColor, this.uOpacity);
     })();
 
     // Normal node - animated normal map for surface detail
     // Uses texture-based normals matching the original WaterMesh addon
+    // IMPORTANT: normalNode expects normals in -1..1 range (NOT 0-1 texture encoding)
     const normalNode = Fn(() => {
       // Get world-space UV from geometry (1:1 world coordinates)
       const worldUV = uv();
@@ -248,7 +232,8 @@ export class TSLWaterMaterial {
         const ny = wave2.mul(0.03).add(wave3.mul(0.015)).mul(distortion);
         const nz = float(1.0);
 
-        return normalize(vec3(nx, ny, nz)).mul(0.5).add(0.5);
+        // Return normalized vector in -1..1 range (world-space normal)
+        return normalize(vec3(nx, ny, nz));
       }
 
       // TEXTURE-BASED NORMALS - matches original WaterMesh addon
@@ -274,7 +259,7 @@ export class TSLWaterMaterial {
         worldUV.y.mul(texScale2).add(scroll2)
       );
 
-      // Sample normal map at both UVs
+      // Sample normal map at both UVs (texture stores 0-1, convert to -1..1)
       const normal1 = texture(config.normalMap!, uv1).rgb.mul(2.0).sub(1.0);
       const normal2 = texture(config.normalMap!, uv2).rgb.mul(2.0).sub(1.0);
 
@@ -292,34 +277,41 @@ export class TSLWaterMaterial {
         blended.z
       );
 
-      return normalize(scaledNormal).mul(0.5).add(0.5);
+      // Return normalized vector in -1..1 range (world-space normal)
+      return normalize(scaledNormal);
     })();
 
-    // Roughness - low for reflective water surface
+    // Roughness - moderate roughness to prevent over-bright specular highlights
+    // Higher roughness = softer highlights = less white-out at grazing angles
     const roughnessNode = Fn(() => {
       // Vary roughness slightly with waves for subtle sparkle
       const worldPos = positionWorld;
       const sparkle = sin(worldPos.x.mul(10.0).add(scaledTime.mul(5.0)))
         .mul(sin(worldPos.z.mul(10.0).sub(scaledTime.mul(4.0))))
-        .mul(0.05);
+        .mul(0.03);
 
-      // Base roughness varies by quality
-      const baseRoughness = this.quality === 'ultra' ? 0.1 : this.quality === 'high' ? 0.15 : 0.2;
-      return clamp(float(baseRoughness).add(sparkle), 0.05, 0.4);
+      // Base roughness - higher values prevent white-out from PBR specular
+      // Water in reality has roughness ~0.3-0.5 due to micro-waves
+      const baseRoughness = this.quality === 'ultra' ? 0.25 : this.quality === 'high' ? 0.3 : 0.35;
+      return clamp(float(baseRoughness).add(sparkle), 0.15, 0.5);
     })();
 
-    // Metalness - slight metallic quality for better reflections
-    const metalnessNode = float(0.1);
+    // Metalness - very low to avoid excessive reflections
+    // Water is a dielectric, not metallic (metalness should be near 0)
+    const metalnessNode = float(0.0);
 
     material.colorNode = colorNode;
     material.normalNode = normalNode;
     material.roughnessNode = roughnessNode;
     material.metalnessNode = metalnessNode;
 
-    // Enable transparency
+    // Enable transparency with depth writing for proper terrain occlusion
+    // depthWrite = true ensures water is properly occluded by higher terrain
+    // This is critical because without it, water can appear "on top of" mountains
     material.transparent = true;
     material.side = THREE.DoubleSide;
-    material.depthWrite = false;
+    material.depthWrite = true;
+    material.depthTest = true;
 
     return material;
   }
