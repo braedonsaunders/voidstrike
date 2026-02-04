@@ -210,6 +210,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   }, [selectedUnit, selectedTeam, spawnQuantity]);
 
   const handleFight = useCallback(() => {
+    console.log('[BattleSimulator] handleFight called');
     const bridge = getWorkerBridge();
     const worldAdapter = RenderStateWorldAdapter.getInstance();
 
@@ -223,6 +224,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       return;
     }
 
+    console.log('[BattleSimulator] Registering AI for both players');
     // Register both players as AI-controlled so the AI takes over and fights
     const player1Faction = playerSlots[0]?.faction ?? 'dominion';
     const player2Faction = playerSlots[1]?.faction ?? 'dominion';
@@ -230,9 +232,11 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     bridge.registerAI('player2', player2Faction, 'medium');
 
     const currentTick = bridge.currentTick;
+    console.log('[BattleSimulator] Current tick:', currentTick);
 
     // Get all units from render state adapter
     const entities = worldAdapter.getEntitiesWith('Unit', 'Selectable', 'Transform', 'Health');
+    console.log('[BattleSimulator] Found entities:', entities.length);
 
     for (const entity of entities) {
       const selectable = entity.get<{ playerId: string }>('Selectable');
@@ -281,9 +285,11 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       }
     }
 
+    console.log('[BattleSimulator] Calling bridge.resume()');
     bridge.resume();
     setIsPaused(false);
     setSelectedUnit(null);
+    console.log('[BattleSimulator] handleFight completed');
   }, [playerSlots]);
 
   const handlePauseToggle = useCallback(() => {
