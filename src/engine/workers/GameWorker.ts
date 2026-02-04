@@ -1407,6 +1407,24 @@ if (typeof self !== 'undefined') {
           game?.setPerformanceCollection(message.enabled);
           break;
         }
+
+        case 'spawnUnit': {
+          if (!game) return;
+          // Forward to SpawnSystem via eventBus
+          game.eventBus.emit('unit:spawn', {
+            unitType: message.unitType,
+            x: message.x,
+            y: message.y,
+            playerId: message.playerId,
+          });
+          break;
+        }
+
+        case 'destroyEntity': {
+          if (!game) return;
+          game.eventBus.emit('entity:destroy', { entityId: message.entityId });
+          break;
+        }
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);

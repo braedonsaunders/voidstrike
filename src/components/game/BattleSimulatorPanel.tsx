@@ -159,8 +159,14 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     if (!selectedUnit) return;
 
     const game = Game.getInstance();
+    const bridge = getWorkerBridge();
 
     const handleSpawnClick = (data: { worldX: number; worldY: number }) => {
+      if (!bridge) {
+        console.warn('[BattleSimulator] No worker bridge available for spawning');
+        return;
+      }
+
       const spacing = 2;
       const cols = Math.ceil(Math.sqrt(spawnQuantity));
       const rows = Math.ceil(spawnQuantity / cols);
@@ -173,12 +179,8 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
           const x = data.worldX - offsetX + col * spacing;
           const y = data.worldY - offsetY + row * spacing;
 
-          game.eventBus.emit('unit:spawn', {
-            unitType: selectedUnit,
-            x,
-            y,
-            playerId: selectedTeam,
-          });
+          // Send spawn request to worker via bridge
+          bridge.spawnUnit(selectedUnit, x, y, selectedTeam);
           spawned++;
         }
       }
@@ -261,21 +263,22 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
   }, [isPaused]);
 
   const handleClearAll = useCallback(() => {
-    const game = Game.getInstance();
     const worldAdapter = RenderStateWorldAdapter.getInstance();
+    const bridge = getWorkerBridge();
 
     // Clear selection first
     useGameStore.getState().selectUnits([]);
-    game.eventBus.emit('selection:clear', {});
+    if (bridge) {
+      bridge.setSelection([], 'player1');
+    }
 
     // Get all unit entity IDs and request worker to destroy them
-    if (worldAdapter) {
+    if (worldAdapter && bridge) {
       const entities = worldAdapter.getEntitiesWith('Unit', 'Selectable');
-      const entityIds = entities.map((e) => e.id);
 
-      // Emit destroy command for each entity - worker will handle actual destruction
-      for (const entityId of entityIds) {
-        game.eventBus.emit('entity:destroy', { entityId });
+      // Send destroy command for each entity to worker
+      for (const entity of entities) {
+        bridge.destroyEntity(entity.id);
       }
     }
   }, []);
