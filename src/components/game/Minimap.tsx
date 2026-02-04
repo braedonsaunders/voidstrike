@@ -8,7 +8,7 @@ import { getRenderStateAdapter, getWorkerBridge } from '@/engine/workers';
 import { clamp } from '@/utils/math';
 import { debugInitialization } from '@/utils/debugLogger';
 
-const MINIMAP_SIZE = 192;
+const MINIMAP_SIZE = 208;
 
 // Convert hex color (0xRRGGBB) to CSS hex string
 function hexToCSS(hex: number, darken: number = 0): string {
