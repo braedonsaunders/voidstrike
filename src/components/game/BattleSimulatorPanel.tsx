@@ -238,6 +238,13 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     const entities = worldAdapter.getEntitiesWith('Unit', 'Selectable', 'Transform', 'Health');
     console.log('[BattleSimulator] Found entities:', entities.length);
 
+    let skippedNoComponents = 0;
+    let skippedDead = 0;
+    let skippedWorker = 0;
+    let skippedWrongPlayer = 0;
+    let attackCommands = 0;
+    let moveCommands = 0;
+
     for (const entity of entities) {
       const selectable = entity.get<{ playerId: string }>('Selectable');
       const unit = entity.get<{
@@ -252,16 +259,29 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       const transform = entity.get<{ x: number; y: number }>('Transform');
       const health = entity.get<{ isDead: () => boolean }>('Health');
 
-      if (!selectable || !unit || !transform || !health) continue;
-      if (health.isDead()) continue;
-      if (unit.isWorker) continue;
+      if (!selectable || !unit || !transform || !health) {
+        skippedNoComponents++;
+        continue;
+      }
+      if (health.isDead()) {
+        skippedDead++;
+        continue;
+      }
+      if (unit.isWorker) {
+        skippedWorker++;
+        continue;
+      }
 
       const playerId = selectable.playerId;
-      if (playerId !== 'player1' && playerId !== 'player2') continue;
+      if (playerId !== 'player1' && playerId !== 'player2') {
+        skippedWrongPlayer++;
+        continue;
+      }
 
       const targetId = findValidTarget(worldAdapter, entity.id, unit, transform, playerId);
 
       if (targetId !== null) {
+        attackCommands++;
         const attackCommand: GameCommand = {
           tick: currentTick,
           playerId,
@@ -273,6 +293,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       } else {
         const enemyCenter = findEnemyCenter(worldAdapter, unit, playerId);
         if (enemyCenter) {
+          moveCommands++;
           const moveCommand: GameCommand = {
             tick: currentTick,
             playerId,
@@ -284,6 +305,16 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
         }
       }
     }
+
+    console.log('[BattleSimulator] Entity processing stats:', {
+      total: entities.length,
+      skippedNoComponents,
+      skippedDead,
+      skippedWorker,
+      skippedWrongPlayer,
+      attackCommands,
+      moveCommands,
+    });
 
     console.log('[BattleSimulator] Calling bridge.resume()');
     bridge.resume();
