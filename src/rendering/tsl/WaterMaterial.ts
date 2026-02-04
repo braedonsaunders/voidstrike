@@ -36,7 +36,7 @@ import {
   attribute,
   mul,
   add,
-  timerGlobal,
+  time,
   type ShaderNodeObject,
 } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
@@ -176,8 +176,8 @@ export class TSLWaterMaterial {
   ): MeshStandardNodeMaterial {
     const material = new MeshStandardNodeMaterial();
 
-    // Get time from Three.js global timer
-    const time = timerGlobal().mul(this.uTimeScale);
+    // Get scaled time for animations
+    const scaledTime = time.mul(this.uTimeScale);
 
     // Water data attribute: vec3(regionId, isDeep, elevation)
     // isDeep: 0 = shallow, 1 = deep
@@ -201,7 +201,7 @@ export class TSLWaterMaterial {
       const baseColor = mix(this.uShallowColor, this.uDeepColor, depthFactor);
 
       // Add subtle wave-based color variation
-      const wavePhase = worldPos.x.mul(0.1).add(worldPos.z.mul(0.15)).add(time.mul(0.3));
+      const wavePhase = worldPos.x.mul(0.1).add(worldPos.z.mul(0.15)).add(scaledTime.mul(0.3));
       const colorWave = sin(wavePhase).mul(0.03).add(1.0);
       const variedColor = baseColor.mul(colorWave);
 
@@ -237,11 +237,11 @@ export class TSLWaterMaterial {
         const scaledY = worldUV.y.mul(uvScale);
 
         // Multi-scale wave normals
-        const wave1 = sin(scaledX.mul(50.0).add(time.mul(1.2)))
-          .mul(cos(scaledY.mul(40.0).add(time.mul(0.8))));
-        const wave2 = sin(scaledX.mul(100.0).sub(time.mul(0.9)))
-          .mul(cos(scaledY.mul(80.0).add(time.mul(1.1))));
-        const wave3 = sin(scaledX.mul(25.0).add(scaledY.mul(30.0)).add(time.mul(0.5)));
+        const wave1 = sin(scaledX.mul(50.0).add(scaledTime.mul(1.2)))
+          .mul(cos(scaledY.mul(40.0).add(scaledTime.mul(0.8))));
+        const wave2 = sin(scaledX.mul(100.0).sub(scaledTime.mul(0.9)))
+          .mul(cos(scaledY.mul(80.0).add(scaledTime.mul(1.1))));
+        const wave3 = sin(scaledX.mul(25.0).add(scaledY.mul(30.0)).add(scaledTime.mul(0.5)));
 
         const distortion = float(settings.distortionScale);
         const nx = wave1.mul(0.03).add(wave2.mul(0.015)).mul(distortion);
@@ -258,8 +258,8 @@ export class TSLWaterMaterial {
 
       // Two scrolling normal map layers at different scales and speeds
       // This creates the characteristic animated water surface
-      const scroll1 = time.mul(0.03);  // Layer 1 scroll speed
-      const scroll2 = time.mul(0.02);  // Layer 2 scroll speed (slower)
+      const scroll1 = scaledTime.mul(0.03);  // Layer 1 scroll speed
+      const scroll2 = scaledTime.mul(0.02);  // Layer 2 scroll speed (slower)
 
       // Layer 1: Primary wave direction
       const uv1 = vec2(
@@ -299,8 +299,8 @@ export class TSLWaterMaterial {
     const roughnessNode = Fn(() => {
       // Vary roughness slightly with waves for subtle sparkle
       const worldPos = positionWorld;
-      const sparkle = sin(worldPos.x.mul(10.0).add(time.mul(5.0)))
-        .mul(sin(worldPos.z.mul(10.0).sub(time.mul(4.0))))
+      const sparkle = sin(worldPos.x.mul(10.0).add(scaledTime.mul(5.0)))
+        .mul(sin(worldPos.z.mul(10.0).sub(scaledTime.mul(4.0))))
         .mul(0.05);
 
       // Base roughness varies by quality
