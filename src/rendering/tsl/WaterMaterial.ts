@@ -196,13 +196,26 @@ export class TSLWaterMaterial {
       let depthFactor: ShaderNodeObject<any>;
       if (hasWaterDataAttr) {
         const waterData = attribute('aWaterData', 'vec3');
-        depthFactor = waterData.y; // isDeep component
+        depthFactor = waterData.y; // isDeep component (0 or 1)
       } else {
         depthFactor = float(0.5); // Fallback to mid-blend
       }
 
-      // Base color blend between shallow and deep
-      const baseColor = mix(this.uShallowColor, this.uDeepColor, depthFactor);
+      // Add noise-based edge softening to break up the harsh shallow/deep boundary
+      // This creates a more natural, organic transition between water depths
+      const noiseScale = 0.15; // Controls the scale of the noise pattern
+      const noisePhase1 = worldPos.x.mul(noiseScale).add(worldPos.z.mul(noiseScale * 1.3));
+      const noisePhase2 = worldPos.x.mul(noiseScale * 0.7).sub(worldPos.z.mul(noiseScale * 0.9));
+      const edgeNoise = sin(noisePhase1.mul(8.0).add(scaledTime.mul(0.1)))
+        .mul(cos(noisePhase2.mul(6.0).sub(scaledTime.mul(0.08))))
+        .mul(0.3); // Noise amplitude
+
+      // Blend the depth factor with noise to soften edges
+      // Clamp to ensure we stay in 0-1 range
+      const softDepthFactor = clamp(depthFactor.add(edgeNoise), 0.0, 1.0);
+
+      // Base color blend between shallow and deep with softened transition
+      const baseColor = mix(this.uShallowColor, this.uDeepColor, softDepthFactor);
 
       // Add subtle wave-based color variation (purely aesthetic, not lighting)
       const wavePhase = worldPos.x.mul(0.1).add(worldPos.z.mul(0.15)).add(scaledTime.mul(0.3));
