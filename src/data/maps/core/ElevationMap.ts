@@ -105,7 +105,7 @@ export const BIOME_THEMES: Record<BiomeType, BiomeTheme> = {
 /** Standard elevation levels mapped to 0-255 range */
 export const ELEVATION = {
   VOID: 0,        // Below terrain (chasms)
-  WATER: 20,      // Water surface level (same for deep AND shallow - water is always level)
+  WATER: 25,      // Water surface level (must be > LOW - CLIFF_THRESHOLD to avoid shoreline cliffs)
   LOW: 60,        // Ground level
   MID: 140,       // Natural expansion level
   HIGH: 220,      // Main base level
