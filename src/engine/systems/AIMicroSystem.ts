@@ -338,9 +338,10 @@ export class AIMicroSystem extends System {
 
       // Process units in combat-related states
       // RTS-STYLE: Also process idle units in assault mode - they need micro to find targets
+      // NOTE: 'moving' state is NOT included - pure move commands should not trigger auto-attack
+      // This matches SC2 behavior where move commands ignore enemies
       const canProcessUnit =
         unit.state === 'attacking' ||
-        unit.state === 'moving' ||
         unit.state === 'attackmoving' ||
         (unit.canTransform && unit.state === 'idle') ||
         (unit.isInAssaultMode && unit.state === 'idle');
@@ -393,9 +394,10 @@ export class AIMicroSystem extends System {
       // Process units in combat-related states
       // attackmoving = moving to position while engaging enemies along the way
       // RTS-STYLE: Also process idle units in assault mode - they need micro to find targets
+      // NOTE: 'moving' state is NOT included - pure move commands should not trigger auto-attack
+      // This matches SC2 behavior where move commands ignore enemies
       const canProcessUnit =
         unit.state === 'attacking' ||
-        unit.state === 'moving' ||
         unit.state === 'attackmoving' ||
         (unit.canTransform && unit.state === 'idle') ||
         (unit.isInAssaultMode && unit.state === 'idle');

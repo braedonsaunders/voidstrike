@@ -150,6 +150,9 @@ export class FlockingBehavior {
    * Get state-dependent separation strength.
    * RTS style: weak while moving (allow clumping), strong when idle/attacking (spread out).
    * Attacking units actively spread apart while firing.
+   *
+   * RTS-STYLE: Units near friendly combat use combat separation (low) instead of idle (high).
+   * This prevents back units from spreading away from the fight.
    */
   public getSeparationStrength(unit: Unit, distanceToTarget: number): number {
     // Workers gathering/building have no separation
@@ -170,6 +173,12 @@ export class FlockingBehavior {
     // Moving: very weak separation, allow clumping during movement
     if (unit.state === 'moving' || unit.state === 'attackmoving' || unit.state === 'patrolling') {
       return collisionConfig.separationStrengthMoving;
+    }
+
+    // RTS-STYLE: Idle units near friendly combat use combat-level separation
+    // This prevents back units from spreading away while front units fight
+    if (unit.isNearFriendlyCombat) {
+      return collisionConfig.separationStrengthCombat;
     }
 
     // Idle: gentle spreading over time
@@ -283,6 +292,9 @@ export class FlockingBehavior {
    * Calculate cohesion force - steers toward the average position of nearby units.
    * Keeps groups together but with very weak force (RTS style).
    * PERF: Results are cached and only recalculated every COHESION_THROTTLE_TICKS ticks
+   *
+   * RTS-STYLE: Units near friendly combat DO get cohesion toward attacking allies.
+   * This pulls back units toward the fight instead of letting them drift away.
    */
   public calculateCohesionForce(
     selfId: number,
@@ -294,8 +306,14 @@ export class FlockingBehavior {
     out.x = 0;
     out.y = 0;
 
-    // No cohesion for workers or idle units
-    if (selfUnit.isWorker || selfUnit.state === 'idle' || selfUnit.state === 'gathering') {
+    // No cohesion for workers or gathering units
+    if (selfUnit.isWorker || selfUnit.state === 'gathering') {
+      return;
+    }
+
+    // Regular idle units have no cohesion, BUT units near friendly combat DO
+    // This creates a pull toward the battle for back-line units
+    if (selfUnit.state === 'idle' && !selfUnit.isNearFriendlyCombat) {
       return;
     }
 
@@ -327,7 +345,20 @@ export class FlockingBehavior {
       // Use inline data - no entity lookups needed!
       if (other.state === SpatialUnitState.Dead) continue;
       if (selfUnit.isFlying !== other.isFlying) continue;
-      // Only cohere with units in same state
+
+      // RTS-STYLE: Units near friendly combat cohere toward attacking allies
+      // This pulls idle back units toward the front line
+      if (selfUnit.isNearFriendlyCombat) {
+        // Cohere toward attacking units (the battle)
+        if (other.state === SpatialUnitState.Attacking) {
+          sumX += other.x;
+          sumY += other.y;
+          count++;
+        }
+        continue;
+      }
+
+      // Normal cohesion: Only cohere with units in same state
       if (other.state !== selfState) continue;
 
       sumX += other.x;
@@ -510,6 +541,10 @@ export class FlockingBehavior {
       selfUnit.state === 'gathering' ||
       selfUnit.state === 'building';
 
+    // RTS-STYLE: Units near friendly combat should not yield to moving units
+    // This prevents back units from being pushed away from the fight
+    const selfIsNearCombat = selfUnit.isNearFriendlyCombat || selfUnit.state === 'attacking';
+
     for (let i = 0; i < nearbyData.length; i++) {
       const other = nearbyData[i];
       if (other.id === selfId) continue;
@@ -537,11 +572,19 @@ export class FlockingBehavior {
           other.state === SpatialUnitState.AttackMoving ||
           other.state === SpatialUnitState.Gathering;
 
+        // RTS-STYLE: Check if the other unit is also in combat/near combat
+        // We need to check the attacking state from inline data
+        const otherIsInCombat = other.state === SpatialUnitState.Attacking;
+
         // Priority multiplier: if I'm idle and they're moving, I get pushed more (yield)
         // If I'm moving and they're idle, I push them but they don't push me much
+        // RTS-STYLE EXCEPTION: Units near combat don't yield - they hold their ground
         let priorityMultiplier = 1.0;
-        if (!selfIsMoving && otherIsMoving) {
-          // I'm idle, they're moving - I yield (get pushed more)
+        if (selfIsNearCombat) {
+          // I'm in combat or near combat - I don't yield, equal push with everyone
+          priorityMultiplier = 1.0;
+        } else if (!selfIsMoving && otherIsMoving && !otherIsInCombat) {
+          // I'm idle, they're moving (not in combat) - I yield (get pushed more)
           priorityMultiplier = 1.5;
         } else if (selfIsMoving && !otherIsMoving) {
           // I'm moving, they're idle - push through them (they should yield, not me)
