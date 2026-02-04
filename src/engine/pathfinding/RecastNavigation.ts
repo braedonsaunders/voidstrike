@@ -675,7 +675,8 @@ export class RecastNavigation {
         y: point.z,
       }));
 
-      const smoothedPath = this.smoothPath(rawPath, agentRadius);
+      // CRITICAL: Use water-specific smoothing to avoid cutting across land
+      const smoothedPath = this.smoothWaterPath(rawPath, agentRadius);
 
       return { path: smoothedPath, found: true };
     } catch {
@@ -788,6 +789,72 @@ export class RecastNavigation {
       const y = from.y + dy * t;
 
       if (!this.isWalkable(x, y)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /**
+   * Smooth water path by removing redundant waypoints.
+   * Uses water navmesh validation to avoid cutting across land.
+   */
+  private smoothWaterPath(
+    path: Array<{ x: number; y: number }>,
+    agentRadius: number
+  ): Array<{ x: number; y: number }> {
+    if (path.length <= 2) return path;
+
+    const smoothed: Array<{ x: number; y: number }> = [path[0]];
+    let currentIndex = 0;
+
+    while (currentIndex < path.length - 1) {
+      let farthestReachable = currentIndex + 1;
+
+      for (let i = path.length - 1; i > currentIndex + 1; i--) {
+        // Use water-specific walkability check
+        if (this.canWalkDirectWater(path[currentIndex], path[i], agentRadius)) {
+          farthestReachable = i;
+          break;
+        }
+      }
+
+      smoothed.push(path[farthestReachable]);
+      currentIndex = farthestReachable;
+    }
+
+    return smoothed;
+  }
+
+  /**
+   * Check if a direct path between two points is navigable on water.
+   * Uses water navmesh validation to prevent paths cutting across land.
+   */
+  private canWalkDirectWater(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    agentRadius: number
+  ): boolean {
+    if (!this.waterNavMeshQuery) return false;
+
+    const dx = to.x - from.x;
+    const dy = to.y - from.y;
+    const dist = distance(from.x, from.y, to.x, to.y);
+
+    if (dist < 0.5) return true;
+
+    // Sample points along the line with finer granularity for water
+    // to catch narrow peninsulas and islands
+    const stepSize = agentRadius * 0.4;
+    const steps = Math.ceil(dist / stepSize);
+
+    for (let i = 1; i < steps; i++) {
+      const t = i / steps;
+      const x = from.x + dx * t;
+      const y = from.y + dy * t;
+
+      if (!this.isWaterWalkable(x, y)) {
         return false;
       }
     }
