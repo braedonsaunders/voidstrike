@@ -433,12 +433,6 @@ export const PerformanceDashboard = memo(function PerformanceDashboard({
                 {renderMetrics.gpuIndirectActive ? 'ON' : 'OFF'}
               </span>
             </div>
-            {renderMetrics.gpuManagedUnits > 0 && (
-              <div>
-                <span style={{ color: '#666' }}>Units: </span>
-                <span style={{ color: '#aaa' }}>{renderMetrics.gpuManagedUnits}</span>
-              </div>
-            )}
           </div>
         </div>
       )}
