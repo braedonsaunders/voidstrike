@@ -57,7 +57,6 @@ import {
   type ContextMenuAction,
 } from './EditorContextMenu';
 import { EditorStatusBar } from './EditorStatusBar';
-import { EditorMiniMap } from './EditorMiniMap';
 
 // ============================================
 // TYPES
@@ -131,14 +130,6 @@ export function EditorCore({
     y: number;
     gridPos: { x: number; y: number } | null;
     objectAtPosition: EditorObject | null;
-  } | null>(null);
-
-  // Viewport bounds for mini-map
-  const [viewportBounds, setViewportBounds] = useState<{
-    minX: number;
-    maxX: number;
-    minY: number;
-    maxY: number;
   } | null>(null);
 
   // Terrain copy buffer
@@ -411,11 +402,6 @@ export function EditorCore({
     },
     []
   );
-
-  // Handle mini-map navigation
-  const handleMiniMapNavigate = useCallback((x: number, y: number) => {
-    canvasNavigateRef.current?.(x, y);
-  }, []);
 
   // Copy terrain around current position
   const handleCopyTerrain = useCallback(() => {
@@ -748,7 +734,6 @@ export function EditorCore({
               }}
               onObjectHover={setHoveredObject}
               onContextMenu={handleContextMenu}
-              onViewportChange={setViewportBounds}
               onNavigateRef={(fn) => {
                 canvasNavigateRef.current = fn;
               }}
@@ -760,17 +745,6 @@ export function EditorCore({
                 editorState.undo();
               }}
             />
-
-            {/* Mini-map (bottom-left, above status bar) */}
-            <div className="absolute bottom-10 left-3 z-30">
-              <EditorMiniMap
-                config={config}
-                mapData={state.mapData}
-                objects={state.mapData?.objects || []}
-                viewportBounds={viewportBounds}
-                onNavigate={handleMiniMapNavigate}
-              />
-            </div>
 
             {/* Status Bar */}
             <EditorStatusBar
