@@ -80,6 +80,10 @@ export interface UnitRenderState {
   // Combat stats for range overlays
   attackRange: number;
   sightRange: number;
+  // Targeting capabilities
+  isNaval: boolean;
+  canAttackGround: boolean;
+  canAttackAir: boolean;
   // Selection properties for hit detection
   selectionRadius: number;
   selectionPriority: number;

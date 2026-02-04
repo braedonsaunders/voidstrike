@@ -835,6 +835,10 @@ export class WorkerGame extends GameCore {
         // Combat stats for range overlays
         attackRange: unit.attackRange,
         sightRange: unit.sightRange,
+        // Targeting capabilities
+        isNaval: unit.isNaval,
+        canAttackGround: unit.canAttackGround,
+        canAttackAir: unit.canAttackAir,
         // Selection properties for hit detection
         selectionRadius: selectable.selectionRadius,
         selectionPriority: selectable.selectionPriority,

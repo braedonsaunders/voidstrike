@@ -128,10 +128,19 @@ class UnitAdapter {
   public targetY: number | null;
   public speed: number;
   // Command queue for shift-click visualization
-  public commandQueue: Array<{ type: string; targetX?: number; targetY?: number; targetEntityId?: number }>;
+  public commandQueue: Array<{
+    type: string;
+    targetX?: number;
+    targetY?: number;
+    targetEntityId?: number;
+  }>;
   // Combat stats for range overlays
   public attackRange: number;
   public sightRange: number;
+  // Targeting capabilities
+  public isNaval: boolean;
+  public canAttackGround: boolean;
+  public canAttackAir: boolean;
 
   constructor(data: UnitRenderState) {
     this.unitId = data.unitId;
@@ -153,6 +162,9 @@ class UnitAdapter {
     this.commandQueue = data.commandQueue;
     this.attackRange = data.attackRange;
     this.sightRange = data.sightRange;
+    this.isNaval = data.isNaval;
+    this.canAttackGround = data.canAttackGround;
+    this.canAttackAir = data.canAttackAir;
   }
 
   public update(data: UnitRenderState): void {
@@ -175,6 +187,9 @@ class UnitAdapter {
     this.commandQueue = data.commandQueue;
     this.attackRange = data.attackRange;
     this.sightRange = data.sightRange;
+    this.isNaval = data.isNaval;
+    this.canAttackGround = data.canAttackGround;
+    this.canAttackAir = data.canAttackAir;
   }
 
   public isSelected(): boolean {
@@ -371,9 +386,7 @@ class BuildingComponentAdapter {
     this.isFlying = data.isFlying;
     this.liftProgress = data.liftProgress;
     // Simulate productionQueue for renderer compatibility
-    this.productionQueue = data.hasProductionQueue
-      ? [{ progress: data.productionProgress }]
-      : [];
+    this.productionQueue = data.hasProductionQueue ? [{ progress: data.productionProgress }] : [];
     this.attackRange = data.attackRange;
     this.sightRange = data.sightRange;
   }
@@ -389,9 +402,7 @@ class BuildingComponentAdapter {
     this.isFlying = data.isFlying;
     this.liftProgress = data.liftProgress;
     // Simulate productionQueue for renderer compatibility
-    this.productionQueue = data.hasProductionQueue
-      ? [{ progress: data.productionProgress }]
-      : [];
+    this.productionQueue = data.hasProductionQueue ? [{ progress: data.productionProgress }] : [];
     this.attackRange = data.attackRange;
     this.sightRange = data.sightRange;
   }
@@ -576,7 +587,7 @@ class ResourceComponentAdapter {
   }
 
   public getDepletionPercent(): number {
-    return this.maxAmount > 0 ? 1 - (this.amount / this.maxAmount) : 0;
+    return this.maxAmount > 0 ? 1 - this.amount / this.maxAmount : 0;
   }
 
   public getCurrentGatherers(): number {
@@ -622,7 +633,9 @@ export class RenderStateWorldAdapter implements IWorldProvider {
     if (!instance) {
       instance = new RenderStateWorldAdapter();
       global[RENDER_STATE_ADAPTER_KEY] = instance;
-      debugInitialization.log('[RenderStateWorldAdapter] Created new singleton instance on globalThis');
+      debugInitialization.log(
+        '[RenderStateWorldAdapter] Created new singleton instance on globalThis'
+      );
     }
     return instance;
   }
@@ -683,9 +696,11 @@ export class RenderStateWorldAdapter implements IWorldProvider {
     try {
       this._updateCount++;
 
-
       // Debug: log first significant update
-      if (!this.hasLoggedFirstUpdate && (state.units.length > 0 || state.buildings.length > 0 || state.resources.length > 0)) {
+      if (
+        !this.hasLoggedFirstUpdate &&
+        (state.units.length > 0 || state.buildings.length > 0 || state.resources.length > 0)
+      ) {
         debugInitialization.log('[RenderStateWorldAdapter] First update with entities:', {
           tick: state.tick,
           units: state.units.length,
@@ -753,7 +768,12 @@ export class RenderStateWorldAdapter implements IWorldProvider {
       }
 
       // Mark as ready once we have entities
-      if (!this._isReady && (this.unitEntities.size > 0 || this.buildingEntities.size > 0 || this.resourceEntities.size > 0)) {
+      if (
+        !this._isReady &&
+        (this.unitEntities.size > 0 ||
+          this.buildingEntities.size > 0 ||
+          this.resourceEntities.size > 0)
+      ) {
         this._isReady = true;
         debugInitialization.log('[RenderStateWorldAdapter] Adapter is now ready with entities:', {
           units: this.unitEntities.size,
@@ -762,7 +782,10 @@ export class RenderStateWorldAdapter implements IWorldProvider {
         });
       }
     } catch (error) {
-      debugInitialization.error('[RenderStateWorldAdapter] Error updating from render state:', error);
+      debugInitialization.error(
+        '[RenderStateWorldAdapter] Error updating from render state:',
+        error
+      );
     }
   }
 
@@ -786,13 +809,13 @@ export class RenderStateWorldAdapter implements IWorldProvider {
 
     // Units: return when querying for Unit, Selectable (without Building/Resource filter),
     // or Transform alone (legacy)
-    const includeUnits = hasUnit ||
-                         (hasSelectable && !hasBuilding && !hasResource) ||
-                         (hasTransform && componentTypes.length === 1);
+    const includeUnits =
+      hasUnit ||
+      (hasSelectable && !hasBuilding && !hasResource) ||
+      (hasTransform && componentTypes.length === 1);
 
     // Buildings: return when querying for Building, or Selectable (without Unit/Resource filter)
-    const includeBuildings = hasBuilding ||
-                             (hasSelectable && !hasUnit && !hasResource);
+    const includeBuildings = hasBuilding || (hasSelectable && !hasUnit && !hasResource);
 
     // Resources: return when querying for Resource
     const includeResources = hasResource;
@@ -822,10 +845,12 @@ export class RenderStateWorldAdapter implements IWorldProvider {
    * Get entity by ID
    */
   public getEntity(entityId: number): IEntity | null {
-    return this.unitEntities.get(entityId)
-      ?? this.buildingEntities.get(entityId)
-      ?? this.resourceEntities.get(entityId)
-      ?? null;
+    return (
+      this.unitEntities.get(entityId) ??
+      this.buildingEntities.get(entityId) ??
+      this.resourceEntities.get(entityId) ??
+      null
+    );
   }
 
   /**
