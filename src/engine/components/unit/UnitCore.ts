@@ -47,6 +47,10 @@ export class UnitCore extends Component {
   public isBiological: boolean;
   public isMechanical: boolean;
 
+  // RTS-STYLE: Flag set by CombatSystem when friendly allies are fighting nearby
+  // Used by FlockingBehavior to reduce separation and enable cohesion toward battle
+  public isNearFriendlyCombat: boolean = false;
+
   // Vision
   public sightRange: number;
 

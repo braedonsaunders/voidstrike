@@ -108,6 +108,12 @@ export class CombatSystem extends System {
   // RTS-STYLE: Reduced from 15 to 5 ticks for more responsive combat detection
   private readonly COMBAT_ZONE_CHECK_INTERVAL = 5; // Re-check zone every 5 ticks (~250ms)
 
+  // RTS-STYLE: Track units near friendly combat - these units should engage aggressively
+  // This enables SC2-style "all units engage" behavior when allies are fighting nearby
+  private unitsNearFriendlyCombat: Set<number> = new Set();
+  private friendlyCombatCheckTick: number = 0;
+  private readonly FRIENDLY_COMBAT_CHECK_INTERVAL = 5; // Re-check every 5 ticks
+
   // PERF OPTIMIZATION: Combat-active entity list
   // Only units in this set are processed for target acquisition
   private combatActiveUnits: Set<number> = new Set();
@@ -182,6 +188,92 @@ export class CombatSystem extends System {
 
     this.hotCells = this.world.unitGrid.getHotCells();
     this.hotCellsLastUpdate = currentTick;
+  }
+
+  /**
+   * RTS-STYLE: Update the set of units that have friendly allies fighting nearby.
+   * These units should be "combat aware" and use aggressive sight-range targeting.
+   * This creates SC2-style "join nearby combat" behavior where all units engage.
+   * Also sets the isNearFriendlyCombat flag on Unit components for FlockingBehavior.
+   */
+  private updateUnitsNearFriendlyCombat(currentTick: number): void {
+    if (currentTick - this.friendlyCombatCheckTick < this.FRIENDLY_COMBAT_CHECK_INTERVAL) {
+      return;
+    }
+    this.friendlyCombatCheckTick = currentTick;
+
+    // Clear the flag on all units first (will be re-set below for those near combat)
+    const allUnits = this.world.getEntitiesWith('Unit');
+    for (const entity of allUnits) {
+      const unit = entity.get<Unit>('Unit');
+      if (unit) {
+        unit.isNearFriendlyCombat = false;
+      }
+    }
+
+    this.unitsNearFriendlyCombat.clear();
+
+    // First, collect all units currently in attacking state by player
+    const attackingUnitsByPlayer: Map<string, Array<{ x: number; y: number; sightRange: number }>> =
+      new Map();
+
+    const units = this.world.getEntitiesWith('Transform', 'Unit', 'Health', 'Selectable');
+    for (const entity of units) {
+      const unit = entity.get<Unit>('Unit');
+      const health = entity.get<Health>('Health');
+      const selectable = entity.get<Selectable>('Selectable');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!unit || !health || !selectable || !transform) continue;
+      if (health.isDead()) continue;
+
+      // Track attacking units by player
+      if (unit.state === 'attacking' && unit.targetEntityId !== null) {
+        let playerAttackers = attackingUnitsByPlayer.get(selectable.playerId);
+        if (!playerAttackers) {
+          playerAttackers = [];
+          attackingUnitsByPlayer.set(selectable.playerId, playerAttackers);
+        }
+        playerAttackers.push({ x: transform.x, y: transform.y, sightRange: unit.sightRange });
+      }
+    }
+
+    // Now, for each idle unit, check if friendly units are fighting nearby
+    for (const entity of units) {
+      const unit = entity.get<Unit>('Unit');
+      const health = entity.get<Health>('Health');
+      const selectable = entity.get<Selectable>('Selectable');
+      const transform = entity.get<Transform>('Transform');
+
+      if (!unit || !health || !selectable || !transform) continue;
+      if (health.isDead()) continue;
+
+      // Skip workers
+      if (unit.isWorker) continue;
+      // Skip units that can't attack
+      if (unit.attackRange <= 0) continue;
+
+      // Check if any friendly units are fighting within this unit's sight range
+      const playerAttackers = attackingUnitsByPlayer.get(selectable.playerId);
+      if (!playerAttackers || playerAttackers.length === 0) continue;
+
+      for (const attacker of playerAttackers) {
+        const dx = transform.x - attacker.x;
+        const dy = transform.y - attacker.y;
+        const distSq = dx * dx + dy * dy;
+        // Use the larger of the two sight ranges to determine "nearby"
+        const combatAwarenessRange = Math.max(unit.sightRange, attacker.sightRange);
+        const rangeSq = combatAwarenessRange * combatAwarenessRange;
+
+        if (distSq <= rangeSq) {
+          // This unit is near friendly combat - mark it as combat aware
+          this.unitsNearFriendlyCombat.add(entity.id);
+          // Set the flag on the Unit component for FlockingBehavior to use
+          unit.isNearFriendlyCombat = true;
+          break;
+        }
+      }
+    }
   }
 
   /**
@@ -260,6 +352,13 @@ export class CombatSystem extends System {
             continue;
           }
         }
+      }
+
+      // RTS-STYLE: Include idle units that are near friendly combat
+      // This enables SC2-style "join nearby combat" behavior
+      if (this.unitsNearFriendlyCombat.has(entity.id)) {
+        this.combatActiveUnits.add(entity.id);
+        continue;
       }
     }
 
@@ -476,6 +575,8 @@ export class CombatSystem extends System {
 
     // PERF OPTIMIZATION: Update hot cells and combat-active unit list
     this.updateHotCells(currentTick);
+    // RTS-STYLE: Track units near friendly combat before updating combat-active list
+    this.updateUnitsNearFriendlyCombat(currentTick);
     this.updateCombatActiveUnits(currentTick);
 
     // PERF OPTIMIZATION: Rebuild attack queue if dirty
@@ -571,6 +672,10 @@ export class CombatSystem extends System {
               `[CombatSystem] Unit ${attacker.id} cleared assault mode after ${ASSAULT_IDLE_TIMEOUT} ticks idle`
             );
           }
+        } else if (this.unitsNearFriendlyCombat.has(attacker.id)) {
+          // RTS-STYLE: Units near friendly combat use aggressive sight-range search
+          // This enables SC2-style "join nearby combat" - all units engage, not just front line
+          target = this.findBestTargetSpatial(attacker.id, transform, unit);
         } else if (unit.state === 'idle' || unit.isHoldingPosition) {
           // For regular idle units, do a fast check for enemies within ATTACK range
           // Uses light throttle (1 tick = ~50ms) for performance while staying responsive
