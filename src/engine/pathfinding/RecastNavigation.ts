@@ -1101,6 +1101,7 @@ export class RecastNavigation {
   /**
    * Set agent move target.
    * Projects target onto navmesh to ensure valid path corridor computation.
+   * Uses agent's current height layer to avoid snapping to wrong elevation.
    */
   public setAgentTarget(entityId: number, targetX: number, targetY: number): boolean {
     const agentIndex = this.agentMap.get(entityId);
@@ -1119,9 +1120,18 @@ export class RecastNavigation {
         // Project target onto navmesh to ensure it's a valid position
         // This is CRITICAL - requestMoveTarget needs a navmesh position to compute path corridor
         // Use the appropriate navmesh based on domain
-        const projected = domain === 'water'
+        // For ground units, first try projection near agent's current height layer
+        // to avoid snapping to wrong elevation on multi-level terrain
+        let projected = domain === 'water'
           ? this.projectToWaterNavMesh(targetX, targetY)
-          : this.projectToNavMesh(targetX, targetY);
+          : this.projectToNavMeshNearHeight(targetX, targetY, agentPos.y);
+
+        // If height-constrained projection failed, try without height constraint
+        // This allows cross-height movement via ramps
+        if (!projected && domain !== 'water') {
+          projected = this.projectToNavMesh(targetX, targetY);
+        }
+
         if (projected) {
           // Check height difference for ramp traversal debugging
           const heightDiff = Math.abs(agentPos.y - projected.y);
@@ -1150,6 +1160,45 @@ export class RecastNavigation {
     }
 
     return false;
+  }
+
+  /**
+   * Project a point onto the navmesh, preferring positions near a given height.
+   * This prevents snapping to wrong elevation layers on multi-level terrain.
+   *
+   * @param x - X coordinate
+   * @param z - Z coordinate (game Y)
+   * @param hintHeight - Preferred height layer (e.g., agent's current height)
+   * @param heightTolerance - Max vertical distance from hint height (default 3.0)
+   */
+  private projectToNavMeshNearHeight(
+    x: number,
+    z: number,
+    hintHeight: number,
+    heightTolerance: number = 3.0
+  ): { x: number; y: number; z: number } | null {
+    if (!this.navMeshQuery) return null;
+
+    try {
+      // Use tight vertical search centered on hint height
+      const halfExtents = { x: 2, y: heightTolerance, z: 2 };
+
+      const result = this.navMeshQuery.findClosestPoint(
+        { x, y: hintHeight, z },
+        { halfExtents }
+      );
+
+      if (result.success && result.point) {
+        // Verify the result is actually close to the hint height
+        const heightDiff = Math.abs(result.point.y - hintHeight);
+        if (heightDiff <= heightTolerance) {
+          return { x: result.point.x, y: result.point.y, z: result.point.z };
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   /**

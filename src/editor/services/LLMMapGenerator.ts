@@ -12,7 +12,7 @@ import type {
   DecorationStyle,
   ResourceDirection,
 } from '@/data/maps/core/ElevationMap';
-import { generateMap } from '@/data/maps/core/ElevationMapGenerator';
+import { generateMapWithResult } from '@/data/maps/core/ElevationMapGenerator';
 import type { MapData } from '@/data/maps/MapTypes';
 import {
   createBaseResources,
@@ -902,12 +902,29 @@ export async function generateMapWithLLM(
     // Validate and fix the blueprint
     const blueprint = validateAndFixBlueprint(result.blueprint, settings);
 
-    // Generate the full map data
-    const mapData = generateMap(blueprint);
+    // Generate the full map data with connectivity validation and auto-fix
+    const mapResult = generateMapWithResult(blueprint, {
+      validate: true,
+      autoFix: true,
+      verbose: true,
+    });
+
+    // Log connectivity messages
+    for (const msg of mapResult.messages) {
+      debugInitialization.log(msg);
+    }
+
+    // Warn if connectivity issues remain after auto-fix
+    if (mapResult.connectivity && !mapResult.connectivity.valid) {
+      debugInitialization.warn(
+        `[LLMMapGenerator] Map has connectivity issues that could not be auto-fixed. ` +
+        `${mapResult.connectivity.issues.length} issues remain.`
+      );
+    }
 
     return {
       success: true,
-      mapData,
+      mapData: mapResult.mapData,
       blueprint,
     };
   } catch (error) {
