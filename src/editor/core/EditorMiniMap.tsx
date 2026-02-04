@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useRef, useEffect, useCallback, useMemo } from 'react';
+import { useRef, useEffect, useCallback, useMemo, useState } from 'react';
 import type { EditorConfig, EditorMapData, EditorObject } from '../config/EditorConfig';
 
 export interface EditorMiniMapProps {
@@ -27,6 +27,7 @@ export function EditorMiniMap({
 }: EditorMiniMapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Mini-map dimensions
   const miniMapWidth = 160;
@@ -129,22 +130,59 @@ export function EditorMiniMap({
     }
   }, [mapData, objects, viewportBounds, config, elevationColors, miniMapWidth, miniMapHeight]);
 
-  // Handle click to navigate
-  const handleClick = useCallback(
-    (e: React.MouseEvent<HTMLCanvasElement>) => {
-      if (!mapData || !canvasRef.current) return;
+  // Convert screen position to map coordinates
+  const screenToMap = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!mapData || !canvasRef.current) return null;
 
       const rect = canvasRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
 
-      const mapX = (x / miniMapWidth) * mapData.width;
-      const mapY = (y / miniMapHeight) * mapData.height;
+      const mapX = Math.max(0, Math.min((x / miniMapWidth) * mapData.width, mapData.width));
+      const mapY = Math.max(0, Math.min((y / miniMapHeight) * mapData.height, mapData.height));
 
-      onNavigate(mapX, mapY);
+      return { x: mapX, y: mapY };
     },
-    [mapData, onNavigate, miniMapWidth, miniMapHeight]
+    [mapData, miniMapWidth, miniMapHeight]
   );
+
+  // Handle mouse down - start drag and navigate
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (e.button !== 0) return; // Only left click
+
+      const pos = screenToMap(e.clientX, e.clientY);
+      if (pos) {
+        setIsDragging(true);
+        onNavigate(pos.x, pos.y);
+      }
+    },
+    [screenToMap, onNavigate]
+  );
+
+  // Handle mouse move while dragging
+  const handleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLCanvasElement>) => {
+      if (!isDragging) return;
+
+      const pos = screenToMap(e.clientX, e.clientY);
+      if (pos) {
+        onNavigate(pos.x, pos.y);
+      }
+    },
+    [isDragging, screenToMap, onNavigate]
+  );
+
+  // Handle mouse up - stop dragging
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  // Handle mouse leave - stop dragging
+  const handleMouseLeave = useCallback(() => {
+    setIsDragging(false);
+  }, []);
 
   if (!mapData) return null;
 
@@ -175,8 +213,11 @@ export function EditorMiniMap({
         ref={canvasRef}
         width={miniMapWidth}
         height={miniMapHeight}
-        onClick={handleClick}
-        className="cursor-crosshair"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        className={isDragging ? 'cursor-grabbing' : 'cursor-pointer'}
         style={{ display: 'block' }}
       />
     </div>

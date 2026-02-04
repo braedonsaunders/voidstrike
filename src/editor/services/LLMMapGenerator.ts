@@ -559,33 +559,6 @@ const SYSTEM_PROMPT = `You are an expert RTS map designer creating professional 
 - Ramp width affects defensibility: 8-10 = tight choke, 12-14 = wider
 - Place ramps FROM high ground TO low ground
 
-### Water Features
-CRITICAL RULES FOR WATER:
-1. NEVER place water at or near base locations - bases need solid land
-2. Ensure at least 30 cells of land around each main base, 20 around naturals
-3. Water is for OBSTACLES and DECORATION, not where players build
-
-For island maps:
-1. First, paint LAND plateaus where bases will be (HIGH elevation for mains, MID for naturals)
-2. Then fill the REMAINING space with water (shallow first, deep on top)
-3. Islands must be large enough for bases + mining + production (radius 35+ for main, 25+ for natural)
-
-Water body construction (layered approach):
-1. First paint a LARGER shallow water area (the shoreline/edges)
-2. Then paint a SMALLER deep water area in the CENTER (this overwrites the inner shallow)
-This creates natural shores where shallow water surrounds deep water.
-
-Example lake (radius 25 at position 100,100):
-  { "cmd": "water", "x": 100, "y": 100, "radius": 25, "depth": "shallow" }  // Outer shore
-  { "cmd": "water", "x": 100, "y": 100, "radius": 18, "depth": "deep" }     // Inner deep
-
-Properties:
-- shallow water: walkable at 0.6x speed, unbuildable (shore/edges)
-- deep water: impassable (center of lakes, deep rivers)
-- ALWAYS create shallow water FIRST, then deep water on top for proper transitions
-- Shore width should be 5-8 cells for good visual appearance
-- NEVER overlap water with base locations or mineral patches
-
 ### Strategic Features
 - Watch towers: Place at contested locations for vision control
 - Destructible rocks: Block shortcuts, force early aggression to open paths
@@ -824,6 +797,8 @@ function buildUserPrompt(settings: MapGenerationSettings, size: { width: number;
       '- Third/Gold base islands: radius 20-25 at LOW elevation (60)',
       '- Water goes AROUND the islands, not on them',
       '- Connect islands with shallow water crossings (walkable) or ramps',
+      '- CRITICAL: Each island base MUST have a ramp from its plateau down to beach level (LOW elevation)',
+      '  so units can access the shore and shallow water crossings',
       '',
       'Water layering (for ocean between islands):',
       '- Paint shallow water FIRST covering ocean area',
@@ -844,6 +819,13 @@ function buildUserPrompt(settings: MapGenerationSettings, size: { width: number;
       '  1. Paint shallow water FIRST (larger area for shoreline)',
       '  2. Paint deep water on TOP (smaller, in center)',
       '- Shore width should be 5-8 cells',
+      ''
+    );
+  } else {
+    // Explicit instruction: NO water
+    lines.push(
+      '**Water**: DO NOT include any water features. This is a land-only map.',
+      '- Use elevation changes, forests, void areas, and rocks for terrain variety instead',
       ''
     );
   }
@@ -870,10 +852,19 @@ function buildUserPrompt(settings: MapGenerationSettings, size: { width: number;
     '**Requirements**:',
     '1. Create balanced, symmetric spawn positions',
     '2. Each player needs: main base (HIGH), natural (MID), third expansion',
-    '3. Include ramps connecting elevation changes',
+    '3. Include ramps connecting elevation changes:',
+    '   - Main to natural (required)',
+    '   - Natural to third base area (required)',
+    '   - Third to center/contested areas',
     '4. Add watch towers at strategic neutral locations',
     '5. Consider destructible rocks for alternate paths',
     '6. Ensure natural flow from main → natural → third → center',
+    '',
+    '**Map Variety**:',
+    '- Create a unique, interesting layout - avoid generic symmetric patterns',
+    '- Consider asymmetric elements that are still competitively balanced',
+    '- Vary elevation patterns - not everything needs to be a simple plateau',
+    '- Add interesting terrain features that create strategic decisions',
   );
 
   return lines.join('\n');
@@ -972,6 +963,12 @@ function hasRampBetween(
 ): boolean {
   return paint.some(cmd => {
     if (cmd.cmd !== 'ramp') return false;
+
+    // Skip malformed ramp commands missing from/to
+    if (!cmd.from || !cmd.to) {
+      debugInitialization.warn('Skipping malformed ramp command missing from/to:', cmd);
+      return false;
+    }
 
     // Normalize ramp endpoints
     const from = Array.isArray(cmd.from) ? { x: cmd.from[0], y: cmd.from[1] } : cmd.from;
@@ -1109,6 +1106,57 @@ function isPositionInWaterOrVoid(
     }
   }
   return false;
+}
+
+/**
+ * Find the direction to the nearest water from a base position.
+ * Returns normalized direction vector or null if no water nearby.
+ */
+function findNearestWaterDirection(
+  baseX: number,
+  baseY: number,
+  baseRadius: number,
+  paintCommands: MapBlueprint['paint'],
+  mapSize: { width: number; height: number }
+): { dx: number; dy: number } | null {
+  // Sample in 8 directions to find nearest water
+  const directions = [
+    { dx: 0, dy: -1 },   // up
+    { dx: 1, dy: -1 },   // up-right
+    { dx: 1, dy: 0 },    // right
+    { dx: 1, dy: 1 },    // down-right
+    { dx: 0, dy: 1 },    // down
+    { dx: -1, dy: 1 },   // down-left
+    { dx: -1, dy: 0 },   // left
+    { dx: -1, dy: -1 },  // up-left
+  ];
+
+  let nearestDir: { dx: number; dy: number } | null = null;
+  let nearestDist = Infinity;
+
+  for (const dir of directions) {
+    // Check points along this direction from base edge
+    for (let dist = baseRadius + 5; dist < 80; dist += 5) {
+      const checkX = baseX + dir.dx * dist;
+      const checkY = baseY + dir.dy * dist;
+
+      // Skip if out of bounds
+      if (checkX < 0 || checkX >= mapSize.width || checkY < 0 || checkY >= mapSize.height) {
+        break;
+      }
+
+      // Check if this point is in water
+      if (isPositionInWaterOrVoid(checkX, checkY, paintCommands)) {
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestDir = dir;
+        }
+        break;
+      }
+    }
+  }
+
+  return nearestDir;
 }
 
 /**
@@ -1309,6 +1357,13 @@ function validateAndFixBlueprint(
     fixed.paint = [{ cmd: 'fill', elevation: ELEVATION_LOW }, ...fixed.paint];
   }
 
+  // Filter out malformed ramp commands (missing from/to coordinates)
+  const malformedRamps = fixed.paint.filter(cmd => cmd.cmd === 'ramp' && (!cmd.from || !cmd.to));
+  if (malformedRamps.length > 0) {
+    debugInitialization.warn(`Removing ${malformedRamps.length} malformed ramp command(s) missing from/to coordinates`);
+    fixed.paint = fixed.paint.filter(cmd => !(cmd.cmd === 'ramp' && (!cmd.from || !cmd.to)));
+  }
+
   // Ensure border command exists
   const hasBorder = fixed.paint.some(cmd => cmd.cmd === 'border');
   if (!hasBorder) {
@@ -1325,9 +1380,11 @@ function validateAndFixBlueprint(
   // AUTO-GENERATE ELEVATION AND RAMPS FOR BASES
   // ============================================================================
 
-  // Group bases by player slot
+  // Group bases by type
   const mainBases = fixed.bases.filter(b => b.type === 'main' && b.playerSlot !== undefined);
   const naturalBases = fixed.bases.filter(b => b.type === 'natural');
+  const thirdBases = fixed.bases.filter(b => b.type === 'third');
+  const otherBases = fixed.bases.filter(b => b.type === 'fourth' || b.type === 'gold');
 
   // Commands to insert (after fill, before border)
   const elevationCommands: MapBlueprint['paint'] = [];
@@ -1391,6 +1448,48 @@ function validateAndFixBlueprint(
           to: [toX, toY],
           width: 10,
         });
+      }
+    }
+  }
+
+  // For each natural base, find closest third base and create ramp if needed
+  for (const natural of naturalBases) {
+    // Find the closest third base (or other expansion if no third exists)
+    const expansionTargets = thirdBases.length > 0 ? thirdBases : otherBases;
+    let closestThird: (typeof thirdBases)[0] | null = null;
+    let closestDist = Infinity;
+
+    for (const third of expansionTargets) {
+      const dx = third.x - natural.x;
+      const dy = third.y - natural.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestThird = third;
+      }
+    }
+
+    // Create ramp if third exists, within reasonable distance, and no ramp exists
+    if (closestThird && closestDist < 100) {
+      if (!hasRampBetween(fixed.paint, natural.x, natural.y, closestThird.x, closestThird.y)) {
+        // Calculate ramp from natural to third
+        const { fromX, fromY, toX, toY } = calculateRampPosition(
+          natural.x,
+          natural.y,
+          closestThird.x,
+          closestThird.y
+        );
+
+        rampCommands.push({
+          cmd: 'ramp',
+          from: [fromX, fromY],
+          to: [toX, toY],
+          width: 12, // Slightly wider for natural-to-third ramps
+        });
+
+        debugInitialization.log(
+          `Auto-generated ramp from natural at (${natural.x}, ${natural.y}) to third at (${closestThird.x}, ${closestThird.y})`
+        );
       }
     }
   }
@@ -1484,6 +1583,64 @@ function validateAndFixBlueprint(
 
     return true;
   });
+
+  // ============================================================================
+  // BEACH ACCESS RAMPS FOR ISLAND MAPS
+  // ============================================================================
+
+  // For island maps, ensure bases on elevated terrain have ramps down to beach level
+  if (settings.islandMap) {
+    const beachAccessRamps: MapBlueprint['paint'] = [];
+
+    for (const base of fixed.bases) {
+      // Only process main and natural bases on elevated terrain
+      if (base.type !== 'main' && base.type !== 'natural') continue;
+
+      const baseElevation = getBaseElevation(base.type);
+      if (baseElevation <= ELEVATION_LOW) continue; // Already at beach level
+
+      const baseRadius = MIN_LAND_RADIUS[base.type as keyof typeof MIN_LAND_RADIUS] || 20;
+
+      // Find the direction to the nearest water
+      const waterDirection = findNearestWaterDirection(base.x, base.y, baseRadius, fixed.paint, size);
+
+      if (waterDirection) {
+        // Check if a beach access ramp already exists in this direction
+        const beachX = base.x + waterDirection.dx * (baseRadius + 10);
+        const beachY = base.y + waterDirection.dy * (baseRadius + 10);
+
+        if (!hasRampBetween(fixed.paint, base.x, base.y, beachX, beachY) &&
+            !hasRampBetween(beachAccessRamps, base.x, base.y, beachX, beachY)) {
+          // Calculate beach access ramp position
+          const rampStart = baseRadius - 5; // Start just inside plateau edge
+          const rampLength = 15; // Length to reach beach level
+
+          const fromX = Math.round(base.x + waterDirection.dx * rampStart);
+          const fromY = Math.round(base.y + waterDirection.dy * rampStart);
+          const toX = Math.round(base.x + waterDirection.dx * (rampStart + rampLength));
+          const toY = Math.round(base.y + waterDirection.dy * (rampStart + rampLength));
+
+          beachAccessRamps.push({
+            cmd: 'ramp',
+            from: [fromX, fromY],
+            to: [toX, toY],
+            width: 8, // Narrower beach access ramp
+          });
+
+          debugInitialization.log(
+            `Auto-generated beach access ramp for ${base.type} at (${base.x}, ${base.y}) toward water`
+          );
+        }
+      }
+    }
+
+    // Insert beach access ramps
+    if (beachAccessRamps.length > 0) {
+      const borderIndex = fixed.paint.findIndex(cmd => cmd.cmd === 'border');
+      const insertIndex = borderIndex > 0 ? borderIndex : fixed.paint.length;
+      fixed.paint.splice(insertIndex, 0, ...beachAccessRamps);
+    }
+  }
 
   // ============================================================================
   // VALIDATE AND FIX MINERAL PLACEMENT

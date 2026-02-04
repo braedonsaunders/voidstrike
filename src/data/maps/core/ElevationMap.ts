@@ -137,8 +137,11 @@ export { CLIFF_WALL_THRESHOLD_ELEVATION as CLIFF_THRESHOLD } from '@/data/pathfi
 
 export type Point = { x: number; y: number } | [number, number];
 
-/** Helper to normalize point format */
+/** Helper to normalize point format. Throws if input is undefined/null. */
 export function toXY(p: Point): { x: number; y: number } {
+  if (p === undefined || p === null) {
+    throw new Error('toXY: received undefined/null point. Check that ramp from/to coordinates are defined.');
+  }
   if (Array.isArray(p)) return { x: p[0], y: p[1] };
   return p;
 }

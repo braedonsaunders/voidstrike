@@ -431,21 +431,39 @@ export function Editor3DCanvas({
     }
   }, [isInitialized, undoPreview, isUndoPreviewActive]);
 
-  // Handle resize
+  // Handle resize - use ResizeObserver to detect container size changes (e.g., sidebar collapse)
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
     const handleResize = () => {
       if (!containerRef.current || !rendererRef.current || !rtsCameraRef.current) return;
 
       const width = containerRef.current.clientWidth;
       const height = containerRef.current.clientHeight;
 
+      // Avoid resizing to zero dimensions
+      if (width <= 0 || height <= 0) return;
+
       rtsCameraRef.current.camera.aspect = width / height;
       rtsCameraRef.current.camera.updateProjectionMatrix();
       rendererRef.current.setSize(width, height);
     };
 
+    // Use ResizeObserver to detect container size changes (sidebar toggle, etc.)
+    const resizeObserver = new ResizeObserver(() => {
+      // Debounce slightly to avoid excessive updates during CSS transitions
+      requestAnimationFrame(handleResize);
+    });
+    resizeObserver.observe(container);
+
+    // Also listen to window resize as fallback
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', handleResize);
+    };
   }, []);
 
   // Control edge scrolling based on prop
