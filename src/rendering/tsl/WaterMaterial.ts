@@ -168,125 +168,42 @@ export class TSLWaterMaterial {
     const scaledTime = time.mul(this.uTimeScale);
 
     // =========================================================================
-    // COLOR NODE - Base water color with opacity, NO manual lighting
-    // PBR pipeline handles fresnel, specular, environment reflections
+    // COLOR NODE - Base water color, testing opaque rendering
     // =========================================================================
     const colorNode = Fn(() => {
-      // Get depth from vertex attribute (0 = shallow, 1 = deep)
-      const waterData = attribute('aWaterData', 'vec3');
-      const depthFactor = waterData.y;
-
-      // Base color blend between shallow and deep
-      const baseColor = mix(this.uShallowColor, this.uDeepColor, depthFactor);
-
-      // Subtle procedural color variation for natural look
-      const worldPos = positionWorld;
-      const phase1 = worldPos.x.mul(0.08).add(worldPos.z.mul(0.12)).add(scaledTime.mul(0.25));
-      const phase2 = worldPos.x.mul(0.15).sub(worldPos.z.mul(0.1)).add(scaledTime.mul(0.15));
-      const variation = sin(phase1).mul(0.015).add(sin(phase2).mul(0.01)).add(1.0);
-
-      const finalColor = baseColor.mul(variation);
-      return vec4(finalColor, this.uOpacity);
+      // Simple solid color - no alpha since we're testing opaque mode
+      return vec3(0.2, 0.5, 0.7); // Solid blue
     })();
 
     // =========================================================================
-    // NORMAL NODE - Procedural or texture-based surface normals
+    // NORMAL NODE - Simplified flat normal for testing
     // TSL normalNode expects [0,1] encoded normals (same as normal map textures)
     // =========================================================================
     const normalNode = Fn(() => {
-      const worldUV = uv();
-      const distortion = this.uDistortionScale;
-
-      if (!config.normalMap) {
-        // Procedural multi-scale wave normals
-        const uvScale = float(1.0 / settings.textureSize);
-        const scaledX = worldUV.x.mul(uvScale);
-        const scaledY = worldUV.y.mul(uvScale);
-
-        // Three wave layers at different frequencies for natural look
-        const wave1 = sin(scaledX.mul(50.0).add(scaledTime.mul(1.2))).mul(
-          cos(scaledY.mul(40.0).add(scaledTime.mul(0.8)))
-        );
-        const wave2 = sin(scaledX.mul(100.0).sub(scaledTime.mul(0.9))).mul(
-          cos(scaledY.mul(80.0).add(scaledTime.mul(1.1)))
-        );
-        const wave3 = sin(scaledX.mul(25.0).add(scaledY.mul(30.0)).add(scaledTime.mul(0.5)));
-
-        // Combine waves with distortion scaling
-        const nx = wave1.mul(0.025).add(wave2.mul(0.012)).mul(distortion);
-        const ny = wave2.mul(0.025).add(wave3.mul(0.012)).mul(distortion);
-        const nz = float(1.0);
-
-        // TSL normalNode expects [0,1] encoded normals (same as normal map textures)
-        return normalize(vec3(nx, ny, nz)).mul(0.5).add(0.5);
-      }
-
-      // Texture-based normals with two scrolling layers
-      const texScale = float(1.0 / settings.textureSize);
-      const scroll1 = scaledTime.mul(0.03);
-      const scroll2 = scaledTime.mul(0.02);
-
-      // Layer 1: Primary wave direction
-      const uv1 = vec2(
-        worldUV.x.mul(texScale).add(scroll1),
-        worldUV.y.mul(texScale).add(scroll1.mul(0.8))
-      );
-
-      // Layer 2: Secondary wave at different angle and scale
-      const texScale2 = texScale.mul(0.5);
-      const uv2 = vec2(
-        worldUV.x.mul(texScale2).sub(scroll2.mul(0.7)),
-        worldUV.y.mul(texScale2).add(scroll2)
-      );
-
-      // Sample and decode normal maps (textures are [0,1] encoded)
-      const normal1 = texture(config.normalMap!, uv1).rgb.mul(2.0).sub(1.0);
-      const normal2 = texture(config.normalMap!, uv2).rgb.mul(2.0).sub(1.0);
-
-      // Blend normals using partial derivative method
-      const blendedXY = normal1.xy.add(normal2.xy);
-      const blendedZ = normal1.z.mul(normal2.z);
-      const blended = normalize(vec3(blendedXY.x, blendedXY.y, blendedZ));
-
-      // Apply distortion scale
-      const scaled = vec3(
-        blended.x.mul(distortion),
-        blended.y.mul(distortion),
-        blended.z
-      );
-
-      // TSL normalNode expects [0,1] encoded normals
-      return normalize(scaled).mul(0.5).add(0.5);
+      // Simple flat normal pointing up - encoded to [0,1] range
+      // Normal (0, 0, 1) encodes to (0.5, 0.5, 1.0)
+      return vec3(0.5, 0.5, 1.0);
     })();
 
     // =========================================================================
-    // ROUGHNESS NODE - Low for reflective water, with subtle sparkle
+    // ROUGHNESS NODE - Simple constant for testing
     // =========================================================================
-    const roughnessNode = Fn(() => {
-      const worldPos = positionWorld;
-      // Subtle sparkle variation
-      const sparkle = sin(worldPos.x.mul(8.0).add(scaledTime.mul(4.0)))
-        .mul(sin(worldPos.z.mul(8.0).sub(scaledTime.mul(3.0))))
-        .mul(0.03);
-
-      return clamp(this.uRoughness.add(sparkle), 0.02, 0.35);
-    })();
+    const roughnessNode = float(0.15);
 
     // =========================================================================
-    // MATERIAL CONFIGURATION
+    // MATERIAL CONFIGURATION - Ultra minimal for testing
     // =========================================================================
     material.colorNode = colorNode;
-    material.normalNode = normalNode;
-    material.roughnessNode = roughnessNode;
+    // Commenting out normalNode to test if that's causing the issue
+    // material.normalNode = normalNode;
+    // material.roughnessNode = roughnessNode;
+    // material.metalnessNode = float(0.0);
 
-    // Water is a dielectric (non-metallic)
-    material.metalnessNode = float(0.0);
-
-    // Transparent rendering with proper depth handling
-    material.transparent = true;
-    material.side = THREE.DoubleSide;
-    material.depthWrite = false;
-    material.depthTest = true;
+    // Opaque rendering like terrain - testing if transparency is the issue
+    // material.transparent = true;
+    // material.side = THREE.DoubleSide;
+    // material.depthWrite = false;
+    // material.depthTest = true;
 
     return material;
   }
