@@ -467,11 +467,8 @@ export class UnifiedWaterMesh {
 
       // Calculate world-space height
       // In Three.js: Y is up, ground plane is X-Z
-      const height = elevation * HEIGHT_SCALE + WATER_SURFACE_OFFSET;
-
-      // Shallow water renders slightly higher for visual blending
-      const heightOffset = isDeep ? 0 : 0.02;
-      const finalHeight = height + heightOffset;
+      // All water (deep and shallow) renders at the same height - water surface is always level
+      const finalHeight = elevation * HEIGHT_SCALE + WATER_SURFACE_OFFSET;
 
       // Cell size (usually 1, but may be larger if merged)
       const halfSize = size / 2;
