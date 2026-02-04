@@ -168,13 +168,11 @@ export class TSLWaterMaterial {
     const scaledTime = time.mul(this.uTimeScale);
 
     // =========================================================================
-    // COLOR NODE - Base water color with opacity, NO manual lighting
-    // PBR pipeline handles fresnel, specular, environment reflections
+    // COLOR NODE - Base water color, testing opaque rendering
     // =========================================================================
     const colorNode = Fn(() => {
-      // Simple solid color test - if this doesn't render, the issue is elsewhere
-      // TODO: Restore full color logic once basic rendering works
-      return vec4(0.2, 0.5, 0.7, 0.9); // Solid blue-ish with 90% opacity
+      // Simple solid color - no alpha since we're testing opaque mode
+      return vec3(0.2, 0.5, 0.7); // Solid blue
     })();
 
     // =========================================================================
@@ -201,11 +199,11 @@ export class TSLWaterMaterial {
     // material.roughnessNode = roughnessNode;
     // material.metalnessNode = float(0.0);
 
-    // Transparent rendering with proper depth handling
-    material.transparent = true;
-    material.side = THREE.DoubleSide;
-    material.depthWrite = false;
-    material.depthTest = true;
+    // Opaque rendering like terrain - testing if transparency is the issue
+    // material.transparent = true;
+    // material.side = THREE.DoubleSide;
+    // material.depthWrite = false;
+    // material.depthTest = true;
 
     return material;
   }
