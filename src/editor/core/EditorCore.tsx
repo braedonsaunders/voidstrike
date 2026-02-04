@@ -761,8 +761,8 @@ export function EditorCore({
               }}
             />
 
-            {/* Mini-map (bottom-right) */}
-            <div className="absolute bottom-14 right-3 z-20">
+            {/* Mini-map (bottom-left, above status bar) */}
+            <div className="absolute bottom-10 left-3 z-30">
               <EditorMiniMap
                 config={config}
                 mapData={state.mapData}
