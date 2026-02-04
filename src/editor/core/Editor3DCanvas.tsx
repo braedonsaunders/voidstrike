@@ -1259,63 +1259,66 @@ export function Editor3DCanvas({
     >
       <canvas ref={canvasRef} className="w-full h-full" style={{ cursor: getCursor() }} />
 
-      {/* Zoom indicator */}
-      <div
-        className="absolute bottom-3 right-3 px-2 py-1 rounded text-xs"
-        style={{
-          backgroundColor: `${config.theme.surface}cc`,
-          color: config.theme.text.secondary,
-        }}
-      >
-        Zoom: {currentZoom}
-      </div>
-
-      {/* Grid position */}
-      {mouseGridPos && (
+      {/* Overlay container - uses inset-0 for proper absolute positioning */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Zoom indicator */}
         <div
-          className="absolute bottom-3 left-3 px-2 py-1 rounded text-xs font-mono"
+          className="absolute bottom-3 right-3 px-2 py-1 rounded text-xs pointer-events-auto"
           style={{
             backgroundColor: `${config.theme.surface}cc`,
             color: config.theme.text.secondary,
           }}
         >
-          {mouseGridPos.x}, {mouseGridPos.y}
+          Zoom: {currentZoom}
         </div>
-      )}
 
-      {/* Mini-map */}
-      {mapData && (
-        <div className="absolute bottom-10 left-3 z-30">
-          <EditorMiniMap
+        {/* Grid position */}
+        {mouseGridPos && (
+          <div
+            className="absolute bottom-3 left-3 px-2 py-1 rounded text-xs font-mono pointer-events-auto"
+            style={{
+              backgroundColor: `${config.theme.surface}cc`,
+              color: config.theme.text.secondary,
+            }}
+          >
+            {mouseGridPos.x}, {mouseGridPos.y}
+          </div>
+        )}
+
+        {/* Mini-map */}
+        {mapData && (
+          <div className="absolute bottom-10 left-3 z-30 pointer-events-auto">
+            <EditorMiniMap
+              config={config}
+              mapData={mapData}
+              objects={mapData.objects || []}
+              viewportBounds={minimapViewport}
+              onNavigate={handleMinimapNavigate}
+            />
+          </div>
+        )}
+
+        {/* Instructions */}
+        <div
+          className="absolute top-3 left-3 px-3 py-2 rounded text-xs pointer-events-auto"
+          style={{
+            backgroundColor: `${config.theme.surface}cc`,
+            color: config.theme.text.muted,
+          }}
+        >
+          Scroll zoom • Middle-drag rotate • Edge/arrows pan • Click paint
+        </div>
+
+        {/* Undo preview overlay */}
+        {isUndoPreviewActive && undoPreview && (
+          <UndoPreviewOverlay
+            diff={undoPreview}
             config={config}
-            mapData={mapData}
-            objects={mapData.objects || []}
-            viewportBounds={minimapViewport}
-            onNavigate={handleMinimapNavigate}
+            onDismiss={onUndoPreviewDismiss}
+            onConfirm={onUndoPreviewConfirm}
           />
-        </div>
-      )}
-
-      {/* Instructions */}
-      <div
-        className="absolute top-3 left-3 px-3 py-2 rounded text-xs"
-        style={{
-          backgroundColor: `${config.theme.surface}cc`,
-          color: config.theme.text.muted,
-        }}
-      >
-        Scroll zoom • Middle-drag rotate • Edge/arrows pan • Click paint
+        )}
       </div>
-
-      {/* Undo preview overlay */}
-      {isUndoPreviewActive && undoPreview && (
-        <UndoPreviewOverlay
-          diff={undoPreview}
-          config={config}
-          onDismiss={onUndoPreviewDismiss}
-          onConfirm={onUndoPreviewConfirm}
-        />
-      )}
     </div>
   );
 }
