@@ -27,6 +27,7 @@ import {
   autoFixConnectivity,
 } from '@/data/maps';
 import type { TerrainFeature } from '@/data/maps/MapTypes';
+import { getEditorNavigation, resetEditorNavigation } from '../services/EditorNavigation';
 
 // Extended validation result with connectivity details
 interface ExtendedValidationResult extends ValidationResult {
@@ -36,6 +37,13 @@ interface ExtendedValidationResult extends ValidationResult {
     islandCount: number;
     connectedPairs: number;
     blockedPairs: number;
+  };
+  navmeshStats?: {
+    navmeshGenerated: boolean;
+    pathsChecked: number;
+    pathsFound: number;
+    pathsBlocked: number;
+    blockedPaths?: Array<{ from: string; to: string }>;
   };
 }
 
@@ -399,47 +407,107 @@ export const voidstrikeDataProvider: EditorDataProvider = {
       });
     }
 
-    // === CONNECTIVITY VALIDATION ===
-    // Convert to MapData and run connectivity analysis
+    // === RECAST NAVIGATION VALIDATION ===
+    // Uses exact same navmesh as the game for accurate pathfinding validation
 
     let stats: ExtendedValidationResult['stats'] | undefined;
+    let navmeshStats: ExtendedValidationResult['navmeshStats'] | undefined;
 
-    // Only run connectivity validation if we have spawns
+    // Only run navmesh validation if we have spawns
     if (spawns.length >= 2) {
       try {
-        const mapData = editorFormatToMapData(data);
-        const graph = analyzeConnectivity(mapData);
-        const connectivityResult = validateConnectivity(graph);
+        debugInitialization.log('[Validation] Building navmesh for validation...');
 
-        // Add connectivity stats
-        stats = {
-          totalNodes: connectivityResult.stats.totalNodes,
-          totalEdges: connectivityResult.stats.totalEdges,
-          islandCount: connectivityResult.stats.islandCount,
-          connectedPairs: connectivityResult.stats.connectedPairs,
-          blockedPairs: connectivityResult.stats.blockedPairs,
-        };
+        // Reset and get fresh editor navigation instance
+        resetEditorNavigation();
+        const editorNav = getEditorNavigation();
 
-        // Convert connectivity issues to editor format
-        for (const issue of connectivityResult.issues) {
+        // Build navmesh from editor map data (same as game)
+        const buildResult = await editorNav.buildFromMapData(data);
+
+        if (!buildResult.success) {
           issues.push({
-            type: issue.severity,
-            message: issue.message,
-            issueType: issue.type,
-            affectedNodes: issue.affectedNodes,
-            suggestedFix: issue.suggestedFix ? {
-              type: issue.suggestedFix.type,
-              description: issue.suggestedFix.description,
-            } : undefined,
+            type: 'warning',
+            message: `Navmesh generation failed: ${buildResult.error}`,
+            issueType: 'navmesh_error',
           });
+          navmeshStats = {
+            navmeshGenerated: false,
+            pathsChecked: 0,
+            pathsFound: 0,
+            pathsBlocked: 0,
+          };
+        } else {
+          debugInitialization.log('[Validation] Navmesh built, testing paths...');
+
+          // Validate paths between all bases using real navmesh pathfinding
+          const pathResults = editorNav.validateBasePaths(data);
+
+          let pathsChecked = 0;
+          let pathsFound = 0;
+          let pathsBlocked = 0;
+          const blockedPaths: Array<{ from: string; to: string }> = [];
+
+          for (const result of pathResults) {
+            pathsChecked++;
+            if (result.found) {
+              pathsFound++;
+            } else {
+              pathsBlocked++;
+              blockedPaths.push({ from: result.from, to: result.to });
+
+              // Add error for blocked critical paths (main bases)
+              if (result.from.includes('Main Base') && result.to.includes('Main Base')) {
+                issues.push({
+                  type: 'error',
+                  message: `No path between ${result.from} and ${result.to} - units cannot navigate`,
+                  issueType: 'blocked_path',
+                  affectedNodes: [result.from, result.to],
+                });
+              } else {
+                // Warning for other blocked paths (naturals, etc.)
+                issues.push({
+                  type: 'warning',
+                  message: `No path from ${result.from} to ${result.to}`,
+                  issueType: 'blocked_path',
+                  affectedNodes: [result.from, result.to],
+                });
+              }
+            }
+          }
+
+          navmeshStats = {
+            navmeshGenerated: true,
+            pathsChecked,
+            pathsFound,
+            pathsBlocked,
+            blockedPaths: blockedPaths.length > 0 ? blockedPaths : undefined,
+          };
+
+          // Add stats (using navmesh results instead of grid-based)
+          stats = {
+            totalNodes: spawns.length + naturals.length,
+            totalEdges: pathsChecked,
+            islandCount: pathsBlocked > 0 ? 2 : 1, // Simplified
+            connectedPairs: pathsFound,
+            blockedPairs: pathsBlocked,
+          };
+
+          debugInitialization.log(`[Validation] Path validation complete: ${pathsFound}/${pathsChecked} paths found`);
         }
       } catch (error) {
-        debugInitialization.error('[Validation] Connectivity analysis failed:', error);
+        debugInitialization.error('[Validation] Navmesh validation failed:', error);
         issues.push({
           type: 'warning',
-          message: 'Connectivity analysis failed - check console for details',
-          issueType: 'analysis_error',
+          message: 'Navmesh validation failed - check console for details',
+          issueType: 'navmesh_error',
         });
+        navmeshStats = {
+          navmeshGenerated: false,
+          pathsChecked: 0,
+          pathsFound: 0,
+          pathsBlocked: 0,
+        };
       }
     }
 
@@ -450,6 +518,7 @@ export const voidstrikeDataProvider: EditorDataProvider = {
       valid: !hasErrors,
       issues,
       stats,
+      navmeshStats,
     };
   },
 

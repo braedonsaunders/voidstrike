@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import type { EditorConfig, EditorState, EditorMapData, EditorObject } from '../../config/EditorConfig';
 import { Section, ToggleSwitch } from './shared';
 import {
@@ -41,6 +41,31 @@ export function SettingsPanel({
   const [borderStyle, setBorderStyle] = useState<BorderDecorationStyle>('rocks');
   const [borderDensity, setBorderDensity] = useState(0.7);
   const [isGenerating, setIsGenerating] = useState(false);
+  const isInitialMount = useRef(true);
+
+  // Auto-regenerate border decorations when style or density changes (if decorations exist)
+  useEffect(() => {
+    // Skip on initial mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // Only auto-regenerate if there are existing border decorations
+    if (!state.mapData || !onUpdateObjects) return;
+    const currentCount = countBorderDecorations(state.mapData.objects);
+    if (currentCount === 0) return;
+
+    // Regenerate with new settings
+    const settings: BorderDecorationSettings = {
+      ...DEFAULT_BORDER_SETTINGS,
+      style: borderStyle,
+      density: borderDensity,
+    };
+
+    const newObjects = generateBorderDecorations(state.mapData, settings);
+    onUpdateObjects(newObjects);
+  }, [borderStyle, borderDensity]);
 
   if (!state.mapData) return null;
 
