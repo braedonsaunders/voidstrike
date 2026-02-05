@@ -66,8 +66,9 @@ const underAttackPayload = {
 // Target priorities now loaded from unit definitions or categories (@/data/units/categories.ts)
 
 // Assault mode timeout - clear assault mode after this many ticks of being idle with no targets
-// 60 ticks = ~3 seconds at 20 ticks/sec - enough time to scan for new targets before giving up
-const ASSAULT_IDLE_TIMEOUT = 60;
+// 120 ticks = ~6 seconds at 20 ticks/sec - gives units adequate time to find targets during
+// large engagements where back-line units need to path through allies to reach enemies
+const ASSAULT_IDLE_TIMEOUT = 120;
 
 export class CombatSystem extends System {
   public readonly name = 'CombatSystem';
@@ -214,7 +215,9 @@ export class CombatSystem extends System {
 
     this.unitsNearFriendlyCombat.clear();
 
-    // First, collect all units currently in attacking state by player
+    // Collect all units actively engaged in combat or advancing to attack by player
+    // Including attackmoving/assault units closes the timing gap where front units
+    // are advancing but haven't found targets yet
     const attackingUnitsByPlayer: Map<string, Array<{ x: number; y: number; sightRange: number }>> =
       new Map();
 
@@ -228,8 +231,11 @@ export class CombatSystem extends System {
       if (!unit || !health || !selectable || !transform) continue;
       if (health.isDead()) continue;
 
-      // Track attacking units by player
-      if (unit.state === 'attacking' && unit.targetEntityId !== null) {
+      // Track attacking and attack-moving units by player
+      const isInCombat = (unit.state === 'attacking' && unit.targetEntityId !== null) ||
+        unit.state === 'attackmoving' ||
+        unit.isInAssaultMode;
+      if (isInCombat) {
         let playerAttackers = attackingUnitsByPlayer.get(selectable.playerId);
         if (!playerAttackers) {
           playerAttackers = [];
@@ -342,20 +348,20 @@ export class CombatSystem extends System {
         continue;
       }
 
-      // RTS-STYLE INSTANT ATTACK: Include idle units that have an enemy in attack range
-      // This ensures units immediately respond when an enemy walks into their attack range
+      // RTS-STYLE: Include idle units that have an enemy within sight range
+      // This ensures ALL units in an army engage, not just front-line units
       // Uses fast hasEnemyInRadius check (O(cells) not O(entities))
       if (unit.state === 'idle' && unit.attackRange > 0) {
         const selectable = entity.get<Selectable>('Selectable');
         if (selectable) {
           const myPlayerId = this.getPlayerIndex(selectable.playerId);
-          const hasEnemyInAttackRange = this.world.unitGrid.hasEnemyInRadius(
+          const hasEnemyInSightRange = this.world.unitGrid.hasEnemyInRadius(
             transform.x,
             transform.y,
-            unit.attackRange + 1, // +1 for edge tolerance
+            unit.sightRange,
             myPlayerId
           );
-          if (hasEnemyInAttackRange) {
+          if (hasEnemyInSightRange) {
             this.combatActiveUnits.add(entity.id);
             continue;
           }
@@ -688,9 +694,13 @@ export class CombatSystem extends System {
           // Units near friendly combat use aggressive sight-range search
           // This enables "join nearby combat" - all units engage, not just front line
           target = this.findBestTargetSpatial(attacker.id, transform, unit);
-        } else if (unit.state === 'idle' || unit.isHoldingPosition) {
-          // For regular idle units, do a fast check for enemies within ATTACK range
-          // Uses light throttle (1 tick = ~50ms) for performance while staying responsive
+        } else if (unit.state === 'idle' && !unit.isHoldingPosition) {
+          // Idle units in combat zones use sight-range search to find enemies
+          // This prevents the "blind zone" between attackRange (5-6) and sightRange (24-30)
+          // where units can see enemies but won't engage them
+          target = this.findBestTargetSpatial(attacker.id, transform, unit);
+        } else if (unit.isHoldingPosition) {
+          // Holding position units only attack within attack range
           target = this.findImmediateAttackTarget(attacker.id, transform, unit, currentTick);
         }
 

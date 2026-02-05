@@ -687,7 +687,9 @@ export class MovementOrchestrator {
     this.pathfinding.removeAgentIfRegistered(entityId);
 
     // IDLE REPULSION: Apply separation forces to idle units
-    if (unit.state === 'idle' && !unit.isFlying) {
+    // Skip units near friendly combat or in assault mode - they should hold position
+    // and fight, not drift away from the engagement due to separation forces
+    if (unit.state === 'idle' && !unit.isFlying && !unit.isNearFriendlyCombat && !unit.isInAssaultMode) {
       const lastPos = this.lastIdlePosition.get(entityId);
       const currentIdleTicks = this.trulyIdleTicks.get(entityId) || 0;
 
