@@ -245,7 +245,10 @@ describe('FlockingBehavior', () => {
     });
 
     it('returns combat strength for idle units near friendly combat', () => {
-      const nearCombatUnit = createTestUnit({ state: 'idle', isNearFriendlyCombat: true } as Partial<UnitData>);
+      const nearCombatUnit = createTestUnit({
+        state: 'idle',
+        isNearFriendlyCombat: true,
+      } as Partial<UnitData>);
       const regularIdleUnit = createTestUnit({ state: 'idle' });
       const attackingUnit = createTestUnit({ state: 'attacking' });
 
@@ -260,7 +263,10 @@ describe('FlockingBehavior', () => {
     });
 
     it('returns combat strength for assault mode units', () => {
-      const assaultUnit = createTestUnit({ state: 'idle', isInAssaultMode: true } as Partial<UnitData>);
+      const assaultUnit = createTestUnit({
+        state: 'idle',
+        isInAssaultMode: true,
+      } as Partial<UnitData>);
       const attackingUnit = createTestUnit({ state: 'attacking' });
 
       const assaultStrength = flocking.getSeparationStrength(assaultUnit, 10);
@@ -760,6 +766,106 @@ describe('FlockingBehavior', () => {
       // Workers should pass through each other
       expect(out.x).toBe(0);
       expect(out.y).toBe(0);
+    });
+
+    it('caps cumulative physics push force from many neighbors', () => {
+      const selfTransform = createTestTransform(0, 0);
+      const selfUnit = createTestUnit({ state: 'idle', collisionRadius: 0.5 });
+      const out = createOutputVector();
+
+      // Surround the unit with many overlapping neighbors to generate large cumulative force
+      const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
+      entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
+
+      // Place 10 neighbors tightly packed around self
+      for (let i = 0; i < 10; i++) {
+        const angle = (i / 10) * Math.PI * 2;
+        const nx = Math.cos(angle) * 0.3; // Very close - overlapping
+        const ny = Math.sin(angle) * 0.3;
+        const neighborUnit = createTestUnit({ state: 'idle', collisionRadius: 0.5 });
+        const neighborTransform = createTestTransform(nx, ny);
+        entities.set(100 + i, {
+          x: nx,
+          y: ny,
+          data: createSpatialData(100 + i, neighborTransform, neighborUnit),
+        });
+      }
+
+      const grid = createMockSpatialGrid(entities);
+      flocking.calculatePhysicsPush(1, selfTransform, selfUnit, out, grid);
+
+      // Cumulative push should be capped (maxForce = 2.0 from separation config)
+      const forceMag = Math.sqrt(out.x * out.x + out.y * out.y);
+      expect(forceMag).toBeLessThanOrEqual(2.1); // Small tolerance for floating point
+    });
+
+    it('reduces physics push for combat units (attacking state)', () => {
+      const selfTransform = createTestTransform(0, 0);
+      const idleUnit = createTestUnit({ state: 'idle', collisionRadius: 0.5 });
+      const attackingUnit = createTestUnit({ state: 'attacking', collisionRadius: 0.5 });
+      const idleOut = createOutputVector();
+      const attackingOut = createOutputVector();
+
+      // Same neighbor for both
+      const neighborUnit = createTestUnit({ state: 'idle', collisionRadius: 0.5 });
+      const neighborTransform = createTestTransform(0.5, 0);
+
+      const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
+      entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, idleUnit) });
+      entities.set(2, {
+        x: 0.5,
+        y: 0,
+        data: createSpatialData(2, neighborTransform, neighborUnit),
+      });
+
+      const grid = createMockSpatialGrid(entities);
+
+      // Calculate push for idle unit
+      flocking.calculatePhysicsPush(1, selfTransform, idleUnit, idleOut, grid);
+
+      // Need a new flocking instance or advance tick to avoid cache
+      flocking.setCurrentTick(100);
+
+      // Calculate push for attacking unit
+      flocking.calculatePhysicsPush(1, selfTransform, attackingUnit, attackingOut, grid);
+
+      const idleForceMag = Math.sqrt(idleOut.x * idleOut.x + idleOut.y * idleOut.y);
+      const attackingForceMag = Math.sqrt(
+        attackingOut.x * attackingOut.x + attackingOut.y * attackingOut.y
+      );
+
+      // Attacking unit should receive significantly less physics push
+      expect(attackingForceMag).toBeLessThan(idleForceMag);
+    });
+
+    it('reduces physics push for assault mode units', () => {
+      const selfTransform = createTestTransform(0, 0);
+      const assaultUnit = createTestUnit({
+        state: 'idle',
+        collisionRadius: 0.5,
+        isInAssaultMode: true,
+      } as Partial<UnitData>);
+      const out = createOutputVector();
+
+      const neighborUnit = createTestUnit({ state: 'idle', collisionRadius: 0.5 });
+      const neighborTransform = createTestTransform(0.5, 0);
+
+      const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
+      entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, assaultUnit) });
+      entities.set(2, {
+        x: 0.5,
+        y: 0,
+        data: createSpatialData(2, neighborTransform, neighborUnit),
+      });
+
+      const grid = createMockSpatialGrid(entities);
+      flocking.calculatePhysicsPush(1, selfTransform, assaultUnit, out, grid);
+
+      // Assault mode units get combat reduction (0.25x), so force should be small
+      const forceMag = Math.sqrt(out.x * out.x + out.y * out.y);
+      // Without combat reduction, overlapping push would be > 1.0
+      // With 0.25 reduction, it should be <= 0.5 for a single neighbor
+      expect(forceMag).toBeLessThan(1.0);
     });
 
     it('applies priority-based pushing (moving pushes idle)', () => {
