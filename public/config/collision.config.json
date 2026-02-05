@@ -20,8 +20,8 @@
     "strengthArriving": 1.0,
     "_strengthArriving_description": "Separation at destination. Gentle spread, not sudden explosion.",
 
-    "strengthCombat": 0.3,
-    "_strengthCombat_description": "Separation during combat. Minimal - units should focus on attacking, not spreading.",
+    "strengthCombat": 0.1,
+    "_strengthCombat_description": "Separation during combat. Near-zero so units stack tightly like SC2 while fighting.",
 
     "maxForce": 2.0,
     "_maxForce_description": "Maximum separation force. Low cap prevents jerky movement.",
@@ -62,11 +62,11 @@
   "combat": {
     "_description": "Combat movement - minimal spreading, focus on attacking",
 
-    "spreadSpeedMultiplier": 0.25,
-    "_spreadSpeedMultiplier_description": "Speed when spreading in combat. Slow to maintain formation.",
+    "spreadSpeedMultiplier": 0.1,
+    "_spreadSpeedMultiplier_description": "Speed when spreading in combat. Very slow - SC2 units barely move while attacking.",
 
-    "separationThreshold": 0.3,
-    "_separationThreshold_description": "High threshold - don't spread for minor overlaps during combat."
+    "separationThreshold": 0.8,
+    "_separationThreshold_description": "High threshold - only spread when severely overlapping. Most combat units stay put."
   },
 
   "arrival": {

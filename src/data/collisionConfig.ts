@@ -89,7 +89,7 @@ const DEFAULT_CONFIG: CollisionConfig = {
     strengthMoving: 0.15,
     strengthIdle: 1.2,
     strengthArriving: 1.2,
-    strengthCombat: 0.3,
+    strengthCombat: 0.1,
     maxForce: 2.0,
     flyingMultiplier: 1.2,
   },
@@ -105,8 +105,8 @@ const DEFAULT_CONFIG: CollisionConfig = {
     settleThreshold: 0.85,
   },
   combat: {
-    spreadSpeedMultiplier: 0.25,
-    separationThreshold: 0.3,
+    spreadSpeedMultiplier: 0.1,
+    separationThreshold: 0.8,
   },
   arrival: {
     spreadRadius: 3.0,
@@ -157,7 +157,9 @@ class CollisionConfigLoader {
     try {
       const response = await fetch('/config/collision.config.json');
       if (!response.ok) {
-        debugInitialization.warn('[CollisionConfig] Failed to load collision.config.json, using defaults');
+        debugInitialization.warn(
+          '[CollisionConfig] Failed to load collision.config.json, using defaults'
+        );
         this.config = DEFAULT_CONFIG;
         return;
       }

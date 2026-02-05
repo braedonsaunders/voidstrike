@@ -332,21 +332,28 @@ describe('Collision Configuration', () => {
   });
 
   describe('config value relationships', () => {
-    it('idle separation is stricter than combat', () => {
+    it('combat separation threshold is higher than idle (more overlap-tolerant)', () => {
       const config = collisionConfig.getConfig();
-      expect(config.idle.separationThreshold).toBeGreaterThan(config.combat.separationThreshold);
+      // Combat units tolerate more overlap before spreading - SC2-style tight stacking
+      expect(config.combat.separationThreshold).toBeGreaterThanOrEqual(
+        config.idle.separationThreshold
+      );
     });
 
     it('arriving strength is strongest', () => {
       const config = collisionConfig.getConfig();
-      expect(config.separation.strengthArriving).toBeGreaterThanOrEqual(config.separation.strengthIdle);
+      expect(config.separation.strengthArriving).toBeGreaterThanOrEqual(
+        config.separation.strengthIdle
+      );
       expect(config.separation.strengthArriving).toBeGreaterThan(config.separation.strengthMoving);
       expect(config.separation.strengthArriving).toBeGreaterThan(config.separation.strengthCombat);
     });
 
     it('soft margin is larger than hard margin for buildings', () => {
       const config = collisionConfig.getConfig();
-      expect(config.buildingAvoidance.softMargin).toBeGreaterThan(config.buildingAvoidance.hardMargin);
+      expect(config.buildingAvoidance.softMargin).toBeGreaterThan(
+        config.buildingAvoidance.hardMargin
+      );
     });
 
     it('building avoidance is strong compared to separation', () => {
