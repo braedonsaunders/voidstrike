@@ -768,12 +768,21 @@ export class CombatSystem extends System {
             // Resume attack-move to destination
             unit.state = 'attackmoving';
             unit.targetEntityId = null;
+          } else if (unit.isInAssaultMode && unit.assaultDestination) {
+            // RTS-STYLE: Resume attack-moving toward assault destination
+            // This is the SC2 behavior: after killing a target, units continue
+            // toward the a-move destination, engaging enemies along the way.
+            // Without this, units go idle and get stranded far from the fight.
+            unit.targetEntityId = null;
+            unit.targetX = unit.assaultDestination.x;
+            unit.targetY = unit.assaultDestination.y;
+            unit.state = 'attackmoving';
+            unit.path = [];
+            unit.pathIndex = 0;
           } else if (unit.isInAssaultMode) {
-            // RTS-STYLE: Assault mode units stay in assault mode, ready to scan for new targets
-            // They go "idle" but with assault mode flag still set, so they keep scanning
+            // Assault mode but no destination - stay idle and scan for new targets
             unit.targetEntityId = null;
             unit.state = 'idle';
-            // Don't clear assault mode - unit will immediately scan for new targets next tick
           } else if (!unit.executeNextCommand()) {
             unit.clearTarget();
           }
