@@ -243,6 +243,32 @@ describe('FlockingBehavior', () => {
       // Moving strength should be weaker than idle (allows clumping)
       expect(movingStrength).toBeLessThanOrEqual(idleStrength);
     });
+
+    it('returns combat strength for idle units near friendly combat', () => {
+      const nearCombatUnit = createTestUnit({ state: 'idle', isNearFriendlyCombat: true } as Partial<UnitData>);
+      const regularIdleUnit = createTestUnit({ state: 'idle' });
+      const attackingUnit = createTestUnit({ state: 'attacking' });
+
+      const nearCombatStrength = flocking.getSeparationStrength(nearCombatUnit, 10);
+      const regularIdleStrength = flocking.getSeparationStrength(regularIdleUnit, 10);
+      const attackingStrength = flocking.getSeparationStrength(attackingUnit, 10);
+
+      // Near-combat idle units should use combat-level separation (not idle-level)
+      expect(nearCombatStrength).toBe(attackingStrength);
+      // Regular idle units should have stronger separation than near-combat units
+      expect(regularIdleStrength).toBeGreaterThan(nearCombatStrength);
+    });
+
+    it('returns combat strength for assault mode units', () => {
+      const assaultUnit = createTestUnit({ state: 'idle', isInAssaultMode: true } as Partial<UnitData>);
+      const attackingUnit = createTestUnit({ state: 'attacking' });
+
+      const assaultStrength = flocking.getSeparationStrength(assaultUnit, 10);
+      const attackingStrength = flocking.getSeparationStrength(attackingUnit, 10);
+
+      // Assault mode idle units use combat-level separation
+      expect(assaultStrength).toBe(attackingStrength);
+    });
   });
 
   describe('calculateSeparationForce', () => {

@@ -38,7 +38,7 @@ const THREAT_WINDOW_TICKS = 200; // ~10 seconds at 20 ticks/sec
 
 // RTS-style engagement tracking constants
 const ENGAGEMENT_CHECK_INTERVAL = 10; // Check engagement every 10 ticks (~500ms)
-const RE_COMMAND_IDLE_INTERVAL = 40; // Re-command idle units every 40 ticks (~2 sec)
+const RE_COMMAND_IDLE_INTERVAL = 20; // Re-command idle units every 20 ticks (~1 sec)
 const DEFENSE_COMMAND_INTERVAL = 20; // Re-command defending units every 20 ticks (~1 sec)
 const HUNT_MODE_BUILDING_THRESHOLD = 3; // Enter hunt mode when enemy has <= 3 buildings
 
@@ -709,25 +709,6 @@ export class AITacticsManager {
           this.isEngaged.set(ai.playerId, false);
           return;
         }
-      }
-    }
-
-    // Apply formation for coordinated attack
-    const armyWithPositions = this.getArmyUnitsWithPositions(ai.playerId);
-    if (armyWithPositions.length > 3 && !engaged) {
-      // Use concave formation for engaging enemy
-      const formation = this.applyFormation(ai, armyWithPositions, attackTarget, 'concave');
-
-      // Move units to formation positions before attack
-      for (const { entityId, position } of formation) {
-        const command: GameCommand = {
-          tick: currentTick,
-          playerId: ai.playerId,
-          type: 'MOVE',
-          entityIds: [entityId],
-          targetPosition: position,
-        };
-        this.game.issueAICommand(command);
       }
     }
 
