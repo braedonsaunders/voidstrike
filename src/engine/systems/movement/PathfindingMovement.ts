@@ -265,6 +265,20 @@ export class PathfindingMovement {
           targetY = unit.targetY;
         }
 
+        // Attacking units: use target entity position so the crowd agent steers toward
+        // the enemy immediately, eliminating the 1-2 frame "pause" where the crowd has
+        // no valid target between clearing targetX/targetY and the new path arriving.
+        if (targetX === null && unit.state === 'attacking' && unit.targetEntityId !== null) {
+          const targetEntity = this.world.getEntity(unit.targetEntityId);
+          if (targetEntity) {
+            const targetTransform = targetEntity.get<Transform>('Transform');
+            if (targetTransform) {
+              targetX = targetTransform.x;
+              targetY = targetTransform.y;
+            }
+          }
+        }
+
         // Set target if we have one
         if (targetX !== null && targetY !== null) {
           this.recast.setAgentTarget(entity.id, targetX, targetY);

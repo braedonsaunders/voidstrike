@@ -204,12 +204,19 @@ export class CombatSystem extends System {
     }
     this.friendlyCombatCheckTick = currentTick;
 
-    // Clear the flag on all units first (will be re-set below for those near combat)
+    // Combat awareness decay: instead of clearing the flag for all units every check,
+    // only clear it after a decay window. This prevents the positive feedback loop where
+    // units drifting slightly outside the awareness range immediately lose combat flags,
+    // get hit by idle repulsion, drift further, and accelerate away from the battle.
+    const COMBAT_AWARENESS_DECAY_TICKS = 200; // ~10 seconds at 20 ticks/sec
     const allUnits = this.world.getEntitiesWith('Unit');
     for (const entity of allUnits) {
       const unit = entity.get<Unit>('Unit');
-      if (unit) {
-        unit.isNearFriendlyCombat = false;
+      if (unit && unit.isNearFriendlyCombat) {
+        // Only clear if the decay window has elapsed
+        if (currentTick - unit.lastNearCombatTick > COMBAT_AWARENESS_DECAY_TICKS) {
+          unit.isNearFriendlyCombat = false;
+        }
       }
     }
 
@@ -289,6 +296,7 @@ export class CombatSystem extends System {
           this.unitsNearFriendlyCombat.add(entity.id);
           // Set the flag on the Unit component for FlockingBehavior to use
           unit.isNearFriendlyCombat = true;
+          unit.lastNearCombatTick = currentTick;
           break;
         }
       }

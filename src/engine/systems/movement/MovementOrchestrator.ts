@@ -96,6 +96,11 @@ export class MovementOrchestrator {
   // When a naval unit goes on land, immediately snap back to this position
   private lastValidNavalWaterPosition: Map<number, { x: number; y: number }> = new Map();
 
+  // Attack range hysteresis: track which units were in attack range last frame.
+  // Prevents oscillation between in-range (zero forces) and out-of-range (full forces)
+  // at the attack range boundary, which caused gradual outward drift.
+  private wasInAttackRange: Set<number> = new Set();
+
   // PERF: Dirty flag for separation - only recalculate when neighbors changed
   private unitMovedThisTick: Set<number> = new Set();
 
@@ -197,6 +202,7 @@ export class MovementOrchestrator {
     this.trulyIdleTicks.delete(entityId);
     this.lastIdlePosition.delete(entityId);
     this.unitMovedThisTick.delete(entityId);
+    this.wasInAttackRange.delete(entityId);
     this.frameEntityCache.delete(entityId);
   }
 
@@ -690,13 +696,20 @@ export class MovementOrchestrator {
     this.pathfinding.removeAgentIfRegistered(entityId);
 
     // IDLE REPULSION: Apply separation forces to idle units
-    // Skip units near friendly combat or in assault mode - they should hold position
-    // and fight, not drift away from the engagement due to separation forces
+    // Skip units near friendly combat, in assault mode, or recently in combat.
+    // The lastNearCombatTick check closes the positive feedback loop: without it,
+    // units that drift slightly outside combat awareness immediately get full idle
+    // repulsion, which pushes them further away, causing accelerating drift.
+    const RECENT_COMBAT_WINDOW = 200; // ~10 seconds at 20 ticks/sec
+    const wasRecentlyInCombat =
+      unit.lastNearCombatTick > 0 &&
+      this.currentTick - unit.lastNearCombatTick < RECENT_COMBAT_WINDOW;
     if (
       unit.state === 'idle' &&
       !unit.isFlying &&
       !unit.isNearFriendlyCombat &&
-      !unit.isInAssaultMode
+      !unit.isInAssaultMode &&
+      !wasRecentlyInCombat
     ) {
       const lastPos = this.lastIdlePosition.get(entityId);
       const currentIdleTicks = this.trulyIdleTicks.get(entityId) || 0;
@@ -880,7 +893,18 @@ export class MovementOrchestrator {
       effectiveDistance = Math.max(0, centerDistance - attackerRadius - targetRadius);
     }
 
-    if (effectiveDistance > unit.attackRange || needsToEscape) {
+    // Attack range hysteresis: once a unit is in range, require it to move further
+    // out before switching back to out-of-range. This prevents oscillation at the
+    // boundary where units flip between in-range (zero forces) and out-of-range
+    // (full movement forces) every frame, causing gradual outward drift.
+    const ATTACK_RANGE_HYSTERESIS = 1.0;
+    const wasInRange = this.wasInAttackRange.has(entityId);
+    const rangeThreshold = wasInRange
+      ? unit.attackRange + ATTACK_RANGE_HYSTERESIS
+      : unit.attackRange;
+
+    if (effectiveDistance > rangeThreshold || needsToEscape) {
+      this.wasInAttackRange.delete(entityId);
       if (!unit.isFlying) {
         // Force path request (bypass cooldown) so the crowd agent immediately targets the enemy.
         // Without force, units that just transitioned from attackmoving stall for up to 0.5s
@@ -889,62 +913,20 @@ export class MovementOrchestrator {
       }
       return { handled: true, skipMovement: false, targetX: attackTargetX, targetY: attackTargetY };
     } else {
-      // In range - apply separation while attacking
+      this.wasInAttackRange.add(entityId);
+
+      // SC2-style: in-range attacking units are locked in place. Face target and fire.
+      // No separation forces — only hard collision resolution prevents true overlap.
+      // Previous soft combat separation (even at low strength) accumulated over time
+      // and caused units to slowly spread apart during prolonged engagements.
       transform.rotation = Math.atan2(
         -(targetTransform.y - transform.y),
         targetTransform.x - transform.x
       );
 
-      this.flocking.calculateSeparationForce(
-        entityId,
-        transform,
-        unit,
-        tempSeparation,
-        0,
-        this.world.unitGrid as unknown as FlockingSpatialGrid
-      );
+      // Hard collision resolution still runs via resolveHardBuildingCollision in the
+      // main movement path. For in-range attackers we skip all soft forces entirely.
 
-      const combatMoveSpeed = unit.maxSpeed * collisionConfig.combatSpreadSpeedMultiplier;
-      const {
-        nx: sepNx,
-        ny: sepNy,
-        magnitude: sepMag,
-      } = deterministicNormalizeWithMagnitude(tempSeparation.x, tempSeparation.y);
-
-      if (sepMag > collisionConfig.combatSeparationThreshold) {
-        // Use velocity temporarily for position delta
-        const spreadVx = sepNx * combatMoveSpeed;
-        const spreadVy = sepNy * combatMoveSpeed;
-
-        // For naval units, save position before movement for potential revert
-        const isNaval = unit.movementDomain === 'water' && !unit.isFlying;
-        const preMovePosX = transform.x;
-        const preMovePosY = transform.y;
-
-        transform.translate(spreadVx * dt, spreadVy * dt);
-        transform.x = snapValue(transform.x, QUANT_POSITION);
-        transform.y = snapValue(transform.y, QUANT_POSITION);
-        this.pathfinding.clampToMapBounds(transform);
-
-        if (!unit.isFlying) {
-          this.pathfinding.resolveHardBuildingCollision(entityId, transform, unit);
-        }
-
-        // CRITICAL: Naval boundary check must be LAST
-        if (isNaval) {
-          const isOnWater = this.isNavalWaterTerrain(transform.x, transform.y);
-          if (isOnWater) {
-            this.lastValidNavalWaterPosition.set(entityId, { x: transform.x, y: transform.y });
-          } else {
-            // Revert to pre-move position
-            transform.x = preMovePosX;
-            transform.y = preMovePosY;
-          }
-        }
-      }
-
-      // Zero velocity - combat separation is a position adjustment,
-      // not intentional movement. Keeps attack animation playing.
       velocity.zero();
 
       unit.currentSpeed = Math.max(0, unit.currentSpeed - unit.deceleration * dt);
@@ -1175,7 +1157,12 @@ export class MovementOrchestrator {
           unit.state === 'patrolling' ||
           unit.state === 'attacking'
         ) {
-          if (useWasmThisFrame) {
+          // Combat units always use JS fallback for cohesion/alignment because WASM
+          // computes a simple centroid of ALL neighbors, whereas JS cohesion for combat
+          // units specifically targets engaging allies (FlockingBehavior line 364-376).
+          // This ensures combat cohesion pulls toward the fight, not toward idle units.
+          const useWasmForCohesion = useWasmThisFrame && !isInCombatState;
+          if (useWasmForCohesion) {
             const wasmForces = this.wasmBoids!.getForces(entityId);
             if (wasmForces) {
               tempCohesion.x = wasmForces.cohesionX;
@@ -1239,7 +1226,17 @@ export class MovementOrchestrator {
           : distance;
 
       if (!unit.isFlying) {
-        if (useWasmThisFrame) {
+        // Combat units use JS fallback even when WASM is available because:
+        // 1. WASM separation uses global idle strength (1.2) for all states — combat should be 0.1
+        // 2. WASM cohesion uses simple centroid instead of targeting engaging allies
+        // 3. WASM uses linear falloff vs JS quadratic — different force profiles
+        const isNonCrowdCombat =
+          unit.state === 'attackmoving' ||
+          unit.state === 'attacking' ||
+          unit.isInAssaultMode ||
+          unit.isNearFriendlyCombat;
+        const useWasmForBoids = useWasmThisFrame && !isNonCrowdCombat;
+        if (useWasmForBoids) {
           const wasmForces = this.wasmBoids!.getForces(entityId);
           if (wasmForces) {
             tempSeparation.x = wasmForces.separationX;

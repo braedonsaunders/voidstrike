@@ -318,14 +318,17 @@ export class FlockingBehavior {
       return;
     }
 
-    // Check if this unit has an active attack command
+    // Check if this unit has an active attack command or was recently in combat.
+    // The lastNearCombatTick check prevents back-line units that drifted slightly
+    // outside combat awareness from losing cohesion and being repelled indefinitely.
     const selfHasAttackCommand =
       selfUnit.isInAssaultMode ||
       selfUnit.state === 'attackmoving' ||
-      selfUnit.isNearFriendlyCombat;
+      selfUnit.isNearFriendlyCombat ||
+      selfUnit.lastNearCombatTick > 0;
 
-    // Regular idle units have no cohesion, BUT units with attack commands DO
-    // This creates a pull toward the battle for back-line units
+    // Regular idle units have no cohesion, BUT units with attack commands or
+    // recent combat history DO — this creates a pull toward the battle
     if (selfUnit.state === 'idle' && !selfHasAttackCommand) {
       return;
     }

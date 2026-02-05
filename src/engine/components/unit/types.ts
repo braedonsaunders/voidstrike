@@ -210,6 +210,10 @@ export interface UnitFields {
   isBiological: boolean;
   isMechanical: boolean;
 
+  // Combat awareness decay (UnitCore)
+  isNearFriendlyCombat: boolean;
+  lastNearCombatTick: number;
+
   // Vision (UnitCore)
   sightRange: number;
 
