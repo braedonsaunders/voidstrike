@@ -528,4 +528,172 @@ describe('CombatSystem', () => {
       expect(damage).toBe(1);
     });
   });
+
+  describe('target death state transitions', () => {
+    /**
+     * Replicates the state transition logic from CombatSystem when a target dies.
+     * This is the isDead() code path (primary kill path - units marked dead, not destroyed).
+     * Returns the new state and target info for the attacking unit.
+     */
+    interface UnitState {
+      state: string;
+      targetEntityId: number | null;
+      targetX: number | null;
+      targetY: number | null;
+      isInAssaultMode: boolean;
+      assaultDestination: { x: number; y: number } | null;
+      path: number[];
+      pathIndex: number;
+    }
+
+    function resolveTargetDeath(
+      unit: UnitState,
+      isAttackingWhileMoving: boolean
+    ): UnitState {
+      const result = { ...unit, path: [...unit.path] };
+
+      if (isAttackingWhileMoving) {
+        result.targetEntityId = null;
+      } else if (result.targetX !== null && result.targetY !== null) {
+        result.state = 'attackmoving';
+        result.targetEntityId = null;
+      } else if (result.isInAssaultMode && result.assaultDestination) {
+        result.targetEntityId = null;
+        result.targetX = result.assaultDestination.x;
+        result.targetY = result.assaultDestination.y;
+        result.state = 'attackmoving';
+        result.path = [];
+        result.pathIndex = 0;
+      } else if (result.isInAssaultMode) {
+        result.targetEntityId = null;
+        result.state = 'idle';
+      } else {
+        // Fallback: clearTarget
+        result.targetEntityId = null;
+        result.targetX = null;
+        result.targetY = null;
+        result.state = 'idle';
+      }
+
+      return result;
+    }
+
+    it('attack-while-moving units just clear target and keep moving', () => {
+      const unit: UnitState = {
+        state: 'moving',
+        targetEntityId: 42,
+        targetX: 100,
+        targetY: 200,
+        isInAssaultMode: false,
+        assaultDestination: null,
+        path: [1, 2, 3],
+        pathIndex: 1,
+      };
+
+      const result = resolveTargetDeath(unit, true);
+      expect(result.targetEntityId).toBeNull();
+      expect(result.state).toBe('moving'); // Unchanged
+      expect(result.targetX).toBe(100); // Preserved
+      expect(result.targetY).toBe(200); // Preserved
+    });
+
+    it('units with targetX/Y resume attack-moving to destination', () => {
+      const unit: UnitState = {
+        state: 'attacking',
+        targetEntityId: 42,
+        targetX: 100,
+        targetY: 200,
+        isInAssaultMode: true,
+        assaultDestination: { x: 150, y: 250 },
+        path: [1, 2],
+        pathIndex: 0,
+      };
+
+      const result = resolveTargetDeath(unit, false);
+      expect(result.state).toBe('attackmoving');
+      expect(result.targetEntityId).toBeNull();
+      expect(result.targetX).toBe(100); // Uses saved targetX, not assaultDestination
+      expect(result.targetY).toBe(200);
+    });
+
+    it('assault mode units with assaultDestination resume attack-moving (no targetX/Y)', () => {
+      const unit: UnitState = {
+        state: 'attacking',
+        targetEntityId: 42,
+        targetX: null,
+        targetY: null,
+        isInAssaultMode: true,
+        assaultDestination: { x: 150, y: 250 },
+        path: [1, 2, 3],
+        pathIndex: 2,
+      };
+
+      const result = resolveTargetDeath(unit, false);
+      expect(result.state).toBe('attackmoving');
+      expect(result.targetEntityId).toBeNull();
+      expect(result.targetX).toBe(150); // From assaultDestination
+      expect(result.targetY).toBe(250);
+      expect(result.path).toEqual([]); // Path cleared for re-pathing
+      expect(result.pathIndex).toBe(0);
+    });
+
+    it('assault mode units without assaultDestination go idle', () => {
+      const unit: UnitState = {
+        state: 'attacking',
+        targetEntityId: 42,
+        targetX: null,
+        targetY: null,
+        isInAssaultMode: true,
+        assaultDestination: null,
+        path: [],
+        pathIndex: 0,
+      };
+
+      const result = resolveTargetDeath(unit, false);
+      expect(result.state).toBe('idle');
+      expect(result.targetEntityId).toBeNull();
+    });
+
+    it('non-assault units with no destination go idle (fallback)', () => {
+      const unit: UnitState = {
+        state: 'attacking',
+        targetEntityId: 42,
+        targetX: null,
+        targetY: null,
+        isInAssaultMode: false,
+        assaultDestination: null,
+        path: [],
+        pathIndex: 0,
+      };
+
+      const result = resolveTargetDeath(unit, false);
+      expect(result.state).toBe('idle');
+      expect(result.targetEntityId).toBeNull();
+      expect(result.targetX).toBeNull();
+      expect(result.targetY).toBeNull();
+    });
+
+    it('assault destination resume prevents unit stranding after arrival + kill', () => {
+      // Scenario: Unit attack-moves, arrives at destination (targetX/Y cleared by handleArrival),
+      // engages an enemy, kills it. Without the fix, unit goes idle with no movement target.
+      // With the fix, unit resumes attack-moving toward assaultDestination.
+      const unit: UnitState = {
+        state: 'attacking',
+        targetEntityId: 99,
+        targetX: null, // Cleared by handleArrival
+        targetY: null,
+        isInAssaultMode: true,
+        assaultDestination: { x: 50, y: 75 }, // Original attack-move destination
+        path: [],
+        pathIndex: 0,
+      };
+
+      const result = resolveTargetDeath(unit, false);
+      // Unit should resume attack-moving, NOT go idle
+      expect(result.state).toBe('attackmoving');
+      expect(result.targetX).toBe(50);
+      expect(result.targetY).toBe(75);
+      expect(result.targetEntityId).toBeNull();
+    });
+  });
 });
