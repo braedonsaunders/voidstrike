@@ -651,10 +651,11 @@ export class FlockingBehavior {
     }
 
     // SC2-style: combat units overlap freely during engagements.
-    // Reduces physics push so armies stay compact instead of scattering.
+    // Reduced so cohesion+alignment (0.4) dominates physics push (max 0.3).
+    // Prevents back-line units from being pushed backward away from the fight.
     if (selfIsNearCombat) {
-      forceX *= 0.25;
-      forceY *= 0.25;
+      forceX *= 0.15;
+      forceY *= 0.15;
     }
 
     // PERF: Cache the result

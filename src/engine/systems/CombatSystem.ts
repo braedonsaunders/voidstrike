@@ -218,8 +218,10 @@ export class CombatSystem extends System {
     // Collect all units actively engaged in combat or advancing to attack by player
     // Including attackmoving/assault units closes the timing gap where front units
     // are advancing but haven't found targets yet
-    const attackingUnitsByPlayer: Map<string, Array<{ x: number; y: number; sightRange: number }>> =
-      new Map();
+    const attackingUnitsByPlayer: Map<
+      string,
+      Array<{ x: number; y: number; sightRange: number }>
+    > = new Map();
 
     const units = this.world.getEntitiesWith('Transform', 'Unit', 'Health', 'Selectable');
     for (const entity of units) {
@@ -232,7 +234,8 @@ export class CombatSystem extends System {
       if (health.isDead()) continue;
 
       // Track attacking and attack-moving units by player
-      const isInCombat = (unit.state === 'attacking' && unit.targetEntityId !== null) ||
+      const isInCombat =
+        (unit.state === 'attacking' && unit.targetEntityId !== null) ||
         unit.state === 'attackmoving' ||
         unit.isInAssaultMode;
       if (isInCombat) {
@@ -275,8 +278,10 @@ export class CombatSystem extends System {
         const dx = transform.x - attacker.x;
         const dy = transform.y - attacker.y;
         const distSq = dx * dx + dy * dy;
-        // Use the larger of the two sight ranges to determine "nearby"
-        const combatAwarenessRange = Math.max(unit.sightRange, attacker.sightRange);
+        // Use 1.5x the larger sight range to create a generous awareness zone.
+        // Without the buffer, units that drifted slightly from earlier physics push
+        // lose combat awareness, get full idle separation, and accelerate away.
+        const combatAwarenessRange = Math.max(unit.sightRange, attacker.sightRange) * 1.5;
         const rangeSq = combatAwarenessRange * combatAwarenessRange;
 
         if (distSq <= rangeSq) {
