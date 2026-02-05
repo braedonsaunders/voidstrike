@@ -567,8 +567,7 @@ export class FlockingBehavior {
       selfUnit.state === 'attacking';
 
     // Units near friendly combat or with active attack commands don't yield
-    const selfIsNearCombat =
-      selfUnit.isNearFriendlyCombat || selfHasAttackCommand;
+    const selfIsNearCombat = selfUnit.isNearFriendlyCombat || selfHasAttackCommand;
 
     for (let i = 0; i < nearbyData.length; i++) {
       const other = nearbyData[i];
@@ -637,6 +636,25 @@ export class FlockingBehavior {
         forceX += nx * pushStrength;
         forceY += ny * pushStrength;
       }
+    }
+
+    // Cap cumulative physics push to prevent explosive spreading in large groups.
+    // Without this, 20 tightly-packed units generate massive uncapped forces (easily 15-30+)
+    // while separation caps at 2.0 and cohesion is only 0.1.
+    const maxPushForce = collisionConfig.separationMaxForce;
+    const pushMagSq = forceX * forceX + forceY * forceY;
+    if (pushMagSq > maxPushForce * maxPushForce) {
+      const pushMag = deterministicMagnitude(forceX, forceY);
+      const scale = maxPushForce / pushMag;
+      forceX *= scale;
+      forceY *= scale;
+    }
+
+    // SC2-style: combat units overlap freely during engagements.
+    // Reduces physics push so armies stay compact instead of scattering.
+    if (selfIsNearCombat) {
+      forceX *= 0.25;
+      forceY *= 0.25;
     }
 
     // PERF: Cache the result

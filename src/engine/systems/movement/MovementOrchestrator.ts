@@ -600,8 +600,10 @@ export class MovementOrchestrator {
         const directDistanceSq = directDx * directDx + directDy * directDy;
 
         const needsPath =
-          unit.state === 'moving' || unit.state === 'attackmoving' ||
-          unit.state === 'gathering' || unit.state === 'building';
+          unit.state === 'moving' ||
+          unit.state === 'attackmoving' ||
+          unit.state === 'gathering' ||
+          unit.state === 'building';
         if (directDistanceSq > 9 && needsPath) {
           this.pathfinding.requestPathWithCooldown(entity.id, unit.targetX, unit.targetY);
         }
@@ -690,7 +692,12 @@ export class MovementOrchestrator {
     // IDLE REPULSION: Apply separation forces to idle units
     // Skip units near friendly combat or in assault mode - they should hold position
     // and fight, not drift away from the engagement due to separation forces
-    if (unit.state === 'idle' && !unit.isFlying && !unit.isNearFriendlyCombat && !unit.isInAssaultMode) {
+    if (
+      unit.state === 'idle' &&
+      !unit.isFlying &&
+      !unit.isNearFriendlyCombat &&
+      !unit.isInAssaultMode
+    ) {
       const lastPos = this.lastIdlePosition.get(entityId);
       const currentIdleTicks = this.trulyIdleTicks.get(entityId) || 0;
 
@@ -1116,8 +1123,11 @@ export class MovementOrchestrator {
         }
 
         // Add arrival spreading - skip for combat units who should converge, not spread
-        const isInCombatState = unit.state === 'attackmoving' || unit.state === 'attacking' ||
-          unit.isInAssaultMode || unit.isNearFriendlyCombat;
+        const isInCombatState =
+          unit.state === 'attackmoving' ||
+          unit.state === 'attacking' ||
+          unit.isInAssaultMode ||
+          unit.isNearFriendlyCombat;
         const distToFinalTarget =
           unit.targetX !== null && unit.targetY !== null
             ? deterministicMagnitude(unit.targetX - transform.x, unit.targetY - transform.y)
@@ -1154,10 +1164,13 @@ export class MovementOrchestrator {
         }
 
         // Add cohesion and alignment
+        // Include 'attacking' so out-of-range units maintain group cohesion while closing.
+        // In-range attacking units never reach here (processAttackingUnit returns skipMovement=true).
         if (
           unit.state === 'moving' ||
           unit.state === 'attackmoving' ||
-          unit.state === 'patrolling'
+          unit.state === 'patrolling' ||
+          unit.state === 'attacking'
         ) {
           if (useWasmThisFrame) {
             const wasmForces = this.wasmBoids!.getForces(entityId);
@@ -1281,7 +1294,8 @@ export class MovementOrchestrator {
         if (
           unit.state === 'moving' ||
           unit.state === 'attackmoving' ||
-          unit.state === 'patrolling'
+          unit.state === 'patrolling' ||
+          unit.state === 'attacking'
         ) {
           finalVx += tempCohesion.x;
           finalVy += tempCohesion.y;
