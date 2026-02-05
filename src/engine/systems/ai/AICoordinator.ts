@@ -1009,13 +1009,15 @@ export class AICoordinator extends System {
       this.updateGameState(ai);
 
       const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
+
       if (totalBuildings === 0) {
-        if (currentTick % 100 === 0) {
-          debugAI.warn(
-            `[AICoordinator] ${playerId} has NO buildings detected! AI logic SKIPPED. buildingCounts:`,
-            Object.fromEntries(ai.buildingCounts)
-          );
+        // No buildings (e.g. battle simulator) - skip economy but still run combat tactics
+        // This ensures units get re-commanded during battles even without a base
+        if (ai.state !== 'attacking') {
+          ai.state = 'attacking';
         }
+        this.tacticsManager.updateEnemyRelations(ai, currentTick);
+        this.executeTacticalBehavior(ai, currentTick);
         continue;
       }
 

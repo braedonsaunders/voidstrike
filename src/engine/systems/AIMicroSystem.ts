@@ -255,8 +255,10 @@ export class AIMicroSystem extends System {
 
         case 'kite':
           if (decision.targetPosition && currentTick - state.lastKiteTick > KITE_COOLDOWN_TICKS) {
-            // Save target before kiting
+            // Save target and assault state before kiting
             const savedTargetId = decision.targetId;
+            const savedAssaultDest = unit.assaultDestination;
+            const wasInAssaultMode = unit.isInAssaultMode;
 
             const moveCommand: GameCommand = {
               tick: currentTick,
@@ -267,6 +269,12 @@ export class AIMicroSystem extends System {
             };
             this.game.issueAICommand(moveCommand);
             state.lastKiteTick = currentTick;
+
+            // Restore assault mode - kiting is a micro action, not a deliberate disengage
+            if (wasInAssaultMode) {
+              unit.isInAssaultMode = true;
+              unit.assaultDestination = savedAssaultDest;
+            }
 
             // Re-target after kiting (5 ticks delay)
             if (savedTargetId !== undefined) {
@@ -287,6 +295,9 @@ export class AIMicroSystem extends System {
 
         case 'retreat':
           if (!state.retreating && decision.targetPosition) {
+            const savedAssaultDest = unit.assaultDestination;
+            const wasInAssaultMode = unit.isInAssaultMode;
+
             const command: GameCommand = {
               tick: currentTick,
               playerId,
@@ -297,6 +308,12 @@ export class AIMicroSystem extends System {
             this.game.issueAICommand(command);
             state.retreating = true;
             state.retreatEndTick = currentTick + 40; // 2 seconds
+
+            // Restore assault mode - retreat is temporary, unit should re-engage after
+            if (wasInAssaultMode) {
+              unit.isInAssaultMode = true;
+              unit.assaultDestination = savedAssaultDest;
+            }
           }
           break;
 

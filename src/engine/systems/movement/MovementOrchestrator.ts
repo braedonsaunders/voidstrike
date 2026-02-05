@@ -600,7 +600,8 @@ export class MovementOrchestrator {
         const directDistanceSq = directDx * directDx + directDy * directDy;
 
         const needsPath =
-          unit.state === 'moving' || unit.state === 'gathering' || unit.state === 'building';
+          unit.state === 'moving' || unit.state === 'attackmoving' ||
+          unit.state === 'gathering' || unit.state === 'building';
         if (directDistanceSq > 9 && needsPath) {
           this.pathfinding.requestPathWithCooldown(entity.id, unit.targetX, unit.targetY);
         }
@@ -1114,13 +1115,15 @@ export class MovementOrchestrator {
           }
         }
 
-        // Add arrival spreading
+        // Add arrival spreading - skip for combat units who should converge, not spread
+        const isInCombatState = unit.state === 'attackmoving' || unit.state === 'attacking' ||
+          unit.isInAssaultMode || unit.isNearFriendlyCombat;
         const distToFinalTarget =
           unit.targetX !== null && unit.targetY !== null
             ? deterministicMagnitude(unit.targetX - transform.x, unit.targetY - transform.y)
             : distance;
 
-        if (distToFinalTarget < collisionConfig.arrivalSpreadRadius) {
+        if (distToFinalTarget < collisionConfig.arrivalSpreadRadius && !isInCombatState) {
           if (useWasmThisFrame) {
             const wasmForces = this.wasmBoids!.getForces(entityId);
             if (wasmForces) {
