@@ -51,6 +51,11 @@ export class UnitCore extends Component {
   // Used by FlockingBehavior to reduce separation and enable cohesion toward battle
   public isNearFriendlyCombat: boolean = false;
 
+  // Tick when isNearFriendlyCombat was last true — used for decay-based awareness.
+  // Prevents the positive feedback loop where units that drift slightly outside the
+  // awareness range immediately lose combat flags and get repelled by idle separation.
+  public lastNearCombatTick: number = 0;
+
   // Vision
   public sightRange: number;
 
