@@ -882,7 +882,10 @@ export class MovementOrchestrator {
 
     if (effectiveDistance > unit.attackRange || needsToEscape) {
       if (!unit.isFlying) {
-        this.pathfinding.requestPathWithCooldown(entityId, attackTargetX, attackTargetY);
+        // Force path request (bypass cooldown) so the crowd agent immediately targets the enemy.
+        // Without force, units that just transitioned from attackmoving stall for up to 0.5s
+        // because the cooldown from the previous attack-move path request blocks the new one.
+        this.pathfinding.requestPathWithCooldown(entityId, attackTargetX, attackTargetY, true);
       }
       return { handled: true, skipMovement: false, targetX: attackTargetX, targetY: attackTargetY };
     } else {
