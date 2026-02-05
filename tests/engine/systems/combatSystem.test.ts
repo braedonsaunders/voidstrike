@@ -696,4 +696,67 @@ describe('CombatSystem', () => {
       expect(result.targetEntityId).toBeNull();
     });
   });
+
+  describe('attackmoving engagement range filter', () => {
+    /**
+     * Replicates the engagement range check from CombatSystem.
+     * Attackmoving units should NOT switch to 'attacking' state when targets
+     * are beyond attackRange + 3. This preserves formation cohesion while marching.
+     */
+    function shouldEngageTarget(
+      unitState: string,
+      canAttackWhileMoving: boolean,
+      attackRange: number,
+      distanceToTarget: number
+    ): boolean {
+      if (unitState !== 'attackmoving') return true;
+      if (canAttackWhileMoving) return true;
+      return distanceToTarget <= attackRange + 3;
+    }
+
+    it('attackmoving unit ignores targets beyond engagement range', () => {
+      // Attack range 5, target at 20 (sight range distance)
+      expect(shouldEngageTarget('attackmoving', false, 5, 20)).toBe(false);
+    });
+
+    it('attackmoving unit ignores targets just beyond engagement range', () => {
+      // Attack range 5, engagement range = 5 + 3 = 8, target at 9
+      expect(shouldEngageTarget('attackmoving', false, 5, 9)).toBe(false);
+    });
+
+    it('attackmoving unit engages targets within engagement range', () => {
+      // Attack range 5, engagement range = 8, target at 7
+      expect(shouldEngageTarget('attackmoving', false, 5, 7)).toBe(true);
+    });
+
+    it('attackmoving unit engages targets at exact engagement range', () => {
+      // Attack range 5, engagement range = 8, target at 8
+      expect(shouldEngageTarget('attackmoving', false, 5, 8)).toBe(true);
+    });
+
+    it('attackmoving unit engages targets within attack range', () => {
+      expect(shouldEngageTarget('attackmoving', false, 5, 4)).toBe(true);
+    });
+
+    it('canAttackWhileMoving units always engage regardless of distance', () => {
+      expect(shouldEngageTarget('attackmoving', true, 5, 20)).toBe(true);
+      expect(shouldEngageTarget('attackmoving', true, 5, 100)).toBe(true);
+    });
+
+    it('non-attackmoving units always engage regardless of distance', () => {
+      expect(shouldEngageTarget('idle', false, 5, 20)).toBe(true);
+      expect(shouldEngageTarget('attacking', false, 5, 20)).toBe(true);
+      expect(shouldEngageTarget('patrolling', false, 5, 20)).toBe(true);
+    });
+
+    it('works with different attack ranges', () => {
+      // Long range unit (range 10): engagement at 13
+      expect(shouldEngageTarget('attackmoving', false, 10, 14)).toBe(false);
+      expect(shouldEngageTarget('attackmoving', false, 10, 12)).toBe(true);
+
+      // Short range unit (range 1): engagement at 4
+      expect(shouldEngageTarget('attackmoving', false, 1, 5)).toBe(false);
+      expect(shouldEngageTarget('attackmoving', false, 1, 3)).toBe(true);
+    });
+  });
 });

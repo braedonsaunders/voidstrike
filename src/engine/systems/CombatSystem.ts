@@ -709,6 +709,25 @@ export class CombatSystem extends System {
           target = this.getTargetThrottled(attacker.id, transform, unit, currentTick);
         }
 
+        // RTS-STYLE: Attackmoving units keep marching in formation until close to engagement range.
+        // Without this, units find targets at sight range (24-30), immediately switch to 'attacking'
+        // state, lose cohesion/alignment forces, and spread apart from physics push.
+        // SC2 behavior: units march together and peel off individually when close enough to fight.
+        if (target !== null && unit.state === 'attackmoving' && !unit.canAttackWhileMoving) {
+          const candidateEntity = this.world.getEntity(target);
+          if (candidateEntity) {
+            const candidateTransform = candidateEntity.get<Transform>('Transform');
+            if (candidateTransform) {
+              const distToTarget = transform.distanceTo(candidateTransform);
+              // Engagement buffer: switch to attacking when within attack range + 3
+              // This gives the unit ~1 second to close while still maintaining formation for most of the march
+              if (distToTarget > unit.attackRange + 3) {
+                target = null;
+              }
+            }
+          }
+        }
+
         if (target && !unit.isHoldingPosition) {
           // Units with canAttackWhileMoving keep moving while attacking
           if (
