@@ -161,31 +161,31 @@ export class FlockingBehavior {
       return 0;
     }
 
-    // Near arrival: gentle spreading at destination
-    if (distanceToTarget < collisionConfig.arrivalSpreadRadius && distanceToTarget > 0) {
-      return collisionConfig.separationStrengthArriving;
-    }
-
     // Attacking: minimal separation - focus on attacking, not spreading
     if (unit.state === 'attacking') {
       return collisionConfig.separationStrengthCombat;
     }
 
-    // Attack-moving: use combat-level separation to stay clumped while advancing
-    // This keeps attack groups tight until they engage
+    // Attack-moving or assault mode: combat-level separation to stay clumped
+    // Must check BEFORE arrival spread so combat units don't fan out near their target
     if (unit.state === 'attackmoving' || unit.isInAssaultMode) {
       return collisionConfig.separationStrengthCombat;
-    }
-
-    // Moving: very weak separation, allow clumping during movement
-    if (unit.state === 'moving' || unit.state === 'patrolling') {
-      return collisionConfig.separationStrengthMoving;
     }
 
     // Idle units near friendly combat use combat-level separation
     // This prevents back units from spreading away while front units fight
     if (unit.isNearFriendlyCombat) {
       return collisionConfig.separationStrengthCombat;
+    }
+
+    // Near arrival: gentle spreading at destination (only for non-combat movement)
+    if (distanceToTarget < collisionConfig.arrivalSpreadRadius && distanceToTarget > 0) {
+      return collisionConfig.separationStrengthArriving;
+    }
+
+    // Moving: very weak separation, allow clumping during movement
+    if (unit.state === 'moving' || unit.state === 'patrolling') {
+      return collisionConfig.separationStrengthMoving;
     }
 
     // Idle: gentle spreading over time
