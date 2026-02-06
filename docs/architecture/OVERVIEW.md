@@ -590,6 +590,8 @@ voidstrike/
     │   │   ├── behaviorTree.test.ts
     │   │   ├── influenceMap.perf.test.ts
     │   │   └── unitBehaviors.test.ts
+    │   ├── combat/
+    │   │   └── targetAcquisition.test.ts
     │   ├── components/ # React components
     │   │   ├── ability.test.ts
     │   │   ├── building.test.ts
