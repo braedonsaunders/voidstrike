@@ -700,6 +700,12 @@ export class MovementOrchestrator {
     // The lastNearCombatTick check closes the positive feedback loop: without it,
     // units that drift slightly outside combat awareness immediately get full idle
     // repulsion, which pushes them further away, causing accelerating drift.
+    //
+    // Naval units skip idle separation entirely. Water terrain boundaries are rigid
+    // constraints — idle separation accumulates into position reverts that push naval
+    // units progressively further from formation. The water boundary itself prevents
+    // true overlap, making separation redundant for naval units.
+    const isNavalUnit = unit.movementDomain === 'water' && !unit.isFlying;
     const RECENT_COMBAT_WINDOW = 200; // ~10 seconds at 20 ticks/sec
     const wasRecentlyInCombat =
       unit.lastNearCombatTick > 0 &&
@@ -707,6 +713,7 @@ export class MovementOrchestrator {
     if (
       unit.state === 'idle' &&
       !unit.isFlying &&
+      !isNavalUnit &&
       !unit.isNearFriendlyCombat &&
       !unit.isInAssaultMode &&
       !wasRecentlyInCombat
