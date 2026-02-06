@@ -646,6 +646,8 @@ voidstrike/
     │   └── workers/ # Web Workers
     │       └── gameWorker.test.ts
     ├── rendering/ # Rendering systems
+    │   ├── effects/ # Visual effects
+    │   │   └── BattleEffectsRenderer.test.ts
     │   └── vision/
     │       └── VisionCoordinates.test.ts
     ├── utils/ # Utility functions
