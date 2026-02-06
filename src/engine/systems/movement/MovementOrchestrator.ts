@@ -1197,7 +1197,7 @@ export class MovementOrchestrator {
       // cohesion pulls them backward toward the friendly center of mass, and
       // alignment can oppose their approach vector. In-range attacking units
       // never reach here (processAttackingUnit returns skipMovement=true).
-      if (unit.state === 'moving' || unit.state === 'attackmoving' || unit.state === 'patrolling') {
+      if (unit.state === 'moving' || unit.state === 'patrolling') {
         if (wasmForces) {
           tempCohesion.x = wasmForces.cohesionX;
           tempCohesion.y = wasmForces.cohesionY;
@@ -1303,12 +1303,12 @@ export class MovementOrchestrator {
       finalVy += tempStuckNudge.y;
     }
 
-    // Attacking units closing on a target must never drift backward.
+    // Combat units closing on a target must never drift backward.
     // Separation and physics push from packed allies can overpower the
     // approach velocity, especially for units at the back of a group.
     // Remove any velocity component opposing the target direction — the
     // unit can still slide perpendicular to spread around obstacles.
-    if (unit.state === 'attacking' && distance > this.arrivalThreshold) {
+    if (isInCombatState && distance > this.arrivalThreshold) {
       const dot = finalVx * dx + finalVy * dy;
       if (dot < 0) {
         const invDistSq = 1 / (distance * distance);
