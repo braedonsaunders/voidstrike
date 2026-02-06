@@ -624,6 +624,8 @@ voidstrike/
     │   │   ├── merkleTree.test.ts
     │   │   └── types.test.ts
     │   ├── systems/ # ECS Systems
+    │   │   ├── ai/ # AI subsystems
+    │   │   │   └── AIGameCompletion.test.ts
     │   │   ├── movement/
     │   │   │   ├── flockingBehavior.perf.test.ts
     │   │   │   └── flockingBehavior.test.ts
