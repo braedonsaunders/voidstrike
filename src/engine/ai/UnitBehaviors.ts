@@ -59,7 +59,10 @@ function getUnitData(ctx: BehaviorContext) {
 /**
  * Get nearest enemy unit
  */
-function getNearestEnemy(ctx: BehaviorContext, range: number): {
+function getNearestEnemy(
+  ctx: BehaviorContext,
+  range: number
+): {
   entityId: number;
   distance: number;
   transform: Transform;
@@ -169,6 +172,7 @@ function findBestTarget(ctx: BehaviorContext): number | null {
     attackRange: unit.attackRange,
     canAttackAir: unit.canAttackAir,
     canAttackGround: unit.canAttackGround,
+    canAttackNaval: unit.canAttackNaval,
     includeBuildingsInSearch: unit.canAttackGround,
     attackerVisualRadius: AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius),
     excludeEntityId: ctx.entityId,
@@ -332,12 +336,7 @@ export const moveToAttackRange = asyncAction('MoveToAttackRange', (ctx) => {
   const targetTransform = target.get<Transform>('Transform');
   if (!targetTransform) return 'failure';
 
-  const dist = distance(
-    data.transform.x,
-    data.transform.y,
-    targetTransform.x,
-    targetTransform.y
-  );
+  const dist = distance(data.transform.x, data.transform.y, targetTransform.x, targetTransform.y);
 
   // Already in range
   if (dist <= data.unit.attackRange * 0.9) {
@@ -442,12 +441,7 @@ export const retreatToBase = action('RetreatToBase', (ctx) => {
     if (buildingSelectable.playerId !== selectable.playerId) continue;
 
     const buildingTransform = building.get<Transform>('Transform')!;
-    const dist = distance(
-      transform.x,
-      transform.y,
-      buildingTransform.x,
-      buildingTransform.y
-    );
+    const dist = distance(transform.x, transform.y, buildingTransform.x, buildingTransform.y);
 
     if (dist < nearestDist) {
       nearestDist = dist;
@@ -497,12 +491,7 @@ export const positionOptimally = action('PositionOptimally', (ctx) => {
   const targetTransform = target.get<Transform>('Transform');
   if (!targetTransform) return false;
 
-  const dist = distance(
-    transform.x,
-    transform.y,
-    targetTransform.x,
-    targetTransform.y
-  );
+  const dist = distance(transform.x, transform.y, targetTransform.x, targetTransform.y);
 
   // Ideal position at 85% of attack range
   const idealDist = unit.attackRange * 0.85;
@@ -551,7 +540,11 @@ export function createCombatMicroTree(): BehaviorNode {
     // Priority 1: Retreat if in danger (low health + high threat)
     sequence(
       'DangerRetreat',
-      condition('CheckDanger', (ctx) => isLowHealth(ctx, 0.25) && isUnderThreat(ctx, 3), retreatToBase)
+      condition(
+        'CheckDanger',
+        (ctx) => isLowHealth(ctx, 0.25) && isUnderThreat(ctx, 3),
+        retreatToBase
+      )
     ),
 
     // Priority 2: Kite if ranged unit has melee threat close
@@ -562,25 +555,13 @@ export function createCombatMicroTree(): BehaviorNode {
     ),
 
     // Priority 3: Attack current target
-    sequence(
-      'AttackSequence',
-      condition('HasValidTarget', hasTarget, attackTarget)
-    ),
+    sequence('AttackSequence', condition('HasValidTarget', hasTarget, attackTarget)),
 
     // Priority 4: Acquire and attack new target
-    sequence(
-      'AcquireAndAttack',
-      acquireTarget,
-      moveToAttackRange,
-      attackTarget
-    ),
+    sequence('AcquireAndAttack', acquireTarget, moveToAttackRange, attackTarget),
 
     // Priority 5: Position optimally if ranged
-    condition(
-      'OptimalPosition',
-      (ctx) => isRangedUnit(ctx) && hasTarget(ctx),
-      positionOptimally
-    )
+    condition('OptimalPosition', (ctx) => isRangedUnit(ctx) && hasTarget(ctx), positionOptimally)
   );
 }
 
@@ -614,13 +595,7 @@ export function createRangedCombatTree(): BehaviorNode {
     sequence(
       'NormalCombat',
       acquireTarget,
-      parallel(
-        'AttackAndPosition',
-        2,
-        moveToAttackRange,
-        positionOptimally,
-        attackTarget
-      )
+      parallel('AttackAndPosition', 2, moveToAttackRange, positionOptimally, attackTarget)
     )
   );
 }
@@ -772,11 +747,7 @@ export function createPatrolTree(): BehaviorNode {
     condition(
       'EngageEnemy',
       hasEnemiesNearby,
-      sequence(
-        'PatrolCombat',
-        createCombatMicroTree(),
-        wait('CombatPause', 20)
-      )
+      sequence('PatrolCombat', createCombatMicroTree(), wait('CombatPause', 20))
     ),
 
     // Continue patrol movement
@@ -840,16 +811,10 @@ export function createWorkerGatheringTree(): BehaviorNode {
 
       for (const resource of resources) {
         const building = resource.get<Building>('Building')!;
-        if (building.buildingId !== 'mineral_patch' && building.buildingId !== 'refinery')
-          continue;
+        if (building.buildingId !== 'mineral_patch' && building.buildingId !== 'refinery') continue;
 
         const transform = resource.get<Transform>('Transform')!;
-        const dist = distance(
-          data.transform.x,
-          data.transform.y,
-          transform.x,
-          transform.y
-        );
+        const dist = distance(data.transform.x, data.transform.y, transform.x, transform.y);
 
         if (dist < nearestDist) {
           nearestDist = dist;

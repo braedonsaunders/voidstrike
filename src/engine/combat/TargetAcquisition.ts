@@ -65,6 +65,8 @@ export interface TargetQueryOptions {
   canAttackAir?: boolean;
   /** Whether attacker can attack ground units */
   canAttackGround?: boolean;
+  /** Whether attacker can attack naval units */
+  canAttackNaval?: boolean;
   /** Whether to include buildings in search */
   includeBuildingsInSearch?: boolean;
   /** Attacker's visual radius for edge-to-edge distance calculations */
@@ -119,10 +121,7 @@ export interface TargetResult {
  * @param options - Query options
  * @returns Best target or null if none found
  */
-export function findBestTarget(
-  world: World,
-  options: TargetQueryOptions
-): TargetResult | null {
+export function findBestTarget(world: World, options: TargetQueryOptions): TargetResult | null {
   const config: TargetScoringConfig = {
     ...DEFAULT_SCORING_CONFIG,
     ...options.scoringConfig,
@@ -131,6 +130,7 @@ export function findBestTarget(
   // Default targeting capabilities
   const canAttackAir = options.canAttackAir ?? true;
   const canAttackGround = options.canAttackGround ?? true;
+  const canAttackNaval = options.canAttackNaval ?? true;
   const includeBuildings = options.includeBuildingsInSearch ?? canAttackGround;
   const attackRange = options.attackRange ?? options.range;
   const attackerRadius = options.attackerVisualRadius ?? 0.5;
@@ -138,11 +138,7 @@ export function findBestTarget(
   let bestTarget: TargetResult | null = null;
 
   // Query units from spatial grid
-  const nearbyUnitIds = world.unitGrid.queryRadius(
-    options.x,
-    options.y,
-    options.range
-  );
+  const nearbyUnitIds = world.unitGrid.queryRadius(options.x, options.y, options.range);
 
   for (const entityId of nearbyUnitIds) {
     if (options.excludeEntityId !== undefined && entityId === options.excludeEntityId) {
@@ -160,13 +156,16 @@ export function findBestTarget(
     if (!transform || !health || !selectable) continue;
     // Check alliance - skip if not an enemy (same player or same team)
     const attackerTeam = options.attackerTeamId ?? 0;
-    if (!isEnemy(options.attackerPlayerId, attackerTeam, selectable.playerId, selectable.teamId)) continue;
+    if (!isEnemy(options.attackerPlayerId, attackerTeam, selectable.playerId, selectable.teamId))
+      continue;
     if (health.isDead()) continue;
 
-    // Check air/ground targeting capability
+    // Check air/ground/naval targeting capability
     const targetIsFlying = unit?.isFlying ?? false;
+    const targetIsNaval = unit?.isNaval ?? false;
     if (targetIsFlying && !canAttackAir) continue;
-    if (!targetIsFlying && !canAttackGround) continue;
+    if (!targetIsFlying && targetIsNaval && !canAttackNaval) continue;
+    if (!targetIsFlying && !targetIsNaval && !canAttackGround) continue;
 
     // Calculate edge-to-edge distance
     const centerDistance = Math.sqrt(
@@ -197,11 +196,7 @@ export function findBestTarget(
 
   // Query buildings from spatial grid if enabled
   if (includeBuildings) {
-    const nearbyBuildingIds = world.buildingGrid.queryRadius(
-      options.x,
-      options.y,
-      options.range
-    );
+    const nearbyBuildingIds = world.buildingGrid.queryRadius(options.x, options.y, options.range);
 
     for (const entityId of nearbyBuildingIds) {
       if (options.excludeEntityId !== undefined && entityId === options.excludeEntityId) {
@@ -219,26 +214,18 @@ export function findBestTarget(
       if (!transform || !health || !selectable || !building) continue;
       // Check alliance - skip if not an enemy (same player or same team)
       const attackerTeam = options.attackerTeamId ?? 0;
-      if (!isEnemy(options.attackerPlayerId, attackerTeam, selectable.playerId, selectable.teamId)) continue;
+      if (!isEnemy(options.attackerPlayerId, attackerTeam, selectable.playerId, selectable.teamId))
+        continue;
       if (health.isDead()) continue;
 
       // Calculate distance to building edge
       const halfW = building.width / 2;
       const halfH = building.height / 2;
-      const clampedX = Math.max(
-        transform.x - halfW,
-        Math.min(options.x, transform.x + halfW)
-      );
-      const clampedY = Math.max(
-        transform.y - halfH,
-        Math.min(options.y, transform.y + halfH)
-      );
+      const clampedX = Math.max(transform.x - halfW, Math.min(options.x, transform.x + halfW));
+      const clampedY = Math.max(transform.y - halfH, Math.min(options.y, transform.y + halfH));
       const edgeDx = options.x - clampedX;
       const edgeDy = options.y - clampedY;
-      const distance = Math.max(
-        0,
-        Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius
-      );
+      const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
 
       if (distance > options.range) continue;
 
@@ -278,6 +265,7 @@ export function findAllTargets(
 
   const canAttackAir = options.canAttackAir ?? true;
   const canAttackGround = options.canAttackGround ?? true;
+  const canAttackNaval = options.canAttackNaval ?? true;
   const includeBuildings = options.includeBuildingsInSearch ?? canAttackGround;
   const attackRange = options.attackRange ?? options.range;
   const attackerRadius = options.attackerVisualRadius ?? 0.5;
@@ -285,11 +273,7 @@ export function findAllTargets(
   const targets: TargetResult[] = [];
 
   // Query units
-  const nearbyUnitIds = world.unitGrid.queryRadius(
-    options.x,
-    options.y,
-    options.range
-  );
+  const nearbyUnitIds = world.unitGrid.queryRadius(options.x, options.y, options.range);
 
   for (const entityId of nearbyUnitIds) {
     if (options.excludeEntityId !== undefined && entityId === options.excludeEntityId) {
@@ -307,12 +291,16 @@ export function findAllTargets(
     if (!transform || !health || !selectable) continue;
     // Check alliance - skip if not an enemy (same player or same team)
     const attackerTeam = options.attackerTeamId ?? 0;
-    if (!isEnemy(options.attackerPlayerId, attackerTeam, selectable.playerId, selectable.teamId)) continue;
+    if (!isEnemy(options.attackerPlayerId, attackerTeam, selectable.playerId, selectable.teamId))
+      continue;
     if (health.isDead()) continue;
 
+    // Check air/ground/naval targeting capability
     const targetIsFlying = unit?.isFlying ?? false;
+    const targetIsNaval = unit?.isNaval ?? false;
     if (targetIsFlying && !canAttackAir) continue;
-    if (!targetIsFlying && !canAttackGround) continue;
+    if (!targetIsFlying && targetIsNaval && !canAttackNaval) continue;
+    if (!targetIsFlying && !targetIsNaval && !canAttackGround) continue;
 
     const centerDistance = Math.sqrt(
       (transform.x - options.x) ** 2 + (transform.y - options.y) ** 2
@@ -339,11 +327,7 @@ export function findAllTargets(
 
   // Query buildings
   if (includeBuildings) {
-    const nearbyBuildingIds = world.buildingGrid.queryRadius(
-      options.x,
-      options.y,
-      options.range
-    );
+    const nearbyBuildingIds = world.buildingGrid.queryRadius(options.x, options.y, options.range);
 
     for (const entityId of nearbyBuildingIds) {
       if (options.excludeEntityId !== undefined && entityId === options.excludeEntityId) {
@@ -361,25 +345,24 @@ export function findAllTargets(
       if (!transform || !health || !selectable || !building) continue;
       // Check alliance - skip if not an enemy (same player or same team)
       const attackerTeamBuilding = options.attackerTeamId ?? 0;
-      if (!isEnemy(options.attackerPlayerId, attackerTeamBuilding, selectable.playerId, selectable.teamId)) continue;
+      if (
+        !isEnemy(
+          options.attackerPlayerId,
+          attackerTeamBuilding,
+          selectable.playerId,
+          selectable.teamId
+        )
+      )
+        continue;
       if (health.isDead()) continue;
 
       const halfW = building.width / 2;
       const halfH = building.height / 2;
-      const clampedX = Math.max(
-        transform.x - halfW,
-        Math.min(options.x, transform.x + halfW)
-      );
-      const clampedY = Math.max(
-        transform.y - halfH,
-        Math.min(options.y, transform.y + halfH)
-      );
+      const clampedX = Math.max(transform.x - halfW, Math.min(options.x, transform.x + halfW));
+      const clampedY = Math.max(transform.y - halfH, Math.min(options.y, transform.y + halfH));
       const edgeDx = options.x - clampedX;
       const edgeDy = options.y - clampedY;
-      const distance = Math.max(
-        0,
-        Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius
-      );
+      const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
 
       if (distance > options.range) continue;
 
@@ -421,9 +404,7 @@ function calculateTargetScore(
   config: TargetScoringConfig
 ): number {
   // Base priority from unit category (or fixed for buildings)
-  const basePriority = isBuilding
-    ? config.buildingBasePriority
-    : getDefaultTargetPriority(unitId);
+  const basePriority = isBuilding ? config.buildingBasePriority : getDefaultTargetPriority(unitId);
 
   // Distance factor: 1.0 at center, 0.0 at edge of search range
   const distanceFactor = Math.max(0, 1 - distance / searchRange);
