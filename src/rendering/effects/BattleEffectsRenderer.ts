@@ -28,11 +28,7 @@ import { EventBus } from '@/engine/core/EventBus';
 import { getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
 import { AssetManager, DEFAULT_AIRBORNE_HEIGHT } from '@/assets/AssetManager';
 import { AdvancedParticleSystem } from './AdvancedParticleSystem';
-import {
-  BATTLE_EFFECTS,
-  RENDER_ORDER,
-  FACTION_COLORS,
-} from '@/data/rendering.config';
+import { BATTLE_EFFECTS, RENDER_ORDER, FACTION_COLORS } from '@/data/rendering.config';
 import { clamp } from '@/utils/math';
 
 // ============================================
@@ -42,6 +38,16 @@ import { clamp } from '@/utils/math';
 // Note: Airborne height is configured per-unit-type in assets.json
 const GROUND_EFFECT_OFFSET = BATTLE_EFFECTS.GROUND_EFFECT_OFFSET;
 const POOL_SIZE = BATTLE_EFFECTS.POOL_SIZE;
+
+// ============================================
+// MESH POOL
+// ============================================
+
+interface MeshPool<T extends THREE.Object3D = THREE.Mesh> {
+  available: T[];
+  inUse: Set<T>;
+  maxSize: number;
+}
 
 // ============================================
 // INTERFACES
@@ -76,6 +82,7 @@ interface GroundEffect {
   startScale: number;
   endScale: number;
   heightOffset: number; // For air unit effects
+  sourcePool: MeshPool; // Pool this mesh was acquired from, for correct release
 }
 
 interface ImpactDecal {
@@ -142,16 +149,6 @@ interface LaserEffect {
   animationFrameId: number;
 }
 
-// ============================================
-// MESH POOL
-// ============================================
-
-interface MeshPool<T extends THREE.Object3D = THREE.Mesh> {
-  available: T[];
-  inUse: Set<T>;
-  maxSize: number;
-}
-
 // Temp vectors for calculations (reused to avoid GC pressure)
 const _tempVec1 = new THREE.Vector3();
 const _tempVec2 = new THREE.Vector3();
@@ -180,7 +177,9 @@ export class BattleEffectsRenderer {
   private laserEffects: Set<LaserEffect> = new Set();
 
   // ECS sync callback for entity-synced projectiles
-  private getProjectilePosition: ((entityId: number) => { x: number; y: number; z: number } | null) | null = null;
+  private getProjectilePosition:
+    | ((entityId: number) => { x: number; y: number; z: number } | null)
+    | null = null;
 
   // Event listener cleanup
   private eventUnsubscribers: (() => void)[] = [];
@@ -245,7 +244,11 @@ export class BattleEffectsRenderer {
   // Decal textures
   private scorchTexture: THREE.Texture;
 
-  constructor(scene: THREE.Scene, eventBus: EventBus, getTerrainHeight?: (x: number, z: number) => number) {
+  constructor(
+    scene: THREE.Scene,
+    eventBus: EventBus,
+    getTerrainHeight?: (x: number, z: number) => number
+  ) {
     this.scene = scene;
     this.eventBus = eventBus;
     this.getTerrainHeight = getTerrainHeight ?? null;
@@ -284,8 +287,8 @@ export class BattleEffectsRenderer {
       transparent: true,
       opacity: 0.9,
       side: THREE.DoubleSide,
-      depthTest: true,      // FIXED: Now properly occluded by units
-      depthWrite: false,    // Don't write to depth (allows stacking)
+      depthTest: true, // FIXED: Now properly occluded by units
+      depthWrite: false, // Don't write to depth (allows stacking)
       polygonOffset: true,
       polygonOffsetFactor: -4,
       polygonOffsetUnits: -4,
@@ -556,7 +559,9 @@ export class BattleEffectsRenderer {
    *
    * @param fn Callback that returns {x, y, z} for an entity ID, or null if entity doesn't exist
    */
-  public setProjectilePositionCallback(fn: (entityId: number) => { x: number; y: number; z: number } | null): void {
+  public setProjectilePositionCallback(
+    fn: (entityId: number) => { x: number; y: number; z: number } | null
+  ): void {
     this.getProjectilePosition = fn;
   }
 
@@ -682,193 +687,249 @@ export class BattleEffectsRenderer {
   private setupEventListeners(): void {
     // Combat attack - create muzzle flash and instant weapon effects
     // For projectile-based attacks (damage === 0), visuals are handled by projectile:spawned
-    this.eventUnsubscribers.push(this.eventBus.on('combat:attack', (data: {
-      attackerId?: string; // Unit type ID for attacker (e.g., "valkyrie") - for airborne height lookup
-      attackerEntityId?: number; // Entity ID for focus fire tracking
-      targetId?: number; // Entity ID for focus fire tracking
-      attackerPos?: { x: number; y: number };
-      targetPos?: { x: number; y: number };
-      targetUnitType?: string; // Unit type ID for target - for airborne height lookup
-      damage: number;
-      damageType: string;
-      targetHeight?: number;
-      attackerIsFlying?: boolean;
-      targetIsFlying?: boolean;
-      attackerFaction?: string;
-    }) => {
-      if (data.attackerPos && data.targetPos) {
-        const attackerTerrainHeight = this.getHeightAt(data.attackerPos.x, data.attackerPos.y);
-        const targetTerrainHeight = this.getHeightAt(data.targetPos.x, data.targetPos.y);
+    this.eventUnsubscribers.push(
+      this.eventBus.on(
+        'combat:attack',
+        (data: {
+          attackerId?: string; // Unit type ID for attacker (e.g., "valkyrie") - for airborne height lookup
+          attackerEntityId?: number; // Entity ID for focus fire tracking
+          targetId?: number; // Entity ID for focus fire tracking
+          attackerPos?: { x: number; y: number };
+          targetPos?: { x: number; y: number };
+          targetUnitType?: string; // Unit type ID for target - for airborne height lookup
+          damage: number;
+          damageType: string;
+          targetHeight?: number;
+          attackerIsFlying?: boolean;
+          targetIsFlying?: boolean;
+          attackerFaction?: string;
+        }) => {
+          if (data.attackerPos && data.targetPos) {
+            const attackerTerrainHeight = this.getHeightAt(data.attackerPos.x, data.attackerPos.y);
+            const targetTerrainHeight = this.getHeightAt(data.targetPos.x, data.targetPos.y);
 
-        // Per-unit-type airborne height from assets.json
-        const attackerAirborneHeight = data.attackerId ? AssetManager.getAirborneHeight(data.attackerId) : DEFAULT_AIRBORNE_HEIGHT;
-        const targetAirborneHeight = data.targetUnitType ? AssetManager.getAirborneHeight(data.targetUnitType) : DEFAULT_AIRBORNE_HEIGHT;
-        const attackerFlyingOffset = data.attackerIsFlying ? attackerAirborneHeight : 0;
-        const targetFlyingOffset = data.targetIsFlying ? targetAirborneHeight : 0;
+            // Per-unit-type airborne height from assets.json
+            const attackerAirborneHeight = data.attackerId
+              ? AssetManager.getAirborneHeight(data.attackerId)
+              : DEFAULT_AIRBORNE_HEIGHT;
+            const targetAirborneHeight = data.targetUnitType
+              ? AssetManager.getAirborneHeight(data.targetUnitType)
+              : DEFAULT_AIRBORNE_HEIGHT;
+            const attackerFlyingOffset = data.attackerIsFlying ? attackerAirborneHeight : 0;
+            const targetFlyingOffset = data.targetIsFlying ? targetAirborneHeight : 0;
 
-        const startPos = new THREE.Vector3(
-          data.attackerPos.x,
-          attackerTerrainHeight + 0.5 + attackerFlyingOffset,
-          data.attackerPos.y
-        );
+            const startPos = new THREE.Vector3(
+              data.attackerPos.x,
+              attackerTerrainHeight + 0.5 + attackerFlyingOffset,
+              data.attackerPos.y
+            );
 
-        const endPos = new THREE.Vector3(
-          data.targetPos.x,
-          targetTerrainHeight + 0.5 + targetFlyingOffset,
-          data.targetPos.y
-        );
+            const endPos = new THREE.Vector3(
+              data.targetPos.x,
+              targetTerrainHeight + 0.5 + targetFlyingOffset,
+              data.targetPos.y
+            );
 
-        const faction = (data.attackerFaction as keyof typeof FACTION_COLORS) || 'dominion';
+            const faction = (data.attackerFaction as keyof typeof FACTION_COLORS) || 'dominion';
 
-        // Only create instant weapon visuals (lasers, melee) when damage > 0
-        // Projectile-based attacks (damage === 0) are handled by projectile:spawned event
-        if (data.damage > 0) {
-          this.createProjectileEffect(startPos, endPos, data.damageType, faction, !!data.targetIsFlying);
+            // Only create instant weapon visuals (lasers, melee) when damage > 0
+            // Projectile-based attacks (damage === 0) are handled by projectile:spawned event
+            if (data.damage > 0) {
+              this.createProjectileEffect(
+                startPos,
+                endPos,
+                data.damageType,
+                faction,
+                !!data.targetIsFlying
+              );
+            }
+
+            // Track focus fire using entity IDs (pass airborne height for correct positioning)
+            if (data.attackerEntityId !== undefined && data.targetId !== undefined) {
+              this.trackFocusFire(
+                data.attackerEntityId,
+                data.targetId,
+                data.targetPos,
+                !!data.targetIsFlying,
+                targetAirborneHeight
+              );
+            }
+          }
         }
-
-        // Track focus fire using entity IDs (pass airborne height for correct positioning)
-        if (data.attackerEntityId !== undefined && data.targetId !== undefined) {
-          this.trackFocusFire(data.attackerEntityId, data.targetId, data.targetPos, !!data.targetIsFlying, targetAirborneHeight);
-        }
-      }
-    }));
+      )
+    );
 
     // Projectile spawned - create visual for entity-synced projectile
-    this.eventUnsubscribers.push(this.eventBus.on('projectile:spawned', (data: {
-      entityId: number;
-      startPos: { x: number; y: number; z: number };
-      targetPos: { x: number; y: number; z: number };
-      projectileType: string;
-      faction: string;
-      trailType?: string;
-      visualScale?: number;
-    }) => {
-      const startTerrainHeight = this.getHeightAt(data.startPos.x, data.startPos.y);
-      const targetTerrainHeight = this.getHeightAt(data.targetPos.x, data.targetPos.y);
+    this.eventUnsubscribers.push(
+      this.eventBus.on(
+        'projectile:spawned',
+        (data: {
+          entityId: number;
+          startPos: { x: number; y: number; z: number };
+          targetPos: { x: number; y: number; z: number };
+          projectileType: string;
+          faction: string;
+          trailType?: string;
+          visualScale?: number;
+        }) => {
+          const startTerrainHeight = this.getHeightAt(data.startPos.x, data.startPos.y);
+          const targetTerrainHeight = this.getHeightAt(data.targetPos.x, data.targetPos.y);
 
-      const startPos = new THREE.Vector3(
-        data.startPos.x,
-        startTerrainHeight + data.startPos.z,
-        data.startPos.y
-      );
+          const startPos = new THREE.Vector3(
+            data.startPos.x,
+            startTerrainHeight + data.startPos.z,
+            data.startPos.y
+          );
 
-      const endPos = new THREE.Vector3(
-        data.targetPos.x,
-        targetTerrainHeight + data.targetPos.z,
-        data.targetPos.y
-      );
+          const endPos = new THREE.Vector3(
+            data.targetPos.x,
+            targetTerrainHeight + data.targetPos.z,
+            data.targetPos.y
+          );
 
-      const faction = (data.faction as keyof typeof FACTION_COLORS) || 'dominion';
+          const faction = (data.faction as keyof typeof FACTION_COLORS) || 'dominion';
 
-      // Calculate duration based on distance and a base speed
-      const distance = startPos.distanceTo(endPos);
-      const duration = Math.max(0.15, distance / 40); // ~40 units/sec visual speed
+          // Calculate duration based on distance and a base speed
+          const distance = startPos.distanceTo(endPos);
+          const duration = Math.max(0.15, distance / 40); // ~40 units/sec visual speed
 
-      this.createEntityProjectileEffect(
-        data.entityId,
-        startPos,
-        endPos,
-        data.trailType || 'bullet',
-        faction,
-        duration
-      );
-    }));
+          this.createEntityProjectileEffect(
+            data.entityId,
+            startPos,
+            endPos,
+            data.trailType || 'bullet',
+            faction,
+            duration
+          );
+        }
+      )
+    );
 
     // Projectile impact - create hit effect
-    this.eventUnsubscribers.push(this.eventBus.on('projectile:impact', (data: {
-      entityId: number;
-      position: { x: number; y: number; z: number };
-      damageType: string;
-      splashRadius: number;
-      faction: string;
-      projectileId: string;
-    }) => {
-      const terrainHeight = this.getHeightAt(data.position.x, data.position.y);
-      const impactPos = new THREE.Vector3(
-        data.position.x,
-        terrainHeight + data.position.z,
-        data.position.y
-      );
+    this.eventUnsubscribers.push(
+      this.eventBus.on(
+        'projectile:impact',
+        (data: {
+          entityId: number;
+          position: { x: number; y: number; z: number };
+          damageType: string;
+          splashRadius: number;
+          faction: string;
+          projectileId: string;
+        }) => {
+          const terrainHeight = this.getHeightAt(data.position.x, data.position.y);
+          const impactPos = new THREE.Vector3(
+            data.position.x,
+            terrainHeight + data.position.z,
+            data.position.y
+          );
 
-      // Create hit effect
-      this.createHitEffect(impactPos, data.position.z > 1);
+          // Create hit effect
+          this.createHitEffect(impactPos, data.position.z > 1);
 
-      // Create splash effect if applicable
-      if (data.splashRadius > 0) {
-        this.createSplashEffect(impactPos, data.splashRadius);
-      }
+          // Create splash effect if applicable
+          if (data.splashRadius > 0) {
+            this.createSplashEffect(impactPos, data.splashRadius);
+          }
 
-      // Cleanup visual if it still exists
-      const effectId = this.entityToProjectile.get(data.entityId);
-      if (effectId !== undefined) {
-        this.cleanupProjectileEffect(effectId);
-      }
-    }));
+          // Cleanup visual if it still exists
+          const effectId = this.entityToProjectile.get(data.entityId);
+          if (effectId !== undefined) {
+            this.cleanupProjectileEffect(effectId);
+          }
+        }
+      )
+    );
 
     // Unit died - create death effect
-    this.eventUnsubscribers.push(this.eventBus.on('unit:died', (data: {
-      entityId?: number;
-      position?: { x: number; y: number };
-      isFlying?: boolean;
-      unitType?: string; // Unit type ID for airborne height lookup
-    }) => {
-      if (data.position) {
-        const terrainHeight = this.getHeightAt(data.position.x, data.position.y);
-        // Per-unit-type airborne height from assets.json
-        const airborneHeight = data.unitType ? AssetManager.getAirborneHeight(data.unitType) : DEFAULT_AIRBORNE_HEIGHT;
-        const heightOffset = data.isFlying ? airborneHeight : 0;
-        this.createDeathEffect(
-          new THREE.Vector3(data.position.x, terrainHeight, data.position.y),
-          heightOffset
-        );
-      }
-      if (data.entityId !== undefined) {
-        this.clearFocusFire(data.entityId);
-      }
-    }));
+    this.eventUnsubscribers.push(
+      this.eventBus.on(
+        'unit:died',
+        (data: {
+          entityId?: number;
+          position?: { x: number; y: number };
+          isFlying?: boolean;
+          unitType?: string; // Unit type ID for airborne height lookup
+        }) => {
+          if (data.position) {
+            const terrainHeight = this.getHeightAt(data.position.x, data.position.y);
+            // Per-unit-type airborne height from assets.json
+            const airborneHeight = data.unitType
+              ? AssetManager.getAirborneHeight(data.unitType)
+              : DEFAULT_AIRBORNE_HEIGHT;
+            const heightOffset = data.isFlying ? airborneHeight : 0;
+            this.createDeathEffect(
+              new THREE.Vector3(data.position.x, terrainHeight, data.position.y),
+              heightOffset
+            );
+          }
+          if (data.entityId !== undefined) {
+            this.clearFocusFire(data.entityId);
+          }
+        }
+      )
+    );
 
     // Building destroyed - big explosion
-    this.eventUnsubscribers.push(this.eventBus.on('building:destroyed', (data: {
-      entityId: number;
-      playerId: string;
-      buildingType: string;
-      position: { x: number; y: number };
-    }) => {
-      const terrainHeight = this.getHeightAt(data.position.x, data.position.y);
-      const isLarge = ['headquarters', 'infantry_bay', 'forge', 'hangar'].includes(data.buildingType);
-      this.createExplosion(
-        new THREE.Vector3(data.position.x, terrainHeight, data.position.y),
-        isLarge ? 2.0 : 1.0
-      );
-      this.clearFocusFire(data.entityId);
-    }));
+    this.eventUnsubscribers.push(
+      this.eventBus.on(
+        'building:destroyed',
+        (data: {
+          entityId: number;
+          playerId: string;
+          buildingType: string;
+          position: { x: number; y: number };
+        }) => {
+          const terrainHeight = this.getHeightAt(data.position.x, data.position.y);
+          const isLarge = ['headquarters', 'infantry_bay', 'forge', 'hangar'].includes(
+            data.buildingType
+          );
+          this.createExplosion(
+            new THREE.Vector3(data.position.x, terrainHeight, data.position.y),
+            isLarge ? 2.0 : 1.0
+          );
+          this.clearFocusFire(data.entityId);
+        }
+      )
+    );
 
     // Move command
-    this.eventUnsubscribers.push(this.eventBus.on('command:move', (data: {
-      entityIds: number[];
-      targetPosition?: { x: number; y: number };
-      playerId?: string;
-    }) => {
-      const localPlayerId = getLocalPlayerId();
-      const spectating = isSpectatorMode();
-      if (!spectating && data.playerId && data.playerId !== localPlayerId) {
-        return;
-      }
+    this.eventUnsubscribers.push(
+      this.eventBus.on(
+        'command:move',
+        (data: {
+          entityIds: number[];
+          targetPosition?: { x: number; y: number };
+          playerId?: string;
+        }) => {
+          const localPlayerId = getLocalPlayerId();
+          const spectating = isSpectatorMode();
+          if (!spectating && data.playerId && data.playerId !== localPlayerId) {
+            return;
+          }
 
-      if (data.entityIds.length > 0 && data.targetPosition) {
-        const terrainHeight = this.getHeightAt(data.targetPosition.x, data.targetPosition.y);
-        this.createMoveIndicator(
-          new THREE.Vector3(data.targetPosition.x, terrainHeight + GROUND_EFFECT_OFFSET, data.targetPosition.y)
-        );
-      }
-    }));
+          if (data.entityIds.length > 0 && data.targetPosition) {
+            const terrainHeight = this.getHeightAt(data.targetPosition.x, data.targetPosition.y);
+            this.createMoveIndicator(
+              new THREE.Vector3(
+                data.targetPosition.x,
+                terrainHeight + GROUND_EFFECT_OFFSET,
+                data.targetPosition.y
+              )
+            );
+          }
+        }
+      )
+    );
 
     // Stop attack tracking
-    this.eventUnsubscribers.push(this.eventBus.on('unit:stopAttack', (data: { attackerId?: number; targetId?: number }) => {
-      if (data.attackerId !== undefined && data.targetId !== undefined) {
-        this.removeAttackerFromTarget(data.attackerId, data.targetId);
-      }
-    }));
+    this.eventUnsubscribers.push(
+      this.eventBus.on('unit:stopAttack', (data: { attackerId?: number; targetId?: number }) => {
+        if (data.attackerId !== undefined && data.targetId !== undefined) {
+          this.removeAttackerFromTarget(data.attackerId, data.targetId);
+        }
+      })
+    );
   }
 
   // ============================================
@@ -1090,10 +1151,15 @@ export class BattleEffectsRenderer {
       startScale: 0.1,
       endScale: radius * 0.8,
       heightOffset: 0,
+      sourcePool: this.shockwavePool,
     });
   }
 
-  private createLaserEffect(start: THREE.Vector3, end: THREE.Vector3, faction: keyof typeof FACTION_COLORS): void {
+  private createLaserEffect(
+    start: THREE.Vector3,
+    end: THREE.Vector3,
+    faction: keyof typeof FACTION_COLORS
+  ): void {
     const colors = FACTION_COLORS[faction];
 
     // Calculate laser beam direction and length
@@ -1234,7 +1300,7 @@ export class BattleEffectsRenderer {
     if (!mesh) return;
 
     const terrainHeight = this.getHeightAt(position.x, position.z);
-    const heightOffset = isAirTarget ? (position.y - terrainHeight) : GROUND_EFFECT_OFFSET;
+    const heightOffset = isAirTarget ? position.y - terrainHeight : GROUND_EFFECT_OFFSET;
 
     mesh.position.set(position.x, terrainHeight + heightOffset, position.z);
     mesh.scale.set(1, 1, 1);
@@ -1255,6 +1321,7 @@ export class BattleEffectsRenderer {
       startScale: 1,
       endScale: 2.5,
       heightOffset,
+      sourcePool: this.groundEffectPool,
     });
 
     // Spawn sparks (reduced since particle system also spawns)
@@ -1295,6 +1362,7 @@ export class BattleEffectsRenderer {
       startScale: 1,
       endScale: 3,
       heightOffset: heightOffset + GROUND_EFFECT_OFFSET,
+      sourcePool: this.deathEffectPool,
     });
 
     // Spawn sparks
@@ -1388,11 +1456,7 @@ export class BattleEffectsRenderer {
 
       debrisParticles.push({
         mesh: debris,
-        velocity: new THREE.Vector3(
-          Math.cos(angle) * speed,
-          upSpeed,
-          Math.sin(angle) * speed
-        ),
+        velocity: new THREE.Vector3(Math.cos(angle) * speed, upSpeed, Math.sin(angle) * speed),
         angularVelocity: new THREE.Vector3(
           (Math.random() - 0.5) * 10,
           (Math.random() - 0.5) * 10,
@@ -1478,11 +1542,7 @@ export class BattleEffectsRenderer {
       const speed = 2 + Math.random() * 6;
       const upSpeed = 3 + Math.random() * 5;
 
-      spark.velocity.set(
-        Math.cos(angle) * speed,
-        upSpeed,
-        Math.sin(angle) * speed
-      );
+      spark.velocity.set(Math.cos(angle) * speed, upSpeed, Math.sin(angle) * speed);
 
       spark.maxLife = 0.3 + Math.random() * 0.5;
       spark.life = spark.maxLife;
@@ -1500,7 +1560,13 @@ export class BattleEffectsRenderer {
   // FOCUS FIRE & MOVE INDICATORS
   // ============================================
 
-  private trackFocusFire(attackerId: number, targetId: number, targetPos: { x: number; y: number }, isFlying: boolean, airborneHeight: number = DEFAULT_AIRBORNE_HEIGHT): void {
+  private trackFocusFire(
+    attackerId: number,
+    targetId: number,
+    targetPos: { x: number; y: number },
+    isFlying: boolean,
+    airborneHeight: number = DEFAULT_AIRBORNE_HEIGHT
+  ): void {
     let attackers = this.targetAttackerCounts.get(targetId);
     if (!attackers) {
       attackers = new Set();
@@ -1647,7 +1713,9 @@ export class BattleEffectsRenderer {
         // For instant projectiles (non-entity-synced), create hit effect here
         if (!effect.isEntitySynced) {
           this.createHitEffect(effect.endPos, effect.isAirTarget);
-          this.eventBus.emit('combat:hit', { position: { x: effect.endPos.x, y: effect.endPos.z } });
+          this.eventBus.emit('combat:hit', {
+            position: { x: effect.endPos.x, y: effect.endPos.z },
+          });
         }
 
         // Cleanup
@@ -1743,12 +1811,7 @@ export class BattleEffectsRenderer {
       effect.progress += dt / effect.duration;
 
       if (effect.progress >= 1) {
-        // Release to appropriate pool based on effect type
-        if (effect.type === 'death') {
-          this.releaseToPool(this.deathEffectPool, effect.mesh);
-        } else {
-          this.releaseToPool(this.groundEffectPool, effect.mesh);
-        }
+        this.releaseToPool(effect.sourcePool, effect.mesh);
         this.groundEffects.splice(i, 1);
       } else {
         // Scale and fade
@@ -1790,7 +1853,8 @@ export class BattleEffectsRenderer {
       if (explosion.progress >= 1) {
         // Cleanup
         if (explosion.coreFlash) this.releaseToPool(this.explosionCorePool, explosion.coreFlash);
-        if (explosion.shockwaveRing) this.releaseToPool(this.shockwavePool, explosion.shockwaveRing);
+        if (explosion.shockwaveRing)
+          this.releaseToPool(this.shockwavePool, explosion.shockwaveRing);
         for (const debris of explosion.debrisParticles) {
           this.releaseToPool(this.debrisPool, debris.mesh);
         }
@@ -1811,7 +1875,8 @@ export class BattleEffectsRenderer {
           const shockwaveProgress = Math.min(explosion.progress * 2, 1);
           const scale = 0.5 + shockwaveProgress * 4 * explosion.intensity;
           explosion.shockwaveRing.scale.set(scale, scale, 1);
-          (explosion.shockwaveRing.material as THREE.MeshBasicMaterial).opacity = 0.9 * (1 - shockwaveProgress);
+          (explosion.shockwaveRing.material as THREE.MeshBasicMaterial).opacity =
+            0.9 * (1 - shockwaveProgress);
         }
 
         // Update debris
@@ -1923,7 +1988,8 @@ export class BattleEffectsRenderer {
           const shrink = 1 - indicator.progress * 0.5;
           ring.scale.set(baseScale * shrink, baseScale * shrink, 1);
           const baseOpacity = 0.9 - j * 0.2;
-          (ring.material as THREE.MeshBasicMaterial).opacity = baseOpacity * (1 - indicator.progress);
+          (ring.material as THREE.MeshBasicMaterial).opacity =
+            baseOpacity * (1 - indicator.progress);
         }
       }
     }
