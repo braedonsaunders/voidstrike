@@ -854,12 +854,13 @@ export class CombatSystem extends System {
           continue;
         }
 
-        // Check if attacker can target this entity based on air/ground status
-        // Buildings are always ground targets, units check isFlying
+        // Check if attacker can target this entity based on air/ground/naval status
+        // Buildings are always ground targets, units check isFlying and isNaval
         const targetIsFlying = targetUnit?.isFlying ?? false;
+        const targetIsNaval = targetUnit?.isNaval ?? false;
         const canAttackThisTarget = targetBuilding
           ? unit.canAttackGround // Buildings are ground targets
-          : unit.canAttackTarget(targetIsFlying); // Units check air/ground
+          : unit.canAttackTarget(targetIsFlying, targetIsNaval);
 
         if (!canAttackThisTarget) {
           // Cannot attack this target type - clear and find new target
@@ -1117,6 +1118,7 @@ export class CombatSystem extends System {
       attackRange: selfUnit.attackRange,
       canAttackAir: selfUnit.canAttackAir,
       canAttackGround: selfUnit.canAttackGround,
+      canAttackNaval: selfUnit.canAttackNaval,
       includeBuildingsInSearch: selfUnit.canAttackGround,
       attackerVisualRadius: AssetManager.getCachedVisualRadius(
         selfUnit.unitId,
@@ -1197,6 +1199,7 @@ export class CombatSystem extends System {
       attackRange: selfUnit.attackRange,
       canAttackAir: selfUnit.canAttackAir,
       canAttackGround: selfUnit.canAttackGround,
+      canAttackNaval: selfUnit.canAttackNaval,
       includeBuildingsInSearch: selfUnit.canAttackGround,
       attackerVisualRadius: AssetManager.getCachedVisualRadius(
         selfUnit.unitId,

@@ -332,6 +332,19 @@ export class FlockingBehavior {
       return;
     }
 
+    // Naval units in combat: zero cohesion. Cohesion pulls front-line units backward
+    // toward the center of mass of nearby allies — water boundary enforcement then
+    // reverts the resulting position onto land, trapping units in place.
+    const isNaval = selfUnit.movementDomain === 'water' && !selfUnit.isFlying;
+    const isInCombat =
+      selfUnit.state === 'attacking' ||
+      selfUnit.state === 'attackmoving' ||
+      selfUnit.isInAssaultMode ||
+      selfUnit.isNearFriendlyCombat;
+    if (isNaval && isInCombat) {
+      return;
+    }
+
     // Check if this unit has an active attack command or was recently in combat.
     // The lastNearCombatTick check prevents back-line units that drifted slightly
     // outside combat awareness from losing cohesion and being repelled indefinitely.
@@ -452,6 +465,19 @@ export class FlockingBehavior {
 
     // No alignment for workers or stationary units
     if (selfUnit.isWorker || selfUnit.state === 'idle' || selfUnit.state === 'gathering') {
+      return;
+    }
+
+    // Naval units in combat: zero alignment. Matching heading of nearby allies
+    // can oppose forward movement toward targets — water boundary enforcement
+    // amplifies any backward component into a full position revert.
+    const isNaval = selfUnit.movementDomain === 'water' && !selfUnit.isFlying;
+    const isInCombat =
+      selfUnit.state === 'attacking' ||
+      selfUnit.state === 'attackmoving' ||
+      selfUnit.isInAssaultMode ||
+      selfUnit.isNearFriendlyCombat;
+    if (isNaval && isInCombat) {
       return;
     }
 

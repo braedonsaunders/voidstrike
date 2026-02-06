@@ -635,6 +635,56 @@ describe('FlockingBehavior', () => {
       expect(out2.x).toBe(out1.x);
       expect(out2.y).toBe(out1.y);
     });
+
+    it('returns zero force for naval units in combat', () => {
+      const selfTransform = createTestTransform(0, 0);
+      const selfUnit = createTestUnit({
+        state: 'attacking',
+        movementDomain: 'water',
+        isFlying: false,
+      } as Partial<UnitData>);
+      const out = createOutputVector();
+
+      const neighbor = createTestUnit({ state: 'attacking' });
+      const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
+      entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
+      entities.set(2, {
+        x: 5,
+        y: 0,
+        data: createSpatialData(2, createTestTransform(5, 0), neighbor),
+      });
+
+      const grid = createMockSpatialGrid(entities);
+      flocking.calculateCohesionForce(1, selfTransform, selfUnit, out, grid);
+
+      expect(out.x).toBe(0);
+      expect(out.y).toBe(0);
+    });
+
+    it('still applies cohesion for ground units in combat', () => {
+      const selfTransform = createTestTransform(0, 0);
+      const selfUnit = createTestUnit({
+        state: 'moving',
+        movementDomain: 'ground',
+        isFlying: false,
+      } as Partial<UnitData>);
+      const out = createOutputVector();
+
+      const neighbor = createTestUnit({ state: 'moving' });
+      const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
+      entities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
+      entities.set(2, {
+        x: 5,
+        y: 0,
+        data: createSpatialData(2, createTestTransform(5, 0), neighbor),
+      });
+
+      const grid = createMockSpatialGrid(entities);
+      flocking.calculateCohesionForce(1, selfTransform, selfUnit, out, grid);
+
+      // Ground units should still get cohesion
+      expect(out.x).toBeGreaterThan(0);
+    });
   });
 
   // =============================================================================
@@ -759,6 +809,48 @@ describe('FlockingBehavior', () => {
       flocking.calculateAlignmentForce(1, selfTransform, selfUnit, selfVelocity, out, grid, cache);
 
       // No moving neighbors, so no alignment force
+      expect(out.x).toBe(0);
+      expect(out.y).toBe(0);
+    });
+
+    it('returns zero force for naval units in combat', () => {
+      const selfTransform = createTestTransform(0, 0);
+      const selfUnit = createTestUnit({
+        state: 'attacking',
+        movementDomain: 'water',
+        isFlying: false,
+      } as Partial<UnitData>);
+      const selfVelocity = createTestVelocity(1, 0);
+      const out = createOutputVector();
+
+      const neighbor1Transform = createTestTransform(2, 0);
+      const neighbor1Unit = createTestUnit({ state: 'attacking' });
+      const neighbor1Velocity = createTestVelocity(0, 1);
+
+      const gridEntities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
+      gridEntities.set(1, { x: 0, y: 0, data: createSpatialData(1, selfTransform, selfUnit) });
+      gridEntities.set(2, {
+        x: 2,
+        y: 0,
+        data: createSpatialData(2, neighbor1Transform, neighbor1Unit),
+      });
+
+      const cacheEntities = new Map<
+        number,
+        { transform: Transform; unit: Unit; velocity: Velocity }
+      >();
+      cacheEntities.set(1, { transform: selfTransform, unit: selfUnit, velocity: selfVelocity });
+      cacheEntities.set(2, {
+        transform: neighbor1Transform,
+        unit: neighbor1Unit,
+        velocity: neighbor1Velocity,
+      });
+
+      const grid = createMockSpatialGrid(gridEntities);
+      const cache = createMockEntityCache(cacheEntities);
+
+      flocking.calculateAlignmentForce(1, selfTransform, selfUnit, selfVelocity, out, grid, cache);
+
       expect(out.x).toBe(0);
       expect(out.y).toBe(0);
     });
