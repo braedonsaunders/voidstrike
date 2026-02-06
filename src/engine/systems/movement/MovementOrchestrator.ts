@@ -1298,11 +1298,14 @@ export class MovementOrchestrator {
         finalVx = prefVx + tempSeparation.x;
         finalVy = prefVy + tempSeparation.y;
 
+        // Cohesion and alignment for formation movement only. Attacking units have a
+        // specific target — cohesion pulls them backward toward the friendly center of
+        // mass, and alignment can oppose their approach vector. Both cause drift away
+        // from the enemy during sustained engagements.
         if (
           unit.state === 'moving' ||
           unit.state === 'attackmoving' ||
-          unit.state === 'patrolling' ||
-          unit.state === 'attacking'
+          unit.state === 'patrolling'
         ) {
           finalVx += tempCohesion.x;
           finalVy += tempCohesion.y;
