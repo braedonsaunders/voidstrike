@@ -83,6 +83,10 @@ export interface EnemyRelation {
   basePosition: { x: number; y: number } | null;
   /** Estimated enemy army supply near our territory */
   armyNearUs: number;
+  /** Number of operational buildings this enemy has */
+  buildingCount: number;
+  /** Whether this enemy still has at least one headquarters building */
+  hasHeadquarters: boolean;
 }
 
 /**
@@ -177,6 +181,10 @@ export interface AIPlayer {
   enemyRelations: Map<string, EnemyRelation>;
   /** Currently selected primary enemy to attack */
   primaryEnemyId: string | null;
+  /** Enemy the AI has committed to attacking (persists through state transitions) */
+  committedEnemyId: string | null;
+  /** Tick when the current commitment began */
+  commitmentStartTick: number;
   /** Personality-based weights for decision making */
   personalityWeights: PersonalityWeights;
 
@@ -435,6 +443,12 @@ export class AICoordinator extends System {
     return this.world;
   }
 
+  // Building revelation: throttle and tracking
+  private lastRevelationCheckTick = 0;
+  private static readonly REVELATION_CHECK_INTERVAL = 200; // Every ~10 seconds
+  private static readonly REVELATION_DURATION = 12; // Reveal lasts 12 seconds (refresh every 10)
+  private static readonly REVELATION_RADIUS = 5; // Reveal radius around each building
+
   /**
    * Update shared AI primitives with current game state.
    * Called once per update cycle, before individual AI updates.
@@ -448,6 +462,82 @@ export class AICoordinator extends System {
 
     // Update influence map with current unit positions
     this.updateInfluenceMap();
+
+    // SC2-style building revelation: when a player loses all HQ buildings,
+    // reveal their remaining buildings to all other players
+    this.checkBuildingRevelation();
+  }
+
+  /**
+   * SC2-style building revelation: when a player has no headquarters buildings,
+   * reveal all their remaining buildings on the map to every other player.
+   * This prevents endless games where scattered buildings can't be found.
+   */
+  private checkBuildingRevelation(): void {
+    const currentTick = this.game.getCurrentTick();
+    if (currentTick - this.lastRevelationCheckTick < AICoordinator.REVELATION_CHECK_INTERVAL) {
+      return;
+    }
+    this.lastRevelationCheckTick = currentTick;
+
+    // Gather all faction configs to know what HQ building types exist
+    // Use the first AI player's config as reference (all factions share base type detection)
+    const firstAI = this.aiPlayers.values().next().value;
+    if (!firstAI?.config) return;
+    const baseTypes = firstAI.config.roles.baseTypes;
+
+    // Scan all buildings: track per-player HQ status and building positions
+    const playerHasHQ = new Map<string, boolean>();
+    const playerBuildingPositions = new Map<string, Array<{ x: number; y: number }>>();
+    const buildings = this.getCachedBuildingsWithTransform();
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable');
+      const building = entity.get<Building>('Building');
+      const transform = entity.get<Transform>('Transform');
+      const health = entity.get<Health>('Health');
+
+      if (!selectable || !building || !transform || !health) continue;
+      if (health.isDead()) continue;
+      if (!building.isOperational()) continue;
+
+      const ownerId = selectable.playerId;
+
+      // Track building positions
+      if (!playerBuildingPositions.has(ownerId)) {
+        playerBuildingPositions.set(ownerId, []);
+      }
+      playerBuildingPositions.get(ownerId)!.push({ x: transform.x, y: transform.y });
+
+      // Track HQ status
+      if (baseTypes.includes(building.buildingId)) {
+        playerHasHQ.set(ownerId, true);
+      }
+    }
+
+    // For each player with buildings but no HQ, reveal their buildings to all other players
+    for (const [playerId, buildingPositions] of playerBuildingPositions) {
+      if (playerHasHQ.get(playerId)) continue; // Still has HQ — no reveal
+      if (buildingPositions.length === 0) continue;
+
+      debugAI.log(
+        `[AICoordinator] Player ${playerId} has no HQ - revealing ${buildingPositions.length} buildings`
+      );
+
+      // Emit vision reveals for all other players that have buildings (i.e., alive players)
+      for (const [otherPlayerId] of playerBuildingPositions) {
+        if (otherPlayerId === playerId) continue;
+
+        for (const pos of buildingPositions) {
+          this.game.eventBus.emit('vision:reveal', {
+            playerId: otherPlayerId,
+            position: pos,
+            radius: AICoordinator.REVELATION_RADIUS,
+            duration: AICoordinator.REVELATION_DURATION,
+          });
+        }
+      }
+    }
   }
 
   /**
@@ -570,6 +660,8 @@ export class AICoordinator extends System {
       // RTS-style enemy tracking
       enemyRelations: new Map(),
       primaryEnemyId: null,
+      committedEnemyId: null,
+      commitmentStartTick: 0,
       personalityWeights: PERSONALITY_WEIGHTS[actualPersonality],
 
       minerals: 50,

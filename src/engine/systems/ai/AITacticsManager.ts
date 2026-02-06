@@ -42,6 +42,14 @@ const RE_COMMAND_IDLE_INTERVAL = 20; // Re-command idle units every 20 ticks (~1
 const DEFENSE_COMMAND_INTERVAL = 20; // Re-command defending units every 20 ticks (~1 sec)
 const HUNT_MODE_BUILDING_THRESHOLD = 3; // Enter hunt mode when enemy has <= 3 buildings
 
+// Target commitment constants (prevents flip-flopping between enemies)
+const COMMITMENT_SWITCH_SCORE_MULTIPLIER = 1.5; // New target must score 1.5x higher to switch
+const COMMITMENT_NEAR_ELIMINATION_SCORE_FLOOR = 0.05; // Near-dead enemies almost never abandoned
+
+// Defense scaling during committed attacks
+const COMMITTED_ATTACK_DANGER_THRESHOLD = 0.8; // Higher danger required to interrupt cleanup
+const COMMITTED_ATTACK_BUILDING_DAMAGE_THRESHOLD = 0.3; // Only defend badly damaged buildings
+
 export class AITacticsManager {
   private game: IGameInstance;
   private coordinator: AICoordinator;
@@ -102,6 +110,27 @@ export class AITacticsManager {
       enemyPlayerIds.add(selectable.playerId);
     }
 
+    // Count buildings per enemy player (for hunt mode and elimination tracking)
+    const enemyBuildingCounts = new Map<string, number>();
+    const enemyHasHQ = new Map<string, boolean>();
+    const baseTypes = ai.config?.roles.baseTypes ?? [];
+
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId === ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (!building.isOperational()) continue;
+
+      const ownerId = selectable.playerId;
+      enemyBuildingCounts.set(ownerId, (enemyBuildingCounts.get(ownerId) || 0) + 1);
+      if (baseTypes.includes(building.buildingId)) {
+        enemyHasHQ.set(ownerId, true);
+      }
+    }
+
     // Update relations for each enemy
     for (const enemyPlayerId of enemyPlayerIds) {
       let relation = ai.enemyRelations.get(enemyPlayerId);
@@ -115,9 +144,15 @@ export class AITacticsManager {
           threatScore: 0,
           basePosition: null,
           armyNearUs: 0,
+          buildingCount: 0,
+          hasHeadquarters: false,
         };
         ai.enemyRelations.set(enemyPlayerId, relation);
       }
+
+      // Update per-enemy building tracking
+      relation.buildingCount = enemyBuildingCounts.get(enemyPlayerId) || 0;
+      relation.hasHeadquarters = enemyHasHQ.get(enemyPlayerId) || false;
 
       // Find enemy base position and calculate distance
       let enemyBase: { x: number; y: number } | null = null;
@@ -126,7 +161,7 @@ export class AITacticsManager {
         const building = entity.get<Building>('Building')!;
         const transform = entity.get<Transform>('Transform')!;
         if (selectable.playerId !== enemyPlayerId) continue;
-        if (ai.config?.roles.baseTypes.includes(building.buildingId)) {
+        if (baseTypes.includes(building.buildingId)) {
           enemyBase = { x: transform.x, y: transform.y };
           break;
         }
@@ -176,6 +211,15 @@ export class AITacticsManager {
       }
     }
 
+    // Clear commitment if committed enemy has been fully eliminated
+    if (ai.committedEnemyId && !ai.enemyRelations.has(ai.committedEnemyId)) {
+      debugAI.log(
+        `[AITacticsManager] ${ai.playerId} committed enemy ${ai.committedEnemyId} eliminated, clearing commitment`
+      );
+      ai.committedEnemyId = null;
+      ai.commitmentStartTick = 0;
+    }
+
     // Select primary enemy based on personality-weighted scores
     ai.primaryEnemyId = this.selectPrimaryEnemy(ai);
 
@@ -215,17 +259,30 @@ export class AITacticsManager {
     const weHaveControl = threatAnalysis.friendlyInfluence > threatAnalysis.enemyInfluence;
     const opportunityScore = proximityScore * (weHaveControl ? 0.7 : 0.3);
 
-    // Weighted sum using personality weights
+    // Near-elimination bonus: heavily incentivize finishing off nearly-dead enemies
+    let eliminationBonus = 0;
+    if (relation.buildingCount > 0 && relation.buildingCount <= HUNT_MODE_BUILDING_THRESHOLD) {
+      // Scale: 3 buildings = 0.3, 2 buildings = 0.5, 1 building = 0.8
+      eliminationBonus = 0.8 - (relation.buildingCount - 1) * 0.25;
+    } else if (relation.buildingCount > 0 && !relation.hasHeadquarters) {
+      // Lost HQ but still has more buildings: moderate bonus
+      eliminationBonus = 0.2;
+    }
+
+    // Weighted sum using personality weights + elimination awareness
     return (
       proximityScore * weights.proximity +
       threatScore * weights.threat +
       retaliationScore * weights.retaliation +
-      opportunityScore * weights.opportunity
+      opportunityScore * weights.opportunity +
+      eliminationBonus
     );
   }
 
   /**
    * Select the primary enemy to attack based on personality-weighted threat scores.
+   * Includes hysteresis to prevent flip-flopping between targets, especially when
+   * an enemy is near elimination. SC2-style: once committed, finish them off.
    */
   private selectPrimaryEnemy(ai: AIPlayer): string | null {
     let bestEnemyId: string | null = null;
@@ -238,12 +295,53 @@ export class AITacticsManager {
       }
     }
 
+    // Hysteresis: prefer staying on committed target to prevent flip-flopping
+    const committedId = ai.committedEnemyId;
+    if (committedId && ai.enemyRelations.has(committedId)) {
+      const committedRelation = ai.enemyRelations.get(committedId)!;
+      const committedScore = committedRelation.threatScore;
+
+      // Near elimination: almost never switch away — finish them off
+      if (
+        committedRelation.buildingCount > 0 &&
+        committedRelation.buildingCount <= HUNT_MODE_BUILDING_THRESHOLD
+      ) {
+        if (committedScore > COMMITMENT_NEAR_ELIMINATION_SCORE_FLOOR) {
+          debugAI.log(
+            `[AITacticsManager] ${ai.playerId} staying committed to near-eliminated enemy: ${committedId} ` +
+              `(${committedRelation.buildingCount} buildings left)`
+          );
+          return committedId;
+        }
+      }
+
+      // Normal hysteresis: new target must score significantly higher to justify switching
+      if (
+        bestEnemyId !== committedId &&
+        bestScore < committedScore * COMMITMENT_SWITCH_SCORE_MULTIPLIER
+      ) {
+        debugAI.log(
+          `[AITacticsManager] ${ai.playerId} staying committed to ${committedId} ` +
+            `(committed: ${committedScore.toFixed(2)}, best: ${bestScore.toFixed(2)}, ` +
+            `needs ${(committedScore * COMMITMENT_SWITCH_SCORE_MULTIPLIER).toFixed(2)} to switch)`
+        );
+        return committedId;
+      }
+    }
+
+    // Update commitment tracking
+    if (bestEnemyId && bestEnemyId !== committedId) {
+      ai.committedEnemyId = bestEnemyId;
+      ai.commitmentStartTick = this.game.getCurrentTick();
+      debugAI.log(`[AITacticsManager] ${ai.playerId} committing to new enemy: ${bestEnemyId}`);
+    }
+
     if (bestEnemyId) {
       const relation = ai.enemyRelations.get(bestEnemyId)!;
       debugAI.log(
         `[AITacticsManager] ${ai.playerId} selected primary enemy: ${bestEnemyId} ` +
           `(score: ${relation.threatScore.toFixed(2)}, distance: ${relation.baseDistance.toFixed(0)}, ` +
-          `armyNearUs: ${relation.armyNearUs})`
+          `buildings: ${relation.buildingCount}, armyNearUs: ${relation.armyNearUs})`
       );
     }
 
@@ -270,6 +368,8 @@ export class AITacticsManager {
         threatScore: 0,
         basePosition: null,
         armyNearUs: 0,
+        buildingCount: 0,
+        hasHeadquarters: false,
       };
       ai.enemyRelations.set(attackerPlayerId, relation);
     } else {
@@ -289,9 +389,35 @@ export class AITacticsManager {
     const tacticalConfig = config.tactical;
 
     // Priority 1: Defense when under attack
+    // SC2-style: when committed to finishing off a nearly-dead enemy,
+    // only defend against serious threats — ignore minor pokes
     if (this.isUnderAttack(ai)) {
-      ai.state = 'defending';
-      return;
+      if (ai.state === 'attacking' && ai.committedEnemyId) {
+        const committedRelation = ai.enemyRelations.get(ai.committedEnemyId);
+        if (
+          committedRelation &&
+          committedRelation.buildingCount > 0 &&
+          committedRelation.buildingCount <= HUNT_MODE_BUILDING_THRESHOLD
+        ) {
+          // Only interrupt cleanup for serious threats
+          if (!this.isUnderSeriousAttack(ai)) {
+            debugAI.log(
+              `[AITactics] ${ai.playerId}: Ignoring minor threat during cleanup of ${ai.committedEnemyId} ` +
+                `(${committedRelation.buildingCount} buildings left)`
+            );
+            // Stay attacking — don't switch to defending
+          } else {
+            ai.state = 'defending';
+            return;
+          }
+        } else {
+          ai.state = 'defending';
+          return;
+        }
+      } else {
+        ai.state = 'defending';
+        return;
+      }
     }
 
     // Priority 2: Scouting (if enabled and cooldown expired)
@@ -350,6 +476,34 @@ export class AITacticsManager {
 
       if (health.getHealthPercent() < 0.5) return true;
       if (health.getHealthPercent() < 0.9 && recentEnemyContact) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Check if the AI is under a serious attack (higher threshold than isUnderAttack).
+   * Used when the AI is committed to finishing off a nearly-dead enemy — minor pokes
+   * shouldn't interrupt a cleanup operation.
+   */
+  private isUnderSeriousAttack(ai: AIPlayer): boolean {
+    const basePos = this.coordinator.findAIBase(ai);
+    if (basePos) {
+      const influenceMap = this.coordinator.getInfluenceMap();
+      const threatAnalysis = influenceMap.getThreatAnalysis(basePos.x, basePos.y, ai.playerId);
+
+      // Require much higher danger level to interrupt cleanup
+      if (threatAnalysis.dangerLevel > COMMITTED_ATTACK_DANGER_THRESHOLD) return true;
+    }
+
+    // Only trigger for severely damaged buildings (not minor scratches)
+    const buildings = this.coordinator.getCachedBuildings();
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+
+      if (health.getHealthPercent() < COMMITTED_ATTACK_BUILDING_DAMAGE_THRESHOLD) return true;
     }
     return false;
   }
@@ -662,6 +816,7 @@ export class AITacticsManager {
 
   /**
    * Execute the attacking phase with formation control.
+   * Uses per-enemy hunt mode to finish off nearly-dead opponents in FFA.
    */
   public executeAttackingPhase(ai: AIPlayer, currentTick: number): void {
     const armyUnits = this.getArmyUnits(ai.playerId);
@@ -671,8 +826,12 @@ export class AITacticsManager {
       return;
     }
 
-    const enemyBuildingCount = this.countEnemyBuildings(ai);
-    const inHuntMode = enemyBuildingCount > 0 && enemyBuildingCount <= HUNT_MODE_BUILDING_THRESHOLD;
+    // Per-enemy hunt mode: check if the PRIMARY enemy is near elimination
+    const primaryEnemyId = ai.primaryEnemyId;
+    const primaryRelation = primaryEnemyId ? ai.enemyRelations.get(primaryEnemyId) : null;
+    const primaryBuildingCount = primaryRelation?.buildingCount ?? Infinity;
+    const inHuntMode =
+      primaryBuildingCount > 0 && primaryBuildingCount <= HUNT_MODE_BUILDING_THRESHOLD;
 
     // Check engagement status periodically
     const lastCheck = this.lastEngagementCheck.get(ai.playerId) || 0;
@@ -684,21 +843,26 @@ export class AITacticsManager {
 
     const engaged = this.isEngaged.get(ai.playerId) || false;
 
-    // Find target
+    // Find target — in hunt mode, target the specific nearly-dead enemy
     let attackTarget: { x: number; y: number } | null = null;
 
-    if (inHuntMode) {
-      attackTarget = this.findAnyEnemyBuilding(ai);
+    if (inHuntMode && primaryEnemyId) {
+      attackTarget = this.findEnemyBuildingForPlayer(ai, primaryEnemyId);
       if (!attackTarget) {
-        ai.state = 'building';
-        this.isEngaged.set(ai.playerId, false);
-        debugAI.log(
-          `[AITactics] ${ai.playerId}: Hunt mode - no enemy buildings found, returning to build`
-        );
-        return;
+        // Primary enemy's buildings all gone — check for stragglers from anyone
+        attackTarget = this.findAnyEnemyBuilding(ai);
+        if (!attackTarget) {
+          ai.state = 'building';
+          this.isEngaged.set(ai.playerId, false);
+          debugAI.log(
+            `[AITactics] ${ai.playerId}: Hunt mode - no enemy buildings found, returning to build`
+          );
+          return;
+        }
       }
       debugAI.log(
-        `[AITactics] ${ai.playerId}: HUNT MODE - targeting enemy building at (${attackTarget.x.toFixed(0)}, ${attackTarget.y.toFixed(0)})`
+        `[AITactics] ${ai.playerId}: HUNT MODE - targeting ${primaryEnemyId}'s building at ` +
+          `(${attackTarget.x.toFixed(0)}, ${attackTarget.y.toFixed(0)}) [${primaryBuildingCount} left]`
       );
     } else {
       attackTarget = this.findEnemyBase(ai);
@@ -746,23 +910,21 @@ export class AITacticsManager {
       // Send all units to the same target position
       // Let combat system and flocking handle natural spreading during engagement
       // Spreading units to different positions causes them to end up outside sight range
-      {
-        // Regular attack - send all units to same target
-        const command: GameCommand = {
-          tick: currentTick,
-          playerId: ai.playerId,
-          type: 'ATTACK',
-          entityIds: armyUnits,
-          targetPosition: attackTarget,
-        };
-        this.game.issueAICommand(command);
-        debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units`);
-      }
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId: ai.playerId,
+        type: 'ATTACK',
+        entityIds: armyUnits,
+        targetPosition: attackTarget,
+      };
+      this.game.issueAICommand(command);
+      debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units`);
     }
 
     // State transition logic
-    if (enemyBuildingCount === 0) {
-      // No buildings left - check for remaining enemy units
+    const totalEnemyBuildings = this.countEnemyBuildings(ai);
+    if (totalEnemyBuildings === 0) {
+      // No buildings left for any enemy - check for remaining enemy units
       if (this.hasRemainingEnemyUnits(ai)) {
         // Hunt remaining enemy units
         const enemyCluster = this.findEnemyUnitCluster(ai);
@@ -790,6 +952,7 @@ export class AITacticsManager {
         debugAI.log(`[AITactics] ${ai.playerId}: Enemy eliminated, returning units to base`);
       }
     } else if (!engaged && !inHuntMode) {
+      // Disengage timeout — but never disengage during hunt mode
       const disengagedDuration = currentTick - (this.lastEngagementCheck.get(ai.playerId) || 0);
       if (disengagedDuration > 100) {
         ai.state = 'building';
@@ -799,6 +962,7 @@ export class AITacticsManager {
         );
       }
     }
+    // When inHuntMode: never disengage, keep marching toward target
   }
 
   /**
@@ -1201,6 +1365,51 @@ export class AITacticsManager {
       const building = entity.get<Building>('Building')!;
 
       if (selectable.playerId === ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (!building.isOperational()) continue;
+
+      return { x: transform.x, y: transform.y };
+    }
+
+    return null;
+  }
+
+  /**
+   * Find a specific enemy player's building for targeted hunt mode.
+   * Prioritizes HQ buildings, then falls back to any building of that player.
+   */
+  private findEnemyBuildingForPlayer(
+    ai: AIPlayer,
+    targetPlayerId: string
+  ): { x: number; y: number } | null {
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
+    const config = ai.config!;
+    const baseTypes = config.roles.baseTypes;
+
+    // First pass: look for HQ buildings
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+      const transform = entity.get<Transform>('Transform')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId !== targetPlayerId) continue;
+      if (health.isDead()) continue;
+      if (!building.isOperational()) continue;
+
+      if (baseTypes.includes(building.buildingId)) {
+        return { x: transform.x, y: transform.y };
+      }
+    }
+
+    // Second pass: any building from this player
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const transform = entity.get<Transform>('Transform')!;
+      const health = entity.get<Health>('Health')!;
+      const building = entity.get<Building>('Building')!;
+
+      if (selectable.playerId !== targetPlayerId) continue;
       if (health.isDead()) continue;
       if (!building.isOperational()) continue;
 
