@@ -329,7 +329,11 @@ export class AICoordinator extends System {
     this.game.eventBus.on('alert:underAttack', (data: { playerId: string }) => {
       const ai = this.aiPlayers.get(data.playerId);
       if (ai) {
-        ai.state = 'defending';
+        // Update enemy contact timestamp to inform isUnderAttack(), but don't
+        // directly set state — the tactical state machine handles transitions.
+        // Directly forcing 'defending' state bypassed the state machine and caused
+        // rapid oscillation between building/defending with conflicting commands.
+        ai.lastEnemyContact = this.game.getCurrentTick();
       }
     });
 

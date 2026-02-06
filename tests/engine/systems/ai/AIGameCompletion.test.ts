@@ -11,6 +11,10 @@ import { describe, it, expect } from 'vitest';
  * 4. Defense scaling during committed attacks
  * 5. Near-elimination bonus in threat scoring
  * 6. Building revelation when enemy loses HQ
+ * 7. Counter-attack with overwhelming force
+ * 8. Defense sensitivity thresholds (isUnderAttack)
+ * 9. Defense-to-attack cooldown bypass
+ * 10. Large army defense behavior (no formation stutter)
  */
 
 // Re-implement core logic from AITacticsManager for unit testing
@@ -20,6 +24,12 @@ const COMMITMENT_SWITCH_SCORE_MULTIPLIER = 1.5;
 const COMMITMENT_NEAR_ELIMINATION_SCORE_FLOOR = 0.05;
 const COMMITTED_ATTACK_DANGER_THRESHOLD = 0.8;
 const COMMITTED_ATTACK_BUILDING_DAMAGE_THRESHOLD = 0.3;
+
+// Defense sensitivity constants (mirror AITacticsManager.ts)
+const THREAT_WINDOW_TICKS = 100;
+const DEFENSE_DANGER_THRESHOLD = 0.6;
+const DEFENSE_BUILDING_DAMAGE_THRESHOLD = 0.7;
+const COUNTER_ATTACK_STRENGTH_RATIO = 3.0;
 
 interface EnemyRelation {
   lastAttackedUsTick: number;
@@ -147,6 +157,56 @@ function isUnderSeriousAttack(dangerLevel: number, lowestBuildingHealthPercent: 
   if (dangerLevel > COMMITTED_ATTACK_DANGER_THRESHOLD) return true;
   if (lowestBuildingHealthPercent < COMMITTED_ATTACK_BUILDING_DAMAGE_THRESHOLD) return true;
   return false;
+}
+
+/**
+ * Mirror of isUnderAttack logic (updated with less sensitive thresholds)
+ */
+function isUnderAttack(
+  dangerLevel: number,
+  buildingHealthPercents: number[],
+  lastEnemyContactTick: number,
+  currentTick: number
+): boolean {
+  const recentEnemyContact = currentTick - lastEnemyContactTick < THREAT_WINDOW_TICKS;
+
+  if (dangerLevel > DEFENSE_DANGER_THRESHOLD) return true;
+
+  for (const healthPercent of buildingHealthPercents) {
+    if (healthPercent < 0.5) return true;
+    if (healthPercent < DEFENSE_BUILDING_DAMAGE_THRESHOLD && recentEnemyContact) return true;
+  }
+  return false;
+}
+
+/**
+ * Mirror of counter-attack decision logic
+ */
+function shouldCounterAttack(
+  friendlyInfluence: number,
+  enemyInfluence: number,
+  armySupply: number,
+  attackThreshold: number
+): boolean {
+  if (enemyInfluence <= 0) return true; // No enemies = safe
+  const strengthRatio = friendlyInfluence / enemyInfluence;
+  return strengthRatio >= COUNTER_ATTACK_STRENGTH_RATIO && armySupply >= attackThreshold;
+}
+
+/**
+ * Mirror of updateTacticalState defense-to-attack cooldown bypass
+ */
+function shouldTransitionToAttack(
+  armySupply: number,
+  attackThreshold: number,
+  previousState: string,
+  currentTick: number,
+  lastAttackTick: number,
+  attackCooldown: number
+): boolean {
+  const canAttack = armySupply >= attackThreshold;
+  const justDefended = previousState === 'defending';
+  return canAttack && (justDefended || currentTick - lastAttackTick >= attackCooldown);
 }
 
 describe('AI Game Completion', () => {
@@ -567,6 +627,128 @@ describe('AI Game Completion', () => {
       // Should switch: 0.8 > 0.3 * 1.5 = 0.45
       const result = selectPrimaryEnemy(relations, 'enemyA');
       expect(result).toBe('enemyB');
+    });
+  });
+
+  describe('Defense sensitivity (isUnderAttack)', () => {
+    it('does NOT trigger defense for building at 85% HP (above 0.7 threshold)', () => {
+      // Old bug: building at 85% + recentEnemyContact triggered defense with 0.9 threshold
+      const result = isUnderAttack(0.3, [0.85], 90, 100);
+      expect(result).toBe(false);
+    });
+
+    it('does NOT trigger defense for building at 75% HP without recent contact', () => {
+      // Building below 0.7 but no recent contact = no defense
+      const result = isUnderAttack(0.3, [0.75], 0, 200);
+      expect(result).toBe(false);
+    });
+
+    it('triggers defense for building at 65% HP with recent enemy contact', () => {
+      // Building below 0.7 + recent contact = defense
+      const result = isUnderAttack(0.3, [0.65], 95, 100);
+      expect(result).toBe(true);
+    });
+
+    it('always triggers defense for building below 50% HP', () => {
+      const result = isUnderAttack(0.0, [0.4], 0, 10000);
+      expect(result).toBe(true);
+    });
+
+    it('does NOT trigger for danger level 0.55 (below 0.6 threshold)', () => {
+      // Old code triggered at 0.5; now needs 0.6
+      const result = isUnderAttack(0.55, [1.0], 0, 100);
+      expect(result).toBe(false);
+    });
+
+    it('triggers for danger level 0.65', () => {
+      const result = isUnderAttack(0.65, [1.0], 0, 100);
+      expect(result).toBe(true);
+    });
+
+    it('enemy contact expires after 100 ticks (not 200)', () => {
+      // Contact at tick 0, current tick 150 → expired (100-tick window)
+      const result = isUnderAttack(0.3, [0.65], 0, 150);
+      expect(result).toBe(false);
+
+      // Contact at tick 55, current tick 150 → still active (within 100 ticks)
+      const result2 = isUnderAttack(0.3, [0.65], 55, 150);
+      expect(result2).toBe(true);
+    });
+
+    it('healthy buildings with minor danger do not trigger defense', () => {
+      // All buildings at full health, minor danger = no defense
+      const result = isUnderAttack(0.4, [1.0, 0.95, 0.98], 90, 100);
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('Counter-attack with overwhelming force', () => {
+    it('counter-attacks when army is 3x+ stronger than local threat', () => {
+      // Friendly influence 150, enemy influence 30 → ratio 5.0 >= 3.0
+      const result = shouldCounterAttack(150, 30, 20, 10);
+      expect(result).toBe(true);
+    });
+
+    it('does NOT counter-attack when army is only slightly stronger', () => {
+      // Friendly influence 50, enemy influence 30 → ratio 1.67 < 3.0
+      const result = shouldCounterAttack(50, 30, 20, 10);
+      expect(result).toBe(false);
+    });
+
+    it('does NOT counter-attack when army supply is below threshold', () => {
+      // Strong locally but low overall supply
+      const result = shouldCounterAttack(150, 30, 5, 10);
+      expect(result).toBe(false);
+    });
+
+    it('always counter-attacks when no enemies near base', () => {
+      // Zero enemy influence = Infinity ratio
+      const result = shouldCounterAttack(100, 0, 20, 10);
+      expect(result).toBe(true);
+    });
+
+    it('100-unit army counter-attacks against a few raiders', () => {
+      // Simulates the reported bug: massive army sitting at base
+      // Friendly influence ~500, enemy influence ~20 (a few raiders)
+      const result = shouldCounterAttack(500, 20, 100, 10);
+      expect(result).toBe(true);
+    });
+
+    it('does NOT counter-attack against equal-strength armies', () => {
+      // Friendly 100, enemy 80 → ratio 1.25 < 3.0
+      const result = shouldCounterAttack(100, 80, 50, 10);
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('Defense-to-attack cooldown bypass', () => {
+    it('allows immediate attack transition from defending state', () => {
+      // Was just defending, threat cleared, has enough army
+      const result = shouldTransitionToAttack(20, 10, 'defending', 100, 50, 200);
+      expect(result).toBe(true);
+    });
+
+    it('respects cooldown when transitioning from building state', () => {
+      // Normal cooldown applies when not coming from defense
+      const result = shouldTransitionToAttack(20, 10, 'building', 100, 50, 200);
+      expect(result).toBe(false); // 100 - 50 = 50 < 200 cooldown
+    });
+
+    it('attacks normally when cooldown has expired', () => {
+      const result = shouldTransitionToAttack(20, 10, 'building', 300, 50, 200);
+      expect(result).toBe(true); // 300 - 50 = 250 >= 200 cooldown
+    });
+
+    it('does NOT attack without sufficient army even from defending', () => {
+      const result = shouldTransitionToAttack(5, 10, 'defending', 100, 50, 200);
+      expect(result).toBe(false); // 5 < 10 threshold
+    });
+
+    it('prevents AI from getting stuck in building state after defense', () => {
+      // Scenario: AI just cleared a threat, has massive 100-supply army,
+      // but lastAttackTick was recent. Without bypass, it would sit in building state.
+      const result = shouldTransitionToAttack(100, 10, 'defending', 105, 100, 200);
+      expect(result).toBe(true); // justDefended bypasses cooldown
     });
   });
 });
