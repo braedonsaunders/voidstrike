@@ -1155,14 +1155,15 @@ export class MovementOrchestrator {
           finalVy += tempSeparation.y * collisionConfig.arrivalSpreadStrength;
         }
 
-        // Add cohesion and alignment
-        // Include 'attacking' so out-of-range units maintain group cohesion while closing.
-        // In-range attacking units never reach here (processAttackingUnit returns skipMovement=true).
+        // Cohesion and alignment for formation movement only. Attacking units have a
+        // specific target — cohesion pulls them backward toward the friendly center of
+        // mass, and alignment can oppose their approach vector. Both cause drift away
+        // from the enemy during sustained engagements. In-range attacking units never
+        // reach here (processAttackingUnit returns skipMovement=true).
         if (
           unit.state === 'moving' ||
           unit.state === 'attackmoving' ||
-          unit.state === 'patrolling' ||
-          unit.state === 'attacking'
+          unit.state === 'patrolling'
         ) {
           // Combat units always use JS fallback for cohesion/alignment because WASM
           // computes a simple centroid of ALL neighbors, whereas JS cohesion for combat
@@ -1394,6 +1395,21 @@ export class MovementOrchestrator {
       );
       finalVx += tempStuckNudge.x;
       finalVy += tempStuckNudge.y;
+    }
+
+    // Attacking units closing on a target must never drift backward.
+    // Separation and physics push from packed allies can overpower the
+    // approach velocity, especially for units at the back of a group.
+    // Remove any velocity component opposing the target direction — the
+    // unit can still slide perpendicular to spread around obstacles.
+    if (unit.state === 'attacking' && distance > this.arrivalThreshold) {
+      const dot = finalVx * dx + finalVy * dy;
+      if (dot < 0) {
+        const invDistSq = 1 / (distance * distance);
+        const backwardScale = dot * invDistSq;
+        finalVx -= backwardScale * dx;
+        finalVy -= backwardScale * dy;
+      }
     }
 
     // Velocity deadzone: zero out micro-velocities from residual forces
