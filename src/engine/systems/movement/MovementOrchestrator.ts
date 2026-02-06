@@ -30,7 +30,7 @@ import {
   deterministicMagnitude,
   deterministicNormalizeWithMagnitude,
 } from '@/utils/FixedPoint';
-import { WasmBoids, getWasmBoids } from '../../wasm/WasmBoids';
+import { WasmBoids, getWasmBoids, BoidsForces } from '../../wasm/WasmBoids';
 import { CROWD_MAX_AGENTS } from '@/data/pathfinding.config';
 import { stateToEnum } from '../../core/SpatialGrid';
 import { collisionConfig } from '@/data/collisionConfig';
@@ -1065,12 +1065,28 @@ export class MovementOrchestrator {
     };
     const unitGrid = this.world.unitGrid as unknown as FlockingSpatialGrid;
 
-    if (USE_RECAST_CROWD && this.pathfinding.isAgentRegistered(entityId) && !unit.isFlying) {
+    // Shared state used by both base velocity and flocking force phases
+    const isInCombatState =
+      unit.state === 'attackmoving' ||
+      unit.state === 'attacking' ||
+      unit.isInAssaultMode ||
+      unit.isNearFriendlyCombat;
+    const distToFinalTarget =
+      unit.targetX !== null && unit.targetY !== null
+        ? deterministicMagnitude(unit.targetX - transform.x, unit.targetY - transform.y)
+        : distance;
+    const useCrowd =
+      USE_RECAST_CROWD && this.pathfinding.isAgentRegistered(entityId) && !unit.isFlying;
+
+    // ===== PHASE 1: BASE VELOCITY =====
+    // Only this section differs between crowd and direct movement.
+    // Crowd agents get velocity from Recast; direct agents calculate toward target.
+    if (useCrowd) {
       const state = this.pathfinding.getAgentState(entityId);
       if (state) {
         finalVx = state.vx;
         finalVy = state.vy;
-        crowdHeight = state.height; // Store height for terrain following
+        crowdHeight = state.height;
 
         // Fallback if crowd returns zero velocity
         const velMagSq = finalVx * finalVx + finalVy * finalVy;
@@ -1083,12 +1099,11 @@ export class MovementOrchestrator {
             );
           }
           if (distance > 0.01) {
-            // Calculate initial direction toward target
             let fallbackVx = (dx / distance) * unit.maxSpeed;
             let fallbackVy = (dy / distance) * unit.maxSpeed;
 
             // Apply building avoidance to prevent going through buildings
-            // This is critical when NavMesh crowd fails - we must still respect obstacles
+            // Critical when NavMesh crowd fails — we must still respect obstacles
             this.pathfinding.calculateBuildingAvoidanceForce(
               entityId,
               transform,
@@ -1103,7 +1118,6 @@ export class MovementOrchestrator {
             // Reduce speed when building avoidance is active to prevent overshooting
             const avoidMag = deterministicMagnitude(tempBuildingAvoid.x, tempBuildingAvoid.y);
             if (avoidMag > 0.5) {
-              // Strong avoidance active - reduce speed to allow steering to take effect
               const speedReduction = Math.max(0.3, 1.0 - avoidMag * 0.3);
               fallbackVx *= speedReduction;
               fallbackVy *= speedReduction;
@@ -1113,107 +1127,8 @@ export class MovementOrchestrator {
             finalVy = fallbackVy;
           }
         }
-
-        // Add arrival spreading - skip for combat units who should converge, not spread
-        const isInCombatState =
-          unit.state === 'attackmoving' ||
-          unit.state === 'attacking' ||
-          unit.isInAssaultMode ||
-          unit.isNearFriendlyCombat;
-        const distToFinalTarget =
-          unit.targetX !== null && unit.targetY !== null
-            ? deterministicMagnitude(unit.targetX - transform.x, unit.targetY - transform.y)
-            : distance;
-
-        if (distToFinalTarget < collisionConfig.arrivalSpreadRadius && !isInCombatState) {
-          if (useWasmThisFrame) {
-            const wasmForces = this.wasmBoids!.getForces(entityId);
-            if (wasmForces) {
-              tempSeparation.x = wasmForces.separationX;
-              tempSeparation.y = wasmForces.separationY;
-            } else {
-              this.flocking.calculateSeparationForce(
-                entityId,
-                transform,
-                unit,
-                tempSeparation,
-                distToFinalTarget,
-                unitGrid
-              );
-            }
-          } else {
-            this.flocking.calculateSeparationForce(
-              entityId,
-              transform,
-              unit,
-              tempSeparation,
-              distToFinalTarget,
-              unitGrid
-            );
-          }
-          finalVx += tempSeparation.x * collisionConfig.arrivalSpreadStrength;
-          finalVy += tempSeparation.y * collisionConfig.arrivalSpreadStrength;
-        }
-
-        // Cohesion and alignment for formation movement only. Attacking units have a
-        // specific target — cohesion pulls them backward toward the friendly center of
-        // mass, and alignment can oppose their approach vector. Both cause drift away
-        // from the enemy during sustained engagements. In-range attacking units never
-        // reach here (processAttackingUnit returns skipMovement=true).
-        if (
-          unit.state === 'moving' ||
-          unit.state === 'attackmoving' ||
-          unit.state === 'patrolling'
-        ) {
-          // Combat units always use JS fallback for cohesion/alignment because WASM
-          // computes a simple centroid of ALL neighbors, whereas JS cohesion for combat
-          // units specifically targets engaging allies (FlockingBehavior line 364-376).
-          // This ensures combat cohesion pulls toward the fight, not toward idle units.
-          const useWasmForCohesion = useWasmThisFrame && !isInCombatState;
-          if (useWasmForCohesion) {
-            const wasmForces = this.wasmBoids!.getForces(entityId);
-            if (wasmForces) {
-              tempCohesion.x = wasmForces.cohesionX;
-              tempCohesion.y = wasmForces.cohesionY;
-              tempAlignment.x = wasmForces.alignmentX;
-              tempAlignment.y = wasmForces.alignmentY;
-            } else {
-              this.flocking.calculateCohesionForce(
-                entityId,
-                transform,
-                unit,
-                tempCohesion,
-                unitGrid
-              );
-              this.flocking.calculateAlignmentForce(
-                entityId,
-                transform,
-                unit,
-                velocity,
-                tempAlignment,
-                unitGrid,
-                entityCache
-              );
-            }
-          } else {
-            this.flocking.calculateCohesionForce(entityId, transform, unit, tempCohesion, unitGrid);
-            this.flocking.calculateAlignmentForce(
-              entityId,
-              transform,
-              unit,
-              velocity,
-              tempAlignment,
-              unitGrid,
-              entityCache
-            );
-          }
-          finalVx += tempCohesion.x;
-          finalVy += tempCohesion.y;
-          finalVx += tempAlignment.x;
-          finalVy += tempAlignment.y;
-        }
       } else {
-        // Fallback to direct movement
+        // No crowd state — direct fallback
         if (distance > 0.01) {
           finalVx = (dx / distance) * unit.currentSpeed;
           finalVy = (dy / distance) * unit.currentSpeed;
@@ -1221,69 +1136,74 @@ export class MovementOrchestrator {
       }
     } else {
       // Direct movement for flying units or non-crowd
-      let prefVx = 0;
-      let prefVy = 0;
       if (distance > 0.01) {
-        prefVx = (dx / distance) * unit.currentSpeed;
-        prefVy = (dy / distance) * unit.currentSpeed;
+        finalVx = (dx / distance) * unit.currentSpeed;
+        finalVy = (dy / distance) * unit.currentSpeed;
+      }
+    }
+
+    // ===== PHASE 2: FLOCKING FORCES =====
+    // Unified for both crowd and direct paths. The base velocity source
+    // doesn't affect how flocking forces are calculated or applied.
+    if (!unit.isFlying) {
+      // Combat units always use JS for boid forces — WASM uses global idle
+      // strength for all states and simple centroids instead of targeting
+      // engaging allies, producing incorrect force profiles for combat.
+      const useWasmForBoids = useWasmThisFrame && !isInCombatState;
+
+      // Get WASM forces if available (single cached lookup for all three forces)
+      let wasmForces: BoidsForces | null = null;
+      if (useWasmForBoids) {
+        wasmForces = this.wasmBoids!.getForces(entityId) ?? null;
       }
 
-      const distToFinalTarget =
-        unit.targetX !== null && unit.targetY !== null
-          ? deterministicMagnitude(unit.targetX - transform.x, unit.targetY - transform.y)
-          : distance;
+      // Pre-batch neighbors for JS calculations (skip if WASM provided forces)
+      if (!wasmForces) {
+        this.flocking.preBatchNeighbors(entityId, transform, unit, unitGrid);
+      }
 
-      if (!unit.isFlying) {
-        // Combat units use JS fallback even when WASM is available because:
-        // 1. WASM separation uses global idle strength (1.2) for all states — combat should be 0.1
-        // 2. WASM cohesion uses simple centroid instead of targeting engaging allies
-        // 3. WASM uses linear falloff vs JS quadratic — different force profiles
-        const isNonCrowdCombat =
-          unit.state === 'attackmoving' ||
-          unit.state === 'attacking' ||
-          unit.isInAssaultMode ||
-          unit.isNearFriendlyCombat;
-        const useWasmForBoids = useWasmThisFrame && !isNonCrowdCombat;
-        if (useWasmForBoids) {
-          const wasmForces = this.wasmBoids!.getForces(entityId);
-          if (wasmForces) {
-            tempSeparation.x = wasmForces.separationX;
-            tempSeparation.y = wasmForces.separationY;
-            tempCohesion.x = wasmForces.cohesionX;
-            tempCohesion.y = wasmForces.cohesionY;
-            tempAlignment.x = wasmForces.alignmentX;
-            tempAlignment.y = wasmForces.alignmentY;
-          } else {
-            this.flocking.preBatchNeighbors(entityId, transform, unit, unitGrid);
-            this.flocking.calculateSeparationForce(
-              entityId,
-              transform,
-              unit,
-              tempSeparation,
-              distToFinalTarget,
-              unitGrid
-            );
-            this.flocking.calculateCohesionForce(entityId, transform, unit, tempCohesion, unitGrid);
-            this.flocking.calculateAlignmentForce(
-              entityId,
-              transform,
-              unit,
-              velocity,
-              tempAlignment,
-              unitGrid,
-              entityCache
-            );
-          }
+      // --- Separation ---
+      if (wasmForces) {
+        tempSeparation.x = wasmForces.separationX;
+        tempSeparation.y = wasmForces.separationY;
+      } else {
+        this.flocking.calculateSeparationForce(
+          entityId,
+          transform,
+          unit,
+          tempSeparation,
+          distToFinalTarget,
+          unitGrid
+        );
+      }
+
+      // Crowd agents handle local avoidance internally — separation is only
+      // needed for arrival spreading at waypoints. Non-crowd agents rely on
+      // separation as their primary collision avoidance.
+      if (useCrowd) {
+        const isArriving =
+          distToFinalTarget < collisionConfig.arrivalSpreadRadius && !isInCombatState;
+        if (isArriving) {
+          finalVx += tempSeparation.x * collisionConfig.arrivalSpreadStrength;
+          finalVy += tempSeparation.y * collisionConfig.arrivalSpreadStrength;
+        }
+      } else {
+        finalVx += tempSeparation.x;
+        finalVy += tempSeparation.y;
+      }
+
+      // --- Cohesion and alignment ---
+      // Formation movement only. Attacking units have a specific target —
+      // cohesion pulls them backward toward the friendly center of mass, and
+      // alignment can oppose their approach vector. In-range attacking units
+      // never reach here (processAttackingUnit returns skipMovement=true).
+      if (unit.state === 'moving' || unit.state === 'attackmoving' || unit.state === 'patrolling') {
+        if (wasmForces) {
+          tempCohesion.x = wasmForces.cohesionX;
+          tempCohesion.y = wasmForces.cohesionY;
+          tempAlignment.x = wasmForces.alignmentX;
+          tempAlignment.y = wasmForces.alignmentY;
         } else {
-          this.flocking.preBatchNeighbors(entityId, transform, unit, unitGrid);
-          this.flocking.calculateSeparationForce(
-            entityId,
-            transform,
-            unit,
-            tempSeparation,
-            distToFinalTarget,
-            unitGrid
-          );
           this.flocking.calculateCohesionForce(entityId, transform, unit, tempCohesion, unitGrid);
           this.flocking.calculateAlignmentForce(
             entityId,
@@ -1295,37 +1215,23 @@ export class MovementOrchestrator {
             entityCache
           );
         }
-
-        finalVx = prefVx + tempSeparation.x;
-        finalVy = prefVy + tempSeparation.y;
-
-        // Cohesion and alignment for formation movement only. Attacking units have a
-        // specific target — cohesion pulls them backward toward the friendly center of
-        // mass, and alignment can oppose their approach vector. Both cause drift away
-        // from the enemy during sustained engagements.
-        if (
-          unit.state === 'moving' ||
-          unit.state === 'attackmoving' ||
-          unit.state === 'patrolling'
-        ) {
-          finalVx += tempCohesion.x;
-          finalVy += tempCohesion.y;
-          finalVx += tempAlignment.x;
-          finalVy += tempAlignment.y;
-        }
-      } else {
-        // Flying units
-        this.flocking.calculateSeparationForce(
-          entityId,
-          transform,
-          unit,
-          tempSeparation,
-          distToFinalTarget,
-          unitGrid
-        );
-        finalVx = prefVx + tempSeparation.x * collisionConfig.flyingSeparationMultiplier;
-        finalVy = prefVy + tempSeparation.y * collisionConfig.flyingSeparationMultiplier;
+        finalVx += tempCohesion.x;
+        finalVy += tempCohesion.y;
+        finalVx += tempAlignment.x;
+        finalVy += tempAlignment.y;
       }
+    } else {
+      // Flying units: separation only with reduced multiplier
+      this.flocking.calculateSeparationForce(
+        entityId,
+        transform,
+        unit,
+        tempSeparation,
+        distToFinalTarget,
+        unitGrid
+      );
+      finalVx += tempSeparation.x * collisionConfig.flyingSeparationMultiplier;
+      finalVy += tempSeparation.y * collisionConfig.flyingSeparationMultiplier;
     }
 
     // Building avoidance - Two modes:
