@@ -452,23 +452,40 @@ describe('ResourceSystem', () => {
   describe('drop-off distance calculation', () => {
     function calculateDropOffRange(buildingWidth: number): number {
       const buildingHalfWidth = buildingWidth / 2;
-      return buildingHalfWidth + 3.5;
+      return buildingHalfWidth + 2.0;
+    }
+
+    function calculateEdgeDistance(buildingWidth: number): number {
+      const buildingHalfWidth = buildingWidth / 2;
+      return buildingHalfWidth + 0.8;
     }
 
     it('calculates drop-off range for standard base (width 5)', () => {
       const range = calculateDropOffRange(5);
-      expect(range).toBe(6); // 2.5 + 3.5
+      expect(range).toBe(4.5); // 2.5 + 2.0
     });
 
     it('calculates drop-off range for large base (width 7)', () => {
       const range = calculateDropOffRange(7);
-      expect(range).toBe(7); // 3.5 + 3.5
+      expect(range).toBe(5.5); // 3.5 + 2.0
     });
 
-    it('includes buffer for arrival threshold', () => {
-      // 3.5 buffer accounts for movement arrival threshold (0.8)
-      const range = calculateDropOffRange(5);
-      expect(range).toBeGreaterThan(5); // Greater than building width
+    it('drop-off range covers the movement target with arrival threshold', () => {
+      // Workers target halfWidth + 0.8, arrival threshold is 0.8
+      // So workers stop at worst at halfWidth + 1.6, dropoff range is halfWidth + 2.0
+      const edgeDist = calculateEdgeDistance(5); // 3.3
+      const arrivalThreshold = 0.8;
+      const worstStopDistance = edgeDist + arrivalThreshold; // 4.1
+      const dropOffRange = calculateDropOffRange(5); // 4.5
+      expect(dropOffRange).toBeGreaterThan(worstStopDistance);
+    });
+
+    it('movement target places workers near building edge', () => {
+      // Workers should target just outside the building, not far away
+      const buildingHalfWidth = 5 / 2; // 2.5 (building edge from center)
+      const edgeDist = calculateEdgeDistance(5); // 3.3
+      const distFromEdge = edgeDist - buildingHalfWidth; // 0.8
+      expect(distFromEdge).toBeLessThanOrEqual(1.0);
     });
   });
 
