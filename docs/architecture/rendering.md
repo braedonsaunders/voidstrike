@@ -1540,6 +1540,7 @@ const waves = [
 4. **Notification**: User is notified of quality reduction
 
 **Implementation:**
+
 ```typescript
 // WaterMemoryManager.ts
 async handleDeviceLost(device: GPUDevice) {
@@ -1725,6 +1726,7 @@ The map editor renders water with proper orientation:
 ### Performance Considerations
 
 - Object pooling for all mesh types (150+ per pool)
+- Pool-tracked ground effects: each `GroundEffect` stores its `sourcePool` reference to guarantee correct release (prevents silent pool mismatch leaks)
 - Vector3 pooling to avoid allocation in hot loops
 - Instanced mesh particles for GPU efficiency
 - Separate render groups for ground vs air effects
@@ -1743,10 +1745,12 @@ The map editor renders water with proper orientation:
 ### Event Flow
 
 ```
+
 CombatSystem.processAttack()
 ├── Emit 'combat:attack' → BattleEffectsRenderer creates projectile
 ├── Emit 'damage:dealt' → DamageNumberSystem shows/consolidates number
 └── Emit 'player:damage' → ScreenEffectsSystem triggers effects
+
 ```
 
 ---
@@ -1765,38 +1769,40 @@ VOIDSTRIKE features a comprehensive overlay system for strategic information dis
 ### Architecture
 
 ```
+
 ┌─────────────────────────────────────────────────────────────────┐
-│                     OVERLAY SYSTEM                               │
-│                                                                  │
-│  ┌─────────────────────┐     ┌─────────────────────────────┐    │
-│  │  TSLGameOverlayManager │     │  OverlayScene (Phaser 2D)   │    │
-│  │  (src/rendering/tsl/)│     │  (src/phaser/scenes/)       │    │
-│  │                     │     │                             │    │
-│  │  • Terrain overlay  │     │  • Attack range (hold R)    │    │
-│  │  • Elevation overlay│     │  • Vision range (hold V)    │    │
-│  │  • Threat overlay   │     │  • Resource markers         │    │
-│  │  • Navmesh overlay  │     │  • Tactical grid view       │    │
-│  │  • Buildable grid   │     │                             │    │
-│  └─────────────────────┘     └─────────────────────────────┘    │
-│                                                                  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                    WEB WORKERS                             │  │
-│  │  overlay.worker.ts     pathfinding.worker.ts              │  │
-│  │  • Navmesh chunk       • Batch isWalkable queries         │  │
-│  │    processing          • Batch connectivity checks        │  │
-│  │  • Threat computation                                     │  │
-│  │  • Buildable grid                                         │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                  │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                    CACHING (IndexedDB)                     │  │
-│  │  overlayCache.ts - Static overlay persistence              │  │
-│  │  • Keyed by map hash + overlay type                        │  │
-│  │  • 7-day expiry                                            │  │
-│  │  • Version invalidation                                    │  │
-│  └───────────────────────────────────────────────────────────┘  │
+│ OVERLAY SYSTEM │
+│ │
+│ ┌─────────────────────┐ ┌─────────────────────────────┐ │
+│ │ TSLGameOverlayManager │ │ OverlayScene (Phaser 2D) │ │
+│ │ (src/rendering/tsl/)│ │ (src/phaser/scenes/) │ │
+│ │ │ │ │ │
+│ │ • Terrain overlay │ │ • Attack range (hold R) │ │
+│ │ • Elevation overlay│ │ • Vision range (hold V) │ │
+│ │ • Threat overlay │ │ • Resource markers │ │
+│ │ • Navmesh overlay │ │ • Tactical grid view │ │
+│ │ • Buildable grid │ │ │ │
+│ └─────────────────────┘ └─────────────────────────────┘ │
+│ │
+│ ┌───────────────────────────────────────────────────────────┐ │
+│ │ WEB WORKERS │ │
+│ │ overlay.worker.ts pathfinding.worker.ts │ │
+│ │ • Navmesh chunk • Batch isWalkable queries │ │
+│ │ processing • Batch connectivity checks │ │
+│ │ • Threat computation │ │
+│ │ • Buildable grid │ │
+│ └───────────────────────────────────────────────────────────┘ │
+│ │
+│ ┌───────────────────────────────────────────────────────────┐ │
+│ │ CACHING (IndexedDB) │ │
+│ │ overlayCache.ts - Static overlay persistence │ │
+│ │ • Keyed by map hash + overlay type │ │
+│ │ • 7-day expiry │ │
+│ │ • Version invalidation │ │
+│ └───────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
-```
+
+````
 
 ### Overlay Types
 
@@ -1843,7 +1849,7 @@ const processBatch = async (): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, 0));
   await processBatch();
 };
-```
+````
 
 **Result**: Overlay appears progressively in <2 seconds, game remains responsive.
 
