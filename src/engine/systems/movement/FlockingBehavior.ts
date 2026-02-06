@@ -161,6 +161,20 @@ export class FlockingBehavior {
       return 0;
     }
 
+    const isNaval = unit.movementDomain === 'water' && !unit.isFlying;
+    const isInCombat =
+      unit.state === 'attacking' ||
+      unit.state === 'attackmoving' ||
+      unit.isInAssaultMode ||
+      unit.isNearFriendlyCombat;
+
+    // Naval units in combat: zero separation. Water terrain boundaries are rigid
+    // constraints — even minimal separation accumulates into position reverts that
+    // trap units in place, preventing them from closing to attack range.
+    if (isNaval && isInCombat) {
+      return 0;
+    }
+
     // Attacking: minimal separation - focus on attacking, not spreading
     if (unit.state === 'attacking') {
       return collisionConfig.separationStrengthCombat;
@@ -653,12 +667,19 @@ export class FlockingBehavior {
       forceY *= scale;
     }
 
-    // SC2-style: combat units overlap freely during engagements.
-    // Reduced so cohesion+alignment (0.4) dominates physics push (max 0.3).
-    // Prevents back-line units from being pushed backward away from the fight.
+    // Combat units overlap freely during engagements.
+    // Reduced so cohesion+alignment dominates physics push.
+    // Naval combat units get zero push — water boundary enforcement amplifies
+    // residual forces into full position reverts, causing backward drift.
     if (selfIsNearCombat) {
-      forceX *= 0.15;
-      forceY *= 0.15;
+      const isNaval = selfUnit.movementDomain === 'water' && !selfUnit.isFlying;
+      if (isNaval) {
+        forceX = 0;
+        forceY = 0;
+      } else {
+        forceX *= 0.15;
+        forceY *= 0.15;
+      }
     }
 
     // PERF: Cache the result

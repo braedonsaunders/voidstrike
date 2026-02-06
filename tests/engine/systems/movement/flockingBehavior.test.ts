@@ -275,6 +275,68 @@ describe('FlockingBehavior', () => {
       // Assault mode idle units use combat-level separation
       expect(assaultStrength).toBe(attackingStrength);
     });
+
+    it('returns 0 for naval units when attacking', () => {
+      const unit = createTestUnit({
+        state: 'attacking',
+        movementDomain: 'water',
+        isFlying: false,
+      } as Partial<UnitData>);
+      const strength = flocking.getSeparationStrength(unit, 10);
+      expect(strength).toBe(0);
+    });
+
+    it('returns 0 for naval units when attack-moving', () => {
+      const unit = createTestUnit({
+        state: 'attackmoving',
+        movementDomain: 'water',
+        isFlying: false,
+      } as Partial<UnitData>);
+      const strength = flocking.getSeparationStrength(unit, 10);
+      expect(strength).toBe(0);
+    });
+
+    it('returns 0 for naval units in assault mode', () => {
+      const unit = createTestUnit({
+        state: 'idle',
+        movementDomain: 'water',
+        isFlying: false,
+        isInAssaultMode: true,
+      } as Partial<UnitData>);
+      const strength = flocking.getSeparationStrength(unit, 10);
+      expect(strength).toBe(0);
+    });
+
+    it('returns 0 for naval units near friendly combat', () => {
+      const unit = createTestUnit({
+        state: 'idle',
+        movementDomain: 'water',
+        isFlying: false,
+        isNearFriendlyCombat: true,
+      } as Partial<UnitData>);
+      const strength = flocking.getSeparationStrength(unit, 10);
+      expect(strength).toBe(0);
+    });
+
+    it('returns normal combat strength for ground units when attacking', () => {
+      const unit = createTestUnit({
+        state: 'attacking',
+        movementDomain: 'ground',
+        isFlying: false,
+      } as Partial<UnitData>);
+      const strength = flocking.getSeparationStrength(unit, 10);
+      expect(strength).toBeGreaterThan(0);
+    });
+
+    it('returns normal separation for idle naval units not in combat', () => {
+      const unit = createTestUnit({
+        state: 'idle',
+        movementDomain: 'water',
+        isFlying: false,
+      } as Partial<UnitData>);
+      const strength = flocking.getSeparationStrength(unit, 10);
+      expect(strength).toBeGreaterThan(0);
+    });
   });
 
   describe('calculateSeparationForce', () => {
@@ -866,6 +928,75 @@ describe('FlockingBehavior', () => {
       // Without combat reduction, overlapping push would be > 1.0
       // With 0.25 reduction, it should be <= 0.5 for a single neighbor
       expect(forceMag).toBeLessThan(1.0);
+    });
+
+    it('zeroes physics push for naval units in combat', () => {
+      const selfTransform = createTestTransform(0, 0);
+      const navalAttackingUnit = createTestUnit({
+        state: 'attacking',
+        collisionRadius: 0.5,
+        movementDomain: 'water',
+        isFlying: false,
+      } as Partial<UnitData>);
+      const out = createOutputVector();
+
+      const neighborUnit = createTestUnit({ state: 'idle', collisionRadius: 0.5 });
+      const neighborTransform = createTestTransform(0.5, 0);
+
+      const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
+      entities.set(1, {
+        x: 0,
+        y: 0,
+        data: createSpatialData(1, selfTransform, navalAttackingUnit),
+      });
+      entities.set(2, {
+        x: 0.5,
+        y: 0,
+        data: createSpatialData(2, neighborTransform, neighborUnit),
+      });
+
+      const grid = createMockSpatialGrid(entities);
+
+      flocking.calculatePhysicsPush(1, selfTransform, navalAttackingUnit, out, grid);
+
+      // Naval combat units should receive zero physics push to prevent
+      // water boundary enforcement from trapping them in revert loops
+      expect(out.x).toBe(0);
+      expect(out.y).toBe(0);
+    });
+
+    it('still applies reduced physics push for ground units in combat', () => {
+      const selfTransform = createTestTransform(0, 0);
+      const groundAttackingUnit = createTestUnit({
+        state: 'attacking',
+        collisionRadius: 0.5,
+        movementDomain: 'ground',
+        isFlying: false,
+      } as Partial<UnitData>);
+      const out = createOutputVector();
+
+      const neighborUnit = createTestUnit({ state: 'idle', collisionRadius: 0.5 });
+      const neighborTransform = createTestTransform(0.5, 0);
+
+      const entities = new Map<number, { x: number; y: number; data: SpatialEntityData }>();
+      entities.set(1, {
+        x: 0,
+        y: 0,
+        data: createSpatialData(1, selfTransform, groundAttackingUnit),
+      });
+      entities.set(2, {
+        x: 0.5,
+        y: 0,
+        data: createSpatialData(2, neighborTransform, neighborUnit),
+      });
+
+      const grid = createMockSpatialGrid(entities);
+
+      flocking.calculatePhysicsPush(1, selfTransform, groundAttackingUnit, out, grid);
+
+      // Ground combat units should still receive reduced (but non-zero) physics push
+      const forceMag = Math.sqrt(out.x * out.x + out.y * out.y);
+      expect(forceMag).toBeGreaterThan(0);
     });
 
     it('applies priority-based pushing (moving pushes idle)', () => {
