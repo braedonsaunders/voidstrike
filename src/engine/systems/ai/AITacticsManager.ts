@@ -34,7 +34,7 @@ import type { FormationType } from '../../ai/FormationControl';
 import { deterministicMagnitude } from '@/utils/FixedPoint';
 
 // Threat assessment constants
-const THREAT_WINDOW_TICKS = 200; // ~10 seconds at 20 ticks/sec
+const THREAT_WINDOW_TICKS = 100; // ~5 seconds at 20 ticks/sec (reduced from 200 to prevent defense lock)
 
 // RTS-style engagement tracking constants
 const ENGAGEMENT_CHECK_INTERVAL = 10; // Check engagement every 10 ticks (~500ms)
@@ -49,6 +49,13 @@ const COMMITMENT_NEAR_ELIMINATION_SCORE_FLOOR = 0.05; // Near-dead enemies almos
 // Defense scaling during committed attacks
 const COMMITTED_ATTACK_DANGER_THRESHOLD = 0.8; // Higher danger required to interrupt cleanup
 const COMMITTED_ATTACK_BUILDING_DAMAGE_THRESHOLD = 0.3; // Only defend badly damaged buildings
+
+// Defense sensitivity thresholds
+const DEFENSE_DANGER_THRESHOLD = 0.6; // Danger level to trigger defense (raised from 0.5)
+const DEFENSE_BUILDING_DAMAGE_THRESHOLD = 0.7; // Building health to trigger defense (lowered from 0.9)
+
+// Counter-attack: override defense when army overwhelms local threat
+const COUNTER_ATTACK_STRENGTH_RATIO = 3.0; // Our influence must be 3x enemy to counter-attack
 
 export class AITacticsManager {
   private game: IGameInstance;
@@ -382,6 +389,11 @@ export class AITacticsManager {
 
   /**
    * Determine and update the AI's tactical state based on game conditions.
+   *
+   * Key improvements over naive defense-first logic:
+   * - Counter-attack: large armies overwhelm local threats instead of turtling
+   * - Defense-to-attack bypass: no cooldown penalty after clearing a threat
+   * - Hunt mode immunity: cleanup operations ignore minor pokes
    */
   public updateTacticalState(ai: AIPlayer, currentTick: number): void {
     const config = ai.config!;
@@ -389,9 +401,9 @@ export class AITacticsManager {
     const tacticalConfig = config.tactical;
 
     // Priority 1: Defense when under attack
-    // SC2-style: when committed to finishing off a nearly-dead enemy,
-    // only defend against serious threats — ignore minor pokes
     if (this.isUnderAttack(ai)) {
+      // SC2-style: when committed to finishing off a nearly-dead enemy,
+      // only defend against serious threats — ignore minor pokes
       if (ai.state === 'attacking' && ai.committedEnemyId) {
         const committedRelation = ai.enemyRelations.get(ai.committedEnemyId);
         if (
@@ -399,25 +411,33 @@ export class AITacticsManager {
           committedRelation.buildingCount > 0 &&
           committedRelation.buildingCount <= HUNT_MODE_BUILDING_THRESHOLD
         ) {
-          // Only interrupt cleanup for serious threats
           if (!this.isUnderSeriousAttack(ai)) {
             debugAI.log(
               `[AITactics] ${ai.playerId}: Ignoring minor threat during cleanup of ${ai.committedEnemyId} ` +
                 `(${committedRelation.buildingCount} buildings left)`
             );
             // Stay attacking — don't switch to defending
-          } else {
-            ai.state = 'defending';
             return;
           }
-        } else {
-          ai.state = 'defending';
-          return;
         }
-      } else {
-        ai.state = 'defending';
+      }
+
+      // Counter-attack: if our army overwhelms the local threat, attack instead of defending.
+      // A 100-unit army shouldn't sit at base defending against a few raiders.
+      const strengthRatio = this.getBaseStrengthRatio(ai);
+      const attackThreshold = tacticalConfig.attackThresholds[ai.difficulty];
+      if (strengthRatio >= COUNTER_ATTACK_STRENGTH_RATIO && ai.armySupply >= attackThreshold) {
+        ai.state = 'attacking';
+        ai.lastAttackTick = currentTick; // Enable attack commands immediately
+        debugAI.log(
+          `[AITactics] ${ai.playerId}: Counter-attacking! Army overwhelms threat ` +
+            `(strength ratio: ${strengthRatio.toFixed(1)}, supply: ${ai.armySupply})`
+        );
         return;
       }
+
+      ai.state = 'defending';
+      return;
     }
 
     // Priority 2: Scouting (if enabled and cooldown expired)
@@ -431,8 +451,10 @@ export class AITacticsManager {
     // Priority 3: Attack when army is strong enough
     const attackThreshold = tacticalConfig.attackThresholds[ai.difficulty];
     const canAttack = ai.armySupply >= attackThreshold;
+    // Bypass cooldown when transitioning from defense — the threat cleared, don't penalize
+    const justDefended = ai.state === 'defending';
 
-    if (canAttack && currentTick - ai.lastAttackTick >= ai.attackCooldown) {
+    if (canAttack && (justDefended || currentTick - ai.lastAttackTick >= ai.attackCooldown)) {
       ai.state = 'attacking';
       return;
     }
@@ -451,6 +473,11 @@ export class AITacticsManager {
 
   /**
    * Check if the AI is currently under attack using InfluenceMap.
+   *
+   * Tuned to avoid permanent defense lock:
+   * - Danger threshold raised to 0.6 (from 0.5) to ignore minor threats
+   * - Building damage threshold lowered to 0.7 (from 0.9) — scratches don't trigger defense
+   * - Threat window halved to 5 seconds (from 10) to clear defense faster
    */
   public isUnderAttack(ai: AIPlayer): boolean {
     const currentTick = this.game.getCurrentTick();
@@ -462,11 +489,10 @@ export class AITacticsManager {
       const influenceMap = this.coordinator.getInfluenceMap();
       const threatAnalysis = influenceMap.getThreatAnalysis(basePos.x, basePos.y, ai.playerId);
 
-      // High danger level indicates attack
-      if (threatAnalysis.dangerLevel > 0.5) return true;
+      if (threatAnalysis.dangerLevel > DEFENSE_DANGER_THRESHOLD) return true;
     }
 
-    // Also check building damage
+    // Check building damage — only significant damage triggers defense
     const buildings = this.coordinator.getCachedBuildings();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -474,8 +500,11 @@ export class AITacticsManager {
 
       if (selectable.playerId !== ai.playerId) continue;
 
+      // Critically damaged buildings always trigger defense
       if (health.getHealthPercent() < 0.5) return true;
-      if (health.getHealthPercent() < 0.9 && recentEnemyContact) return true;
+      // Moderately damaged buildings only trigger with recent enemy contact
+      if (health.getHealthPercent() < DEFENSE_BUILDING_DAMAGE_THRESHOLD && recentEnemyContact)
+        return true;
     }
     return false;
   }
@@ -506,6 +535,22 @@ export class AITacticsManager {
       if (health.getHealthPercent() < COMMITTED_ATTACK_BUILDING_DAMAGE_THRESHOLD) return true;
     }
     return false;
+  }
+
+  /**
+   * Estimate the strength ratio of our forces vs enemy forces near our base.
+   * Uses influence map data which accounts for DPS and unit supply.
+   * Returns Infinity when no enemies are nearby (safe to attack).
+   */
+  private getBaseStrengthRatio(ai: AIPlayer): number {
+    const basePos = this.coordinator.findAIBase(ai);
+    if (!basePos) return Infinity;
+
+    const influenceMap = this.coordinator.getInfluenceMap();
+    const threatAnalysis = influenceMap.getThreatAnalysis(basePos.x, basePos.y, ai.playerId);
+
+    if (threatAnalysis.enemyInfluence <= 0) return Infinity;
+    return threatAnalysis.friendlyInfluence / threatAnalysis.enemyInfluence;
   }
 
   /**
@@ -966,7 +1011,12 @@ export class AITacticsManager {
   }
 
   /**
-   * Execute the defending phase with RetreatCoordination.
+   * Execute the defending phase.
+   *
+   * Simplified defense logic to eliminate stutter from formation recalculation:
+   * - Large armies: attack-move directly toward threat (combat system handles targeting)
+   * - Small armies in extreme danger: coordinated retreat
+   * - No per-unit formation positioning during defense (caused oscillating commands)
    */
   public executeDefendingPhase(ai: AIPlayer, currentTick: number): void {
     const armyUnits = this.getArmyUnits(ai.playerId);
@@ -981,92 +1031,63 @@ export class AITacticsManager {
       return;
     }
 
-    // Get retreat coordinator and influence map
-    const retreatCoordinator = ai.retreatCoordinator;
     const influenceMap = this.coordinator.getInfluenceMap();
-
-    // Update retreat coordination with current state
-    retreatCoordinator.update(this.world, currentTick, ai.playerId, influenceMap);
-
-    // Check group retreat status
-    const retreatStatus = retreatCoordinator.getGroupStatus(this.world, ai.playerId);
-    if (retreatStatus.isRetreating) {
-      // Issue retreat commands to retreating units
-      for (const entityId of armyUnits) {
-        if (retreatCoordinator.shouldRetreat(ai.playerId, entityId)) {
-          const retreatTarget = retreatCoordinator.getRetreatTarget(ai.playerId, entityId);
-          if (retreatTarget) {
-            const command: GameCommand = {
-              tick: currentTick,
-              playerId: ai.playerId,
-              type: 'MOVE',
-              entityIds: [entityId],
-              targetPosition: retreatTarget,
-            };
-            this.game.issueAICommand(command);
-          }
-        }
-      }
-
-      // Check if we can re-engage
-      if (retreatStatus.canReengage) {
-        retreatCoordinator.forceReengage(ai.playerId);
-        debugAI.log(`[AITactics] ${ai.playerId}: Re-engaging after retreat`);
-      }
-      return;
-    }
-
-    // Check for individual unit retreats (e.g., low-health units in small skirmishes)
-    // This handles cases where individual units need to retreat but group retreat isn't triggered
-    let individualRetreatsIssued = 0;
-    for (const entityId of armyUnits) {
-      if (retreatCoordinator.shouldRetreat(ai.playerId, entityId)) {
-        const retreatTarget = retreatCoordinator.getRetreatTarget(ai.playerId, entityId);
-        if (retreatTarget) {
-          const command: GameCommand = {
-            tick: currentTick,
-            playerId: ai.playerId,
-            type: 'MOVE',
-            entityIds: [entityId],
-            targetPosition: retreatTarget,
-          };
-          this.game.issueAICommand(command);
-          individualRetreatsIssued++;
-        }
-      }
-    }
-    if (individualRetreatsIssued > 0) {
-      debugAI.log(
-        `[AITactics] ${ai.playerId}: Issued ${individualRetreatsIssued} individual retreat orders`
-      );
-    }
-
-    // Find nearest enemy threat using InfluenceMap
+    const retreatCoordinator = ai.retreatCoordinator;
     const threatAnalysis = influenceMap.getThreatAnalysis(basePos.x, basePos.y, ai.playerId);
 
-    // If threat is too high, force retreat for low health units
+    // Update retreat coordination
+    retreatCoordinator.update(this.world, currentTick, ai.playerId, influenceMap);
+
+    // Desperate retreat: only for very small armies facing overwhelming force
     if (threatAnalysis.dangerLevel > 0.7 && armyUnits.length < 5) {
-      // Calculate retreat rally point (use safe direction from influence map)
       const safeDir = threatAnalysis.safeDirection;
       const rallyPoint = {
         x: basePos.x + safeDir.x * 15,
         y: basePos.y + safeDir.y * 15,
       };
 
-      // Force retreat for all units
       for (const entityId of armyUnits) {
         retreatCoordinator.forceRetreat(ai.playerId, entityId, rallyPoint, currentTick);
       }
 
+      // Batch retreat commands
+      const retreatingIds: number[] = [];
+      for (const entityId of armyUnits) {
+        if (retreatCoordinator.shouldRetreat(ai.playerId, entityId)) {
+          retreatingIds.push(entityId);
+        }
+      }
+      if (retreatingIds.length > 0) {
+        const command: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'MOVE',
+          entityIds: retreatingIds,
+          targetPosition: rallyPoint,
+        };
+        this.game.issueAICommand(command);
+      }
+
       debugAI.log(
-        `[AITactics] ${ai.playerId}: Initiating coordinated retreat, danger level: ${threatAnalysis.dangerLevel.toFixed(2)}`
+        `[AITactics] ${ai.playerId}: Desperate retreat, danger: ${threatAnalysis.dangerLevel.toFixed(2)}`
       );
       return;
     }
 
-    // Normal defense - find threat position
-    const threatPos = this.findNearestThreat(ai, basePos);
+    // Handle active group retreat (if retreat was previously triggered)
+    const retreatStatus = retreatCoordinator.getGroupStatus(this.world, ai.playerId);
+    if (retreatStatus.isRetreating) {
+      if (retreatStatus.canReengage) {
+        retreatCoordinator.forceReengage(ai.playerId);
+        debugAI.log(`[AITactics] ${ai.playerId}: Re-engaging after retreat`);
+      } else {
+        // Continue retreating — don't issue conflicting attack commands
+        return;
+      }
+    }
 
+    // Find threat position
+    const threatPos = this.findNearestThreat(ai, basePos);
     if (!threatPos) {
       if (!this.isUnderAttack(ai)) {
         ai.state = 'building';
@@ -1075,50 +1096,37 @@ export class AITacticsManager {
       return;
     }
 
-    // Throttle defense commands
+    // Throttle defense commands to prevent command spam
     const lastDefenseCommand = this.lastDefenseCommandTick.get(ai.playerId) || 0;
-    const shouldCommand = currentTick - lastDefenseCommand >= DEFENSE_COMMAND_INTERVAL;
-
-    if (shouldCommand) {
-      const idleDefenders = this.getIdleDefendingUnits(ai.playerId, armyUnits);
-
-      if (idleDefenders.length > 0) {
-        // Apply spread formation for defense
-        const armyWithPositions = this.getArmyUnitsWithPositions(ai.playerId);
-        if (armyWithPositions.length > 2) {
-          const formation = this.applyFormation(ai, armyWithPositions, threatPos, 'spread');
-
-          for (const { entityId, position } of formation) {
-            if (idleDefenders.includes(entityId)) {
-              const command: GameCommand = {
-                tick: currentTick,
-                playerId: ai.playerId,
-                type: 'ATTACK',
-                entityIds: [entityId],
-                targetPosition: position,
-              };
-              this.game.issueAICommand(command);
-            }
-          }
-        } else {
-          const command: GameCommand = {
-            tick: currentTick,
-            playerId: ai.playerId,
-            type: 'ATTACK',
-            entityIds: idleDefenders,
-            targetPosition: threatPos,
-          };
-          this.game.issueAICommand(command);
-        }
-
-        debugAI.log(
-          `[AITactics] ${ai.playerId}: Commanding ${idleDefenders.length}/${armyUnits.length} ` +
-            `idle defenders to threat at (${threatPos.x.toFixed(0)}, ${threatPos.y.toFixed(0)})`
-        );
+    if (currentTick - lastDefenseCommand < DEFENSE_COMMAND_INTERVAL) {
+      if (!this.isUnderAttack(ai)) {
+        ai.state = 'building';
       }
-
-      this.lastDefenseCommandTick.set(ai.playerId, currentTick);
+      return;
     }
+
+    const idleDefenders = this.getIdleDefendingUnits(ai.playerId, armyUnits);
+    if (idleDefenders.length > 0) {
+      // Simple defense: attack-move all idle defenders directly toward the threat.
+      // No formation calculations — they cause stutter by recalculating positions
+      // every command interval, oscillating units between different targets.
+      // The combat system handles unit-level targeting and natural spreading.
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId: ai.playerId,
+        type: 'ATTACK',
+        entityIds: idleDefenders,
+        targetPosition: threatPos,
+      };
+      this.game.issueAICommand(command);
+
+      debugAI.log(
+        `[AITactics] ${ai.playerId}: Commanding ${idleDefenders.length}/${armyUnits.length} ` +
+          `idle defenders to threat at (${threatPos.x.toFixed(0)}, ${threatPos.y.toFixed(0)})`
+      );
+    }
+
+    this.lastDefenseCommandTick.set(ai.playerId, currentTick);
 
     if (!this.isUnderAttack(ai)) {
       ai.state = 'building';
