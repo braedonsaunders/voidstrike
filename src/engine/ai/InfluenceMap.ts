@@ -164,6 +164,8 @@ export interface ThreatAnalysis {
   friendlyInfluence: number;
   /** Danger level 0-1 (1 = very dangerous) */
   dangerLevel: number;
+  /** Raw absolute enemy influence at position (> 0 means enemies are present) */
+  threatPresence: number;
   /** Whether position is contested */
   isContested: boolean;
   /** Direction to safety (normalized) */
@@ -416,6 +418,7 @@ export class InfluenceMap {
         enemyInfluence: 0,
         friendlyInfluence: 0,
         dangerLevel: 0,
+        threatPresence: 0,
         isContested: false,
         safeDirection: { x: 0, y: 0 },
       };
@@ -441,7 +444,7 @@ export class InfluenceMap {
     // Calculate danger level (0-1)
     let dangerLevel = 0;
     if (totalInfluence > 0) {
-      dangerLevel = Math.min(1, enemyInfluence / (totalInfluence + 10));
+      dangerLevel = Math.min(1, enemyInfluence / (totalInfluence + 0.1));
     }
 
     // Contested if both sides have significant presence
@@ -455,6 +458,7 @@ export class InfluenceMap {
       enemyInfluence,
       friendlyInfluence,
       dangerLevel,
+      threatPresence: enemyInfluence,
       isContested,
       safeDirection,
     };

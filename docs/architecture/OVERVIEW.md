@@ -1002,13 +1002,13 @@ VOIDSTRIKE uses a **fully serverless peer-to-peer architecture** with Nostr-base
 
 #### Protocol Stack
 
-| Layer            | Technology          | Location                                     |
-| ---------------- | ------------------- | -------------------------------------------- |
-| Transport        | WebRTC DataChannels | `src/hooks/useMultiplayer.ts`                |
-| Signaling        | Nostr Protocol      | `src/hooks/useMultiplayer.ts` (lobby codes)  |
-| NAT Traversal    | STUN (Google)       | ICE servers in useMultiplayer                |
-| Synchronization  | Lockstep            | `src/engine/network/types.ts`                |
-| Desync Detection | Checksums           | `src/engine/network/DesyncDetection.ts`      |
+| Layer            | Technology          | Location                                    |
+| ---------------- | ------------------- | ------------------------------------------- |
+| Transport        | WebRTC DataChannels | `src/hooks/useMultiplayer.ts`               |
+| Signaling        | Nostr Protocol      | `src/hooks/useMultiplayer.ts` (lobby codes) |
+| NAT Traversal    | STUN (Google)       | ICE servers in useMultiplayer               |
+| Synchronization  | Lockstep            | `src/engine/network/types.ts`               |
+| Desync Detection | Checksums           | `src/engine/network/DesyncDetection.ts`     |
 
 #### Lobby System (`src/hooks/useMultiplayer.ts`)
 
@@ -2678,13 +2678,68 @@ type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting'
 
 #### Subsystem Responsibilities
 
-| Subsystem                | Responsibilities                                                    |
-| ------------------------ | ------------------------------------------------------------------- |
-| **AICoordinator**        | AI player state, subsystem coordination, entity query caching       |
-| **AIEconomyManager**     | Worker gathering, repair assignment, incomplete building resumption |
-| **AIBuildOrderExecutor** | Build order steps, macro rules, research initiation, expansion      |
-| **AITacticsManager**     | Tactical state, attack/defend/harass phase execution                |
-| **AIScoutingManager**    | Scout selection, target determination, enemy intel                  |
+| Subsystem                | Responsibilities                                                                               |
+| ------------------------ | ---------------------------------------------------------------------------------------------- |
+| **AICoordinator**        | AI player state, subsystem coordination, entity query caching, reactive defense event handling |
+| **AIEconomyManager**     | Worker gathering, repair assignment, incomplete building resumption                            |
+| **AIBuildOrderExecutor** | Build order steps, macro rules, composition-aware production, research initiation, expansion   |
+| **AITacticsManager**     | Tactical state, persistent attack operations, defend/harass phase execution                    |
+| **AIScoutingManager**    | Scout selection, target determination, enemy intel                                             |
+
+#### Attack Operation System
+
+Attacks are managed as persistent operations that don't oscillate between states:
+
+```typescript
+interface AttackOperation {
+  target: { x: number; y: number };
+  targetPlayerId: string;
+  startTick: number;
+  engaged: boolean;
+}
+```
+
+Once an attack launches, `activeAttackOperation` persists on the AIPlayer. The state machine stays in `'attacking'` as long as the operation exists. The operation ends only when:
+
+- Target is destroyed (retargets to next known enemy building)
+- Army is eliminated
+- Base is under serious threat (operation paused)
+- Disengage timeout expires (no targets found for 100+ ticks)
+
+This prevents the previous bug where the attack cooldown caused the AI to flip between `'attacking'` and `'building'` every few seconds, recalling its army mid-march.
+
+#### Reactive Defense System
+
+Two-layer defense system inspired by SC2's region-based defense:
+
+**Layer 1 — Event-Driven (instant):** When `alert:underAttack` fires, `triggerReactiveDefense()` immediately commands all army units within 60 units of base to respond. Throttled to once per 10 ticks. Bypasses the `actionDelayTicks` gate entirely.
+
+**Layer 2 — Influence-Based (periodic):** `isUnderAttack()` evaluates using:
+
+- `dangerLevel > 0.4` (influence map ratio, lowered from 0.6)
+- `threatPresence > 15` with recent enemy contact (absolute enemy influence signal)
+- Building health below 85% with recent enemy contact (raised from 70%)
+- Building health below 50% (always triggers)
+
+#### Composition-Aware Production
+
+The `doMacro()` method uses a two-pass approach instead of pure priority-based first-match:
+
+**Pass 1:** Non-train rules (supply, buildings, expand, research) execute with priority-based first-match.
+
+**Pass 2:** All eligible train rules are collected and scored using `scoreUnitForProduction()`:
+
+```
+score = baseWeight × diversityMultiplier × techAvailability × affordability
+```
+
+The `diversityMultiplier` uses the `compositionGoals` defined per game phase:
+
+- Under-represented units get up to 2.5× boost
+- Over-represented units get reduced to 0.3×
+- Top 3 candidates are weighted-randomly selected for variety
+
+`canProduceUnit()` pre-checks building + addon availability, preventing cooldown waste on units the AI can't actually build yet.
 
 #### Simulation-Based Economy
 
