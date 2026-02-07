@@ -301,32 +301,91 @@ export class AIBuildOrderExecutor {
     // Sort rules by priority (higher first)
     const sortedRules = [...config.macroRules].sort((a, b) => b.priority - a.priority);
 
-    // Try to execute rules
+    // Pass 1: Execute non-train rules immediately (supply, buildings, expand, research)
+    // These keep their priority-based first-match behavior
     for (const rule of sortedRules) {
-      // Check difficulty restriction
-      if (rule.difficulties && !rule.difficulties.includes(ai.difficulty)) {
-        continue;
-      }
+      if (rule.difficulties && !rule.difficulties.includes(ai.difficulty)) continue;
 
-      // Check cooldown
       const lastExecution = ai.macroRuleCooldowns.get(rule.id) || 0;
-      if (currentTick - lastExecution < rule.cooldownTicks) {
+      if (currentTick - lastExecution < rule.cooldownTicks) continue;
+
+      if (!evaluateRule(rule, snapshot)) continue;
+
+      if (rule.action.type !== 'train') {
+        const success = this.executeRuleAction(ai, rule.action, snapshot);
+        if (success) {
+          ai.macroRuleCooldowns.set(rule.id, currentTick);
+          if (rule.action.type === 'build') {
+            break; // One build per tick
+          }
+        }
         continue;
       }
+    }
 
-      // Evaluate rule conditions
-      if (!evaluateRule(rule, snapshot)) {
-        continue;
+    // Pass 2: Collect all eligible train rules and score them for composition-aware production
+    interface ScoredTrainOption {
+      ruleId: string;
+      unitId: string;
+      score: number;
+      rule: (typeof sortedRules)[0];
+    }
+    const trainCandidates: ScoredTrainOption[] = [];
+
+    for (const rule of sortedRules) {
+      if (rule.action.type !== 'train') continue;
+      if (rule.difficulties && !rule.difficulties.includes(ai.difficulty)) continue;
+
+      const lastExecution = ai.macroRuleCooldowns.get(rule.id) || 0;
+      if (currentTick - lastExecution < rule.cooldownTicks) continue;
+
+      if (!evaluateRule(rule, snapshot)) continue;
+
+      // Score single-target train rules
+      if (rule.action.targetId) {
+        const score = this.scoreUnitForProduction(ai, rule.action.targetId, rule.priority);
+        if (score > 0) {
+          trainCandidates.push({ ruleId: rule.id, unitId: rule.action.targetId, score, rule });
+        }
       }
 
-      // Execute rule action
-      const success = this.executeRuleAction(ai, rule.action, snapshot);
-      if (success) {
-        ai.macroRuleCooldowns.set(rule.id, currentTick);
-        // Only execute one production rule per tick to prevent over-spending
-        if (rule.action.type === 'train' || rule.action.type === 'build') {
+      // Score weighted-option train rules
+      if (rule.action.options) {
+        for (const option of rule.action.options) {
+          const score = this.scoreUnitForProduction(
+            ai,
+            option.id,
+            option.weight * (rule.priority / 40)
+          );
+          if (score > 0) {
+            trainCandidates.push({ ruleId: rule.id, unitId: option.id, score, rule });
+          }
+        }
+      }
+    }
+
+    // Select best candidate with slight randomness for variety
+    if (trainCandidates.length > 0) {
+      trainCandidates.sort((a, b) => b.score - a.score);
+
+      // Pick from top candidates with weighted random (top 3)
+      const topN = Math.min(3, trainCandidates.length);
+      const topCandidates = trainCandidates.slice(0, topN);
+      const totalScore = topCandidates.reduce((sum, c) => sum + c.score, 0);
+      let roll = this.coordinator.getRandom(ai.playerId).next() * totalScore;
+
+      let selected = topCandidates[0];
+      for (const candidate of topCandidates) {
+        roll -= candidate.score;
+        if (roll <= 0) {
+          selected = candidate;
           break;
         }
+      }
+
+      const success = this.tryTrainUnit(ai, selected.unitId);
+      if (success) {
+        ai.macroRuleCooldowns.set(selected.ruleId, currentTick);
       }
     }
   }
@@ -826,6 +885,92 @@ export class AIBuildOrderExecutor {
       return false;
     }
     return true;
+  }
+
+  /**
+   * Check if the AI has the buildings and tech to produce a unit type.
+   * Prevents scoring units we can't actually build yet.
+   */
+  private canProduceUnit(ai: AIPlayer, unitType: string): boolean {
+    const requiresResearchModule = this.unitRequiresResearchModule(unitType);
+
+    const buildings = this.world.getEntitiesWith('Building', 'Selectable');
+    for (const entity of buildings) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const building = entity.get<Building>('Building')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (!building.isComplete()) continue;
+      if (!building.canProduce.includes(unitType)) continue;
+
+      if (requiresResearchModule) {
+        if (!building.hasAddon() || !building.hasTechLab()) {
+          continue;
+        }
+      }
+
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Score a unit type for production using composition-aware utility scoring.
+   * Higher score = more desirable to build right now.
+   *
+   * Factors:
+   * - diversityMultiplier: units under-represented vs composition goals get boosted
+   * - techAvailability: 0 if we can't actually produce this unit (no building/addon)
+   * - affordability: 0 if can't afford
+   */
+  private scoreUnitForProduction(ai: AIPlayer, unitId: string, baseWeight: number): number {
+    if (!this.canAffordUnit(ai, unitId)) return 0;
+    if (!this.canProduceUnit(ai, unitId)) return 0;
+
+    const config = ai.config!;
+    const currentTick = this.game.getCurrentTick();
+    const goals = config.tactical.compositionGoals;
+
+    let targetComposition: Record<string, number> | null = null;
+    for (const goal of goals) {
+      if (currentTick >= goal.timeRange[0] && currentTick < goal.timeRange[1]) {
+        targetComposition = goal.composition;
+        break;
+      }
+    }
+
+    let diversityMultiplier = 1.0;
+
+    if (targetComposition && ai.armySupply > 0) {
+      const totalArmyUnits = Array.from(ai.armyComposition.values()).reduce((a, b) => a + b, 0);
+
+      if (totalArmyUnits > 0) {
+        const currentCount = ai.armyComposition.get(unitId) || 0;
+        const currentPercent = (currentCount / totalArmyUnits) * 100;
+        const targetPercent = targetComposition[unitId] || 0;
+
+        if (targetPercent > 0) {
+          // Under-represented: boost production (up to 2.5x)
+          // Over-represented: reduce production (down to 0.3x)
+          const ratio = currentPercent / targetPercent;
+          if (ratio < 0.5) {
+            diversityMultiplier = 2.5;
+          } else if (ratio < 1.0) {
+            diversityMultiplier = 1.0 + (1.0 - ratio) * 1.5;
+          } else if (ratio > 2.0) {
+            diversityMultiplier = 0.3;
+          } else if (ratio > 1.0) {
+            diversityMultiplier = 1.0 - (ratio - 1.0) * 0.35;
+          }
+        } else {
+          // Unit not in composition goal for this phase
+          diversityMultiplier = 0.5;
+        }
+      }
+    }
+
+    return baseWeight * diversityMultiplier;
   }
 
   /**

@@ -51,8 +51,8 @@ const COMMITTED_ATTACK_DANGER_THRESHOLD = 0.8; // Higher danger required to inte
 const COMMITTED_ATTACK_BUILDING_DAMAGE_THRESHOLD = 0.3; // Only defend badly damaged buildings
 
 // Defense sensitivity thresholds
-const DEFENSE_DANGER_THRESHOLD = 0.6; // Danger level to trigger defense (raised from 0.5)
-const DEFENSE_BUILDING_DAMAGE_THRESHOLD = 0.7; // Building health to trigger defense (lowered from 0.9)
+const DEFENSE_DANGER_THRESHOLD = 0.4; // Danger level to trigger defense (lowered for faster response)
+const DEFENSE_BUILDING_DAMAGE_THRESHOLD = 0.85; // Building health to trigger defense (raised for earlier response)
 
 // Counter-attack: override defense when army overwhelms local threat
 const COUNTER_ATTACK_STRENGTH_RATIO = 3.0; // Our influence must be 3x enemy to counter-attack
@@ -440,6 +440,14 @@ export class AITacticsManager {
       return;
     }
 
+    // Active attack operation persists - don't re-evaluate
+    // The operation ends inside executeAttackingPhase when target is destroyed
+    // or when there's no army left
+    if (ai.activeAttackOperation) {
+      ai.state = 'attacking';
+      return;
+    }
+
     // Priority 2: Scouting (if enabled and cooldown expired)
     if (diffConfig.scoutingEnabled && currentTick - ai.lastScoutTick >= ai.scoutCooldown) {
       if (ai.scoutedLocations.size < 5) {
@@ -448,7 +456,7 @@ export class AITacticsManager {
       }
     }
 
-    // Priority 3: Attack when army is strong enough
+    // Priority 3: Start NEW attack when army is strong enough
     const attackThreshold = tacticalConfig.attackThresholds[ai.difficulty];
     const canAttack = ai.armySupply >= attackThreshold;
     // Bypass cooldown when transitioning from defense — the threat cleared, don't penalize
@@ -456,6 +464,7 @@ export class AITacticsManager {
 
     if (canAttack && (justDefended || currentTick - ai.lastAttackTick >= ai.attackCooldown)) {
       ai.state = 'attacking';
+      // Attack operation will be created in executeAttackingPhase
       return;
     }
 
@@ -474,25 +483,28 @@ export class AITacticsManager {
   /**
    * Check if the AI is currently under attack using InfluenceMap.
    *
-   * Tuned to avoid permanent defense lock:
-   * - Danger threshold raised to 0.6 (from 0.5) to ignore minor threats
-   * - Building damage threshold lowered to 0.7 (from 0.9) — scratches don't trigger defense
-   * - Threat window halved to 5 seconds (from 10) to clear defense faster
+   * Uses multiple signals for reliable detection:
+   * - Primary: danger ratio (enemies have local superiority)
+   * - Secondary: any meaningful enemy presence near base with recent contact
+   * - Building damage with recent enemy contact for early response
    */
   public isUnderAttack(ai: AIPlayer): boolean {
     const currentTick = this.game.getCurrentTick();
     const recentEnemyContact = currentTick - ai.lastEnemyContact < THREAT_WINDOW_TICKS;
 
-    // Use influence map for threat detection
     const basePos = this.coordinator.findAIBase(ai);
     if (basePos) {
       const influenceMap = this.coordinator.getInfluenceMap();
       const threatAnalysis = influenceMap.getThreatAnalysis(basePos.x, basePos.y, ai.playerId);
 
+      // Primary check: danger ratio (enemies have local superiority)
       if (threatAnalysis.dangerLevel > DEFENSE_DANGER_THRESHOLD) return true;
+
+      // Secondary check: any meaningful enemy presence near base with recent contact
+      if (threatAnalysis.threatPresence > 15 && recentEnemyContact) return true;
     }
 
-    // Check building damage — only significant damage triggers defense
+    // Check building damage -- respond earlier
     const buildings = this.coordinator.getCachedBuildings();
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
@@ -502,7 +514,7 @@ export class AITacticsManager {
 
       // Critically damaged buildings always trigger defense
       if (health.getHealthPercent() < 0.5) return true;
-      // Moderately damaged buildings only trigger with recent enemy contact
+      // Moderately damaged buildings trigger with recent enemy contact
       if (health.getHealthPercent() < DEFENSE_BUILDING_DAMAGE_THRESHOLD && recentEnemyContact)
         return true;
     }
@@ -836,6 +848,7 @@ export class AITacticsManager {
       if (unit.isWorker) continue;
       if (health.isDead()) continue;
       if (unit.state !== 'idle') continue;
+      if (unit.isInAssaultMode) continue; // Don't recall units on attack operations
 
       const dx = transform.x - rallyPoint.x;
       const dy = transform.y - rallyPoint.y;
@@ -860,13 +873,15 @@ export class AITacticsManager {
   }
 
   /**
-   * Execute the attacking phase with formation control.
+   * Execute the attacking phase with formation control and attack operation lifecycle.
    * Uses per-enemy hunt mode to finish off nearly-dead opponents in FFA.
+   * Manages activeAttackOperation to prevent state oscillation.
    */
   public executeAttackingPhase(ai: AIPlayer, currentTick: number): void {
     const armyUnits = this.getArmyUnits(ai.playerId);
     if (armyUnits.length === 0) {
       ai.state = 'building';
+      ai.activeAttackOperation = null;
       this.isEngaged.set(ai.playerId, false);
       return;
     }
@@ -888,16 +903,17 @@ export class AITacticsManager {
 
     const engaged = this.isEngaged.get(ai.playerId) || false;
 
-    // Find target — in hunt mode, target the specific nearly-dead enemy
+    // Find target -- in hunt mode, target the specific nearly-dead enemy
     let attackTarget: { x: number; y: number } | null = null;
 
     if (inHuntMode && primaryEnemyId) {
       attackTarget = this.findEnemyBuildingForPlayer(ai, primaryEnemyId);
       if (!attackTarget) {
-        // Primary enemy's buildings all gone — check for stragglers from anyone
+        // Primary enemy's buildings all gone -- check for stragglers from anyone
         attackTarget = this.findAnyEnemyBuilding(ai);
         if (!attackTarget) {
           ai.state = 'building';
+          ai.activeAttackOperation = null;
           this.isEngaged.set(ai.playerId, false);
           debugAI.log(
             `[AITactics] ${ai.playerId}: Hunt mode - no enemy buildings found, returning to build`
@@ -914,10 +930,45 @@ export class AITacticsManager {
       if (!attackTarget) {
         attackTarget = this.findAnyEnemyBuilding(ai);
         if (!attackTarget) {
+          // No valid target - end operation
           ai.state = 'building';
+          ai.activeAttackOperation = null;
           this.isEngaged.set(ai.playerId, false);
           return;
         }
+      }
+    }
+
+    // Create/update attack operation
+    if (!ai.activeAttackOperation) {
+      ai.activeAttackOperation = {
+        target: attackTarget,
+        targetPlayerId: ai.primaryEnemyId || '',
+        startTick: currentTick,
+        engaged: false,
+      };
+      ai.lastAttackTick = currentTick;
+      debugAI.log(
+        `[AITactics] ${ai.playerId}: Starting attack operation to (${attackTarget.x.toFixed(0)}, ${attackTarget.y.toFixed(0)})`
+      );
+
+      // Initial attack command - send all units
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId: ai.playerId,
+        type: 'ATTACK',
+        entityIds: armyUnits,
+        targetPosition: attackTarget,
+      };
+      this.game.issueAICommand(command);
+      debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units`);
+    } else {
+      // Update target position (may have changed if building was destroyed)
+      ai.activeAttackOperation.target = attackTarget;
+
+      // Track engagement status on the operation
+      if (engaged && !ai.activeAttackOperation.engaged) {
+        ai.activeAttackOperation.engaged = true;
       }
     }
 
@@ -931,7 +982,6 @@ export class AITacticsManager {
       if (idleAssaultUnits.length > 0) {
         // Re-command all idle assault units to attack the SAME target position
         // Let combat system and flocking handle natural unit spreading during engagement
-        // Spreading units to different positions causes them to end up outside sight range
         const command: GameCommand = {
           tick: currentTick,
           playerId: ai.playerId,
@@ -946,24 +996,6 @@ export class AITacticsManager {
       }
 
       this.lastReCommandTick.set(ai.playerId, currentTick);
-    }
-
-    // Initial attack command
-    if (ai.lastAttackTick === 0 || currentTick - ai.lastAttackTick >= ai.attackCooldown) {
-      ai.lastAttackTick = currentTick;
-
-      // Send all units to the same target position
-      // Let combat system and flocking handle natural spreading during engagement
-      // Spreading units to different positions causes them to end up outside sight range
-      const command: GameCommand = {
-        tick: currentTick,
-        playerId: ai.playerId,
-        type: 'ATTACK',
-        entityIds: armyUnits,
-        targetPosition: attackTarget,
-      };
-      this.game.issueAICommand(command);
-      debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units`);
     }
 
     // State transition logic
@@ -993,14 +1025,16 @@ export class AITacticsManager {
         // Enemy fully eliminated - return units to base and transition to building
         this.returnUnitsToBase(ai, armyUnits, currentTick);
         ai.state = 'building';
+        ai.activeAttackOperation = null;
         this.isEngaged.set(ai.playerId, false);
         debugAI.log(`[AITactics] ${ai.playerId}: Enemy eliminated, returning units to base`);
       }
     } else if (!engaged && !inHuntMode) {
-      // Disengage timeout — but never disengage during hunt mode
+      // Disengage timeout -- but never disengage during hunt mode
       const disengagedDuration = currentTick - (this.lastEngagementCheck.get(ai.playerId) || 0);
       if (disengagedDuration > 100) {
         ai.state = 'building';
+        ai.activeAttackOperation = null; // End operation on disengage
         this.isEngaged.set(ai.playerId, false);
         debugAI.log(
           `[AITactics] ${ai.playerId}: Disengaged for ${disengagedDuration} ticks, returning to build`
@@ -1135,7 +1169,8 @@ export class AITacticsManager {
   }
 
   /**
-   * Get army units that are idle and need commanding for defense.
+   * Get army units that are idle or moving and need commanding for defense.
+   * Includes moving units (e.g., walking to rally point) so they can be redirected.
    */
   private getIdleDefendingUnits(playerId: string, armyUnits: number[]): number[] {
     const idleUnits: number[] = [];
@@ -1149,15 +1184,23 @@ export class AITacticsManager {
       if (!unit || !health) continue;
       if (health.isDead()) continue;
 
-      const isIdle = unit.state === 'idle' && unit.targetEntityId === null;
-      const isStuck = unit.state === 'idle' && !unit.isInAssaultMode;
       const isEngaged =
         unit.targetEntityId !== null ||
         unit.state === 'attacking' ||
         (unit.state === 'attackmoving' && unit.targetX !== null);
 
-      if ((isIdle || isStuck) && !isEngaged) {
+      if (isEngaged) continue;
+
+      // Include idle units
+      if (unit.state === 'idle') {
         idleUnits.push(entityId);
+        continue;
+      }
+
+      // Include moving units (e.g., walking to rally point) -- redirect them to defend
+      if (unit.state === 'moving') {
+        idleUnits.push(entityId);
+        continue;
       }
     }
 
@@ -1596,6 +1639,9 @@ export class AITacticsManager {
    * so the AI can use them in future attacks.
    */
   public recoverStuckAssaultUnits(ai: AIPlayer, currentTick: number): void {
+    // Don't recover units during active attack operations - they're supposed to be out there
+    if (ai.state === 'attacking' && ai.activeAttackOperation) return;
+
     const basePos = this.coordinator.findAIBase(ai);
     if (!basePos) return;
 
@@ -1693,5 +1739,53 @@ export class AITacticsManager {
         `[AITactics] ${ai.playerId}: Returning ${armyUnits.length} units to base after victory`
       );
     }
+  }
+
+  // === Public Helpers for AICoordinator Reactive Defense ===
+
+  /**
+   * Public wrapper for findNearestThreat for use by AICoordinator's reactive defense.
+   */
+  public findNearestThreatPublic(
+    ai: AIPlayer,
+    position: { x: number; y: number }
+  ): { x: number; y: number } | null {
+    return this.findNearestThreat(ai, position);
+  }
+
+  /**
+   * Get army units near a position (for reactive defense).
+   * Includes idle AND moving units -- redirect them all to defend.
+   */
+  public getArmyUnitsNearBase(
+    playerId: string,
+    basePos: { x: number; y: number },
+    radius: number
+  ): number[] {
+    const nearbyUnits: number[] = [];
+    const entities = this.coordinator.getCachedUnitsWithTransform();
+
+    for (const entity of entities) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const health = entity.get<Health>('Health')!;
+      const transform = entity.get<Transform>('Transform')!;
+
+      if (selectable.playerId !== playerId) continue;
+      if (unit.isWorker) continue;
+      if (health.isDead()) continue;
+      if (unit.attackDamage === 0) continue;
+
+      // Already engaged in combat - don't interrupt
+      if (unit.targetEntityId !== null || unit.state === 'attacking') continue;
+
+      const dx = transform.x - basePos.x;
+      const dy = transform.y - basePos.y;
+      if (deterministicMagnitude(dx, dy) <= radius) {
+        nearbyUnits.push(entity.id);
+      }
+    }
+
+    return nearbyUnits;
   }
 }

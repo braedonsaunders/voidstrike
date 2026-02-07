@@ -26,6 +26,7 @@ import { Building } from '../../components/Building';
 import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
 import type { IGameInstance } from '../../core/IGameInstance';
+import type { GameCommand } from '../../core/GameCommand';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { debugAI } from '@/utils/debugLogger';
 import { deterministicMagnitude } from '@/utils/FixedPoint';
@@ -87,6 +88,21 @@ export interface EnemyRelation {
   buildingCount: number;
   /** Whether this enemy still has at least one headquarters building */
   hasHeadquarters: boolean;
+}
+
+/**
+ * Persistent attack operation. Once launched, continues until completed
+ * or interrupted by serious threat. Prevents state oscillation.
+ */
+export interface AttackOperation {
+  /** Target position */
+  target: { x: number; y: number };
+  /** Target enemy player ID */
+  targetPlayerId: string;
+  /** Tick when attack was launched */
+  startTick: number;
+  /** Whether army has engaged the target */
+  engaged: boolean;
 }
 
 /**
@@ -185,6 +201,8 @@ export interface AIPlayer {
   committedEnemyId: string | null;
   /** Tick when the current commitment began */
   commitmentStartTick: number;
+  /** Active attack operation - persists until completed or interrupted */
+  activeAttackOperation: AttackOperation | null;
   /** Personality-based weights for decision making */
   personalityWeights: PersonalityWeights;
 
@@ -280,6 +298,9 @@ export class AICoordinator extends System {
     resources: null,
   };
 
+  /** Reactive defense tick tracking per player */
+  private lastReactiveDefenseTick: Map<string, number> = new Map();
+
   // Subsystems
   private economyManager: AIEconomyManager;
   private buildOrderExecutor: AIBuildOrderExecutor;
@@ -326,16 +347,19 @@ export class AICoordinator extends System {
       }
     );
 
-    this.game.eventBus.on('alert:underAttack', (data: { playerId: string }) => {
-      const ai = this.aiPlayers.get(data.playerId);
-      if (ai) {
-        // Update enemy contact timestamp to inform isUnderAttack(), but don't
-        // directly set state — the tactical state machine handles transitions.
-        // Directly forcing 'defending' state bypassed the state machine and caused
-        // rapid oscillation between building/defending with conflicting commands.
-        ai.lastEnemyContact = this.game.getCurrentTick();
+    this.game.eventBus.on(
+      'alert:underAttack',
+      (data: { playerId: string; position?: { x: number; y: number } }) => {
+        const ai = this.aiPlayers.get(data.playerId);
+        if (ai) {
+          ai.lastEnemyContact = this.game.getCurrentTick();
+
+          // Reactive defense: immediately command nearby army units to respond
+          // This bypasses the actionDelayTicks gate for instant response
+          this.triggerReactiveDefense(ai, data.position);
+        }
       }
-    });
+    );
 
     this.game.eventBus.on(
       'resource:depleted',
@@ -372,6 +396,51 @@ export class AICoordinator extends System {
           }
         }
       }
+    );
+  }
+
+  /**
+   * Event-driven reactive defense. Called immediately when AI buildings/units
+   * take damage near base. Bypasses the actionDelayTicks gate.
+   *
+   * SC2-style: damage event -> immediate defense command.
+   */
+  private triggerReactiveDefense(ai: AIPlayer, attackPosition?: { x: number; y: number }): void {
+    const currentTick = this.game.getCurrentTick();
+
+    // Throttle to once per 10 ticks to prevent command spam
+    const lastTick = this.lastReactiveDefenseTick.get(ai.playerId) ?? 0;
+    if (currentTick - lastTick < 10) return;
+    this.lastReactiveDefenseTick.set(ai.playerId, currentTick);
+
+    // Don't interrupt active attacks unless we need to
+    if (ai.state === 'attacking' && ai.activeAttackOperation) return;
+
+    const basePos = this.findAIBase(ai);
+    if (!basePos) return;
+
+    // Find the threat position - use provided position or search for nearest enemy
+    const threatPos = attackPosition || this.tacticsManager.findNearestThreatPublic(ai, basePos);
+    if (!threatPos) return;
+
+    // Command all army units within 60 units of base to respond
+    const armyUnits = this.tacticsManager.getArmyUnitsNearBase(ai.playerId, basePos, 60);
+    if (armyUnits.length === 0) return;
+
+    const command: GameCommand = {
+      tick: currentTick,
+      playerId: ai.playerId,
+      type: 'ATTACK' as const,
+      entityIds: armyUnits,
+      targetPosition: threatPos,
+    };
+    this.game.issueAICommand(command);
+
+    // Force defending state
+    ai.state = 'defending';
+
+    debugAI.log(
+      `[AICoordinator] ${ai.playerId}: REACTIVE DEFENSE - ${armyUnits.length} units responding to threat at (${threatPos.x.toFixed(0)}, ${threatPos.y.toFixed(0)})`
     );
   }
 
@@ -666,6 +735,7 @@ export class AICoordinator extends System {
       primaryEnemyId: null,
       committedEnemyId: null,
       commitmentStartTick: 0,
+      activeAttackOperation: null,
       personalityWeights: PERSONALITY_WEIGHTS[actualPersonality],
 
       minerals: 50,
@@ -1094,6 +1164,21 @@ export class AICoordinator extends System {
     // Update shared AI primitives once per cycle
     if (this.aiPlayers.size > 0) {
       this.updateSharedPrimitives();
+    }
+
+    // Fast defense check - runs every 10 ticks regardless of actionDelayTicks
+    // This ensures defense response isn't gated by the 40-tick medium delay
+    if (currentTick % 10 === 0) {
+      for (const [, ai] of this.aiPlayers) {
+        if (ai.state === 'attacking' && ai.activeAttackOperation) continue; // Don't interrupt attacks
+
+        if (this.tacticsManager.isUnderAttack(ai)) {
+          if (ai.state !== 'defending') {
+            ai.state = 'defending';
+            this.tacticsManager.executeDefendingPhase(ai, currentTick);
+          }
+        }
+      }
     }
 
     for (const [playerId, ai] of this.aiPlayers) {

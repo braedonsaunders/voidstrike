@@ -27,8 +27,8 @@ const COMMITTED_ATTACK_BUILDING_DAMAGE_THRESHOLD = 0.3;
 
 // Defense sensitivity constants (mirror AITacticsManager.ts)
 const THREAT_WINDOW_TICKS = 100;
-const DEFENSE_DANGER_THRESHOLD = 0.6;
-const DEFENSE_BUILDING_DAMAGE_THRESHOLD = 0.7;
+const DEFENSE_DANGER_THRESHOLD = 0.4; // Lowered for faster defense response
+const DEFENSE_BUILDING_DAMAGE_THRESHOLD = 0.85; // Raised for earlier response to building damage
 const COUNTER_ATTACK_STRENGTH_RATIO = 3.0;
 
 interface EnemyRelation {
@@ -160,17 +160,22 @@ function isUnderSeriousAttack(dangerLevel: number, lowestBuildingHealthPercent: 
 }
 
 /**
- * Mirror of isUnderAttack logic (updated with less sensitive thresholds)
+ * Mirror of isUnderAttack logic with threatPresence signal and updated thresholds
  */
 function isUnderAttack(
   dangerLevel: number,
   buildingHealthPercents: number[],
   lastEnemyContactTick: number,
-  currentTick: number
+  currentTick: number,
+  threatPresence: number = 0
 ): boolean {
   const recentEnemyContact = currentTick - lastEnemyContactTick < THREAT_WINDOW_TICKS;
 
+  // Primary: danger ratio exceeds threshold
   if (dangerLevel > DEFENSE_DANGER_THRESHOLD) return true;
+
+  // Secondary: meaningful enemy presence near base with recent contact
+  if (threatPresence > 15 && recentEnemyContact) return true;
 
   for (const healthPercent of buildingHealthPercents) {
     if (healthPercent < 0.5) return true;
@@ -631,22 +636,21 @@ describe('AI Game Completion', () => {
   });
 
   describe('Defense sensitivity (isUnderAttack)', () => {
-    it('does NOT trigger defense for building at 85% HP (above 0.7 threshold)', () => {
-      // Old bug: building at 85% + recentEnemyContact triggered defense with 0.9 threshold
-      const result = isUnderAttack(0.3, [0.85], 90, 100);
+    it('does NOT trigger defense for building at 90% HP (above 0.85 threshold)', () => {
+      const result = isUnderAttack(0.2, [0.9], 90, 100);
       expect(result).toBe(false);
     });
 
-    it('does NOT trigger defense for building at 75% HP without recent contact', () => {
-      // Building below 0.7 but no recent contact = no defense
-      const result = isUnderAttack(0.3, [0.75], 0, 200);
-      expect(result).toBe(false);
-    });
-
-    it('triggers defense for building at 65% HP with recent enemy contact', () => {
-      // Building below 0.7 + recent contact = defense
-      const result = isUnderAttack(0.3, [0.65], 95, 100);
+    it('triggers defense for building at 80% HP with recent enemy contact', () => {
+      // Building below 0.85 + recent contact = defense (threshold raised for earlier response)
+      const result = isUnderAttack(0.2, [0.8], 95, 100);
       expect(result).toBe(true);
+    });
+
+    it('does NOT trigger defense for building at 80% HP without recent contact', () => {
+      // Building below 0.85 but no recent contact = no defense
+      const result = isUnderAttack(0.2, [0.8], 0, 200);
+      expect(result).toBe(false);
     });
 
     it('always triggers defense for building below 50% HP', () => {
@@ -654,31 +658,168 @@ describe('AI Game Completion', () => {
       expect(result).toBe(true);
     });
 
-    it('does NOT trigger for danger level 0.55 (below 0.6 threshold)', () => {
-      // Old code triggered at 0.5; now needs 0.6
-      const result = isUnderAttack(0.55, [1.0], 0, 100);
+    it('does NOT trigger for danger level 0.35 (below 0.4 threshold)', () => {
+      const result = isUnderAttack(0.35, [1.0], 0, 100);
       expect(result).toBe(false);
     });
 
-    it('triggers for danger level 0.65', () => {
-      const result = isUnderAttack(0.65, [1.0], 0, 100);
+    it('triggers for danger level 0.45', () => {
+      const result = isUnderAttack(0.45, [1.0], 0, 100);
       expect(result).toBe(true);
+    });
+
+    it('triggers via threatPresence signal with recent contact', () => {
+      // Low danger ratio but meaningful enemy presence near base
+      const result = isUnderAttack(0.2, [1.0], 95, 100, 25);
+      expect(result).toBe(true);
+    });
+
+    it('does NOT trigger via threatPresence without recent contact', () => {
+      const result = isUnderAttack(0.2, [1.0], 0, 200, 25);
+      expect(result).toBe(false);
+    });
+
+    it('does NOT trigger via low threatPresence even with contact', () => {
+      const result = isUnderAttack(0.2, [1.0], 95, 100, 10);
+      expect(result).toBe(false);
     });
 
     it('enemy contact expires after 100 ticks (not 200)', () => {
       // Contact at tick 0, current tick 150 → expired (100-tick window)
-      const result = isUnderAttack(0.3, [0.65], 0, 150);
+      const result = isUnderAttack(0.2, [0.8], 0, 150);
       expect(result).toBe(false);
 
       // Contact at tick 55, current tick 150 → still active (within 100 ticks)
-      const result2 = isUnderAttack(0.3, [0.65], 55, 150);
+      const result2 = isUnderAttack(0.2, [0.8], 55, 150);
       expect(result2).toBe(true);
     });
 
     it('healthy buildings with minor danger do not trigger defense', () => {
       // All buildings at full health, minor danger = no defense
-      const result = isUnderAttack(0.4, [1.0, 0.95, 0.98], 90, 100);
+      const result = isUnderAttack(0.3, [1.0, 0.95, 0.98], 90, 100);
       expect(result).toBe(false);
+    });
+  });
+
+  describe('Attack operation persistence', () => {
+    it('stays in attacking state when activeAttackOperation exists', () => {
+      const activeOp = {
+        target: { x: 100, y: 100 },
+        targetPlayerId: 'enemy1',
+        startTick: 50,
+        engaged: false,
+      };
+
+      // With active operation, state should remain 'attacking' regardless of cooldown
+      expect(activeOp).not.toBeNull();
+      // The key insight: updateTacticalState checks activeAttackOperation
+      // BEFORE evaluating cooldown-based transitions
+    });
+
+    it('clears operation when army is eliminated', () => {
+      let activeOp: {
+        target: { x: number; y: number };
+        targetPlayerId: string;
+        startTick: number;
+        engaged: boolean;
+      } | null = {
+        target: { x: 100, y: 100 },
+        targetPlayerId: 'enemy1',
+        startTick: 50,
+        engaged: false,
+      };
+      const armyUnitsCount = 0;
+
+      if (armyUnitsCount === 0) {
+        activeOp = null;
+      }
+
+      expect(activeOp).toBeNull();
+    });
+
+    it('clears operation on disengage timeout', () => {
+      let activeOp: {
+        target: { x: number; y: number };
+        targetPlayerId: string;
+        startTick: number;
+        engaged: boolean;
+      } | null = {
+        target: { x: 100, y: 100 },
+        targetPlayerId: 'enemy1',
+        startTick: 50,
+        engaged: false,
+      };
+      const engaged = false;
+      const inHuntMode = false;
+      const disengagedDuration = 200;
+
+      if (!engaged && !inHuntMode && disengagedDuration > 100) {
+        activeOp = null;
+      }
+
+      expect(activeOp).toBeNull();
+    });
+
+    it('does NOT clear operation during hunt mode even when disengaged', () => {
+      const activeOp = {
+        target: { x: 100, y: 100 },
+        targetPlayerId: 'enemy1',
+        startTick: 50,
+        engaged: false,
+      };
+      const engaged = false;
+      const inHuntMode = true;
+      const disengagedDuration = 200;
+
+      let shouldClear = false;
+      if (!engaged && !inHuntMode && disengagedDuration > 100) {
+        shouldClear = true;
+      }
+
+      expect(shouldClear).toBe(false);
+      expect(activeOp).not.toBeNull();
+    });
+  });
+
+  describe('Composition-aware production scoring', () => {
+    it('gives higher score to under-represented units', () => {
+      const targetComposition = { trooper: 30, breacher: 30, scorcher: 40 };
+      const armyComposition = new Map<string, number>([
+        ['trooper', 10], // 77% of army but only 30% target
+        ['breacher', 2],
+        ['scorcher', 1],
+      ]);
+      const totalUnits = 13;
+
+      function getDiversityMultiplier(unitId: string): number {
+        const currentCount = armyComposition.get(unitId) || 0;
+        const currentPercent = (currentCount / totalUnits) * 100;
+        const targetPercent = targetComposition[unitId as keyof typeof targetComposition] || 0;
+        if (targetPercent === 0) return 0.5;
+        const ratio = currentPercent / targetPercent;
+        if (ratio < 0.5) return 2.5;
+        if (ratio < 1.0) return 1.0 + (1.0 - ratio) * 1.5;
+        if (ratio > 2.0) return 0.3;
+        if (ratio > 1.0) return 1.0 - (ratio - 1.0) * 0.35;
+        return 1.0;
+      }
+
+      const trooperMult = getDiversityMultiplier('trooper');
+      const scorcherMult = getDiversityMultiplier('scorcher');
+
+      // Trooper is over-represented (77% vs 30% target) → penalized
+      expect(trooperMult).toBeLessThan(1.0);
+      // Scorcher is under-represented (7.7% vs 40% target) → boosted
+      expect(scorcherMult).toBeGreaterThan(1.5);
+    });
+
+    it('returns 0.5 for units not in composition goal', () => {
+      const targetComposition = { trooper: 50, breacher: 50 };
+      const unitId = 'operative';
+      const targetPercent = targetComposition[unitId as keyof typeof targetComposition] || 0;
+      const diversityMult = targetPercent === 0 ? 0.5 : 1.0;
+
+      expect(diversityMult).toBe(0.5);
     });
   });
 

@@ -11,11 +11,7 @@
  * 4. Register in src/data/ai/index.ts
  */
 
-import {
-  type FactionAIConfig,
-  type MacroRule,
-  registerFactionAIConfig,
-} from '../aiConfig';
+import { type FactionAIConfig, type MacroRule, registerFactionAIConfig } from '../aiConfig';
 
 // ==================== MACRO RULES ====================
 // These replace all hardcoded production logic in EnhancedAISystem
@@ -127,7 +123,14 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
       // Have at least 1 infantry bay already
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
       // But less than bases * 2
-      { type: 'buildingCount', operator: '<', value: 2, targetId: 'infantry_bay', compareRef: 'bases', compareMultiplier: 2 },
+      {
+        type: 'buildingCount',
+        operator: '<',
+        value: 2,
+        targetId: 'infantry_bay',
+        compareRef: 'bases',
+        compareMultiplier: 2,
+      },
     ],
     action: { type: 'build', targetId: 'infantry_bay' },
     cooldownTicks: 200,
@@ -192,7 +195,14 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
       { type: 'workers', operator: '>=', value: 18 },
       { type: 'bases', operator: '>=', value: 2 },
       // extractors < bases * 2 (2 per base)
-      { type: 'buildingCount', operator: '<', value: 2, targetId: 'extractor', compareRef: 'bases', compareMultiplier: 2 },
+      {
+        type: 'buildingCount',
+        operator: '<',
+        value: 2,
+        targetId: 'extractor',
+        compareRef: 'bases',
+        compareMultiplier: 2,
+      },
       { type: 'minerals', operator: '>=', value: 75 },
     ],
     action: { type: 'build', targetId: 'extractor' },
@@ -282,6 +292,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 58,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'research_module' },
       { type: 'plasma', operator: '>=', value: 300 },
       { type: 'minerals', operator: '>=', value: 400 },
       { type: 'armySupply', operator: '>=', value: 20 }, // Need army to protect
@@ -297,6 +308,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 55,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'research_module' },
       { type: 'plasma', operator: '>=', value: 150 }, // Lowered
       { type: 'minerals', operator: '>=', value: 250 }, // Lowered
     ],
@@ -312,6 +324,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 52,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'research_module' },
       { type: 'plasma', operator: '>=', value: 100 }, // Lowered
       { type: 'minerals', operator: '>=', value: 150 }, // Lowered
     ],
@@ -343,6 +356,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 48,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'research_module' },
       { type: 'plasma', operator: '>=', value: 75 }, // Lowered
       { type: 'minerals', operator: '>=', value: 100 }, // Lowered
     ],
@@ -374,6 +388,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 44,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'research_module' },
       { type: 'plasma', operator: '>=', value: 25 },
       { type: 'minerals', operator: '>=', value: 50 },
     ],
@@ -405,8 +420,8 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 47,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
-      { type: 'minerals', operator: '>=', value: 150 },
-      { type: 'plasma', operator: '>=', value: 50 },
+      { type: 'minerals', operator: '>=', value: 100 },
+      { type: 'plasma', operator: '>=', value: 25 },
       { type: 'supplyRatio', operator: '<', value: 0.9 },
     ],
     action: {
@@ -428,8 +443,8 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 49,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
-      { type: 'minerals', operator: '>=', value: 150 },
-      { type: 'plasma', operator: '>=', value: 75 },
+      { type: 'minerals', operator: '>=', value: 100 },
+      { type: 'plasma', operator: '>=', value: 50 },
       { type: 'supplyRatio', operator: '<', value: 0.9 },
     ],
     action: {
@@ -463,6 +478,30 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
       ],
     },
     cooldownTicks: 10, // Faster production
+  },
+
+  // Army production with vehicle variety when forge is available
+  {
+    id: 'train_army_with_forge',
+    name: 'Army Production (With Forge)',
+    description: 'Produce diverse army including vehicles when forge available',
+    priority: 43,
+    conditions: [
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'forge' },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
+      { type: 'minerals', operator: '>=', value: 75 },
+      { type: 'supplyRatio', operator: '<', value: 0.95 },
+    ],
+    action: {
+      type: 'train',
+      options: [
+        { id: 'trooper', weight: 5 },
+        { id: 'breacher', weight: 4 },
+        { id: 'scorcher', weight: 6 },
+        { id: 'vanguard', weight: 3 },
+      ],
+    },
+    cooldownTicks: 10,
   },
 
   {
@@ -580,8 +619,8 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       counterBuildingEnabled: false,
       microEnabled: false,
       harassmentEnabled: false,
-      expansionCooldown: 600,    // Lowered - expand more often
-      attackCooldown: 200,       // Lowered - attack every 10 seconds
+      expansionCooldown: 600, // Lowered - expand more often
+      attackCooldown: 200, // Lowered - attack every 10 seconds
       scoutCooldown: 0,
       harassCooldown: 0,
       minWorkersForExpansion: 14,
@@ -597,8 +636,8 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       counterBuildingEnabled: false,
       microEnabled: false,
       harassmentEnabled: false,
-      expansionCooldown: 500,    // Lowered
-      attackCooldown: 150,       // Lowered - attack every 7.5 seconds
+      expansionCooldown: 500, // Lowered
+      attackCooldown: 150, // Lowered - attack every 7.5 seconds
       scoutCooldown: 400,
       harassCooldown: 0,
       minWorkersForExpansion: 12,
@@ -614,8 +653,8 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       counterBuildingEnabled: true,
       microEnabled: true,
       harassmentEnabled: true,
-      expansionCooldown: 400,    // Lowered
-      attackCooldown: 100,       // Lowered - attack every 5 seconds
+      expansionCooldown: 400, // Lowered
+      attackCooldown: 100, // Lowered - attack every 5 seconds
       scoutCooldown: 300,
       harassCooldown: 300,
       minWorkersForExpansion: 8,
@@ -631,8 +670,8 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       counterBuildingEnabled: true,
       microEnabled: true,
       harassmentEnabled: true,
-      expansionCooldown: 350,    // Lowered
-      attackCooldown: 80,        // Lowered - attack every 4 seconds
+      expansionCooldown: 350, // Lowered
+      attackCooldown: 80, // Lowered - attack every 4 seconds
       scoutCooldown: 200,
       harassCooldown: 200,
       minWorkersForExpansion: 6,
@@ -648,8 +687,8 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       counterBuildingEnabled: true,
       microEnabled: true,
       harassmentEnabled: true,
-      expansionCooldown: 250,    // Lowered
-      attackCooldown: 40,        // Lowered - attack every 2 seconds
+      expansionCooldown: 250, // Lowered
+      attackCooldown: 40, // Lowered - attack every 2 seconds
       scoutCooldown: 150,
       harassCooldown: 150,
       minWorkersForExpansion: 4,
@@ -769,18 +808,25 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       },
       {
         timeRange: [5000, Infinity], // Late game
-        composition: { trooper: 20, breacher: 15, devastator: 25, colossus: 20, valkyrie: 15, specter: 5 },
+        composition: {
+          trooper: 20,
+          breacher: 15,
+          devastator: 25,
+          colossus: 20,
+          valkyrie: 15,
+          specter: 5,
+        },
         minArmySupply: 40,
       },
     ],
 
     // Attack thresholds by difficulty - lowered for more aggressive play
     attackThresholds: {
-      easy: 15,      // Lowered from 25 - attack earlier
-      medium: 12,    // Lowered from 20
-      hard: 10,      // Lowered from 15
-      very_hard: 8,  // Lowered from 12
-      insane: 6,     // Lowered from 8
+      easy: 15, // Lowered from 25 - attack earlier
+      medium: 12, // Lowered from 20
+      hard: 10, // Lowered from 15
+      very_hard: 8, // Lowered from 12
+      insane: 6, // Lowered from 8
     },
 
     // Defense ratio (keep this % of army for defense)
@@ -885,15 +931,11 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
         transformLogic: {
           modeA: {
             name: 'fighter',
-            conditions: [
-              { type: 'enemyAirUnits', operator: '>', value: 0 },
-            ],
+            conditions: [{ type: 'enemyAirUnits', operator: '>', value: 0 }],
           },
           modeB: {
             name: 'assault',
-            conditions: [
-              { type: 'enemyAirUnits', operator: '==', value: 0 },
-            ],
+            conditions: [{ type: 'enemyAirUnits', operator: '==', value: 0 }],
           },
         },
       },
