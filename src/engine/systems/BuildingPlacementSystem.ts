@@ -51,21 +51,6 @@ export class BuildingPlacementSystem extends System {
   // Cache reference to AI system for AI resource checks
   private aiSystem: EnhancedAISystem | null = null;
 
-  /**
-   * Get the team ID for a player by finding an existing entity with the same playerId.
-   * Returns 0 (FFA) if no existing entity is found.
-   */
-  private getPlayerTeam(playerId: string): number {
-    const entities = this.world.getEntitiesWith('Selectable');
-    for (const entity of entities) {
-      const selectable = entity.get<Selectable>('Selectable');
-      if (selectable && selectable.playerId === playerId) {
-        return selectable.teamId;
-      }
-    }
-    return 0;
-  }
-
   constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
@@ -198,7 +183,7 @@ export class BuildingPlacementSystem extends System {
       const canMount = 'canMountTurret' in definition ? definition.canMountTurret : true;
       const wall = new Wall(isGate as boolean, canMount as boolean);
 
-      const teamId = this.getPlayerTeam(playerId);
+      const teamId = this.game.getPlayerTeam(playerId);
       wallEntity
         .add(new Transform(pos.x, pos.y, 0))
         .add(building)
@@ -515,7 +500,7 @@ export class BuildingPlacementSystem extends System {
     const buildingEntity = this.world.createEntity();
     const health = new Health(definition.maxHealth, definition.armor, 'structure');
     health.current = definition.maxHealth * 0.1; // Start at 10% health (under construction)
-    const teamId = this.getPlayerTeam(playerId);
+    const teamId = this.game.getPlayerTeam(playerId);
     buildingEntity
       .add(new Transform(snappedX, snappedY, 0))
       .add(new Building(definition))
@@ -661,7 +646,7 @@ export class BuildingPlacementSystem extends System {
 
     const addonHealth = new Health(definition.maxHealth, definition.armor, 'structure');
     addonHealth.current = definition.maxHealth * 0.1; // Start at 10% health like buildings
-    const addonTeamId = this.getPlayerTeam(playerId);
+    const addonTeamId = this.game.getPlayerTeam(playerId);
 
     addonEntity
       .add(new Transform(x, y, 0))
@@ -974,7 +959,7 @@ export class BuildingPlacementSystem extends System {
 
     const addonHealth = new Health(addonDef.maxHealth, addonDef.armor, 'structure');
     addonHealth.current = addonDef.maxHealth * 0.1; // Start at 10% health like buildings
-    const addonTeamId2 = this.getPlayerTeam(playerId);
+    const addonTeamId2 = this.game.getPlayerTeam(playerId);
 
     addonEntity
       .add(new Transform(addonX, addonY, 0))

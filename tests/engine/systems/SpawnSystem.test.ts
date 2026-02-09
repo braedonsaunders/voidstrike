@@ -84,6 +84,7 @@ describe('SpawnSystem', () => {
         emit: vi.fn(),
       },
       getTerrainHeightAt: vi.fn().mockReturnValue(0),
+      getPlayerTeam: vi.fn().mockReturnValue(0),
       statePort: {
         addSupply: vi.fn(),
       },
@@ -207,14 +208,12 @@ describe('SpawnSystem', () => {
       expect(mockGame.getTerrainHeightAt).toHaveBeenCalledWith(10, 20);
     });
 
-    it('uses team ID from existing entity with same playerId', () => {
+    it('uses team ID from game.getPlayerTeam()', () => {
       const unitType = getFirstUnitType();
       if (!unitType) return;
 
-      const existingEntity = {
-        get: vi.fn().mockReturnValue({ playerId: 'player1', teamId: 2 }),
-      };
-      (mockWorld.getEntitiesWith as ReturnType<typeof vi.fn>).mockReturnValue([existingEntity]);
+      // Set up getPlayerTeam to return team 2
+      (mockGame.getPlayerTeam as ReturnType<typeof vi.fn>).mockReturnValue(2);
 
       const handler = eventHandlers.get('unit:spawn')!;
 
@@ -225,8 +224,44 @@ describe('SpawnSystem', () => {
         playerId: 'player1',
       });
 
-      // Check that entity was created (we can't easily verify teamId without more complex mocking)
-      expect(mockWorld.createEntity).toHaveBeenCalled();
+      // Verify getPlayerTeam was called with the correct playerId
+      expect(mockGame.getPlayerTeam).toHaveBeenCalledWith('player1');
+
+      // Verify entity was created with correct team ID in Selectable component
+      const addCalls = (mockEntity.add as ReturnType<typeof vi.fn>).mock.calls;
+      const selectableCall = addCalls.find((call: unknown[]) => call[0] instanceof Selectable);
+      expect(selectableCall).toBeDefined();
+      if (selectableCall) {
+        const selectable = selectableCall[0] as Selectable;
+        expect(selectable.teamId).toBe(2);
+      }
+    });
+
+    it('defaults to team 0 (FFA) when game has no team for player', () => {
+      const unitType = getFirstUnitType();
+      if (!unitType) return;
+
+      // getPlayerTeam returns 0 by default (FFA)
+      (mockGame.getPlayerTeam as ReturnType<typeof vi.fn>).mockReturnValue(0);
+
+      const handler = eventHandlers.get('unit:spawn')!;
+
+      handler({
+        unitType,
+        x: 10,
+        y: 20,
+        playerId: 'player3',
+      });
+
+      expect(mockGame.getPlayerTeam).toHaveBeenCalledWith('player3');
+
+      const addCalls = (mockEntity.add as ReturnType<typeof vi.fn>).mock.calls;
+      const selectableCall = addCalls.find((call: unknown[]) => call[0] instanceof Selectable);
+      expect(selectableCall).toBeDefined();
+      if (selectableCall) {
+        const selectable = selectableCall[0] as Selectable;
+        expect(selectable.teamId).toBe(0);
+      }
     });
   });
 
@@ -283,6 +318,32 @@ describe('SpawnSystem', () => {
           position: { x: 30, y: 40 },
         })
       );
+    });
+
+    it('uses team ID from game.getPlayerTeam() for buildings', () => {
+      const buildingType = getFirstBuildingType();
+      if (!buildingType) return;
+
+      (mockGame.getPlayerTeam as ReturnType<typeof vi.fn>).mockReturnValue(3);
+
+      const handler = eventHandlers.get('building:spawn')!;
+
+      handler({
+        buildingType,
+        x: 30,
+        y: 40,
+        playerId: 'player2',
+      });
+
+      expect(mockGame.getPlayerTeam).toHaveBeenCalledWith('player2');
+
+      const addCalls = (mockEntity.add as ReturnType<typeof vi.fn>).mock.calls;
+      const selectableCall = addCalls.find((call: unknown[]) => call[0] instanceof Selectable);
+      expect(selectableCall).toBeDefined();
+      if (selectableCall) {
+        const selectable = selectableCall[0] as Selectable;
+        expect(selectable.teamId).toBe(3);
+      }
     });
 
     it('handles unknown building type gracefully', () => {
