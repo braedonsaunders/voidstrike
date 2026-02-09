@@ -187,6 +187,9 @@ export class InfluenceMap {
   // Per-player influence grids
   private playerInfluence: Map<string, PlayerInfluence> = new Map();
 
+  // Team assignments (playerId -> teamId, 0 = FFA/no team)
+  private playerTeams: Map<string, number> = new Map();
+
   // Combined maps for quick lookups
   private threatMap: Float32Array; // Enemy threat from perspective of any player
   private controlMap: Float32Array; // Who controls each area (-1 to 1)
@@ -426,14 +429,13 @@ export class InfluenceMap {
 
     const index = row * this.cols + col;
 
-    // Get my influence
-    const myData = this.playerInfluence.get(myPlayerId);
-    const friendlyInfluence = myData ? myData.grid[index] : 0;
-
-    // Calculate enemy influence (sum of all other players)
+    // Sum allied influence as friendly, non-allied as enemy
+    let friendlyInfluence = 0;
     let enemyInfluence = 0;
     for (const [playerId, data] of this.playerInfluence) {
-      if (playerId !== myPlayerId) {
+      if (this.isAlly(playerId, myPlayerId)) {
+        friendlyInfluence += data.grid[index];
+      } else {
         enemyInfluence += data.grid[index];
       }
     }
@@ -498,7 +500,7 @@ export class InfluenceMap {
       // Get enemy influence at neighbor
       let enemyInfluence = 0;
       for (const [playerId, data] of this.playerInfluence) {
-        if (playerId !== myPlayerId) {
+        if (!this.isAlly(playerId, myPlayerId)) {
           enemyInfluence += data.grid[nIndex];
         }
       }
@@ -636,7 +638,7 @@ export class InfluenceMap {
   private getThreatCost(index: number, myPlayerId: string): number {
     let enemyInfluence = 0;
     for (const [playerId, data] of this.playerInfluence) {
-      if (playerId !== myPlayerId) {
+      if (!this.isAlly(playerId, myPlayerId)) {
         enemyInfluence += data.grid[index];
       }
     }
@@ -696,13 +698,13 @@ export class InfluenceMap {
 
         const index = row * this.cols + col;
 
-        // Get influences
-        const myData = this.playerInfluence.get(myPlayerId);
-        const friendly = myData ? myData.grid[index] : 0;
-
+        // Get influences (allied = friendly, non-allied = enemy)
+        let friendly = 0;
         let enemy = 0;
         for (const [playerId, data] of this.playerInfluence) {
-          if (playerId !== myPlayerId) {
+          if (this.isAlly(playerId, myPlayerId)) {
+            friendly += data.grid[index];
+          } else {
             enemy += data.grid[index];
           }
         }
@@ -738,7 +740,7 @@ export class InfluenceMap {
     let enemy = 0;
 
     for (const [playerId, data] of this.playerInfluence) {
-      if (playerId !== myPlayerId) {
+      if (!this.isAlly(playerId, myPlayerId)) {
         enemy += data.grid[index];
       }
     }
@@ -767,6 +769,27 @@ export class InfluenceMap {
     this.playerInfluence.clear();
     this.threatMap.fill(0);
     this.controlMap.fill(0);
+  }
+
+  /**
+   * Set team assignments for alliance-aware influence calculations.
+   * Players on the same non-zero team are treated as allies.
+   * Team 0 means FFA (no alliances).
+   */
+  public setPlayerTeams(teams: Map<string, number>): void {
+    this.playerTeams = new Map(teams);
+  }
+
+  /**
+   * Check if two players are allied (same player or same non-zero team)
+   */
+  private isAlly(playerId: string, myPlayerId: string): boolean {
+    if (playerId === myPlayerId) return true;
+    const myTeam = this.playerTeams.get(myPlayerId) ?? 0;
+    const theirTeam = this.playerTeams.get(playerId) ?? 0;
+    // Team 0 = FFA, no alliances
+    if (myTeam === 0 || theirTeam === 0) return false;
+    return myTeam === theirTeam;
   }
 
   // =============================================================================

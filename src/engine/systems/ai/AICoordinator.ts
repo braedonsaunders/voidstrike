@@ -182,6 +182,8 @@ const _GRUDGE_HALF_LIFE_TICKS = 1200;
 export interface AIPlayer {
   playerId: string;
   faction: string;
+  /** Team ID for alliance checks (0 = FFA, 1-4 = team alliance) */
+  teamId: number;
   difficulty: AIDifficulty;
   personality: AIPersonality;
   state: AIState;
@@ -644,7 +646,8 @@ export class AICoordinator extends System {
     playerId: string,
     faction: string,
     difficulty: AIDifficulty = 'medium',
-    personality: AIPersonality = 'balanced'
+    personality: AIPersonality = 'balanced',
+    teamId: number = 0
   ): void {
     // Idempotency check: prevent duplicate registrations that would reset AI state
     if (this.aiPlayers.has(playerId)) {
@@ -716,9 +719,15 @@ export class AICoordinator extends System {
       splashSpread: 2.5,
     });
 
+    // Register team for InfluenceMap alliance awareness
+    this.influenceMap.setPlayerTeams(
+      new Map([...this.getPlayerTeamsMap(), [playerId, teamId]])
+    );
+
     this.aiPlayers.set(playerId, {
       playerId,
       faction,
+      teamId,
       difficulty,
       personality: actualPersonality,
       state: 'building',
@@ -789,6 +798,15 @@ export class AICoordinator extends System {
       retreatCoordinator,
       formationControl,
     });
+  }
+
+  /** Get player-to-team mapping for InfluenceMap alliance awareness */
+  private getPlayerTeamsMap(): Map<string, number> {
+    const teams = new Map<string, number>();
+    for (const [id, ai] of this.aiPlayers) {
+      teams.set(id, ai.teamId);
+    }
+    return teams;
   }
 
   /** Simple string hash for generating unique seeds */
@@ -876,6 +894,20 @@ export class AICoordinator extends System {
       }
     }
 
+    // Scouting intel from ScoutingMemory
+    let enemyStrategy: string = 'unknown';
+    let enemyTechLevel = 1;
+    let enemyHasAirTech = false;
+
+    if (ai.primaryEnemyId) {
+      const intel = ai.scoutingMemory.getIntel(ai.primaryEnemyId);
+      if (intel) {
+        enemyStrategy = intel.strategy.strategy;
+        enemyTechLevel = intel.tech.techLevel;
+        enemyHasAirTech = intel.tech.techBuildings.some(b => b.includes('hangar') || b.includes('starport'));
+      }
+    }
+
     return {
       playerId: ai.playerId,
       difficulty: ai.difficulty,
@@ -905,6 +937,10 @@ export class AICoordinator extends System {
       underAttack: ai.state === 'defending',
 
       hasAntiAir,
+
+      enemyStrategy,
+      enemyTechLevel,
+      enemyHasAirTech,
 
       config,
     };
@@ -1188,6 +1224,7 @@ export class AICoordinator extends System {
       ai.lastActionTick = currentTick;
 
       this.updateGameState(ai);
+      this.scoutingManager.updateEnemyIntel(ai);
 
       const totalBuildings = Array.from(ai.buildingCounts.values()).reduce((a, b) => a + b, 0);
 
@@ -1262,7 +1299,7 @@ export class AICoordinator extends System {
         this.tacticsManager.rallyNewUnitsToArmy(ai);
         break;
       case 'expanding':
-        this.tacticsManager.executeExpandingPhase(ai);
+        this.tacticsManager.executeExpandingPhase(ai, currentTick);
         break;
       case 'attacking':
         this.tacticsManager.executeAttackingPhase(ai, currentTick);

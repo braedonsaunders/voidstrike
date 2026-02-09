@@ -21,6 +21,7 @@ import { Unit } from '../../components/Unit';
 import { Building } from '../../components/Building';
 import { Health } from '../../components/Health';
 import { Selectable } from '../../components/Selectable';
+import { isEnemy } from '../../combat/TargetAcquisition';
 import { Ability, DOMINION_ABILITIES } from '../../components/Ability';
 import { Resource } from '../../components/Resource';
 import type { IGameInstance } from '../../core/IGameInstance';
@@ -1383,7 +1384,7 @@ export class AIBuildOrderExecutor {
           const health = entity.get<Health>('Health')!;
           const unit = entity.get<Unit>('Unit')!;
 
-          if (selectable.playerId === ai.playerId) continue; // Enemy only
+          if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
           if (health.isDead()) continue;
 
           // For snipe, prefer biological targets
@@ -1507,12 +1508,13 @@ export class AIBuildOrderExecutor {
 
     // Get enemy bases to avoid
     const enemyBases: Array<{ x: number; y: number }> = [];
+
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const building = entity.get<Building>('Building')!;
       const transform = entity.get<Transform>('Transform')!;
 
-      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
       if (ai.config!.roles.baseTypes.includes(building.buildingId)) {
         enemyBases.push({ x: transform.x, y: transform.y });
       }

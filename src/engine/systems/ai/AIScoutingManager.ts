@@ -30,6 +30,7 @@ import type {
   ScoutedUnitType,
   StrategicInference,
 } from '../../ai/ScoutingMemory';
+import { isEnemy } from '../../combat/TargetAcquisition';
 
 export class AIScoutingManager {
   private game: IGameInstance;
@@ -199,7 +200,7 @@ export class AIScoutingManager {
       const unit = entity.get<Unit>('Unit')!;
       const health = entity.get<Health>('Health')!;
 
-      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
 
       visibleEnemyIds.add(entity.id);
@@ -223,7 +224,7 @@ export class AIScoutingManager {
       const transform = entity.get<Transform>('Transform')!;
       const health = entity.get<Health>('Health')!;
 
-      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
 
       visibleEnemyIds.add(entity.id);

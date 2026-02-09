@@ -67,7 +67,10 @@ export type ConditionType =
   | 'underAttack'
   | 'enemyAirUnits'
   | 'hasAntiAir'
-  | 'productionBuildingsCount';
+  | 'productionBuildingsCount'
+  | 'enemyStrategy'     // Inferred enemy strategy from ScoutingMemory
+  | 'enemyTechLevel'    // Enemy tech level (1-3)
+  | 'enemyHasAirTech';  // Whether enemy has air tech buildings
 
 // ==================== MACRO RULES ====================
 
@@ -482,6 +485,15 @@ export function evaluateCondition(
     case 'productionBuildingsCount':
       value = state.productionBuildingsCount;
       break;
+    case 'enemyStrategy':
+      value = state.enemyStrategy;
+      break;
+    case 'enemyTechLevel':
+      value = state.enemyTechLevel;
+      break;
+    case 'enemyHasAirTech':
+      value = state.enemyHasAirTech;
+      break;
     default:
       return false;
   }
@@ -651,6 +663,11 @@ export interface AIStateSnapshot {
 
   // Capabilities
   hasAntiAir: boolean;
+
+  // Scouting intel
+  enemyStrategy: string;      // InferredStrategy string
+  enemyTechLevel: number;     // 1-3
+  enemyHasAirTech: boolean;   // From ScoutingMemory
 
   // Config reference
   config: FactionAIConfig;

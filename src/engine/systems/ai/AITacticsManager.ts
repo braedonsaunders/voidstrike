@@ -456,6 +456,24 @@ export class AITacticsManager {
       }
     }
 
+    // Priority 2b: Expansion when economically ready and area is safe
+    const baseCount = this.coordinator.countPlayerBases(ai);
+    const maxBases = diffConfig.maxBases;
+    if (baseCount < maxBases && currentTick - ai.lastExpansionTick >= ai.expansionCooldown) {
+      if (ai.minerals >= 350 && ai.armySupply >= 6) {
+        const basePos = this.coordinator.findAIBase(ai);
+        if (basePos) {
+          const influenceMap = this.coordinator.getInfluenceMap();
+          const expansionArea = influenceMap.findBestExpansionArea(basePos.x, basePos.y, ai.playerId, 40);
+          if (expansionArea && expansionArea.score > -10) {
+            ai.state = 'expanding';
+            ai.lastExpansionTick = currentTick;
+            return;
+          }
+        }
+      }
+    }
+
     // Priority 3: Start NEW attack when army is strong enough
     const attackThreshold = tacticalConfig.attackThresholds[ai.difficulty];
     const canAttack = ai.armySupply >= attackThreshold;
@@ -719,7 +737,7 @@ export class AITacticsManager {
       const building = entity.get<Building>('Building')!;
       const transform = entity.get<Transform>('Transform')!;
 
-      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
       if (baseTypes.includes(building.buildingId)) {
         return { x: transform.x, y: transform.y };
       }
@@ -729,7 +747,7 @@ export class AITacticsManager {
       const selectable = entity.get<Selectable>('Selectable')!;
       const transform = entity.get<Transform>('Transform')!;
 
-      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
       return { x: transform.x, y: transform.y };
     }
 
@@ -748,7 +766,7 @@ export class AITacticsManager {
       const transform = entity.get<Transform>('Transform')!;
       const health = entity.get<Health>('Health')!;
 
-      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
       if (unit.isWorker) {
         return { x: transform.x, y: transform.y };
@@ -867,9 +885,63 @@ export class AITacticsManager {
 
   /**
    * Execute the expanding phase.
+   *
+   * Evaluates expansion area safety and sends an army escort to secure
+   * contested locations before transitioning back to building state.
+   * The macro rules (expand_depleted, expand_saturated, expand_timed)
+   * handle actually issuing the build command for the expansion building.
    */
-  public executeExpandingPhase(ai: AIPlayer): void {
+  public executeExpandingPhase(ai: AIPlayer, currentTick: number): void {
+    const basePos = this.coordinator.findAIBase(ai);
+    if (!basePos) {
+      ai.state = 'building';
+      return;
+    }
+
+    const influenceMap = this.coordinator.getInfluenceMap();
+    const expansionArea = influenceMap.findBestExpansionArea(
+      basePos.x, basePos.y, ai.playerId, 40
+    );
+
+    if (!expansionArea) {
+      ai.state = 'building';
+      return;
+    }
+
+    // Check if expansion area is safe enough
+    const threatAnalysis = influenceMap.getThreatAnalysis(
+      expansionArea.x, expansionArea.y, ai.playerId
+    );
+
+    if (threatAnalysis.dangerLevel > 0.3) {
+      // Expansion area is contested -- send army to secure it first
+      const armyUnits = this.getArmyUnits(ai.playerId);
+      if (armyUnits.length > 0) {
+        const escortCount = Math.min(armyUnits.length, Math.max(3, Math.floor(armyUnits.length * 0.3)));
+        const escortUnits = armyUnits.slice(0, escortCount);
+
+        const command: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'ATTACK',
+          entityIds: escortUnits,
+          targetPosition: expansionArea,
+        };
+        this.game.issueAICommand(command);
+
+        debugAI.log(
+          `[AITactics] ${ai.playerId}: Securing expansion area at (${expansionArea.x.toFixed(0)}, ${expansionArea.y.toFixed(0)}) with ${escortCount} units`
+        );
+      }
+    }
+
+    // Transition back to building -- the macro rules handle actually building the expansion.
+    // The army escort provides protection while the worker builds.
     ai.state = 'building';
+
+    debugAI.log(
+      `[AITactics] ${ai.playerId}: Expansion phase at (${expansionArea.x.toFixed(0)}, ${expansionArea.y.toFixed(0)}), danger: ${threatAnalysis.dangerLevel.toFixed(2)}`
+    );
   }
 
   /**
@@ -878,12 +950,46 @@ export class AITacticsManager {
    * Manages activeAttackOperation to prevent state oscillation.
    */
   public executeAttackingPhase(ai: AIPlayer, currentTick: number): void {
-    const armyUnits = this.getArmyUnits(ai.playerId);
+    let armyUnits = this.getArmyUnits(ai.playerId);
     if (armyUnits.length === 0) {
       ai.state = 'building';
       ai.activeAttackOperation = null;
       this.isEngaged.set(ai.playerId, false);
       return;
+    }
+
+    // Split army: keep defenseRatio portion near base for defense
+    const config = ai.config!;
+    const defenseRatio = config.tactical.defenseRatio[ai.difficulty];
+    if (defenseRatio > 0 && armyUnits.length > 3) {
+      const basePos = this.coordinator.findAIBase(ai);
+      if (basePos) {
+        const defenseCount = Math.max(1, Math.floor(armyUnits.length * defenseRatio));
+        const unitsWithDist: Array<{ id: number; dist: number }> = [];
+        for (const entityId of armyUnits) {
+          const entity = this.world.getEntity(entityId);
+          if (!entity) continue;
+          const transform = entity.get<Transform>('Transform');
+          if (!transform) continue;
+          const dx = transform.x - basePos.x;
+          const dy = transform.y - basePos.y;
+          unitsWithDist.push({ id: entityId, dist: deterministicMagnitude(dx, dy) });
+        }
+        unitsWithDist.sort((a, b) => a.dist - b.dist);
+
+        // Closest units form defense garrison, rest attack
+        armyUnits = unitsWithDist.slice(defenseCount).map((u) => u.id);
+        if (armyUnits.length === 0) {
+          // Entire army is garrison -- don't attack
+          ai.state = 'building';
+          ai.activeAttackOperation = null;
+          this.isEngaged.set(ai.playerId, false);
+          return;
+        }
+        debugAI.log(
+          `[AITactics] ${ai.playerId}: Army split - ${armyUnits.length} attacking, ${defenseCount} defending base`
+        );
+      }
     }
 
     // Per-enemy hunt mode: check if the PRIMARY enemy is near elimination
@@ -952,16 +1058,56 @@ export class AITacticsManager {
         `[AITactics] ${ai.playerId}: Starting attack operation to (${attackTarget.x.toFixed(0)}, ${attackTarget.y.toFixed(0)})`
       );
 
-      // Initial attack command - send all units
-      const command: GameCommand = {
-        tick: currentTick,
-        playerId: ai.playerId,
-        type: 'ATTACK',
-        entityIds: armyUnits,
-        targetPosition: attackTarget,
-      };
-      this.game.issueAICommand(command);
-      debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units`);
+      // Use concave formation for initial attack to spread units naturally
+      if (armyUnits.length >= 6) {
+        const groupId = ai.formationControl.createGroup(this.world, armyUnits, ai.playerId);
+        const slots = ai.formationControl.calculateConcaveFormation(
+          this.world,
+          groupId,
+          attackTarget
+        );
+
+        if (slots.length > 0) {
+          // Issue per-unit attack commands to formation positions
+          for (const slot of slots) {
+            const command: GameCommand = {
+              tick: currentTick,
+              playerId: ai.playerId,
+              type: 'ATTACK',
+              entityIds: [slot.entityId],
+              targetPosition: slot.targetPosition,
+            };
+            this.game.issueAICommand(command);
+          }
+          debugAI.log(
+            `[AITactics] ${ai.playerId}: Attacking in concave formation with ${slots.length} units`
+          );
+        } else {
+          // Fallback: standard group attack
+          const command: GameCommand = {
+            tick: currentTick,
+            playerId: ai.playerId,
+            type: 'ATTACK',
+            entityIds: armyUnits,
+            targetPosition: attackTarget,
+          };
+          this.game.issueAICommand(command);
+          debugAI.log(
+            `[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units (no formation)`
+          );
+        }
+      } else {
+        // Small army: no formation needed
+        const command: GameCommand = {
+          tick: currentTick,
+          playerId: ai.playerId,
+          type: 'ATTACK',
+          entityIds: armyUnits,
+          targetPosition: attackTarget,
+        };
+        this.game.issueAICommand(command);
+        debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units`);
+      }
     } else {
       // Update target position (may have changed if building was destroyed)
       ai.activeAttackOperation.target = attackTarget;
@@ -1074,11 +1220,17 @@ export class AITacticsManager {
 
     // Desperate retreat: only for very small armies facing overwhelming force
     if (threatAnalysis.dangerLevel > 0.7 && armyUnits.length < 5) {
-      const safeDir = threatAnalysis.safeDirection;
-      const rallyPoint = {
-        x: basePos.x + safeDir.x * 15,
-        y: basePos.y + safeDir.y * 15,
-      };
+      // Use InfluenceMap A* to find safe retreat path
+      const safePath = influenceMap.findSafePath(
+        basePos.x, basePos.y,
+        basePos.x + threatAnalysis.safeDirection.x * 30,
+        basePos.y + threatAnalysis.safeDirection.y * 30,
+        ai.playerId,
+        1.0 // Maximum threat avoidance during desperate retreat
+      );
+      const rallyPoint = safePath.length > 0
+        ? safePath[0]
+        : { x: basePos.x + threatAnalysis.safeDirection.x * 15, y: basePos.y + threatAnalysis.safeDirection.y * 15 };
 
       for (const entityId of armyUnits) {
         retreatCoordinator.forceRetreat(ai.playerId, entityId, rallyPoint, currentTick);
@@ -1225,7 +1377,7 @@ export class AITacticsManager {
       const transform = entity.get<Transform>('Transform')!;
       const health = entity.get<Health>('Health')!;
 
-      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
       if (unit.attackDamage === 0) continue;
 
@@ -1273,15 +1425,16 @@ export class AITacticsManager {
         ai.playerId
       );
       if (targetThreat.dangerLevel > 0.6) {
-        // Try to approach from safe direction
-        const safeOffset = {
-          x: targetThreat.safeDirection.x * 10,
-          y: targetThreat.safeDirection.y * 10,
-        };
-        const safeApproach = {
-          x: harassTarget.x + safeOffset.x,
-          y: harassTarget.y + safeOffset.y,
-        };
+        // Find safe approach path using InfluenceMap A*
+        const approachPath = influenceMap.findSafePath(
+          startPos.x, startPos.y,
+          harassTarget.x, harassTarget.y,
+          ai.playerId,
+          0.6 // Moderate threat avoidance for harassment
+        );
+        const safeApproach = approachPath.length > 1
+          ? approachPath[Math.min(1, approachPath.length - 1)]
+          : { x: harassTarget.x + targetThreat.safeDirection.x * 10, y: harassTarget.y + targetThreat.safeDirection.y * 10 };
         const command: GameCommand = {
           tick: currentTick,
           playerId: ai.playerId,
@@ -1376,7 +1529,7 @@ export class AITacticsManager {
       const health = entity.get<Health>('Health')!;
       const building = entity.get<Building>('Building')!;
 
-      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
       if (!building.isOperational()) continue;
 
@@ -1400,7 +1553,7 @@ export class AITacticsManager {
       const transform = entity.get<Transform>('Transform')!;
       const health = entity.get<Health>('Health')!;
 
-      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
       if (!building.isOperational()) continue;
 
@@ -1415,7 +1568,7 @@ export class AITacticsManager {
       const health = entity.get<Health>('Health')!;
       const building = entity.get<Building>('Building')!;
 
-      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
       if (!building.isOperational()) continue;
 
@@ -1568,7 +1721,7 @@ export class AITacticsManager {
       const health = entity.get<Health>('Health')!;
       const building = entity.get<Building>('Building')!;
 
-      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
       if (health.isDead()) continue;
       if (!building.isOperational()) continue;
 
@@ -1590,42 +1743,12 @@ export class AITacticsManager {
     if (!basePos) return null;
 
     const influenceMap = this.coordinator.getInfluenceMap();
-
-    // Get safe direction from current position
-    const threatAnalysis = influenceMap.getThreatAnalysis(
-      fromPosition.x,
-      fromPosition.y,
-      ai.playerId
+    const path = influenceMap.findSafePath(
+      fromPosition.x, fromPosition.y,
+      basePos.x, basePos.y,
+      ai.playerId,
+      0.8 // Strong threat avoidance for retreat
     );
-
-    // Build path using safe direction as guide
-    const path: Array<{ x: number; y: number }> = [];
-    const stepSize = 10;
-    let currentX = fromPosition.x;
-    let currentY = fromPosition.y;
-
-    // Generate waypoints toward base, biasing toward safe direction
-    for (let i = 0; i < 5; i++) {
-      // Direction to base
-      const dx = basePos.x - currentX;
-      const dy = basePos.y - currentY;
-      const dist = deterministicMagnitude(dx, dy);
-
-      if (dist < stepSize) {
-        path.push(basePos);
-        break;
-      }
-
-      // Blend safe direction with direct path to base
-      const directX = dx / dist;
-      const directY = dy / dist;
-      const blendedX = directX * 0.7 + threatAnalysis.safeDirection.x * 0.3;
-      const blendedY = directY * 0.7 + threatAnalysis.safeDirection.y * 0.3;
-
-      currentX += blendedX * stepSize;
-      currentY += blendedY * stepSize;
-      path.push({ x: currentX, y: currentY });
-    }
 
     return path.length > 0 ? path : null;
   }

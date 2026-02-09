@@ -51,9 +51,10 @@ export class EnhancedAISystem extends System {
     playerId: string,
     faction: string,
     difficulty: AIDifficulty = 'medium',
-    personality: AIPersonality = 'balanced'
+    personality: AIPersonality = 'balanced',
+    teamId: number = 0
   ): void {
-    this.coordinator.registerAI(playerId, faction, difficulty, personality);
+    this.coordinator.registerAI(playerId, faction, difficulty, personality, teamId);
 
     // Also register with AIMicroSystem for unit micro management
     this.game.eventBus.emit('ai:registered', { playerId });
