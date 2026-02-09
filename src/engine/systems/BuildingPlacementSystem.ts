@@ -519,6 +519,11 @@ export class BuildingPlacementSystem extends System {
     // Building starts in 'waiting_for_worker' state (from constructor)
     // Construction will start when worker arrives at site
 
+    // Immediately register in spatial grid so subsequent placement checks
+    // within the same tick detect this building (prevents overlap)
+    const gridRadius = Math.max(definition.width, definition.height) / 2 + 1;
+    this.world.buildingGrid.update(buildingEntity.id, snappedX, snappedY, gridRadius);
+
     // Associate extractor with plasma geyser
     if (plasmaGeyserEntity) {
       const resource = plasmaGeyserEntity.get<Resource>('Resource')!;

@@ -671,9 +671,10 @@ export class AIBuildOrderExecutor {
         for (let offset = 2; offset <= 8; offset += 2) {
           for (let angle = 0; angle < 8; angle++) {
             const theta = (angle * Math.PI * 2) / 8;
+            // Snap to grid to match handleBuildingPlace snapping
             const pos = {
-              x: choke.x + Math.cos(theta) * offset,
-              y: choke.y + Math.sin(theta) * offset,
+              x: Math.round(choke.x + Math.cos(theta) * offset),
+              y: Math.round(choke.y + Math.sin(theta) * offset),
             };
 
             if (
@@ -734,7 +735,8 @@ export class AIBuildOrderExecutor {
     }
 
     for (const offset of offsets) {
-      const pos = { x: basePos.x + offset.x, y: basePos.y + offset.y };
+      // Snap to grid to match handleBuildingPlace snapping
+      const pos = { x: Math.round(basePos.x + offset.x), y: Math.round(basePos.y + offset.y) };
       if (!this.game.isValidBuildingPlacement(pos.x, pos.y, width, height, excludeEntityId, true)) {
         continue;
       }
