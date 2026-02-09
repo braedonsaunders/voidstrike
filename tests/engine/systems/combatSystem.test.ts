@@ -759,4 +759,75 @@ describe('CombatSystem', () => {
       expect(shouldEngageTarget('attackmoving', false, 1, 3)).toBe(true);
     });
   });
+
+  describe('building engagement distance calculation', () => {
+    /**
+     * Replicates the edge-to-edge distance calculation used by CombatSystem
+     * for building targets in the engagement buffer. Uses AABB clamping to
+     * find the closest point on the building's rectangular footprint.
+     */
+    function buildingEdgeDistance(
+      unitX: number,
+      unitY: number,
+      buildingCenterX: number,
+      buildingCenterY: number,
+      buildingWidth: number,
+      buildingHeight: number
+    ): number {
+      const halfW = buildingWidth / 2;
+      const halfH = buildingHeight / 2;
+      const clampedX = Math.max(
+        buildingCenterX - halfW,
+        Math.min(unitX, buildingCenterX + halfW)
+      );
+      const clampedY = Math.max(
+        buildingCenterY - halfH,
+        Math.min(unitY, buildingCenterY + halfH)
+      );
+      const edgeDx = unitX - clampedX;
+      const edgeDy = unitY - clampedY;
+      return Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+    }
+
+    it('unit at building edge has near-zero distance', () => {
+      // Unit just outside the right edge of a 5x5 building centered at origin
+      const dist = buildingEdgeDistance(3.0, 0, 0, 0, 5, 5);
+      expect(dist).toBeCloseTo(0.5, 1); // 3.0 - 2.5 = 0.5 from edge
+    });
+
+    it('unit inside building has zero distance', () => {
+      // Unit at building center
+      const dist = buildingEdgeDistance(0, 0, 0, 0, 5, 5);
+      expect(dist).toBe(0);
+    });
+
+    it('unit approaching from corner uses edge distance not center distance', () => {
+      // Unit at the corner approach of a 5x5 building
+      // Center-to-center distance: sqrt(4^2 + 4^2) = 5.66
+      // Edge distance should be much less: closest point on rect is (2.5, 2.5)
+      // Edge dist: sqrt((4-2.5)^2 + (4-2.5)^2) = sqrt(1.5^2 + 1.5^2) = 2.12
+      const edgeDist = buildingEdgeDistance(4, 4, 0, 0, 5, 5);
+      const centerDist = Math.sqrt(4 * 4 + 4 * 4); // 5.66
+      expect(edgeDist).toBeCloseTo(2.12, 1);
+      expect(edgeDist).toBeLessThan(centerDist);
+
+      // With attackRange 5, engagement buffer = 8
+      // Edge distance (2.12) passes, center distance (5.66) also passes for 5x5
+      // But for larger buildings the difference matters
+      expect(edgeDist).toBeLessThan(5 + 3); // edge: within engagement
+      expect(centerDist).toBeLessThan(5 + 3); // center: also within for 5x5
+    });
+
+    it('edge distance is always <= center distance for buildings', () => {
+      // Verify edge-to-edge is never greater than center-to-center
+      const positions = [
+        [10, 0], [0, 10], [7, 7], [3, 8], [10, 10],
+      ];
+      for (const [ux, uy] of positions) {
+        const edgeDist = buildingEdgeDistance(ux, uy, 0, 0, 6, 6);
+        const centerDist = Math.sqrt(ux * ux + uy * uy);
+        expect(edgeDist).toBeLessThanOrEqual(centerDist);
+      }
+    });
+  });
 });
