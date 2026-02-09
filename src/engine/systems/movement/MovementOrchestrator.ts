@@ -519,6 +519,7 @@ export class MovementOrchestrator {
     // Handle dead units
     if (unit.state === 'dead') {
       velocity.zero();
+      transform.syncPrevious();
       this.world.unitGrid.remove(entity.id);
       this.pathfinding.removeAgentIfRegistered(entity.id);
       return;
@@ -592,6 +593,7 @@ export class MovementOrchestrator {
             // No water found - clear target and stop
             unit.clearTarget();
             velocity.zero();
+            transform.syncPrevious();
             return;
           }
         }
@@ -635,6 +637,7 @@ export class MovementOrchestrator {
           unit.clearTarget();
         }
         velocity.zero();
+        transform.syncPrevious();
         return;
       }
     }
@@ -650,6 +653,7 @@ export class MovementOrchestrator {
         unit.currentSpeed = Math.max(0, unit.currentSpeed - unit.deceleration * dt);
       }
       velocity.zero();
+      transform.syncPrevious();
       return;
     }
 
@@ -736,6 +740,7 @@ export class MovementOrchestrator {
       const isTrulyIdle = currentIdleTicks >= TRULY_IDLE_THRESHOLD_TICKS;
       if (isTrulyIdle && this.currentTick % TRULY_IDLE_PROCESS_INTERVAL !== 0) {
         velocity.zero();
+        transform.syncPrevious();
         return;
       }
 
@@ -803,13 +808,15 @@ export class MovementOrchestrator {
         }
 
         // Zero velocity after position update - idle separation is a position
-        // adjustment, not intentional movement. Keeps idle animation playing.
+        // adjustment, not intentional movement.
         velocity.zero();
+        transform.syncPrevious();
         return;
       }
     }
 
     velocity.zero();
+    transform.syncPrevious();
   }
 
   /**
@@ -935,6 +942,7 @@ export class MovementOrchestrator {
       // main movement path. For in-range attackers we skip all soft forces entirely.
 
       velocity.zero();
+      transform.syncPrevious();
 
       unit.currentSpeed = Math.max(0, unit.currentSpeed - unit.deceleration * dt);
       return { handled: true, skipMovement: true, targetX: null, targetY: null };
