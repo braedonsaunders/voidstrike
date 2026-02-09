@@ -643,7 +643,11 @@ export class AIBuildOrderExecutor {
     buildingType?: string
   ): { x: number; y: number } | null {
     const positionalAnalysis = this.coordinator.getPositionalAnalysis();
-    const AI_BUILDING_SPACING = 2;
+    const AI_BUILDING_SPACING = 3;
+
+    // Determine if this building produces units (needs spawn corridor clearance)
+    const buildingDef = buildingType ? BUILDING_DEFINITIONS[buildingType] : undefined;
+    const isProductionBuilding = (buildingDef?.canProduce?.length ?? 0) > 0;
 
     // Check if this is a defensive building that should be placed near chokes
     const defensiveBuildings = [
@@ -684,7 +688,16 @@ export class AIBuildOrderExecutor {
             ) {
               continue;
             }
-            if (this.hasAdequateBuildingSpacing(pos.x, pos.y, width, height, AI_BUILDING_SPACING)) {
+            if (
+              this.hasAdequateBuildingSpacing(
+                pos.x,
+                pos.y,
+                width,
+                height,
+                AI_BUILDING_SPACING,
+                isProductionBuilding
+              )
+            ) {
               debugAI.log(
                 `[AIBuildOrder] Placing ${buildingType} near choke point at (${pos.x.toFixed(0)}, ${pos.y.toFixed(0)})`
               );
@@ -725,7 +738,16 @@ export class AIBuildOrderExecutor {
       if (!this.game.isValidBuildingPlacement(pos.x, pos.y, width, height, excludeEntityId, true)) {
         continue;
       }
-      if (this.hasAdequateBuildingSpacing(pos.x, pos.y, width, height, AI_BUILDING_SPACING)) {
+      if (
+        this.hasAdequateBuildingSpacing(
+          pos.x,
+          pos.y,
+          width,
+          height,
+          AI_BUILDING_SPACING,
+          isProductionBuilding
+        )
+      ) {
         return pos;
       }
     }
@@ -736,19 +758,24 @@ export class AIBuildOrderExecutor {
   /**
    * Check if a building position has adequate spacing from other buildings.
    * Used by AI to ensure units can walk between buildings.
+   * Enforces extra spacing on the +X side of production buildings to keep
+   * the unit spawn/rally corridor clear.
    */
   private hasAdequateBuildingSpacing(
     centerX: number,
     centerY: number,
     width: number,
     height: number,
-    spacing: number
+    spacing: number,
+    isProductionBuilding: boolean = false
   ): boolean {
     const halfW = width / 2;
     const halfH = height / 2;
+    // Extra clearance on the +X side of production buildings for spawn/rally corridor
+    const PRODUCTION_CORRIDOR_EXTRA = 2;
 
     // Query nearby buildings with extra padding for spacing check
-    const queryPadding = spacing + 10;
+    const queryPadding = spacing + PRODUCTION_CORRIDOR_EXTRA + 10;
     const nearbyBuildingIds = this.game.world.buildingGrid.queryRect(
       centerX - halfW - queryPadding,
       centerY - halfH - queryPadding,
@@ -776,12 +803,25 @@ export class AIBuildOrderExecutor {
 
       const existingHalfW = building.width / 2;
       const existingHalfH = building.height / 2;
-      const dx = Math.abs(centerX - transform.x);
-      const dy = Math.abs(centerY - transform.y);
+      const rawDx = centerX - transform.x;
+      const rawDy = centerY - transform.y;
+      const dx = Math.abs(rawDx);
+      const dy = Math.abs(rawDy);
 
-      // Check if buildings are too close (need spacing gap for unit pathing)
-      const requiredDx = halfW + existingHalfW + spacing;
+      let requiredDx = halfW + existingHalfW + spacing;
       const requiredDy = halfH + existingHalfH + spacing;
+
+      // Protect production building spawn corridors on the +X side.
+      // Units spawn at width/2+1 and rally at width/2+3 from the building center.
+      const existingIsProduction = building.canProduce.length > 0;
+      if (existingIsProduction && rawDx > 0) {
+        // New building is to the right of an existing production building
+        requiredDx += PRODUCTION_CORRIDOR_EXTRA;
+      }
+      if (isProductionBuilding && rawDx < 0) {
+        // New production building has an existing building to its right (blocking its spawn)
+        requiredDx += PRODUCTION_CORRIDOR_EXTRA;
+      }
 
       if (dx < requiredDx && dy < requiredDy) {
         return false;
@@ -990,12 +1030,10 @@ export class AIBuildOrderExecutor {
 
     if (!canAfford) {
       // Calculate affordability ratio: how close are we to affording this?
-      const mineralRatio = unitDef.mineralCost > 0
-        ? Math.min(1.0, ai.minerals / unitDef.mineralCost)
-        : 1.0;
-      const plasmaRatio = unitDef.plasmaCost > 0
-        ? Math.min(1.0, ai.plasma / unitDef.plasmaCost)
-        : 1.0;
+      const mineralRatio =
+        unitDef.mineralCost > 0 ? Math.min(1.0, ai.minerals / unitDef.mineralCost) : 1.0;
+      const plasmaRatio =
+        unitDef.plasmaCost > 0 ? Math.min(1.0, ai.plasma / unitDef.plasmaCost) : 1.0;
       // Use the minimum of the two ratios (bottleneck resource)
       const affordRatio = Math.min(mineralRatio, plasmaRatio);
 
@@ -1195,12 +1233,8 @@ export class AIBuildOrderExecutor {
       if (currentPct >= targetPct) continue;
 
       // Calculate how close we are to affording it (savings threshold = 70%)
-      const mineralRatio = unitDef.mineralCost > 0
-        ? ai.minerals / unitDef.mineralCost
-        : 1.0;
-      const plasmaRatio = unitDef.plasmaCost > 0
-        ? ai.plasma / unitDef.plasmaCost
-        : 1.0;
+      const mineralRatio = unitDef.mineralCost > 0 ? ai.minerals / unitDef.mineralCost : 1.0;
+      const plasmaRatio = unitDef.plasmaCost > 0 ? ai.plasma / unitDef.plasmaCost : 1.0;
       const affordRatio = Math.min(mineralRatio, plasmaRatio);
 
       if (affordRatio >= 0.7) {
