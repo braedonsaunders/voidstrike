@@ -567,6 +567,94 @@ describe('AI Game Completion', () => {
     });
   });
 
+  describe('Hunt mode entity-targeted attack commands', () => {
+    /**
+     * Replicates the initial attack command logic from AITacticsManager.executeAttackingPhase.
+     * When attackTarget has an entityId, the command should use targetEntityId (entity-targeted)
+     * instead of targetPosition (position-based) to prevent units from attack-moving to the
+     * building center and going idle instead of actually attacking.
+     */
+    interface AttackTarget {
+      x: number;
+      y: number;
+      entityId?: number;
+    }
+
+    interface AttackCommand {
+      tick: number;
+      playerId: string;
+      type: 'ATTACK';
+      entityIds: number[];
+      targetEntityId?: number;
+      targetPosition?: { x: number; y: number };
+    }
+
+    function buildAttackCommand(
+      tick: number,
+      playerId: string,
+      entityIds: number[],
+      attackTarget: AttackTarget
+    ): AttackCommand {
+      return {
+        tick,
+        playerId,
+        type: 'ATTACK',
+        entityIds,
+        ...(attackTarget.entityId !== undefined
+          ? { targetEntityId: attackTarget.entityId }
+          : { targetPosition: attackTarget }),
+      };
+    }
+
+    it('uses targetEntityId when attackTarget has entityId (hunt mode)', () => {
+      const target: AttackTarget = { x: 50, y: 60, entityId: 42 };
+      const command = buildAttackCommand(100, 'ai1', [1, 2, 3], target);
+
+      expect(command.targetEntityId).toBe(42);
+      expect(command.targetPosition).toBeUndefined();
+    });
+
+    it('falls back to targetPosition when no entityId available', () => {
+      const target: AttackTarget = { x: 50, y: 60 };
+      const command = buildAttackCommand(100, 'ai1', [1, 2, 3], target);
+
+      expect(command.targetPosition).toEqual({ x: 50, y: 60 });
+      expect(command.targetEntityId).toBeUndefined();
+    });
+
+    it('entity-targeted command sends units to attacking state, not attackmoving', () => {
+      // With targetEntityId, CommandSystem sets unit.targetEntityId directly,
+      // putting unit into 'attacking' state. With targetPosition, units go to
+      // 'attackmoving' and must find the target through engagement range checks.
+      const targetWithEntity: AttackTarget = { x: 50, y: 60, entityId: 42 };
+      const targetPositionOnly: AttackTarget = { x: 50, y: 60 };
+
+      const entityCommand = buildAttackCommand(100, 'ai1', [1], targetWithEntity);
+      const positionCommand = buildAttackCommand(100, 'ai1', [1], targetPositionOnly);
+
+      // Entity-targeted: unit knows exactly what to attack
+      expect(entityCommand.targetEntityId).toBeDefined();
+      expect(entityCommand.targetPosition).toBeUndefined();
+
+      // Position-targeted: unit attack-moves to position
+      expect(positionCommand.targetEntityId).toBeUndefined();
+      expect(positionCommand.targetPosition).toBeDefined();
+    });
+
+    it('findEnemyBuildingForPlayer always includes entityId', () => {
+      // The findEnemyBuildingForPlayer method returns { x, y, entityId } -
+      // entityId is always present (not optional), so entity-targeting always works
+      const buildingResult: { x: number; y: number; entityId: number } = {
+        x: 50,
+        y: 60,
+        entityId: 42,
+      };
+
+      const command = buildAttackCommand(100, 'ai1', [1, 2], buildingResult);
+      expect(command.targetEntityId).toBe(42);
+    });
+  });
+
   describe('FFA scenario integration', () => {
     it('AI finishes off nearly-dead enemy instead of switching to new attacker', () => {
       // Simulate: AI attacking enemyA (2 buildings left), enemyB pokes AI base

@@ -29,12 +29,6 @@ interface FlyingBuildingMoveCommand {
   targetPosition: { x: number; y: number };
 }
 
-interface BuildAddonCommand {
-  buildingId: number;
-  addonType: 'research_module' | 'production_module';
-  playerId: string;
-}
-
 interface LowerSupplyDepotCommand {
   buildingId: number;
   lower?: boolean;
@@ -56,7 +50,6 @@ export class BuildingMechanicsSystem extends System {
   private setupEventListeners(): void {
     this.game.eventBus.on('command:liftOff', this.handleLiftOffCommand.bind(this));
     this.game.eventBus.on('command:land', this.handleLandCommand.bind(this));
-    this.game.eventBus.on('command:buildAddon', this.handleBuildAddonCommand.bind(this));
     this.game.eventBus.on(
       'command:lowerSupplyDepot',
       this.handleLowerSupplyDepotCommand.bind(this)
@@ -74,7 +67,14 @@ export class BuildingMechanicsSystem extends System {
 
   private handleAddonLiftCommand(command: { buildingId: number; playerId?: string }): void {
     const entity = this.world.getEntity(command.buildingId);
-    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleAddonLiftCommand')) return;
+    if (
+      !validateEntityAlive(
+        entity,
+        command.buildingId,
+        'BuildingMechanicsSystem:handleAddonLiftCommand'
+      )
+    )
+      return;
 
     const building = entity.get<Building>('Building');
     if (!building || !building.addonEntityId) return;
@@ -102,7 +102,14 @@ export class BuildingMechanicsSystem extends System {
     // This handles a building attaching to an existing addon at a position
     // The building should fly to the position and then attach
     const entity = this.world.getEntity(command.buildingId);
-    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleAddonLandCommand')) return;
+    if (
+      !validateEntityAlive(
+        entity,
+        command.buildingId,
+        'BuildingMechanicsSystem:handleAddonLandCommand'
+      )
+    )
+      return;
 
     const building = entity.get<Building>('Building');
     if (!building) return;
@@ -115,7 +122,14 @@ export class BuildingMechanicsSystem extends System {
 
   private handleLiftOffCommand(command: LiftOffCommand): void {
     const entity = this.world.getEntity(command.buildingId);
-    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleLiftOffCommand')) return;
+    if (
+      !validateEntityAlive(
+        entity,
+        command.buildingId,
+        'BuildingMechanicsSystem:handleLiftOffCommand'
+      )
+    )
+      return;
 
     const building = entity.get<Building>('Building');
     if (!building) return;
@@ -147,7 +161,10 @@ export class BuildingMechanicsSystem extends System {
 
   private handleLandCommand(command: LandCommand): void {
     const entity = this.world.getEntity(command.buildingId);
-    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleLandCommand')) return;
+    if (
+      !validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleLandCommand')
+    )
+      return;
 
     const building = entity.get<Building>('Building');
     const transform = entity.get<Transform>('Transform');
@@ -183,7 +200,14 @@ export class BuildingMechanicsSystem extends System {
 
   private handleFlyingBuildingMoveCommand(command: FlyingBuildingMoveCommand): void {
     const entity = this.world.getEntity(command.buildingId);
-    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleFlyingBuildingMoveCommand')) return;
+    if (
+      !validateEntityAlive(
+        entity,
+        command.buildingId,
+        'BuildingMechanicsSystem:handleFlyingBuildingMoveCommand'
+      )
+    )
+      return;
 
     const building = entity.get<Building>('Building');
     if (!building) return;
@@ -192,41 +216,6 @@ export class BuildingMechanicsSystem extends System {
     if (building.state !== 'flying') return;
 
     building.setFlyingTarget(command.targetPosition.x, command.targetPosition.y);
-  }
-
-  private handleBuildAddonCommand(command: BuildAddonCommand): void {
-    const entity = this.world.getEntity(command.buildingId);
-    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleBuildAddonCommand')) return;
-
-    const building = entity.get<Building>('Building');
-    const transform = entity.get<Transform>('Transform');
-    const selectable = entity.get<Selectable>('Selectable');
-
-    if (!building || !transform || !selectable) return;
-    if (!building.canHaveAddon) return;
-    if (building.hasAddon()) return;
-    if (building.state !== 'complete') return;
-
-    // Check if addon spot is clear
-    const addonX = transform.x + building.width;
-    const addonY = transform.y;
-
-    if (!this.isValidBuildingSpot(addonX, addonY, 2, 2, -1)) {
-      this.game.eventBus.emit('building:addonFailed', {
-        buildingId: command.buildingId,
-        reason: 'Addon position blocked',
-      });
-      return;
-    }
-
-    // Emit event to create the addon building
-    this.game.eventBus.emit('building:place', {
-      buildingType: command.addonType,
-      position: { x: addonX, y: addonY },
-      playerId: command.playerId,
-      isAddon: true,
-      attachTo: command.buildingId,
-    });
   }
 
   private handleAttachToAddonCommand(data: { buildingId: number; addonId: number }): void {
@@ -254,7 +243,14 @@ export class BuildingMechanicsSystem extends System {
 
   private handleLowerSupplyDepotCommand(command: LowerSupplyDepotCommand): void {
     const entity = this.world.getEntity(command.buildingId);
-    if (!validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleLowerSupplyDepotCommand')) return;
+    if (
+      !validateEntityAlive(
+        entity,
+        command.buildingId,
+        'BuildingMechanicsSystem:handleLowerSupplyDepotCommand'
+      )
+    )
+      return;
 
     const building = entity.get<Building>('Building');
     if (!building) return;
@@ -274,7 +270,8 @@ export class BuildingMechanicsSystem extends System {
   private handleDemolishCommand(command: DemolishCommand): void {
     for (const entityId of command.entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!validateEntityAlive(entity, entityId, 'BuildingMechanicsSystem:handleDemolishCommand')) continue;
+      if (!validateEntityAlive(entity, entityId, 'BuildingMechanicsSystem:handleDemolishCommand'))
+        continue;
 
       const building = entity.get<Building>('Building');
       const transform = entity.get<Transform>('Transform');

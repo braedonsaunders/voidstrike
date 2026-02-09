@@ -992,6 +992,46 @@ export class CombatSystem extends System {
           }
         }
 
+        // If this building has an addon, destroy the orphaned addon too.
+        // Without cleanup, orphaned addons become ghost targets the AI sends
+        // units to attack but units can't properly engage.
+        if (buildingComp.addonEntityId !== null) {
+          const addonEntity = this.world.getEntity(buildingComp.addonEntityId);
+          if (addonEntity && !addonEntity.isDestroyed()) {
+            const addonHealth = addonEntity.get<Health>('Health');
+            const addonBuilding = addonEntity.get<Building>('Building');
+            const addonSelectable = addonEntity.get<Selectable>('Selectable');
+            const addonTransform = addonEntity.get<Transform>('Transform');
+            if (addonHealth && addonBuilding && addonSelectable && addonTransform) {
+              addonHealth.current = 0;
+              addonBuilding.state = 'destroyed';
+              debugCombat.log(
+                `CombatSystem: Orphaned addon ${addonBuilding.buildingId} (${addonEntity.id}) destroyed with parent`
+              );
+              this.game.eventBus.emit('building:destroyed', {
+                entityId: addonEntity.id,
+                playerId: addonSelectable.playerId,
+                buildingType: addonBuilding.buildingId,
+                position: { x: addonTransform.x, y: addonTransform.y },
+                width: addonBuilding.width,
+                height: addonBuilding.height,
+              });
+              this.world.destroyEntity(addonEntity.id);
+            }
+          }
+        }
+
+        // If this is an addon, clear the parent's addon reference
+        if (buildingComp.attachedToId !== null) {
+          const parentEntity = this.world.getEntity(buildingComp.attachedToId);
+          if (parentEntity) {
+            const parentBuilding = parentEntity.get<Building>('Building');
+            if (parentBuilding && parentBuilding.addonEntityId === building.id) {
+              parentBuilding.detachAddon();
+            }
+          }
+        }
+
         debugCombat.log(
           `CombatSystem: Building ${buildingComp.buildingId} (${building.id}) destroyed at (${transform.x.toFixed(1)}, ${transform.y.toFixed(1)})`
         );
