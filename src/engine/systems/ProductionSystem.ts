@@ -22,6 +22,9 @@ export class ProductionSystem extends System {
   // Cached reference to AI system (lazy loaded)
   private aiSystem: EnhancedAISystem | null = null;
 
+  // Tracks sequential spawn positions per building to spread units apart
+  private buildingSpawnCounter = new Map<number, number>();
+
   constructor(game: IGameInstance) {
     super(game);
     this.setupEventListeners();
@@ -390,9 +393,10 @@ export class ProductionSystem extends System {
     item: ProductionQueueItem
   ): void {
     if (item.type === 'unit') {
-      // Spawn the unit(s) near the building (not at rally point)
-      // For reactor bonus, produceCount will be 2
-      const baseSpawnX = buildingTransform.x + building.width / 2 + 1;
+      // Spawn outside the building's navmesh obstacle zone. The soft avoidance
+      // margin is 1.0, so offset by width/2 + 2.5 to ensure units start fully
+      // clear of the building footprint and avoidance zones.
+      const baseSpawnX = buildingTransform.x + building.width / 2 + 2.5;
       const baseSpawnY = buildingTransform.y;
 
       // Get the building's owner from its Selectable component
@@ -403,11 +407,19 @@ export class ProductionSystem extends System {
         : buildingEntity?.get<Selectable>('Selectable');
       const ownerPlayerId = selectable?.playerId;
 
+      // Track sequential spawns from this building to spread units apart.
+      // Uses a rotating index so units fan out instead of stacking.
+      const spawnCount = this.buildingSpawnCounter.get(buildingId) ?? 0;
+
       // Spawn multiple units if produceCount > 1 (reactor bonus)
       for (let i = 0; i < item.produceCount; i++) {
-        // Offset spawn position slightly for multiple units to avoid overlap
-        const spawnX = baseSpawnX + i * 0.5;
-        const spawnY = baseSpawnY + i * 0.5;
+        // Alternate perpendicular spread: units fan out along Y axis to avoid
+        // piling up at the same point when many units spawn in quick succession
+        const spawnIndex = spawnCount + i;
+        const side = spawnIndex % 2 === 0 ? 1 : -1;
+        const tier = Math.floor(spawnIndex / 2);
+        const spawnX = baseSpawnX + tier * 0.8;
+        const spawnY = baseSpawnY + side * (tier + 1) * 1.2;
 
         // Diagnostic: log when units are spawned (helps debug AI production issues)
         debugSpawning.log(
@@ -426,6 +438,11 @@ export class ProductionSystem extends System {
           rallyTargetId: building.rallyTargetId,
         });
       }
+
+      // Update spawn counter for this building, reset after 10 to prevent
+      // spawn positions from drifting too far from the building
+      const nextCount = (spawnCount + item.produceCount) % 10;
+      this.buildingSpawnCounter.set(buildingId, nextCount);
 
       // Emit production complete for Phaser overlay (local player's units only)
       if (ownerPlayerId === this.game.config.playerId) {

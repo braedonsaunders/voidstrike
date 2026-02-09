@@ -425,9 +425,6 @@ export class AICoordinator extends System {
     if (currentTick - lastTick < 10) return;
     this.lastReactiveDefenseTick.set(ai.playerId, currentTick);
 
-    // Don't interrupt active attacks unless we need to
-    if (ai.state === 'attacking' && ai.activeAttackOperation) return;
-
     const basePos = this.findAIBase(ai);
     if (!basePos) return;
 
@@ -435,7 +432,10 @@ export class AICoordinator extends System {
     const threatPos = attackPosition || this.tacticsManager.findNearestThreatPublic(ai, basePos);
     if (!threatPos) return;
 
-    // Command all army units within 60 units of base to respond
+    // Command army units near base to respond. During active attacks, units near
+    // base are idle reinforcements — they should still defend rather than watch
+    // the base get destroyed. getArmyUnitsNearBase already filters to units within
+    // the base radius that aren't engaged in combat.
     const armyUnits = this.tacticsManager.getArmyUnitsNearBase(ai.playerId, basePos, 60);
     if (armyUnits.length === 0) return;
 
@@ -448,8 +448,11 @@ export class AICoordinator extends System {
     };
     this.game.issueAICommand(command);
 
-    // Force defending state
-    ai.state = 'defending';
+    // Only switch to defending state if not in an active attack — units on offense
+    // continue their operation while home units defend independently.
+    if (!ai.activeAttackOperation) {
+      ai.state = 'defending';
+    }
 
     debugAI.log(
       `[AICoordinator] ${ai.playerId}: REACTIVE DEFENSE - ${armyUnits.length} units responding to threat at (${threatPos.x.toFixed(0)}, ${threatPos.y.toFixed(0)})`
@@ -1222,10 +1225,12 @@ export class AICoordinator extends System {
     // This ensures defense response isn't gated by the 40-tick medium delay
     if (currentTick % 10 === 0) {
       for (const [, ai] of this.aiPlayers) {
-        if (ai.state === 'attacking' && ai.activeAttackOperation) continue; // Don't interrupt attacks
-
         if (this.tacticsManager.isUnderAttack(ai)) {
-          if (ai.state !== 'defending') {
+          if (ai.state === 'attacking' && ai.activeAttackOperation) {
+            // During active attacks, trigger reactive defense for home units
+            // without interrupting the attack operation
+            this.triggerReactiveDefense(ai);
+          } else if (ai.state !== 'defending') {
             ai.state = 'defending';
             this.tacticsManager.executeDefendingPhase(ai, currentTick);
           }
