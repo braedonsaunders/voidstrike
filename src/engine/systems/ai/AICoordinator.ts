@@ -442,7 +442,7 @@ export class AICoordinator extends System {
     const command: GameCommand = {
       tick: currentTick,
       playerId: ai.playerId,
-      type: 'ATTACK' as const,
+      type: 'ATTACK_MOVE' as const,
       entityIds: armyUnits,
       targetPosition: threatPos,
     };
