@@ -61,6 +61,9 @@ function createTestState(overrides: Partial<AIStateSnapshot> = {}): AIStateSnaps
     enemyAirUnits: 0,
     underAttack: false,
     hasAntiAir: false,
+    enemyStrategy: 'unknown',
+    enemyTechLevel: 1,
+    enemyHasAirTech: false,
     config: defaultConfig as FactionAIConfig,
     ...overrides,
   };
@@ -508,6 +511,98 @@ describe('faction config registry', () => {
     const factions = getRegisteredFactions();
 
     expect(factions).toContain('registered-faction');
+  });
+});
+
+describe('scouting intel conditions', () => {
+  it('evaluates enemyStrategy == rush', () => {
+    const state = createTestState({ enemyStrategy: 'rush' });
+    const condition: RuleCondition = { type: 'enemyStrategy', operator: '==', value: 'rush' };
+    expect(evaluateCondition(condition, state)).toBe(true);
+  });
+
+  it('evaluates enemyStrategy != unknown', () => {
+    const state = createTestState({ enemyStrategy: 'tech' });
+    const condition: RuleCondition = { type: 'enemyStrategy', operator: '!=', value: 'unknown' };
+    expect(evaluateCondition(condition, state)).toBe(true);
+  });
+
+  it('evaluates enemyTechLevel > value', () => {
+    const state = createTestState({ enemyTechLevel: 2 });
+    const condition: RuleCondition = { type: 'enemyTechLevel', operator: '>', value: 1 };
+    expect(evaluateCondition(condition, state)).toBe(true);
+  });
+
+  it('evaluates enemyHasAirTech == true', () => {
+    const state = createTestState({ enemyHasAirTech: true });
+    const condition: RuleCondition = { type: 'enemyHasAirTech', operator: '==', value: true };
+    expect(evaluateCondition(condition, state)).toBe(true);
+  });
+
+  it('evaluates enemyHasAirTech == false', () => {
+    const state = createTestState({ enemyHasAirTech: false });
+    const condition: RuleCondition = { type: 'enemyHasAirTech', operator: '==', value: false };
+    expect(evaluateCondition(condition, state)).toBe(true);
+  });
+});
+
+describe('dominion scouting-reactive macro rules', () => {
+  it('has counter_rush_defense rule', () => {
+    const config = getFactionAIConfig('dominion');
+    expect(config).toBeDefined();
+
+    const rule = config!.macroRules.find((r) => r.id === 'counter_rush_defense');
+    expect(rule).toBeDefined();
+    expect(rule!.priority).toBeGreaterThan(85);
+    expect(rule!.conditions.some((c) => c.type === 'enemyStrategy')).toBe(true);
+    expect(rule!.action.type).toBe('build');
+    expect(rule!.action.targetId).toBe('bunker');
+  });
+
+  it('has counter_tech_aggression rule', () => {
+    const config = getFactionAIConfig('dominion');
+    expect(config).toBeDefined();
+
+    const rule = config!.macroRules.find((r) => r.id === 'counter_tech_aggression');
+    expect(rule).toBeDefined();
+    expect(rule!.conditions.some((c) => c.type === 'enemyStrategy')).toBe(true);
+    expect(rule!.action.type).toBe('attack');
+  });
+
+  it('has counter_air_tech_preemptive rule', () => {
+    const config = getFactionAIConfig('dominion');
+    expect(config).toBeDefined();
+
+    const rule = config!.macroRules.find((r) => r.id === 'counter_air_tech_preemptive');
+    expect(rule).toBeDefined();
+    expect(rule!.conditions.some((c) => c.type === 'enemyHasAirTech')).toBe(true);
+    expect(rule!.action.type).toBe('train');
+  });
+
+  it('counter_rush_defense activates when enemy rushes', () => {
+    const state = createTestState({
+      enemyStrategy: 'rush',
+      minerals: 200,
+      difficulty: 'hard',
+      buildingCounts: new Map([['infantry_bay', 1]]),
+    });
+    const config = getFactionAIConfig('dominion');
+    const rule = config!.macroRules.find((r) => r.id === 'counter_rush_defense');
+    expect(rule).toBeDefined();
+    expect(evaluateRule(rule!, state)).toBe(true);
+  });
+
+  it('counter_air_tech_preemptive activates with enemy air tech', () => {
+    const state = createTestState({
+      enemyHasAirTech: true,
+      hasAntiAir: false,
+      difficulty: 'hard',
+      buildingCounts: new Map([['infantry_bay', 1]]),
+    });
+    const config = getFactionAIConfig('dominion');
+    const rule = config!.macroRules.find((r) => r.id === 'counter_air_tech_preemptive');
+    expect(rule).toBeDefined();
+    expect(evaluateRule(rule!, state)).toBe(true);
   });
 });
 

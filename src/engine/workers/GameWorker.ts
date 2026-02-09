@@ -1154,7 +1154,7 @@ export class WorkerGame extends GameCore {
 
         const enhancedAI = this.world.getSystem(EnhancedAISystem);
         if (enhancedAI) {
-          enhancedAI.registerAI(slot.id, slot.faction, slot.aiDifficulty ?? 'medium');
+          enhancedAI.registerAI(slot.id, slot.faction, slot.aiDifficulty ?? 'medium', 'balanced', team);
         }
       }
     }

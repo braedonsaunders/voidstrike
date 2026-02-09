@@ -284,6 +284,61 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     difficulties: ['hard', 'very_hard', 'insane'],
   },
 
+  // === Scouting-Reactive Rules ===
+  {
+    id: 'counter_rush_defense',
+    name: 'Anti-Rush Defense',
+    description: 'Build defensive structures when rush detected',
+    priority: 92,
+    conditions: [
+      { type: 'enemyStrategy', operator: '==', value: 'rush' },
+      { type: 'buildingCount', operator: '<', value: 1, targetId: 'bunker' },
+      { type: 'minerals', operator: '>=', value: 100 },
+    ],
+    action: {
+      type: 'build',
+      targetId: 'bunker',
+    },
+    cooldownTicks: 200,
+    difficulties: ['hard', 'very_hard', 'insane'],
+  },
+  {
+    id: 'counter_tech_aggression',
+    name: 'Punish Tech',
+    description: 'Attack when enemy is teching with weak army',
+    priority: 88,
+    conditions: [
+      { type: 'enemyStrategy', operator: '==', value: 'tech' },
+      { type: 'armySupply', operator: '>=', value: 10 },
+      { type: 'gameTime', operator: '>=', value: 800 },
+    ],
+    action: {
+      type: 'attack',
+    },
+    cooldownTicks: 400,
+    difficulties: ['very_hard', 'insane'],
+  },
+  {
+    id: 'counter_air_tech_preemptive',
+    name: 'Preemptive Anti-Air',
+    description: 'Build anti-air when enemy air tech detected before air units appear',
+    priority: 90,
+    conditions: [
+      { type: 'enemyHasAirTech', operator: '==', value: true },
+      { type: 'hasAntiAir', operator: '==', value: false },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
+    ],
+    action: {
+      type: 'train',
+      options: [
+        { id: 'trooper', weight: 10 },
+        { id: 'valkyrie', weight: 5 },
+      ],
+    },
+    cooldownTicks: 10,
+    difficulties: ['hard', 'very_hard', 'insane'],
+  },
+
   // === Unit Production - Heavy Units (ALL DIFFICULTIES) ===
   {
     id: 'train_dreadnought',

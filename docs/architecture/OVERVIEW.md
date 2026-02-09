@@ -2721,6 +2721,61 @@ Two-layer defense system inspired by SC2's region-based defense:
 - Building health below 85% with recent enemy contact (raised from 70%)
 - Building health below 50% (always triggers)
 
+#### Army Splitting (defenseRatio)
+
+The AI now splits its army when attacking, keeping a defense garrison at the base. The `defenseRatio` config (per difficulty) controls what fraction of the army stays home:
+
+- Easy: 50% garrison, Medium: 40%, Hard: 30%, Very Hard: 25%, Insane: 20%
+- Units nearest to the base are kept for defense; farther units form the attack group
+- Small armies (3 or fewer) are never split
+- Garrison units remain idle near the base and respond instantly to defense triggers
+
+#### Team Alliance System
+
+All AI systems use proper alliance checks via `isEnemy()` from `TargetAcquisition.ts`. The `AIPlayer` interface includes a `teamId` field (0 = FFA, 1-4 = team). This affects:
+
+- `AITacticsManager`: Enemy base/building/unit/threat detection all use `isEnemy()`
+- `AIScoutingManager`: Enemy intel gathering skips allied entities
+- `AIBuildOrderExecutor`: Ability targeting and expansion placement respect alliances
+- `InfluenceMap`: Threat analysis sums allied influence as friendly, not enemy
+
+#### ScoutingMemory Integration
+
+`ScoutingMemory` strategy inference is wired into macro decisions via three new `ConditionType` values:
+
+- `enemyStrategy`: Inferred enemy strategy (`rush`, `tech`, `macro`, `air_transition`, `unknown`)
+- `enemyTechLevel`: Enemy tech level (1-3)
+- `enemyHasAirTech`: Whether enemy has air tech buildings
+
+Three scouting-reactive macro rules respond to enemy strategies:
+- `counter_rush_defense` (priority 92): Builds bunker when rush detected
+- `counter_air_tech_preemptive` (priority 90): Trains anti-air when enemy air tech detected
+- `counter_tech_aggression` (priority 88): Launches attack to punish greedy teching
+
+#### InfluenceMap Safe Pathfinding
+
+Retreat and harassment paths now use `InfluenceMap.findSafePath()` (A* with threat avoidance) instead of naive direction offsets. Three integration points:
+
+- `getSafeRetreatPath()`: Delegates to `findSafePath()` with 0.8 threat avoidance
+- Desperate retreat: Uses `findSafePath()` with 1.0 (maximum) threat avoidance
+- Harassment approach: Uses `findSafePath()` with 0.6 (moderate) threat avoidance
+
+#### Expansion Phase
+
+The `'expanding'` state is now functional. `updateTacticalState()` transitions to expanding when:
+- Fewer bases than `maxBases`, expansion cooldown expired, 350+ minerals, 6+ army supply
+- `InfluenceMap.findBestExpansionArea()` finds a safe location (score > -10)
+
+`executeExpandingPhase()` evaluates threat at the expansion site and dispatches an escort force (30% of army, minimum 3 units) if `dangerLevel > 0.3`. The macro rules handle the actual expansion building.
+
+#### FormationControl Integration
+
+`FormationControl.calculateConcaveFormation()` is used for initial attack commands:
+- Armies of 6+ units get per-unit ATTACK commands to concave formation positions facing the enemy
+- Smaller armies use standard group commands
+- Re-commanding idle assault units uses standard group commands (no formation recalculation)
+- Defense phase deliberately avoids formations to prevent command oscillation
+
 #### Composition-Aware Production
 
 The `doMacro()` method uses a two-pass approach instead of pure priority-based first-match:
