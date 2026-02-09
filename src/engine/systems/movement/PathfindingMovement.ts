@@ -265,16 +265,63 @@ export class PathfindingMovement {
           targetY = unit.targetY;
         }
 
-        // Attacking units: use target entity position so the crowd agent steers toward
-        // the enemy immediately, eliminating the 1-2 frame "pause" where the crowd has
-        // no valid target between clearing targetX/targetY and the new path arriving.
+        // Attacking units: steer crowd agent toward target immediately,
+        // eliminating the 1-2 frame "pause" where the crowd has no valid target
+        // between clearing targetX/targetY and the new path arriving.
         if (targetX === null && unit.state === 'attacking' && unit.targetEntityId !== null) {
           const targetEntity = this.world.getEntity(unit.targetEntityId);
           if (targetEntity) {
             const targetTransform = targetEntity.get<Transform>('Transform');
             if (targetTransform) {
-              targetX = targetTransform.x;
-              targetY = targetTransform.y;
+              const targetBuilding = targetEntity.get<Building>('Building');
+              if (targetBuilding) {
+                // For buildings: compute standoff position at building edge.
+                // Using the building center sends the crowd agent INTO the obstacle,
+                // causing units to walk through and disappear inside buildings.
+                const halfW = targetBuilding.width / 2;
+                const halfH = targetBuilding.height / 2;
+                const clampedX = Math.max(
+                  targetTransform.x - halfW,
+                  Math.min(transform.x, targetTransform.x + halfW)
+                );
+                const clampedY = Math.max(
+                  targetTransform.y - halfH,
+                  Math.min(transform.y, targetTransform.y + halfH)
+                );
+                const edgeDx = transform.x - clampedX;
+                const edgeDy = transform.y - clampedY;
+                const {
+                  nx: dirX,
+                  ny: dirY,
+                  magnitude: edgeDist,
+                } = deterministicNormalizeWithMagnitude(edgeDx, edgeDy);
+                if (edgeDist > 0.01) {
+                  const standoff = unit.attackRange * 0.8;
+                  targetX = clampedX + dirX * standoff;
+                  targetY = clampedY + dirY * standoff;
+                } else {
+                  // Unit inside building footprint — escape outward
+                  const awayDx = transform.x - targetTransform.x;
+                  const awayDy = transform.y - targetTransform.y;
+                  const {
+                    nx: awayNx,
+                    ny: awayNy,
+                    magnitude: awayMag,
+                  } = deterministicNormalizeWithMagnitude(awayDx, awayDy);
+                  const escapeDistance = Math.max(halfW, halfH) + unit.attackRange + 1;
+                  if (awayMag > 0.01) {
+                    targetX = targetTransform.x + awayNx * escapeDistance;
+                    targetY = targetTransform.y + awayNy * escapeDistance;
+                  } else {
+                    targetX = targetTransform.x + escapeDistance;
+                    targetY = targetTransform.y;
+                  }
+                }
+              } else {
+                // For unit targets: use center position (units don't block navmesh)
+                targetX = targetTransform.x;
+                targetY = targetTransform.y;
+              }
             }
           }
         }

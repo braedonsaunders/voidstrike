@@ -1234,42 +1234,6 @@ export class MovementOrchestrator {
       finalVy += tempSeparation.y * collisionConfig.flyingSeparationMultiplier;
     }
 
-    // Building avoidance - Two modes:
-    // 1. Full steering for non-crowd paths (flying units or crowd unavailable)
-    // 2. Emergency-only for crowd agents (safety net when NavMesh fails)
-    if (!USE_RECAST_CROWD || unit.isFlying || !this.pathfinding.isAgentRegistered(entityId)) {
-      // Full building avoidance for non-crowd paths
-      this.pathfinding.calculateBuildingAvoidanceForce(
-        entityId,
-        transform,
-        unit,
-        tempBuildingAvoid,
-        finalVx,
-        finalVy
-      );
-      finalVx += tempBuildingAvoid.x;
-      finalVy += tempBuildingAvoid.y;
-    } else {
-      // Emergency building avoidance for crowd agents - only when very close to building
-      // This is a safety net for when NavMesh obstacles fail to register properly
-      this.pathfinding.calculateBuildingAvoidanceForce(
-        entityId,
-        transform,
-        unit,
-        tempBuildingAvoid,
-        finalVx,
-        finalVy
-      );
-      const avoidMag = deterministicMagnitude(tempBuildingAvoid.x, tempBuildingAvoid.y);
-      // Only apply if strong avoidance is detected (unit is close to building)
-      // This prevents oscillation while still catching penetration cases
-      if (avoidMag > 1.5) {
-        // Apply emergency avoidance with reduced strength to avoid oscillation
-        finalVx += tempBuildingAvoid.x * 0.7;
-        finalVy += tempBuildingAvoid.y * 0.7;
-      }
-    }
-
     // Physics pushing
     if (!unit.isFlying) {
       this.flocking.calculatePhysicsPush(entityId, transform, unit, tempPhysicsPush, unitGrid);
@@ -1315,6 +1279,40 @@ export class MovementOrchestrator {
         const backwardScale = dot * invDistSq;
         finalVx -= backwardScale * dx;
         finalVy -= backwardScale * dy;
+      }
+    }
+
+    // Building avoidance — applied AFTER backward drift removal so the force
+    // can't be stripped. Previously, the backward removal treated building
+    // avoidance as "backward drift" when approaching a building to attack,
+    // causing units to walk through and disappear inside buildings.
+    // Two modes:
+    // 1. Full steering for non-crowd paths (flying units or crowd unavailable)
+    // 2. Emergency-only for crowd agents (safety net when NavMesh fails)
+    if (!USE_RECAST_CROWD || unit.isFlying || !this.pathfinding.isAgentRegistered(entityId)) {
+      this.pathfinding.calculateBuildingAvoidanceForce(
+        entityId,
+        transform,
+        unit,
+        tempBuildingAvoid,
+        finalVx,
+        finalVy
+      );
+      finalVx += tempBuildingAvoid.x;
+      finalVy += tempBuildingAvoid.y;
+    } else {
+      this.pathfinding.calculateBuildingAvoidanceForce(
+        entityId,
+        transform,
+        unit,
+        tempBuildingAvoid,
+        finalVx,
+        finalVy
+      );
+      const avoidMag = deterministicMagnitude(tempBuildingAvoid.x, tempBuildingAvoid.y);
+      if (avoidMag > 1.5) {
+        finalVx += tempBuildingAvoid.x * 0.7;
+        finalVy += tempBuildingAvoid.y * 0.7;
       }
     }
 
