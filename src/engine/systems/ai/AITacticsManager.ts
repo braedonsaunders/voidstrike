@@ -1010,7 +1010,7 @@ export class AITacticsManager {
     const engaged = this.isEngaged.get(ai.playerId) || false;
 
     // Find target -- in hunt mode, target the specific nearly-dead enemy
-    let attackTarget: { x: number; y: number } | null = null;
+    let attackTarget: { x: number; y: number; entityId?: number } | null = null;
 
     if (inHuntMode && primaryEnemyId) {
       attackTarget = this.findEnemyBuildingForPlayer(ai, primaryEnemyId);
@@ -1126,19 +1126,36 @@ export class AITacticsManager {
       const idleAssaultUnits = this.getIdleAssaultUnits(ai.playerId, armyUnits);
 
       if (idleAssaultUnits.length > 0) {
-        // Re-command all idle assault units to attack the SAME target position
-        // Let combat system and flocking handle natural unit spreading during engagement
-        const command: GameCommand = {
-          tick: currentTick,
-          playerId: ai.playerId,
-          type: 'ATTACK',
-          entityIds: idleAssaultUnits,
-          targetPosition: attackTarget,
-        };
-        this.game.issueAICommand(command);
-        debugAI.log(
-          `[AITactics] ${ai.playerId}: Re-commanding ${idleAssaultUnits.length} idle assault units to target`
-        );
+        if (attackTarget.entityId !== undefined) {
+          // Entity-targeted attack: units go directly to 'attacking' state with
+          // the building as their target, bypassing the attack-move engagement
+          // buffer. This prevents the idle→attackmove→idle cycle that caused
+          // units to never actually attack buildings during hunt mode.
+          const command: GameCommand = {
+            tick: currentTick,
+            playerId: ai.playerId,
+            type: 'ATTACK',
+            entityIds: idleAssaultUnits,
+            targetEntityId: attackTarget.entityId,
+          };
+          this.game.issueAICommand(command);
+          debugAI.log(
+            `[AITactics] ${ai.playerId}: Re-commanding ${idleAssaultUnits.length} idle assault units to attack building entity ${attackTarget.entityId}`
+          );
+        } else {
+          // Fallback: position-based attack-move
+          const command: GameCommand = {
+            tick: currentTick,
+            playerId: ai.playerId,
+            type: 'ATTACK',
+            entityIds: idleAssaultUnits,
+            targetPosition: attackTarget,
+          };
+          this.game.issueAICommand(command);
+          debugAI.log(
+            `[AITactics] ${ai.playerId}: Re-commanding ${idleAssaultUnits.length} idle assault units to target`
+          );
+        }
       }
 
       this.lastReCommandTick.set(ai.playerId, currentTick);
@@ -1542,7 +1559,7 @@ export class AITacticsManager {
   /**
    * Find ANY enemy building for hunt mode.
    */
-  private findAnyEnemyBuilding(ai: AIPlayer): { x: number; y: number } | null {
+  private findAnyEnemyBuilding(ai: AIPlayer): { x: number; y: number; entityId: number } | null {
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
     const config = ai.config!;
     const baseTypes = config.roles.baseTypes;
@@ -1558,7 +1575,7 @@ export class AITacticsManager {
       if (!building.isOperational()) continue;
 
       if (baseTypes.includes(building.buildingId)) {
-        return { x: transform.x, y: transform.y };
+        return { x: transform.x, y: transform.y, entityId: entity.id };
       }
     }
 
@@ -1572,7 +1589,7 @@ export class AITacticsManager {
       if (health.isDead()) continue;
       if (!building.isOperational()) continue;
 
-      return { x: transform.x, y: transform.y };
+      return { x: transform.x, y: transform.y, entityId: entity.id };
     }
 
     return null;
@@ -1585,7 +1602,7 @@ export class AITacticsManager {
   private findEnemyBuildingForPlayer(
     ai: AIPlayer,
     targetPlayerId: string
-  ): { x: number; y: number } | null {
+  ): { x: number; y: number; entityId: number } | null {
     const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
     const config = ai.config!;
     const baseTypes = config.roles.baseTypes;
@@ -1602,7 +1619,7 @@ export class AITacticsManager {
       if (!building.isOperational()) continue;
 
       if (baseTypes.includes(building.buildingId)) {
-        return { x: transform.x, y: transform.y };
+        return { x: transform.x, y: transform.y, entityId: entity.id };
       }
     }
 
@@ -1617,7 +1634,7 @@ export class AITacticsManager {
       if (health.isDead()) continue;
       if (!building.isOperational()) continue;
 
-      return { x: transform.x, y: transform.y };
+      return { x: transform.x, y: transform.y, entityId: entity.id };
     }
 
     return null;

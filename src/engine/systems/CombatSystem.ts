@@ -731,7 +731,26 @@ export class CombatSystem extends System {
           if (candidateEntity) {
             const candidateTransform = candidateEntity.get<Transform>('Transform');
             if (candidateTransform) {
-              const distToTarget = transform.distanceTo(candidateTransform);
+              // Use edge-to-edge distance for buildings (AABB clamping), center-to-center for units
+              const candidateBuilding = candidateEntity.get<Building>('Building');
+              let distToTarget: number;
+              if (candidateBuilding) {
+                const halfW = candidateBuilding.width / 2;
+                const halfH = candidateBuilding.height / 2;
+                const clampedX = Math.max(
+                  candidateTransform.x - halfW,
+                  Math.min(transform.x, candidateTransform.x + halfW)
+                );
+                const clampedY = Math.max(
+                  candidateTransform.y - halfH,
+                  Math.min(transform.y, candidateTransform.y + halfH)
+                );
+                const edgeDx = transform.x - clampedX;
+                const edgeDy = transform.y - clampedY;
+                distToTarget = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+              } else {
+                distToTarget = transform.distanceTo(candidateTransform);
+              }
               // Engagement buffer: switch to attacking when within attack range + 3
               // This gives the unit ~1 second to close while still maintaining formation for most of the march
               if (distToTarget > unit.attackRange + 3) {
