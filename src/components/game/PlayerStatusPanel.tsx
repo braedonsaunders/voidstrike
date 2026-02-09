@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, memo, useRef } from 'react';
-import { useGameSetupStore, PLAYER_COLORS } from '@/store/gameSetupStore';
+import { useGameSetupStore, PLAYER_COLORS, TEAM_COLORS, type TeamNumber } from '@/store/gameSetupStore';
 import { RenderStateWorldAdapter } from '@/engine/workers/RenderStateAdapter';
 import { getWorkerBridge } from '@/engine/workers/WorkerBridge';
 
@@ -14,6 +14,7 @@ interface PlayerStatus {
   unitCount: number;
   workerCount: number;
   armySupply: number;
+  team: TeamNumber;
 }
 
 // PERF: Wrapped in memo to prevent unnecessary re-renders from parent state changes
@@ -97,6 +98,7 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
           unitCount,
           workerCount,
           armySupply,
+          team: slot.team,
         });
       }
 
@@ -140,48 +142,92 @@ export const PlayerStatusPanel = memo(function PlayerStatusPanel() {
     return `rgb(${r}, ${g}, ${b})`;
   };
 
+  // Group players by team for display
+  const allFFA = playerStatuses.every((s: PlayerStatus) => s.team === 0);
+  const teamGroups: [TeamNumber, PlayerStatus[]][] | null = !allFFA
+    ? (Array.from(
+        playerStatuses.reduce((map: Map<TeamNumber, PlayerStatus[]>, status: PlayerStatus) => {
+          const key = status.team;
+          if (!map.has(key)) map.set(key, []);
+          map.get(key)!.push(status);
+          return map;
+        }, new Map<TeamNumber, PlayerStatus[]>())
+      ) as [TeamNumber, PlayerStatus[]][]).sort(([a], [b]) => a - b)
+    : null;
+
+  const renderPlayerRow = (status: PlayerStatus) => (
+    <div
+      key={status.playerId}
+      className={`flex items-center gap-2 ${!status.isAlive ? 'opacity-50' : ''}`}
+    >
+      {/* Color indicator */}
+      <div
+        className="w-2 h-2 rounded-sm flex-shrink-0"
+        style={{ backgroundColor: hexToRgb(status.colorHex) }}
+      />
+
+      {/* Player name */}
+      <span
+        className={`font-medium min-w-[60px] truncate ${!status.isAlive ? 'line-through' : ''}`}
+        style={{ color: hexToRgb(status.colorHex) }}
+      >
+        {status.name}
+      </span>
+
+      {/* Status */}
+      {!status.isAlive ? (
+        <span className="text-red-400 text-[10px]">DEFEATED</span>
+      ) : isSpectator ? (
+        <div className="flex items-center gap-2 text-void-300">
+          <span title="Workers">👷 {status.workerCount}</span>
+          <span title="Army">⚔️ {status.armySupply}</span>
+          <span title="Buildings">🏠 {status.buildingCount}</span>
+        </div>
+      ) : (
+        <span className="text-green-400 text-[10px]">●</span>
+      )}
+    </div>
+  );
+
   return (
     <div className="bg-black/50 backdrop-blur-sm rounded px-2 py-1.5 text-xs">
       <div className="text-void-400 text-[10px] uppercase tracking-wider mb-1">
         Players
       </div>
-      <div className="space-y-1">
-        {playerStatuses.map(status => (
-          <div
-            key={status.playerId}
-            className={`flex items-center gap-2 ${!status.isAlive ? 'opacity-50' : ''}`}
-          >
-            {/* Color indicator */}
-            <div
-              className="w-2 h-2 rounded-sm flex-shrink-0"
-              style={{ backgroundColor: hexToRgb(status.colorHex) }}
-            />
-
-            {/* Player name */}
-            <span
-              className={`font-medium min-w-[60px] truncate ${!status.isAlive ? 'line-through' : ''}`}
-              style={{ color: hexToRgb(status.colorHex) }}
-            >
-              {status.name}
-            </span>
-
-            {/* Status */}
-            {!status.isAlive ? (
-              <span className="text-red-400 text-[10px]">DEFEATED</span>
-            ) : isSpectator ? (
-              // Show detailed stats in spectator mode
-              <div className="flex items-center gap-2 text-void-300">
-                <span title="Workers">👷 {status.workerCount}</span>
-                <span title="Army">⚔️ {status.armySupply}</span>
-                <span title="Buildings">🏠 {status.buildingCount}</span>
+      {allFFA ? (
+        // FFA: flat list, no team headers
+        <div className="space-y-1">
+          {playerStatuses.map(renderPlayerRow)}
+        </div>
+      ) : (
+        // Team game: group under team headers
+        <div className="space-y-1.5">
+          {teamGroups!.map(([teamNum, members]) => {
+            const teamInfo = TEAM_COLORS[teamNum];
+            return (
+              <div key={teamNum}>
+                <div
+                  className="flex items-center gap-1.5 mb-0.5"
+                >
+                  <div
+                    className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: teamInfo.color }}
+                  />
+                  <span
+                    className="text-[10px] uppercase tracking-wider font-medium"
+                    style={{ color: teamInfo.color }}
+                  >
+                    {teamInfo.name}
+                  </span>
+                </div>
+                <div className="space-y-1 pl-1 border-l border-void-800/50">
+                  {members.map(renderPlayerRow)}
+                </div>
               </div>
-            ) : (
-              // Just show alive indicator in normal mode
-              <span className="text-green-400 text-[10px]">●</span>
-            )}
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 });
