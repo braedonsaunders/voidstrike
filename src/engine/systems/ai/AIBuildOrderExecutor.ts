@@ -1746,18 +1746,17 @@ export class AIBuildOrderExecutor {
     const existingBases = this.coordinator.getAIBasePositions(ai);
     const buildings = this.coordinator.getCachedBuildingsWithTransform();
 
-    // Get enemy bases to avoid
-    const enemyBases: Array<{ x: number; y: number }> = [];
+    // Get all enemy building positions to avoid expanding near occupied bases
+    const enemyBuildings: Array<{ x: number; y: number }> = [];
 
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
-      const building = entity.get<Building>('Building')!;
+      const buildingComp = entity.get<Building>('Building')!;
       const transform = entity.get<Transform>('Transform')!;
 
       if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
-      if (ai.config!.roles.baseTypes.includes(building.buildingId)) {
-        enemyBases.push({ x: transform.x, y: transform.y });
-      }
+      if (buildingComp.state === 'destroyed') continue;
+      enemyBuildings.push({ x: transform.x, y: transform.y });
     }
 
     // First try to use PositionalAnalysis expansion locations
@@ -1778,12 +1777,12 @@ export class AIBuildOrderExecutor {
           }
         }
 
-        // Penalize if close to enemy bases
-        for (const enemyBase of enemyBases) {
-          const dist = deterministicMagnitude(loc.x - enemyBase.x, loc.y - enemyBase.y);
-          if (dist < 25) {
-            score -= 500;
-          } else if (dist < 40) {
+        // Penalize if close to any enemy buildings (location is occupied)
+        for (const enemyBuilding of enemyBuildings) {
+          const dist = deterministicMagnitude(loc.x - enemyBuilding.x, loc.y - enemyBuilding.y);
+          if (dist < 35) {
+            score -= 1000; // Disqualify - enemy has buildings at this mineral cluster
+          } else if (dist < 50) {
             score -= 100;
           }
         }
@@ -1862,12 +1861,12 @@ export class AIBuildOrderExecutor {
 
       if (distanceToNearestBase < 30) continue;
 
-      // Check enemy proximity
+      // Check enemy proximity - skip minerals near any enemy building
       let tooCloseToEnemy = false;
-      for (const enemyBase of enemyBases) {
-        const dx = transform.x - enemyBase.x;
-        const dy = transform.y - enemyBase.y;
-        if (deterministicMagnitude(dx, dy) < 25) {
+      for (const enemyBuilding of enemyBuildings) {
+        const dx = transform.x - enemyBuilding.x;
+        const dy = transform.y - enemyBuilding.y;
+        if (deterministicMagnitude(dx, dy) < 35) {
           tooCloseToEnemy = true;
           break;
         }
