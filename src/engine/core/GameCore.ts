@@ -125,6 +125,13 @@ export abstract class GameCore implements IGameInstance {
   }
 
   // ============================================================================
+  // PLAYER TEAM DATA
+  // ============================================================================
+
+  /** Player team assignments (0 = FFA, 1-4 = team alliance) */
+  protected playerTeams: Map<string, number> = new Map();
+
+  // ============================================================================
   // TERRAIN DATA
   // ============================================================================
 
@@ -585,6 +592,23 @@ export abstract class GameCore implements IGameInstance {
    */
   public isInMultiplayerMode(): boolean {
     return this.config.isMultiplayer;
+  }
+
+  /**
+   * Get the team ID for a player.
+   * Returns 0 (FFA) if the player has no team assignment.
+   * Used by SpawnSystem and BuildingPlacementSystem to set teamId on new entities.
+   */
+  public getPlayerTeam(playerId: string): number {
+    return this.playerTeams.get(playerId) ?? 0;
+  }
+
+  /**
+   * Set the team ID for a player.
+   * Called during entity spawning to register team assignments.
+   */
+  public setPlayerTeam(playerId: string, teamId: number): void {
+    this.playerTeams.set(playerId, teamId);
   }
 
   // ============================================================================

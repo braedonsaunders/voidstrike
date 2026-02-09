@@ -88,6 +88,9 @@ export interface IGameInstance {
   /** Check if running in multiplayer mode */
   isInMultiplayerMode(): boolean;
 
+  /** Get team ID for a player (0 = FFA, 1-4 = team alliance) */
+  getPlayerTeam(playerId: string): number;
+
   // ============================================================================
   // TERRAIN METHODS
   // ============================================================================

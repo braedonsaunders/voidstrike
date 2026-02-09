@@ -40,23 +40,6 @@ export class SpawnSystem extends System {
     return this.aiSystem;
   }
 
-  /**
-   * Get the team ID for a player by finding an existing entity with the same playerId.
-   * Returns 0 (FFA) if no existing entity is found.
-   */
-  private getPlayerTeam(playerId: string): number {
-    // Search for any existing entity with this playerId to get their team
-    const entities = this.world.getEntitiesWith('Selectable');
-    for (const entity of entities) {
-      const selectable = entity.get<Selectable>('Selectable');
-      if (selectable && selectable.playerId === playerId) {
-        return selectable.teamId;
-      }
-    }
-    // No existing entity found - default to FFA (team 0)
-    return 0;
-  }
-
   private setupEventListeners(): void {
     // Handle unit spawning from production
     this.game.eventBus.on('unit:spawn', this.handleUnitSpawn.bind(this));
@@ -115,8 +98,8 @@ export class SpawnSystem extends System {
     // Flying units stay at Z=0 since their visual height is handled by visualHeight
     const spawnHeight = isFlying ? 0 : this.game.getTerrainHeightAt(x, y);
 
-    // Get team from another entity with the same playerId (for team alliance system)
-    const teamId = this.getPlayerTeam(playerId);
+    // Get team from authoritative player team registry
+    const teamId = this.game.getPlayerTeam(playerId);
 
     // Add core components
     entity
@@ -225,8 +208,8 @@ export class SpawnSystem extends System {
     // Selection radius based on building size
     const selectionRadius = Math.max(definition.width, definition.height) * 0.6;
 
-    // Get team from another entity with the same playerId (for team alliance system)
-    const teamId = this.getPlayerTeam(playerId);
+    // Get team from authoritative player team registry
+    const teamId = this.game.getPlayerTeam(playerId);
 
     entity
       .add(new Transform(x, y, 0))

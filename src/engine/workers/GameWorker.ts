@@ -126,9 +126,6 @@ export class WorkerGame extends GameCore {
     Map<string, { effects: UpgradeEffect[]; completedAt: number }>
   > = new Map();
 
-  // Player team assignments (0 = FFA, 1-4 = team alliance)
-  private playerTeams: Map<string, number> = new Map();
-
   // Selection state (for UI feedback)
   private selectedEntityIds: number[] = [];
 
@@ -1154,7 +1151,13 @@ export class WorkerGame extends GameCore {
 
         const enhancedAI = this.world.getSystem(EnhancedAISystem);
         if (enhancedAI) {
-          enhancedAI.registerAI(slot.id, slot.faction, slot.aiDifficulty ?? 'medium', 'balanced', team);
+          enhancedAI.registerAI(
+            slot.id,
+            slot.faction,
+            slot.aiDifficulty ?? 'medium',
+            'balanced',
+            team
+          );
         }
       }
     }
@@ -1276,11 +1279,6 @@ export class WorkerGame extends GameCore {
     if (resources) {
       resources.supply += 1;
     }
-  }
-
-  /** Get team ID for a player. Used by SpawnSystem to set team on spawned units/buildings. */
-  public getPlayerTeam(playerId: string): number {
-    return this.playerTeams.get(playerId) ?? 0;
   }
 }
 
