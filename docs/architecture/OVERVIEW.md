@@ -625,6 +625,7 @@ voidstrike/
     │   │   └── types.test.ts
     │   ├── systems/ # ECS Systems
     │   │   ├── ai/ # AI subsystems
+    │   │   │   ├── AIBuildOrderExecutor.test.ts
     │   │   │   └── AIGameCompletion.test.ts
     │   │   ├── movement/
     │   │   │   ├── flockingBehavior.perf.test.ts
