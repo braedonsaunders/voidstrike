@@ -324,12 +324,30 @@ export class AIBuildOrderExecutor {
       }
     }
 
+    // Fix #1: Update resource reservation for high-priority composition units
+    this.updateResourceReservation(ai);
+
+    // Fix #2: Check if we should save resources for an expensive unit
+    const saveCheck = this.shouldSaveForExpensiveUnit(ai);
+    if (saveCheck.saving) {
+      ai.lastSaveModeTick = ai.lastSaveModeTick || currentTick;
+      // In save mode: skip all unit production to accumulate resources
+      debugAI.log(
+        `[AIBuildOrder] ${ai.playerId}: Skipping production to save for ${saveCheck.targetUnit}`
+      );
+      return;
+    } else {
+      // Reset save mode timer when not saving
+      ai.lastSaveModeTick = 0;
+    }
+
     // Pass 2: Collect all eligible train rules and score them for composition-aware production
     interface ScoredTrainOption {
       ruleId: string;
       unitId: string;
       score: number;
       rule: (typeof sortedRules)[0];
+      affordable: boolean;
     }
     const trainCandidates: ScoredTrainOption[] = [];
 
@@ -346,7 +364,15 @@ export class AIBuildOrderExecutor {
       if (rule.action.targetId) {
         const score = this.scoreUnitForProduction(ai, rule.action.targetId, rule.priority);
         if (score > 0) {
-          trainCandidates.push({ ruleId: rule.id, unitId: rule.action.targetId, score, rule });
+          // Fix #1: Check affordability against reservation-aware budget
+          const affordable = this.canAffordUnitWithReservation(ai, rule.action.targetId);
+          trainCandidates.push({
+            ruleId: rule.id,
+            unitId: rule.action.targetId,
+            score,
+            rule,
+            affordable,
+          });
         }
       }
 
@@ -359,34 +385,54 @@ export class AIBuildOrderExecutor {
             option.weight * (rule.priority / 40)
           );
           if (score > 0) {
-            trainCandidates.push({ ruleId: rule.id, unitId: option.id, score, rule });
+            const affordable = this.canAffordUnitWithReservation(ai, option.id);
+            trainCandidates.push({
+              ruleId: rule.id,
+              unitId: option.id,
+              score,
+              rule,
+              affordable,
+            });
           }
         }
       }
     }
 
-    // Select best candidate with slight randomness for variety
+    // Select best affordable candidate with slight randomness for variety
     if (trainCandidates.length > 0) {
-      trainCandidates.sort((a, b) => b.score - a.score);
+      // Only consider affordable candidates for actual training
+      const affordableCandidates = trainCandidates.filter((c) => c.affordable);
 
-      // Pick from top candidates with weighted random (top 3)
-      const topN = Math.min(3, trainCandidates.length);
-      const topCandidates = trainCandidates.slice(0, topN);
-      const totalScore = topCandidates.reduce((sum, c) => sum + c.score, 0);
-      let roll = this.coordinator.getRandom(ai.playerId).next() * totalScore;
+      if (affordableCandidates.length > 0) {
+        affordableCandidates.sort((a, b) => b.score - a.score);
 
-      let selected = topCandidates[0];
-      for (const candidate of topCandidates) {
-        roll -= candidate.score;
-        if (roll <= 0) {
-          selected = candidate;
-          break;
+        // Pick from top candidates with weighted random (top 3)
+        const topN = Math.min(3, affordableCandidates.length);
+        const topCandidates = affordableCandidates.slice(0, topN);
+        const totalScore = topCandidates.reduce((sum, c) => sum + c.score, 0);
+        let roll = this.coordinator.getRandom(ai.playerId).next() * totalScore;
+
+        let selected = topCandidates[0];
+        for (const candidate of topCandidates) {
+          roll -= candidate.score;
+          if (roll <= 0) {
+            selected = candidate;
+            break;
+          }
         }
-      }
 
-      const success = this.tryTrainUnit(ai, selected.unitId);
-      if (success) {
-        ai.macroRuleCooldowns.set(selected.ruleId, currentTick);
+        const success = this.tryTrainUnit(ai, selected.unitId);
+        if (success) {
+          ai.macroRuleCooldowns.set(selected.ruleId, currentTick);
+
+          // Fix #3: Track consecutive production for cooldown system
+          if (ai.lastTrainedUnitType === selected.unitId) {
+            ai.consecutiveTrainCount++;
+          } else {
+            ai.consecutiveTrainCount = 1;
+            ai.lastTrainedUnitType = selected.unitId;
+          }
+        }
       }
     }
   }
@@ -922,17 +968,43 @@ export class AIBuildOrderExecutor {
    *
    * Factors:
    * - diversityMultiplier: units under-represented vs composition goals get boosted
-   * - techAvailability: 0 if we can't actually produce this unit (no building/addon)
-   * - affordability: 0 if can't afford
+   * - techAvailability: 0 if we can't produce (no building/addon)
+   * - affordability: reduced score if can't afford (not hard 0), enabling save-up behavior
+   * - productionCooldown: penalty for building the same cheap unit repeatedly
    */
   private scoreUnitForProduction(ai: AIPlayer, unitId: string, baseWeight: number): number {
-    if (!this.canAffordUnit(ai, unitId)) return 0;
+    // Hard block: can't produce what we don't have buildings for
     if (!this.canProduceUnit(ai, unitId)) return 0;
 
     const config = ai.config!;
     const currentTick = this.game.getCurrentTick();
     const goals = config.tactical.compositionGoals;
+    const unitDef = UNIT_DEFINITIONS[unitId];
+    if (!unitDef) return 0;
 
+    // --- Affordability scoring (Fix #4: score adjustment for unaffordable units) ---
+    // Instead of returning 0, calculate how close we are to affording this unit.
+    // This allows expensive units to signal "save up for me" to the macro system.
+    let affordabilityMultiplier = 1.0;
+    const canAfford = this.canAffordUnit(ai, unitId);
+
+    if (!canAfford) {
+      // Calculate affordability ratio: how close are we to affording this?
+      const mineralRatio = unitDef.mineralCost > 0
+        ? Math.min(1.0, ai.minerals / unitDef.mineralCost)
+        : 1.0;
+      const plasmaRatio = unitDef.plasmaCost > 0
+        ? Math.min(1.0, ai.plasma / unitDef.plasmaCost)
+        : 1.0;
+      // Use the minimum of the two ratios (bottleneck resource)
+      const affordRatio = Math.min(mineralRatio, plasmaRatio);
+
+      // Scale: 0% affordable = 0.05x, 100% affordable = 0.5x
+      // This gives unaffordable units a reduced but non-zero score
+      affordabilityMultiplier = 0.05 + affordRatio * 0.45;
+    }
+
+    // --- Composition diversity scoring ---
     let targetComposition: Record<string, number> | null = null;
     for (const goal of goals) {
       if (currentTick >= goal.timeRange[0] && currentTick < goal.timeRange[1]) {
@@ -952,8 +1024,6 @@ export class AIBuildOrderExecutor {
         const targetPercent = targetComposition[unitId] || 0;
 
         if (targetPercent > 0) {
-          // Under-represented: boost production (up to 2.5x)
-          // Over-represented: reduce production (down to 0.3x)
           const ratio = currentPercent / targetPercent;
           if (ratio < 0.5) {
             diversityMultiplier = 2.5;
@@ -971,7 +1041,177 @@ export class AIBuildOrderExecutor {
       }
     }
 
-    return baseWeight * diversityMultiplier;
+    // --- Production cooldown penalty (Fix #3: prevent spamming one unit type) ---
+    let cooldownMultiplier = 1.0;
+    if (ai.lastTrainedUnitType === unitId && ai.consecutiveTrainCount >= 3) {
+      // After 3+ consecutive builds of the same unit, progressively reduce score
+      // 3 consecutive: 0.4x, 4: 0.25x, 5+: 0.15x
+      const excess = ai.consecutiveTrainCount - 2;
+      cooldownMultiplier = Math.max(0.15, 0.6 / excess);
+    }
+
+    return baseWeight * diversityMultiplier * affordabilityMultiplier * cooldownMultiplier;
+  }
+
+  /**
+   * Calculate resource reservation for the highest-priority composition goal unit
+   * that we can produce but can't yet afford. Reserves a fraction of income toward it.
+   * (Fix #1: Resource reservation)
+   */
+  private updateResourceReservation(ai: AIPlayer): void {
+    const config = ai.config!;
+    const currentTick = this.game.getCurrentTick();
+    const goals = config.tactical.compositionGoals;
+
+    // Only reserve in mid/late game when we have real composition goals
+    let targetComposition: Record<string, number> | null = null;
+    for (const goal of goals) {
+      if (currentTick >= goal.timeRange[0] && currentTick < goal.timeRange[1]) {
+        targetComposition = goal.composition;
+        break;
+      }
+    }
+
+    if (!targetComposition) {
+      ai.resourceReservation = { minerals: 0, plasma: 0 };
+      return;
+    }
+
+    // Find the most under-represented producible but unaffordable unit
+    const totalArmyUnits = Array.from(ai.armyComposition.values()).reduce((a, b) => a + b, 0);
+    let bestReserveTarget: { unitId: string; deficit: number } | null = null;
+
+    for (const [unitId, targetPct] of Object.entries(targetComposition)) {
+      if (targetPct <= 0) continue;
+      if (!this.canProduceUnit(ai, unitId)) continue;
+      if (this.canAffordUnit(ai, unitId)) continue;
+
+      const unitDef = UNIT_DEFINITIONS[unitId];
+      if (!unitDef) continue;
+
+      // How under-represented is this unit?
+      const currentCount = ai.armyComposition.get(unitId) || 0;
+      const currentPct = totalArmyUnits > 0 ? (currentCount / totalArmyUnits) * 100 : 0;
+      const deficit = targetPct - currentPct;
+
+      if (deficit > 0 && (!bestReserveTarget || deficit > bestReserveTarget.deficit)) {
+        bestReserveTarget = { unitId, deficit };
+      }
+    }
+
+    if (bestReserveTarget) {
+      const unitDef = UNIT_DEFINITIONS[bestReserveTarget.unitId]!;
+      // Reserve 40% of the unit's cost to prevent cheap units from consuming everything
+      ai.resourceReservation = {
+        minerals: unitDef.mineralCost * 0.4,
+        plasma: unitDef.plasmaCost * 0.4,
+      };
+    } else {
+      ai.resourceReservation = { minerals: 0, plasma: 0 };
+    }
+  }
+
+  /**
+   * Check if the AI can afford a unit after accounting for resource reservations.
+   * Cheap units must compete with reservation budget, expensive units ignore it.
+   * (Fix #1: Resource reservation enforcement)
+   */
+  private canAffordUnitWithReservation(ai: AIPlayer, unitType: string): boolean {
+    const unitDef = UNIT_DEFINITIONS[unitType];
+    if (!unitDef) return false;
+
+    // Expensive units (cost > reservation) bypass reservation entirely
+    // This prevents the reservation from blocking the unit it's saving for
+    if (
+      unitDef.mineralCost >= ai.resourceReservation.minerals * 2 ||
+      unitDef.plasmaCost >= ai.resourceReservation.plasma * 2
+    ) {
+      return this.canAffordUnit(ai, unitType);
+    }
+
+    // Cheap units must be affordable even with reservation set aside
+    const availableMinerals = ai.minerals - ai.resourceReservation.minerals;
+    const availablePlasma = ai.plasma - ai.resourceReservation.plasma;
+
+    if (availableMinerals < unitDef.mineralCost || availablePlasma < unitDef.plasmaCost) {
+      return false;
+    }
+    if (ai.supply + unitDef.supplyCost > ai.maxSupply) {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * Determine if the AI should enter save mode: skip cheap production to save
+   * for a high-value unit that's almost affordable.
+   * (Fix #2: Savings threshold)
+   */
+  private shouldSaveForExpensiveUnit(ai: AIPlayer): { saving: boolean; targetUnit: string | null } {
+    const config = ai.config!;
+    const currentTick = this.game.getCurrentTick();
+    const goals = config.tactical.compositionGoals;
+
+    // Don't save if army is critically small (need units to survive)
+    let minArmySupply = 6;
+    for (const goal of goals) {
+      if (currentTick >= goal.timeRange[0] && currentTick < goal.timeRange[1]) {
+        minArmySupply = goal.minArmySupply;
+        break;
+      }
+    }
+    if (ai.armySupply < minArmySupply) {
+      return { saving: false, targetUnit: null };
+    }
+
+    // Don't save for too long (max 200 ticks = 10 seconds of saving)
+    if (ai.lastSaveModeTick > 0 && currentTick - ai.lastSaveModeTick > 200) {
+      return { saving: false, targetUnit: null };
+    }
+
+    // Find the highest-scoring unaffordable unit we're close to affording
+    let targetComposition: Record<string, number> | null = null;
+    for (const goal of goals) {
+      if (currentTick >= goal.timeRange[0] && currentTick < goal.timeRange[1]) {
+        targetComposition = goal.composition;
+        break;
+      }
+    }
+    if (!targetComposition) return { saving: false, targetUnit: null };
+
+    const totalArmyUnits = Array.from(ai.armyComposition.values()).reduce((a, b) => a + b, 0);
+
+    for (const [unitId, targetPct] of Object.entries(targetComposition)) {
+      if (targetPct <= 0) continue;
+      if (!this.canProduceUnit(ai, unitId)) continue;
+      if (this.canAffordUnit(ai, unitId)) continue;
+
+      const unitDef = UNIT_DEFINITIONS[unitId];
+      if (!unitDef) continue;
+
+      // Check if this unit is under-represented
+      const currentCount = ai.armyComposition.get(unitId) || 0;
+      const currentPct = totalArmyUnits > 0 ? (currentCount / totalArmyUnits) * 100 : 0;
+      if (currentPct >= targetPct) continue;
+
+      // Calculate how close we are to affording it (savings threshold = 70%)
+      const mineralRatio = unitDef.mineralCost > 0
+        ? ai.minerals / unitDef.mineralCost
+        : 1.0;
+      const plasmaRatio = unitDef.plasmaCost > 0
+        ? ai.plasma / unitDef.plasmaCost
+        : 1.0;
+      const affordRatio = Math.min(mineralRatio, plasmaRatio);
+
+      if (affordRatio >= 0.7) {
+        debugAI.log(
+          `[AIBuildOrder] ${ai.playerId}: Save mode - ${(affordRatio * 100).toFixed(0)}% toward ${unitId} (${Math.floor(ai.minerals)}M/${Math.floor(ai.plasma)}G of ${unitDef.mineralCost}M/${unitDef.plasmaCost}G)`
+        );
+        return { saving: true, targetUnit: unitId };
+      }
+    }
+
+    return { saving: false, targetUnit: null };
   }
 
   /**

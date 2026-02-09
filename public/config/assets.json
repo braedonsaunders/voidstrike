@@ -144,7 +144,7 @@
       "model": "/models/units/scorcher_LOD0.glb",
       "scale": 1,
       "collisionRadius": 0.5,
-      "rotation": { "y": 90 },
+      "rotation": { "y": 180 },
       "animations": {
         "idle": [
           "idle",

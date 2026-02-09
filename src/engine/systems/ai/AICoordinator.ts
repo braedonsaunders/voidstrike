@@ -263,6 +263,16 @@ export interface AIPlayer {
   completedResearch: Set<string>;
   researchInProgress: Map<string, number>; // researchId -> buildingId
 
+  // Production diversity tracking
+  /** Resources reserved for high-priority composition goal units */
+  resourceReservation: { minerals: number; plasma: number };
+  /** Count of consecutive trains of the same unit type */
+  consecutiveTrainCount: number;
+  /** Last unit type trained (for consecutive tracking) */
+  lastTrainedUnitType: string | null;
+  /** Tick when save mode was last active (prevents indefinite saving) */
+  lastSaveModeTick: number;
+
   // AI Primitive instances (per-player)
   scoutingMemory: ScoutingMemory;
   workerDistribution: WorkerDistribution;
@@ -791,6 +801,12 @@ export class AICoordinator extends System {
 
       completedResearch: new Set(),
       researchInProgress: new Map(),
+
+      // Production diversity tracking
+      resourceReservation: { minerals: 0, plasma: 0 },
+      consecutiveTrainCount: 0,
+      lastTrainedUnitType: null,
+      lastSaveModeTick: 0,
 
       // AI Primitive instances
       scoutingMemory,
