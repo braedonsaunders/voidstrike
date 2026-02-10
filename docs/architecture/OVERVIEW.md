@@ -2709,6 +2709,16 @@ Once an attack launches, `activeAttackOperation` persists on the AIPlayer. The s
 
 This prevents the previous bug where the attack cooldown caused the AI to flip between `'attacking'` and `'building'` every few seconds, recalling its army mid-march.
 
+#### Near-Army Threat Detection (FFA)
+
+During active attack operations, the re-command loop checks for enemy combat units near the army centroid via `findNearbyArmyThreat()`. If 2+ enemy combat units from any player are detected within 25 units, idle assault units are redirected toward the threat via ATTACK_MOVE instead of being sent back to the committed enemy's buildings. This gives SC2-style behavior where armies engage nearby threats before resuming structure destruction.
+
+#### Combat Threat Retarget
+
+Units attacking buildings periodically re-evaluate for higher-priority combat unit threats within attack range (every 15 ticks via `findThreatRetarget()`). If an enemy combat unit is in weapon range while the unit is hitting a building, it switches targets. This prevents the scenario where two armies stand beside each other ignoring one another because each unit has a building `targetEntityId` locked in. Assault mode and attack-move destinations are preserved through target switches.
+
+The engagement buffer during attack-move marches is set to `attackRange + 5`, allowing units to break formation and engage enemies within a moderate distance during approach.
+
 #### Reactive Defense System
 
 Two-layer defense system inspired by SC2's region-based defense:
