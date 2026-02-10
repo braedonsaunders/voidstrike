@@ -208,6 +208,7 @@ voidstrike/
 │   │   │   ├── EditorMiniMap.tsx
 │   │   │   ├── EditorStatusBar.tsx
 │   │   │   ├── EditorToolbar.tsx
+│   │   │   ├── MapPreviewModal.tsx
 │   │   │   └── UndoPreviewOverlay.tsx
 │   │   ├── hooks/ # React hooks
 │   │   │   ├── useEditorState.ts
