@@ -1,7 +1,12 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import type { EditorConfig, EditorState, EditorMapData, EditorObject } from '../../config/EditorConfig';
+import type {
+  EditorConfig,
+  EditorState,
+  EditorMapData,
+  EditorObject,
+} from '../../config/EditorConfig';
 import { Section, ToggleSwitch } from './shared';
 import {
   generateBorderDecorations,
@@ -17,7 +22,9 @@ export interface SettingsPanelProps {
   state: EditorState;
   visibility: { labels: boolean; grid: boolean; categories: Record<string, boolean> };
   onBiomeChange: (biomeId: string) => void;
-  onMetadataUpdate: (updates: Partial<Pick<EditorMapData, 'name' | 'width' | 'height' | 'biomeId'>>) => void;
+  onMetadataUpdate: (
+    updates: Partial<Pick<EditorMapData, 'name' | 'width' | 'height' | 'biomeId'>>
+  ) => void;
   onToggleLabels: () => void;
   onToggleGrid: () => void;
   onToggleCategory: (category: string) => void;
@@ -43,6 +50,16 @@ export function SettingsPanel({
   const [borderScale, setBorderScale] = useState(2.0); // Average of scaleMin/scaleMax
   const [isGenerating, setIsGenerating] = useState(false);
   const isInitialMount = useRef(true);
+  const stateRef = useRef(state);
+  const onUpdateObjectsRef = useRef(onUpdateObjects);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    onUpdateObjectsRef.current = onUpdateObjects;
+  }, [onUpdateObjects]);
 
   // Auto-regenerate border decorations when style, density, or scale changes (if decorations exist)
   useEffect(() => {
@@ -53,8 +70,10 @@ export function SettingsPanel({
     }
 
     // Only auto-regenerate if there are existing border decorations
-    if (!state.mapData || !onUpdateObjects) return;
-    const currentCount = countBorderDecorations(state.mapData.objects);
+    const mapData = stateRef.current.mapData;
+    const updateObjects = onUpdateObjectsRef.current;
+    if (!mapData || !updateObjects) return;
+    const currentCount = countBorderDecorations(mapData.objects);
     if (currentCount === 0) return;
 
     // Regenerate with new settings
@@ -66,8 +85,8 @@ export function SettingsPanel({
       scaleMax: borderScale * 1.4,
     };
 
-    const newObjects = generateBorderDecorations(state.mapData, settings);
-    onUpdateObjects(newObjects);
+    const newObjects = generateBorderDecorations(mapData, settings);
+    updateObjects(newObjects);
   }, [borderStyle, borderDensity, borderScale]);
 
   if (!state.mapData) return null;
@@ -104,7 +123,10 @@ export function SettingsPanel({
       <Section title="Map Info" icon="📋" theme={theme}>
         <div className="space-y-3">
           <div>
-            <label className="text-[10px] uppercase tracking-wider" style={{ color: theme.text.muted }}>
+            <label
+              className="text-[10px] uppercase tracking-wider"
+              style={{ color: theme.text.muted }}
+            >
               Name
             </label>
             <input
@@ -121,7 +143,10 @@ export function SettingsPanel({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="text-[10px] uppercase tracking-wider" style={{ color: theme.text.muted }}>
+              <label
+                className="text-[10px] uppercase tracking-wider"
+                style={{ color: theme.text.muted }}
+              >
                 Width
               </label>
               <input
@@ -137,7 +162,10 @@ export function SettingsPanel({
               />
             </div>
             <div>
-              <label className="text-[10px] uppercase tracking-wider" style={{ color: theme.text.muted }}>
+              <label
+                className="text-[10px] uppercase tracking-wider"
+                style={{ color: theme.text.muted }}
+              >
                 Height
               </label>
               <input
@@ -167,11 +195,14 @@ export function SettingsPanel({
                 px-3 py-2 rounded-lg text-xs transition-all
                 ${state.activeBiome === biome.id ? 'ring-1' : 'hover:bg-white/5'}
               `}
-              style={{
-                backgroundColor: state.activeBiome === biome.id ? `${theme.primary}20` : theme.surface,
-                color: state.activeBiome === biome.id ? theme.text.primary : theme.text.muted,
-                '--tw-ring-color': theme.primary,
-              } as React.CSSProperties}
+              style={
+                {
+                  backgroundColor:
+                    state.activeBiome === biome.id ? `${theme.primary}20` : theme.surface,
+                  color: state.activeBiome === biome.id ? theme.text.primary : theme.text.muted,
+                  '--tw-ring-color': theme.primary,
+                } as React.CSSProperties
+              }
             >
               {biome.name}
             </button>
@@ -194,11 +225,11 @@ export function SettingsPanel({
             label="Show Grid"
             theme={theme}
           />
+          <div className="my-2 h-px" style={{ backgroundColor: theme.border }} />
           <div
-            className="my-2 h-px"
-            style={{ backgroundColor: theme.border }}
-          />
-          <div className="text-[10px] uppercase tracking-wider mb-1" style={{ color: theme.text.muted }}>
+            className="text-[10px] uppercase tracking-wider mb-1"
+            style={{ color: theme.text.muted }}
+          >
             Categories
           </div>
           {categories.map((category) => (
@@ -218,11 +249,23 @@ export function SettingsPanel({
         <Section title="Border Decorations" icon="🪨" theme={theme}>
           <div className="space-y-3">
             <div>
-              <label className="text-[10px] uppercase tracking-wider block mb-1.5" style={{ color: theme.text.muted }}>
+              <label
+                className="text-[10px] uppercase tracking-wider block mb-1.5"
+                style={{ color: theme.text.muted }}
+              >
                 Style
               </label>
               <div className="grid grid-cols-3 gap-1">
-                {(['rocks', 'crystals', 'trees', 'mixed', 'alien', 'dead_trees'] as BorderDecorationStyle[]).map((style) => (
+                {(
+                  [
+                    'rocks',
+                    'crystals',
+                    'trees',
+                    'mixed',
+                    'alien',
+                    'dead_trees',
+                  ] as BorderDecorationStyle[]
+                ).map((style) => (
                   <button
                     key={style}
                     onClick={() => setBorderStyle(style)}
@@ -230,7 +273,10 @@ export function SettingsPanel({
                     style={{
                       backgroundColor: borderStyle === style ? `${theme.primary}20` : theme.surface,
                       color: borderStyle === style ? theme.text.primary : theme.text.muted,
-                      border: borderStyle === style ? `1px solid ${theme.primary}` : '1px solid transparent',
+                      border:
+                        borderStyle === style
+                          ? `1px solid ${theme.primary}`
+                          : '1px solid transparent',
                     }}
                   >
                     {style.replace('_', ' ')}
@@ -241,7 +287,10 @@ export function SettingsPanel({
 
             <div>
               <div className="flex justify-between items-center mb-1.5">
-                <label className="text-[10px] uppercase tracking-wider" style={{ color: theme.text.muted }}>
+                <label
+                  className="text-[10px] uppercase tracking-wider"
+                  style={{ color: theme.text.muted }}
+                >
                   Density
                 </label>
                 <span className="text-[10px] font-mono" style={{ color: theme.text.secondary }}>
@@ -261,7 +310,10 @@ export function SettingsPanel({
 
             <div>
               <div className="flex justify-between items-center mb-1.5">
-                <label className="text-[10px] uppercase tracking-wider" style={{ color: theme.text.muted }}>
+                <label
+                  className="text-[10px] uppercase tracking-wider"
+                  style={{ color: theme.text.muted }}
+                >
                   Scale
                 </label>
                 <span className="text-[10px] font-mono" style={{ color: theme.text.secondary }}>
@@ -308,7 +360,8 @@ export function SettingsPanel({
             </div>
 
             <div className="text-[10px]" style={{ color: theme.text.muted }}>
-              Places decorative {borderStyle} around the map edges to create an imposing boundary wall.
+              Places decorative {borderStyle} around the map edges to create an imposing boundary
+              wall.
             </div>
           </div>
         </Section>
