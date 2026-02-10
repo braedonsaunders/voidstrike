@@ -2749,13 +2749,14 @@ All AI systems use proper alliance checks via `isEnemy()` from `TargetAcquisitio
 - `enemyHasAirTech`: Whether enemy has air tech buildings
 
 Three scouting-reactive macro rules respond to enemy strategies:
+
 - `counter_rush_defense` (priority 92): Builds bunker when rush detected
 - `counter_air_tech_preemptive` (priority 90): Trains anti-air when enemy air tech detected
 - `counter_tech_aggression` (priority 88): Launches attack to punish greedy teching
 
 #### InfluenceMap Safe Pathfinding
 
-Retreat and harassment paths now use `InfluenceMap.findSafePath()` (A* with threat avoidance) instead of naive direction offsets. Three integration points:
+Retreat and harassment paths now use `InfluenceMap.findSafePath()` (A\* with threat avoidance) instead of naive direction offsets. Three integration points:
 
 - `getSafeRetreatPath()`: Delegates to `findSafePath()` with 0.8 threat avoidance
 - Desperate retreat: Uses `findSafePath()` with 1.0 (maximum) threat avoidance
@@ -2764,6 +2765,7 @@ Retreat and harassment paths now use `InfluenceMap.findSafePath()` (A* with thre
 #### Expansion Phase
 
 The `'expanding'` state is now functional. `updateTacticalState()` transitions to expanding when:
+
 - Fewer bases than `maxBases`, expansion cooldown expired, 350+ minerals, 6+ army supply
 - `InfluenceMap.findBestExpansionArea()` finds a safe location (score > -10)
 
@@ -2772,6 +2774,7 @@ The `'expanding'` state is now functional. `updateTacticalState()` transitions t
 #### FormationControl Integration
 
 `FormationControl.calculateConcaveFormation()` is used for initial attack commands:
+
 - Armies of 6+ units get per-unit ATTACK commands to concave formation positions facing the enemy
 - Smaller armies use standard group commands
 - Re-commanding idle assault units uses standard group commands (no formation recalculation)
@@ -2796,6 +2799,67 @@ The `diversityMultiplier` uses the `compositionGoals` defined per game phase:
 - Top 3 candidates are weighted-randomly selected for variety
 
 `canProduceUnit()` pre-checks building + addon availability, preventing cooldown waste on units the AI can't actually build yet.
+
+#### Personality-Specific Composition Goals
+
+The `TacticalConfig` supports per-personality composition goal overrides via `personalityCompositionGoals`:
+
+```typescript
+interface TacticalConfig {
+  compositionGoals: CompositionGoal[]; // Default/fallback goals
+  personalityCompositionGoals?: Partial<Record<AIPersonality, CompositionGoal[]>>; // Per-personality overrides
+}
+```
+
+`AIBuildOrderExecutor.getCompositionGoals()` resolves the active goals: personality-specific goals take priority, falling back to default `compositionGoals`. This drives all three production methods (`scoreUnitForProduction`, `shouldSaveForExpensiveUnit`, `updateResourceReservation`) to produce personality-appropriate armies.
+
+Each personality defines 3 game phases (early/mid/late) with distinct unit proportions. For example, aggressive personalities favor scorchers and valkyries early, while economic personalities invest in late-game dreadnoughts and colossi.
+
+#### Personality-Aware Build Orders
+
+`getRandomBuildOrderForPersonality()` selects build orders matching the AI's personality style:
+
+```typescript
+const PERSONALITY_STYLE_MAP: Record<string, BuildOrderStyle> = {
+  aggressive: 'aggressive',
+  defensive: 'defensive',
+  economic: 'economic',
+  balanced: 'balanced',
+  cheese: 'rush',
+  turtle: 'turtle',
+};
+```
+
+Multiple build order variants exist per difficulty level (2-4 variants each), tagged with styles. The selector prefers matching styles but falls back to random selection if no match exists. This ensures varied openers in multi-AI games.
+
+#### Air and Naval Unit Control
+
+`AITacticsManager` separates army units by domain:
+
+- `getArmyUnits()`: All combat units except naval (naval units can't attack land targets)
+- `getGroundArmyUnits()`: Ground-only combat units (excludes flying and naval)
+- `getAirArmyUnits()`: Flying combat units only
+
+Naval units are excluded from land attack operations to prevent them being sent to unreachable targets.
+
+#### Unit Production Coverage
+
+All Dominion combat and support units have dedicated macro rules:
+
+| Unit        | Rule                | Priority | Requirements                   |
+| ----------- | ------------------- | -------- | ------------------------------ |
+| Trooper     | `train_trooper`     | 50       | Barracks                       |
+| Breacher    | Mixed army rules    | —        | Barracks                       |
+| Vanguard    | Mixed army rules    | —        | War factory                    |
+| Scorcher    | Mixed army rules    | —        | War factory                    |
+| Devastator  | Mixed army rules    | —        | War factory                    |
+| Valkyrie    | Mixed army rules    | —        | Hangar                         |
+| Colossus    | Mixed army rules    | —        | War factory + Forge            |
+| Operative   | `train_operative`   | 45       | Infantry bay + Research module |
+| Lifter      | `train_lifter`      | 41       | Hangar (max 3)                 |
+| Overseer    | `train_overseer`    | 39       | Hangar (max 2, hard+)          |
+| Dreadnought | `train_dreadnought` | 38       | Hangar + Research module       |
+| Specter     | Mixed army rules    | —        | Hangar                         |
 
 #### Simulation-Based Economy
 

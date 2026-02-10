@@ -31,7 +31,11 @@ import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { debugAI } from '@/utils/debugLogger';
 import { deterministicMagnitude } from '@/utils/FixedPoint';
 import { SeededRandom } from '@/utils/math';
-import { getRandomBuildOrder, type AIDifficulty, type BuildOrderStep } from '@/data/ai/buildOrders';
+import {
+  getRandomBuildOrderForPersonality,
+  type AIDifficulty,
+  type BuildOrderStep,
+} from '@/data/ai/buildOrders';
 import {
   type FactionAIConfig,
   type AIStateSnapshot,
@@ -787,7 +791,7 @@ export class AICoordinator extends System {
       lastEnemyContact: 0,
       scoutedLocations: new Set(),
 
-      buildOrder: this.loadBuildOrder(faction, difficulty, aiRandom),
+      buildOrder: this.loadBuildOrder(faction, difficulty, actualPersonality, aiRandom),
       buildOrderIndex: 0,
       buildOrderFailureCount: 0,
 
@@ -1033,18 +1037,25 @@ export class AICoordinator extends System {
   private loadBuildOrder(
     faction: string,
     difficulty: AIDifficulty,
+    personality: AIPersonality = 'balanced',
     aiRandom?: SeededRandom
   ): BuildOrderStep[] {
     // Use provided random or create a temporary one for build order selection
     const randomToUse = aiRandom ?? new SeededRandom(this.baseSeed + this.aiPlayerIndex);
-    const buildOrder = getRandomBuildOrder(faction, difficulty, randomToUse);
+    // Select build order matching personality style when available
+    const buildOrder = getRandomBuildOrderForPersonality(
+      faction,
+      difficulty,
+      personality,
+      randomToUse
+    );
     if (!buildOrder) {
       throw new Error(
         `[AICoordinator] No build order configured for faction ${faction} (${difficulty}).`
       );
     }
     debugAI.log(
-      `[AICoordinator] Loaded build order: ${buildOrder.name} for ${faction} (${difficulty})`
+      `[AICoordinator] Loaded build order: ${buildOrder.name} (style: ${buildOrder.style}) for ${faction} (${difficulty}, ${personality})`
     );
     return [...buildOrder.steps];
   }

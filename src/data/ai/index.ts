@@ -41,6 +41,7 @@ export {
   FACTION_UNIT_COMPOSITIONS,
   getBuildOrders,
   getRandomBuildOrder,
+  getRandomBuildOrderForPersonality,
   getUnitComposition,
   selectUnitToBuild,
   getFactionsWithBuildOrders,

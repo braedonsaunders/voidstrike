@@ -11,6 +11,7 @@ VOIDSTRIKE is a browser-based real-time strategy game built with modern web tech
 ## Technical Architecture
 
 ### Frontend Stack
+
 - **Three.js / React Three Fiber** - 3D rendering engine
 - **Next.js 14** - App Router, Server Components
 - **TypeScript** - Full type safety
@@ -20,6 +21,7 @@ VOIDSTRIKE is a browser-based real-time strategy game built with modern web tech
 - **Howler.js** - Spatial audio
 
 ### Backend Stack (Supabase + Vercel)
+
 - **Supabase Realtime** - WebSocket multiplayer
 - **Supabase Database** - Player data, matches, rankings
 - **Supabase Auth** - OAuth authentication
@@ -30,6 +32,7 @@ VOIDSTRIKE is a browser-based real-time strategy game built with modern web tech
 ## Game Architecture
 
 ### Entity Component System (ECS)
+
 The game uses an ECS architecture for maximum performance and flexibility:
 
 ```
@@ -39,6 +42,7 @@ Systems: Logic processors (MovementSystem, CombatSystem, etc.)
 ```
 
 ### Game Loop
+
 ```
 1. Process Inputs (player commands)
 2. Run Systems (physics, AI, combat)
@@ -48,7 +52,9 @@ Systems: Logic processors (MovementSystem, CombatSystem, etc.)
 ```
 
 ### Lockstep Simulation
+
 For multiplayer, we use deterministic lockstep:
+
 - All clients run identical simulations
 - Only inputs are transmitted (not state)
 - Periodic checksums detect desync
@@ -57,6 +63,7 @@ For multiplayer, we use deterministic lockstep:
 ## Faction Design
 
 ### The Dominion (Humans)
+
 - **Theme**: Military industrial complex
 - **Playstyle**: Versatile, defensive, siege warfare
 - **Unique Mechanics**:
@@ -65,6 +72,7 @@ For multiplayer, we use deterministic lockstep:
   - Healing/repair units
 
 ### The Synthesis (Machine Consciousness)
+
 - **Theme**: Transcendent AI collective
 - **Playstyle**: Powerful but expensive, shield-based
 - **Unique Mechanics**:
@@ -73,6 +81,7 @@ For multiplayer, we use deterministic lockstep:
   - Psionic abilities
 
 ### The Swarm (Organic Hive)
+
 - **Theme**: Adaptive biological horror
 - **Playstyle**: Cheap, fast, overwhelming
 - **Unique Mechanics**:
@@ -83,21 +92,24 @@ For multiplayer, we use deterministic lockstep:
 ## Resource System
 
 ### Primary Resources
+
 1. **Minerals** - Basic resource, abundant
 2. **Plasma** - Advanced resource, limited
 
 ### Economy Flow
+
 ```
 Workers -> Resource Nodes -> Storage -> Production
 ```
 
 ### Worker Saturation
+
 Each resource node displays worker assignment status with floating labels showing "X/Y" (current/optimal):
 
-| Resource Type | Optimal Workers | Max Useful Workers | Label Color |
-|--------------|-----------------|-------------------|-------------|
-| **Minerals** | 2 per patch | 3 per patch | Green when saturated, Yellow when under |
-| **Plasma** | 3 per geyser | 3 per geyser | Green when saturated, Yellow when under |
+| Resource Type | Optimal Workers | Max Useful Workers | Label Color                             |
+| ------------- | --------------- | ------------------ | --------------------------------------- |
+| **Minerals**  | 2 per patch     | 3 per patch        | Green when saturated, Yellow when under |
+| **Plasma**    | 3 per geyser    | 3 per geyser       | Green when saturated, Yellow when under |
 
 - **Green (X/Y)**: Optimal saturation reached - maximum efficiency
 - **Yellow (X/Y)**: Undersaturated - workers needed for optimal income
@@ -108,16 +120,18 @@ AI prioritizes filling extractors to 3 workers first, then distributes workers e
 ## Combat System
 
 ### Auto-Attack Behavior
+
 Units automatically engage enemies based on their state:
 
-| Unit State | Target Acquisition | Notes |
-|------------|-------------------|-------|
-| **Idle** | Immediate within attack range | Instant response, no throttle delay |
-| **Hold Position** | Within attack range only | Won't move to engage |
-| **Patrolling** | Within sight range | Engages then resumes patrol |
-| **Attack-Moving** | Within sight range | Engages then resumes move |
+| Unit State        | Target Acquisition            | Notes                               |
+| ----------------- | ----------------------------- | ----------------------------------- |
+| **Idle**          | Immediate within attack range | Instant response, no throttle delay |
+| **Hold Position** | Within attack range only      | Won't move to engage                |
+| **Patrolling**    | Within sight range            | Engages then resumes patrol         |
+| **Attack-Moving** | Within sight range            | Engages then resumes move           |
 
 **Targeting Priority** (higher = attacked first):
+
 1. Devastators, Dreadnoughts, Colossus (90-100) - High threat units
 2. Specters, Operatives, Breachers (70-85) - Tactical threats
 3. Troopers, Scorchers, Valkyries (50-60) - Standard combat
@@ -126,38 +140,63 @@ Units automatically engage enemies based on their state:
 6. Workers (10) - Lowest priority
 
 Target scoring also considers:
+
 - **Distance** - Closer enemies are prioritized
 - **Health** - Damaged enemies are prioritized
 
 ### Attack Targeting Types
+
 Units have restrictions on what they can attack based on air/ground targeting:
 
-| Target Type | Can Attack Ground | Can Attack Air | Example Units |
-|-------------|-------------------|----------------|---------------|
-| **Ground & Air** | ✅ | ✅ | Trooper, Breacher, Colossus, Specter, Dreadnought (continuous laser) |
-| **Ground Only** | ✅ | ❌ | Fabricator, Scorcher, Devastator, Valkyrie (Assault Mode) |
-| **Air Only** | ❌ | ✅ | Valkyrie (Fighter Mode) |
-| **No Attack** | ❌ | ❌ | Lifter, Overseer |
+| Target Type      | Can Attack Ground | Can Attack Air | Example Units                                                        |
+| ---------------- | ----------------- | -------------- | -------------------------------------------------------------------- |
+| **Ground & Air** | ✅                | ✅             | Trooper, Breacher, Colossus, Specter, Dreadnought (continuous laser) |
+| **Ground Only**  | ✅                | ❌             | Fabricator, Scorcher, Devastator, Valkyrie (Assault Mode)            |
+| **Air Only**     | ❌                | ✅             | Valkyrie (Fighter Mode)                                              |
+| **No Attack**    | ❌                | ❌             | Lifter, Overseer                                                     |
 
 **Transform Mode Targeting**: Some units change targeting when transforming:
+
 - **Valkyrie Fighter Mode** (flying): Air only - anti-air specialist
 - **Valkyrie Assault Mode** (ground): Ground only - ground assault
 - **Devastator/Scorcher**: Ground only in all modes (artillery/flamethrower)
 
-**AI Transform Intelligence**: AI-controlled Valkyries will intelligently transform based on nearby enemy composition:
-- Transform to Fighter Mode when air enemies are present and no ground enemies
-- Transform to Assault Mode when ground enemies are present and no air enemies
-- Consider threat scores to make nuanced decisions when both types are present
+**AI Transform Intelligence**: AI-controlled units intelligently transform based on nearby enemy composition:
+
+- **Valkyrie**: Transforms to Fighter Mode when air enemies present (no ground), Assault Mode when ground enemies present (no air). Uses threat scores for mixed situations.
+- **Scorcher**: Transforms to Inferno mode (area-of-effect) when 2+ enemies are nearby, reverts to Scorcher mode (mobile) when no enemies in range.
 
 **AI Counter-Building**: When AI units are attacked by enemies they cannot hit (e.g., air units attacking ground-only troops), the AI urgently prioritizes building anti-air capable units.
 
+### AI Personality System
+
+Each AI player is assigned a personality that determines its strategic behavior, army composition, and build order selection. In multi-AI games, personalities are varied so no two AIs play identically.
+
+| Personality    | Style            | Early Game                             | Late Game                             |
+| -------------- | ---------------- | -------------------------------------- | ------------------------------------- |
+| **Balanced**   | Well-rounded     | Trooper/Breacher/Vanguard mix          | Diverse army with all unit types      |
+| **Aggressive** | Fast pressure    | Scorcher/Vanguard heavy, early attacks | Valkyrie/Specter focused              |
+| **Defensive**  | Fortify & tech   | Trooper/Breacher/Devastator            | Colossus/Dreadnought deathball        |
+| **Economic**   | Greedy expansion | Light defense, fast expand             | Colossus/Dreadnought/Operative heavy  |
+| **Cheese**     | All-in rush      | Scorcher/Vanguard rush                 | Pivots to Valkyrie/Devastator if held |
+| **Turtle**     | Slow & steady    | Trooper/Devastator behind defenses     | Colossus/Dreadnought siege force      |
+
+Personality affects:
+
+- **Build order selection**: Each personality prefers matching build order styles (e.g., aggressive AI picks aggressive openers)
+- **Composition goals**: Per-phase army composition targets that drive production scoring
+- **Macro rules**: Personality-filtered rules for extra production buildings, earlier expansions, etc.
+- **Attack timing**: More aggressive personalities attack earlier and with smaller armies
+
 ### Damage Types
+
 - **Normal** - Standard damage
 - **Explosive** - Bonus vs large, reduced vs small
 - **Concussive** - Bonus vs small, reduced vs large
 - **Psionic** - Ignores armor
 
 ### Armor Types
+
 - **Light** - Infantry, workers
 - **Armored** - Vehicles, heavy units
 - **Massive** - Capital ships, structures
@@ -170,36 +209,37 @@ Units have restrictions on what they can attack based on air/ground targeting:
 
 Units have a movement domain that determines where they can move:
 
-| Domain | Land | Shallow Water | Deep Water | Air |
-|--------|------|---------------|------------|-----|
-| **Ground** | ✅ | ✅ (0.6x speed) | ❌ | ❌ |
-| **Water** | ❌ | ✅ | ✅ | ❌ |
-| **Amphibious** | ✅ | ✅ | ✅ | ❌ |
-| **Air** | ✅ | ✅ | ✅ | ✅ |
+| Domain         | Land | Shallow Water   | Deep Water | Air |
+| -------------- | ---- | --------------- | ---------- | --- |
+| **Ground**     | ✅   | ✅ (0.6x speed) | ❌         | ❌  |
+| **Water**      | ❌   | ✅              | ✅         | ❌  |
+| **Amphibious** | ✅   | ✅              | ✅         | ❌  |
+| **Air**        | ✅   | ✅              | ✅         | ✅  |
 
 ### Naval Targeting
 
-| Unit Type | Can Attack Ground | Can Attack Air | Can Attack Naval |
-|-----------|-------------------|----------------|------------------|
-| **Ground Units** | ✅ (varies) | ✅ (varies) | ❌ (most) |
-| **Naval Units** | ✅ (varies) | ✅ (varies) | ✅ |
-| **Air Units** | ✅ (varies) | ✅ (varies) | ✅ (most) |
+| Unit Type        | Can Attack Ground | Can Attack Air | Can Attack Naval |
+| ---------------- | ----------------- | -------------- | ---------------- |
+| **Ground Units** | ✅ (varies)       | ✅ (varies)    | ❌ (most)        |
+| **Naval Units**  | ✅ (varies)       | ✅ (varies)    | ✅               |
+| **Air Units**    | ✅ (varies)       | ✅ (varies)    | ✅ (most)        |
 
 ### Torpedo Damage Type
 
 New damage type for anti-ship weapons:
 
 | Torpedo vs | Multiplier |
-|-----------|------------|
-| Light | 0.5x |
-| Armored | 0.75x |
-| Massive | 1.0x |
-| Naval | 1.5x |
-| Structure | 1.25x |
+| ---------- | ---------- |
+| Light      | 0.5x       |
+| Armored    | 0.75x      |
+| Massive    | 1.0x       |
+| Naval      | 1.5x       |
+| Structure  | 1.25x      |
 
 ### Submarine Mechanics
 
 Submarines (Hunter) have special submerge mechanics:
+
 - **Surfaced**: Normal speed, can use deck gun, visible
 - **Submerged**: Reduced speed (67%), cloaked, torpedo attacks only
 - Detected by: Radar Array, Overseer, other submarines (sonar)
@@ -207,36 +247,39 @@ Submarines (Hunter) have special submerge mechanics:
 ### Shore Bombardment
 
 Naval capital ships (Leviathan) can attack land targets:
+
 - Normal attack range applies to coastal targets
 - Shore Bombardment ability: Long-range artillery strike (75 energy)
 - Yamato Cannon: 150 damage single target (100 energy)
 
 ### Dominion Naval Units
 
-| Unit | Cost | Supply | HP | Armor | Speed | Range | DPS | Role |
-|------|------|--------|-----|-------|-------|-------|-----|------|
-| **Mariner** | 75m | 1 | 60 | 0 (Light) | 4.5 | 1 | 3.5 | Naval worker |
-| **Stingray** | 100m | 2 | 120 | 0 (Light) | 6.5 | 6 | 7.2 | Fast patrol |
-| **Corsair** | 150m/75v | 3 | 200 | 1 (Armored) | 3.5 | 8 | 16.8 | Anti-air frigate |
-| **Leviathan** | 350m/250v | 6 | 500 | 3 (Massive) | 2.25 | 10 | 12.5 | Battlecruiser |
-| **Hunter** | 200m/150v | 4 | 175 | 1 (Armored) | 3.0 | 7 | 14 | Submarine |
-| **Kraken** | 200m/100v | 3 | 250 | 2 (Armored) | 3.5 | 6 | 24 | Amphibious transport |
+| Unit          | Cost      | Supply | HP  | Armor       | Speed | Range | DPS  | Role                 |
+| ------------- | --------- | ------ | --- | ----------- | ----- | ----- | ---- | -------------------- |
+| **Mariner**   | 75m       | 1      | 60  | 0 (Light)   | 4.5   | 1     | 3.5  | Naval worker         |
+| **Stingray**  | 100m      | 2      | 120 | 0 (Light)   | 6.5   | 6     | 7.2  | Fast patrol          |
+| **Corsair**   | 150m/75v  | 3      | 200 | 1 (Armored) | 3.5   | 8     | 16.8 | Anti-air frigate     |
+| **Leviathan** | 350m/250v | 6      | 500 | 3 (Massive) | 2.25  | 10    | 12.5 | Battlecruiser        |
+| **Hunter**    | 200m/150v | 4      | 175 | 1 (Armored) | 3.0   | 7     | 14   | Submarine            |
+| **Kraken**    | 200m/100v | 3      | 250 | 2 (Armored) | 3.5   | 6     | 24   | Amphibious transport |
 
 ### Dominion Naval Buildings
 
-| Building | Cost | Size | HP | Requirements | Description |
-|----------|------|------|-----|--------------|-------------|
-| **Drydock** | 200m/100v | 4×4 | 1500 | Forge | Naval production (coastline) |
-| **Offshore Platform** | 150m | 3×3 | 800 | Drydock | Naval supply point (deep water) |
-| **Armed Platform** | +100m/50v | 3×3 | 1000 | Offshore Platform | Defensive upgrade |
+| Building              | Cost      | Size | HP   | Requirements      | Description                     |
+| --------------------- | --------- | ---- | ---- | ----------------- | ------------------------------- |
+| **Drydock**           | 200m/100v | 4×4  | 1500 | Forge             | Naval production (coastline)    |
+| **Offshore Platform** | 150m      | 3×3  | 800  | Drydock           | Naval supply point (deep water) |
+| **Armed Platform**    | +100m/50v | 3×3  | 1000 | Offshore Platform | Defensive upgrade               |
 
 ### Naval Tech Tree
 
 **Drydock produces:**
+
 - Basic: Mariner, Stingray
 - With Research Module: Corsair, Leviathan, Hunter, Kraken
 
 **Drydock researches:**
+
 - Naval Weapons 1/2/3
 - Naval Armor 1/2/3
 - Advanced Sonar (submarines detected at closer range)
@@ -245,6 +288,7 @@ Naval capital ships (Leviathan) can attack land targets:
 ## UI/UX Design
 
 ### HUD Layout
+
 ```
 ┌─────────────────────────────────────────┐
 │ Resources    │    Game Timer   │ Menu   │
@@ -261,6 +305,7 @@ Naval capital ships (Leviathan) can attack land targets:
 ```
 
 ### Control Scheme
+
 - **Left Click** - Select unit/building
 - **Right Click** - Move/Attack/Interact
 - **Shift+Right Click** - Queue command (chain commands)
@@ -274,14 +319,18 @@ Naval capital ships (Leviathan) can attack land targets:
 - **P** - Patrol
 
 ### Command Queuing (Shift-Click)
+
 Hold **Shift** while issuing commands to queue them in sequence:
+
 - Units execute commands in order, proceeding to next when current completes
 - Works with: Move, Attack, Attack-Move, Patrol, Gather
 - Green waypoint indicators show queued destinations for selected units
 - Press **S** (Stop) to clear all queued commands
 
 ### Building Placement Queuing (Shift-Click)
+
 Hold **Shift** while placing buildings to queue multiple placements:
+
 - Each shift-click places a building and stays in placement mode
 - Green dashed path lines connect queued building positions (rally point style)
 - Workers are assigned to each building as they become available
@@ -291,21 +340,24 @@ Hold **Shift** while placing buildings to queue multiple placements:
 
 Units use **magic box detection** for natural movement behavior:
 
-| Command Location | Behavior | Description |
-|-----------------|----------|-------------|
-| **Inside Selection Box** | Clump | All units move to the same point, then spread naturally |
-| **Outside Selection Box** | Preserve Spacing | Units maintain their relative positions |
+| Command Location          | Behavior         | Description                                             |
+| ------------------------- | ---------------- | ------------------------------------------------------- |
+| **Inside Selection Box**  | Clump            | All units move to the same point, then spread naturally |
+| **Outside Selection Box** | Preserve Spacing | Units maintain their relative positions                 |
 
 **Arrival Spreading:**
+
 - Units clump while moving (weak separation) for faster group movement
 - On arrival, strong separation kicks in causing natural spreading
 - Prevents splash damage from grouped units
 
 **Explicit Formations:**
+
 - `F` + click - Open formation menu (select: box, wedge, line, etc.)
 - Units automatically sort: melee front, ranged back, support center
 
 **Available Formations:**
+
 - **Box** - Balanced defensive, ranged protected in center
 - **Wedge** - V-shaped aggressive formation
 - **Line** - Horizontal spread, good for narrow chokes
@@ -320,36 +372,37 @@ Units have differentiated movement speeds and acceleration rates:
 
 **Unit Speed Reference (Dominion Faction):**
 
-| Unit | Role | Speed | Acceleration | Feel |
-|------|------|-------|--------------|------|
-| **Fabricator** | Worker | 4.0 | 50 | Quick worker |
-| **Trooper** | Infantry | 3.15 | 1000 | Instant/snappy |
-| **Breacher** | Heavy Infantry | 3.15 | 1000 | Instant/snappy |
-| **Vanguard** | Recon | 5.25 | 1000 | Fast & snappy |
-| **Operative** | Stealth | 3.94 | 1000 | Instant/snappy |
-| **Scorcher** | Light Vehicle | 5.95 | 800 | Fast vehicle |
-| **Devastator** | Siege | 3.15 | 800 | Heavy vehicle |
-| **Colossus** | Heavy Mech | 2.62 | 600 | Slow heavy mech |
-| **Lifter** | Transport | 3.5 | 3.15 | Floaty transport |
-| **Valkyrie** | Transform | 3.85/3.15 | 4.55 | Responsive fighter |
-| **Specter** | Strike Craft | 3.85 | 4.55 | Strike craft |
-| **Dreadnought** | Capital Ship | 2.62 | 1.4 | Sluggish capital |
-| **Overseer** | Support | 4.13 | 2.975 | Support craft |
+| Unit            | Role           | Speed     | Acceleration | Feel               |
+| --------------- | -------------- | --------- | ------------ | ------------------ |
+| **Fabricator**  | Worker         | 4.0       | 50           | Quick worker       |
+| **Trooper**     | Infantry       | 3.15      | 1000         | Instant/snappy     |
+| **Breacher**    | Heavy Infantry | 3.15      | 1000         | Instant/snappy     |
+| **Vanguard**    | Recon          | 5.25      | 1000         | Fast & snappy      |
+| **Operative**   | Stealth        | 3.94      | 1000         | Instant/snappy     |
+| **Scorcher**    | Light Vehicle  | 5.95      | 800          | Fast vehicle       |
+| **Devastator**  | Siege          | 3.15      | 800          | Heavy vehicle      |
+| **Colossus**    | Heavy Mech     | 2.62      | 600          | Slow heavy mech    |
+| **Lifter**      | Transport      | 3.5       | 3.15         | Floaty transport   |
+| **Valkyrie**    | Transform      | 3.85/3.15 | 4.55         | Responsive fighter |
+| **Specter**     | Strike Craft   | 3.85      | 4.55         | Strike craft       |
+| **Dreadnought** | Capital Ship   | 2.62      | 1.4          | Sluggish capital   |
+| **Overseer**    | Support        | 4.13      | 2.975        | Support craft      |
 
 **Acceleration System:**
 
 Acceleration creates distinct unit "feels":
 
-| Unit Type | Acceleration | Deceleration | Behavior |
-|-----------|--------------|--------------|----------|
-| **Ground Combat** | 800-1000 | 2x accel | Near-instant response |
-| **Ground Vehicles** | 600-800 | 2x accel | Slightly visible ramp-up |
-| **Workers** | 50 | 100 | Visible but quick |
-| **Light Air** | 4-5 | 2x accel | Responsive but floaty |
-| **Medium Air** | 2.5-3.5 | 2x accel | Standard air unit |
-| **Heavy Air** | 1.4-1.5 | 2x accel | Sluggish capital ship |
+| Unit Type           | Acceleration | Deceleration | Behavior                 |
+| ------------------- | ------------ | ------------ | ------------------------ |
+| **Ground Combat**   | 800-1000     | 2x accel     | Near-instant response    |
+| **Ground Vehicles** | 600-800      | 2x accel     | Slightly visible ramp-up |
+| **Workers**         | 50           | 100          | Visible but quick        |
+| **Light Air**       | 4-5          | 2x accel     | Responsive but floaty    |
+| **Medium Air**      | 2.5-3.5      | 2x accel     | Standard air unit        |
+| **Heavy Air**       | 1.4-1.5      | 2x accel     | Sluggish capital ship    |
 
 **Key Mechanics:**
+
 - Ground combat units have effectively instant acceleration (1000) for responsive micro
 - Air units have gradual acceleration (1-5) creating a "floaty" feel
 - Deceleration is typically 2x acceleration for snappy stops
@@ -359,6 +412,7 @@ Acceleration creates distinct unit "feels":
 ## Map Design
 
 ### Map Design Principles
+
 All maps follow classic RTS design principles:
 
 1. **Protected Main Bases** - Each main base is ~90% enclosed by cliffs with a single narrow ramp exit
@@ -372,16 +426,16 @@ All maps follow classic RTS design principles:
 
 Maps now include diverse terrain features that affect gameplay:
 
-| Feature | Walkable | Buildable | Speed | Vision | Notes |
-|---------|----------|-----------|-------|--------|-------|
-| **Water (shallow)** | Yes | No | 0.6x | Clear | Rivers, ponds |
-| **Water (deep)** | No | No | - | Clear | Lakes, impassable |
-| **Forest (light)** | Yes | No | 0.85x | Partial | Small trees, slight cover |
-| **Forest (dense)** | Yes | No | 0.5x | Blocked | Hides units, ambush positions |
-| **Mud/Swamp** | Yes | No | 0.4x | Clear | Significant slow zone |
-| **Road** | Yes | No | 1.25x | Clear | Fast movement corridors |
-| **Void** | No | No | - | Clear | Map edges, chasms |
-| **Cliff** | No | No | - | Blocked | Sheer drops |
+| Feature             | Walkable | Buildable | Speed | Vision  | Notes                         |
+| ------------------- | -------- | --------- | ----- | ------- | ----------------------------- |
+| **Water (shallow)** | Yes      | No        | 0.6x  | Clear   | Rivers, ponds                 |
+| **Water (deep)**    | No       | No        | -     | Clear   | Lakes, impassable             |
+| **Forest (light)**  | Yes      | No        | 0.85x | Partial | Small trees, slight cover     |
+| **Forest (dense)**  | Yes      | No        | 0.5x  | Blocked | Hides units, ambush positions |
+| **Mud/Swamp**       | Yes      | No        | 0.4x  | Clear   | Significant slow zone         |
+| **Road**            | Yes      | No        | 1.25x | Clear   | Fast movement corridors       |
+| **Void**            | No       | No        | -     | Clear   | Map edges, chasms             |
+| **Cliff**           | No       | No        | -     | Blocked | Sheer drops                   |
 
 ### Strategic Terrain Elements
 
@@ -396,20 +450,22 @@ Each map now includes:
 
 ### Available Maps
 
-| Map | Players | Size | Biome | Terrain Features |
-|-----|---------|------|-------|------------------|
-| Crystal Caverns | 2 | 200×180 | Frozen | Frozen lakes, ice corridors, icy slow zones |
-| Void Assault | 2 | 220×220 | Void | Void chasms, alien forests, energy pools |
-| Scorched Basin | 4 | 280×280 | Desert | Lava lakes, scorched forests, sand slow zones |
-| Contested Frontier | 6 | 360×320 | Jungle | Rivers with bridges, dense jungle, mud pits |
-| Titan's Colosseum | 8 | 400×400 | Volcanic | Lava moats, volcanic pits, highway system |
+| Map                | Players | Size    | Biome    | Terrain Features                              |
+| ------------------ | ------- | ------- | -------- | --------------------------------------------- |
+| Crystal Caverns    | 2       | 200×180 | Frozen   | Frozen lakes, ice corridors, icy slow zones   |
+| Void Assault       | 2       | 220×220 | Void     | Void chasms, alien forests, energy pools      |
+| Scorched Basin     | 4       | 280×280 | Desert   | Lava lakes, scorched forests, sand slow zones |
+| Contested Frontier | 6       | 360×320 | Jungle   | Rivers with bridges, dense jungle, mud pits   |
+| Titan's Colosseum  | 8       | 400×400 | Volcanic | Lava moats, volcanic pits, highway system     |
 
 ### Expansion Types (Standard Resource Amounts)
+
 - **Standard Bases** (Main/Natural/Third) - 8 mineral patches: 6× 1500 + 2× 900 (close patches) = 10,800 total minerals
 - **Gold Bases** - 8 mineral patches: 8× 900 = 7,200 total minerals (higher mining rate per patch)
 - **Gas Geysers** - All geysers contain 2,250 plasma gas
 
 Base Protection Levels:
+
 - **Main Base** - Starting location, protected by cliffs with single ramp
 - **Natural** - Close to main, semi-protected chokepoint
 - **Third** - Contested, requires army presence
@@ -419,12 +475,14 @@ Base Protection Levels:
 ### High Ground Advantage
 
 The combat system uses the elevation system:
+
 - Attacking from low → high ground: 30% miss chance
 - Attacking from low → mid ground: 15% miss chance
 - Attacking from mid → high ground: 15% miss chance
 - Same or higher elevation: No penalty
 
 ### Spawn Point Rules
+
 - Only main base locations are valid spawn points
 - Each player slot (1-8) maps to a specific main base
 - AI and human players are assigned to main bases only
@@ -437,6 +495,7 @@ The combat system uses the elevation system:
 The Dominion faction uses worker-based construction where Fabricators physically construct buildings:
 
 **Construction Flow:**
+
 1. Player selects a worker and places a building blueprint
 2. Worker is assigned and moves to the construction site
 3. Worker is "locked" to construction - they stay there building unless explicitly commanded to move
@@ -444,12 +503,14 @@ The Dominion faction uses worker-based construction where Fabricators physically
 5. When complete, the worker is released and returns to idle state
 
 **Paused Construction:**
+
 - If a worker is moved away from a construction site (via move command, gather, attack, repair), construction pauses
 - The building remains at its current progress and health, waiting for a worker
 - Any worker can resume construction by right-clicking on the paused building
 - Paused buildings are NOT cancelled automatically - they persist indefinitely
 
 **Worker Assignment:**
+
 - Multiple workers can be assigned to the same building for faster construction
 - Workers are automatically released when construction completes
 - If the building is destroyed, assigned workers are released
@@ -463,11 +524,13 @@ The Dominion faction uses worker-based construction where Fabricators physically
 | `complete` | Building finished, fully operational |
 
 **Right-Click on Buildings:**
+
 - Right-clicking a friendly under-construction building with workers selected assigns them to resume construction
 - This works for `waiting_for_worker`, `constructing`, and `paused` buildings
 - Visual feedback: yellow flash on building when construction is resumed
 
 **Blueprint Cancellation:**
+
 - Only blueprints in `waiting_for_worker` state (never started) are cancelled if no worker is assigned
 - Resources are fully refunded for cancelled blueprints
 - Once construction starts (`constructing` or `paused`), the building persists
@@ -476,14 +539,15 @@ The Dominion faction uses worker-based construction where Fabricators physically
 
 ### Wall Buildings
 
-| Building | Size | Cost | HP | Armor | Description |
-|----------|------|------|-----|-------|-------------|
-| **Wall Segment** | 1×1 | 25 minerals | 400 | 1 | Basic wall, connects to neighbors, can mount turrets |
-| **Wall Gate** | 2×1 | 75 minerals | 500 | 2 | Entrance gate, opens for friendly units |
+| Building         | Size | Cost        | HP  | Armor | Description                                          |
+| ---------------- | ---- | ----------- | --- | ----- | ---------------------------------------------------- |
+| **Wall Segment** | 1×1  | 25 minerals | 400 | 1     | Basic wall, connects to neighbors, can mount turrets |
+| **Wall Gate**    | 2×1  | 75 minerals | 500 | 2     | Entrance gate, opens for friendly units              |
 
 ### Wall Line Placement
 
 Walls use a special **click+drag placement mode**:
+
 1. Select a worker and choose "Build Walls" (W)
 2. Select wall type (Wall Segment or Gate)
 3. **Click** to start wall line
@@ -492,20 +556,22 @@ Walls use a special **click+drag placement mode**:
 6. Workers are automatically assigned round-robin
 
 **Path Snapping:**
+
 - Walls draw in straight lines only (horizontal, vertical, or 45° diagonal)
 - Real-time cost display during drag
 - Invalid positions shown in red
 
 ### Gate Mechanics
 
-| State | Behavior |
-|-------|----------|
-| **Open** | Allows all units to pass |
-| **Closed** | Blocks all units |
+| State              | Behavior                                         |
+| ------------------ | ------------------------------------------------ |
+| **Open**           | Allows all units to pass                         |
+| **Closed**         | Blocks all units                                 |
 | **Auto** (default) | Opens for friendly units, closes after 2 seconds |
-| **Locked** | Permanently closed until unlocked |
+| **Locked**         | Permanently closed until unlocked                |
 
 **Gate Commands:**
+
 - `O` - Toggle Open/Close
 - `L` - Lock/Unlock
 - `A` - Set to Auto mode
@@ -513,6 +579,7 @@ Walls use a special **click+drag placement mode**:
 ### Wall Connections
 
 Walls automatically connect to adjacent walls:
+
 - Single segment: `■`
 - Horizontal: `═══`
 - Vertical: `║`
@@ -524,12 +591,12 @@ Walls automatically connect to adjacent walls:
 
 Upgrades are researched at Arsenal/Tech Center, then applied per-segment:
 
-| Upgrade | Research Cost | Apply Cost | Effect |
-|---------|---------------|------------|--------|
-| **Reinforced Plating** | 100/100 | 25/0 | +400 HP, +2 armor |
-| **Shield Generator** | 150/150 | 50/25 | +200 regenerating shield |
-| **Integrated Weapons** | 100/100 | 40/25 | Adds auto-turret (5 dmg, 6 range) |
-| **Repair Drone** | 75/75 | 30/15 | Auto-heals adjacent walls |
+| Upgrade                | Research Cost | Apply Cost | Effect                            |
+| ---------------------- | ------------- | ---------- | --------------------------------- |
+| **Reinforced Plating** | 100/100       | 25/0       | +400 HP, +2 armor                 |
+| **Shield Generator**   | 150/150       | 50/25      | +200 regenerating shield          |
+| **Integrated Weapons** | 100/100       | 40/25      | Adds auto-turret (5 dmg, 6 range) |
+| **Repair Drone**       | 75/75         | 30/15      | Auto-heals adjacent walls         |
 
 ### Turret Mounting
 

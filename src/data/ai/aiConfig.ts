@@ -21,8 +21,20 @@
 // ==================== CORE TYPES ====================
 
 export type AIDifficulty = 'easy' | 'medium' | 'hard' | 'very_hard' | 'insane';
-export type AIPersonality = 'aggressive' | 'defensive' | 'economic' | 'balanced' | 'cheese' | 'turtle';
-export type AIState = 'building' | 'expanding' | 'attacking' | 'defending' | 'scouting' | 'harassing';
+export type AIPersonality =
+  | 'aggressive'
+  | 'defensive'
+  | 'economic'
+  | 'balanced'
+  | 'cheese'
+  | 'turtle';
+export type AIState =
+  | 'building'
+  | 'expanding'
+  | 'attacking'
+  | 'defending'
+  | 'scouting'
+  | 'harassing';
 
 // ==================== UTILITY AI SCORING ====================
 
@@ -68,9 +80,9 @@ export type ConditionType =
   | 'enemyAirUnits'
   | 'hasAntiAir'
   | 'productionBuildingsCount'
-  | 'enemyStrategy'     // Inferred enemy strategy from ScoutingMemory
-  | 'enemyTechLevel'    // Enemy tech level (1-3)
-  | 'enemyHasAirTech';  // Whether enemy has air tech buildings
+  | 'enemyStrategy' // Inferred enemy strategy from ScoutingMemory
+  | 'enemyTechLevel' // Enemy tech level (1-3)
+  | 'enemyHasAirTech'; // Whether enemy has air tech buildings
 
 // ==================== MACRO RULES ====================
 
@@ -144,8 +156,11 @@ export interface TacticalConfig {
   /** Weights for threat score calculation */
   threatWeights: ThreatWeights;
 
-  /** Army composition goals by game phase */
+  /** Army composition goals by game phase (default/fallback) */
   compositionGoals: CompositionGoal[];
+
+  /** Personality-specific composition goals (overrides compositionGoals when present) */
+  personalityCompositionGoals?: Partial<Record<AIPersonality, CompositionGoal[]>>;
 
   /** When to attack (army supply thresholds by difficulty) */
   attackThresholds: Record<AIDifficulty, number>;
@@ -412,10 +427,7 @@ export interface DifficultySettings {
 /**
  * Evaluate a condition against AI state
  */
-export function evaluateCondition(
-  condition: RuleCondition,
-  state: AIStateSnapshot
-): boolean {
+export function evaluateCondition(condition: RuleCondition, state: AIStateSnapshot): boolean {
   let value: number | boolean | string;
   let compareValue: number = condition.value as number;
 
@@ -566,7 +578,7 @@ export function evaluateRule(rule: MacroRule, state: AIStateSnapshot): boolean {
   }
 
   // All conditions must pass
-  return rule.conditions.every(cond => evaluateCondition(cond, state));
+  return rule.conditions.every((cond) => evaluateCondition(cond, state));
 }
 
 /**
@@ -599,10 +611,7 @@ export function findBestMacroRule(
 /**
  * Calculate utility score for a decision
  */
-export function calculateUtilityScore(
-  utility: UtilityScore,
-  state: AIStateSnapshot
-): number {
+export function calculateUtilityScore(utility: UtilityScore, state: AIStateSnapshot): number {
   let score = utility.baseScore;
 
   for (const condition of utility.conditions) {
@@ -665,9 +674,9 @@ export interface AIStateSnapshot {
   hasAntiAir: boolean;
 
   // Scouting intel
-  enemyStrategy: string;      // InferredStrategy string
-  enemyTechLevel: number;     // 1-3
-  enemyHasAirTech: boolean;   // From ScoutingMemory
+  enemyStrategy: string; // InferredStrategy string
+  enemyTechLevel: number; // 1-3
+  enemyHasAirTech: boolean; // From ScoutingMemory
 
   // Config reference
   config: FactionAIConfig;
