@@ -6,6 +6,7 @@ import { EditorCore, VOIDSTRIKE_EDITOR_CONFIG } from '@/editor';
 import { voidstrikeDataProvider } from '@/editor/providers/voidstrike';
 import { useGameSetupStore, loadEditorMapDataFromStorage } from '@/store/gameSetupStore';
 import { debugInitialization } from '@/utils/debugLogger';
+import { MapPreviewModal, type PreviewSettings } from '@/editor/core/MapPreviewModal';
 import type { EditorMapData } from '@/editor';
 import type { MapListItem } from '@/editor/core/EditorHeader';
 import type { MapData } from '@/data/maps/MapTypes';
@@ -41,6 +42,10 @@ function EditorPageContent() {
 
   // Track current map data for preview
   const currentMapDataRef = useRef<EditorMapData | null>(null);
+
+  // Preview modal state
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [pendingPreviewData, setPendingPreviewData] = useState<{ editor: EditorMapData; game: MapData } | null>(null);
 
   // Load stored editor map data from IndexedDB (returning from preview)
   useEffect(() => {
@@ -94,28 +99,54 @@ function EditorPageContent() {
       return;
     }
 
-    debugInitialization.log('Preview map:', gameData);
+    // Show the preview settings modal
+    setPendingPreviewData({ editor: data, game: gameData });
+    setShowPreviewModal(true);
+  };
 
-    // Store custom map in game setup store
+  const handleLaunchPreview = useCallback((settings: PreviewSettings) => {
+    if (!pendingPreviewData) return;
+
+    const { editor: editorData, game: gameData } = pendingPreviewData;
+
+    debugInitialization.log('Preview map with settings:', settings);
+
     const store = useGameSetupStore.getState();
 
-    // Store the editor map data so we can restore it when returning from preview
-    store.setEditorMapData(data);
-
-    store.setCustomMap(gameData);
-
-    // Configure for preview: 1 human vs 1 AI
+    // Reset and configure
     store.reset();
-    store.setCustomMap(gameData); // Re-set after reset
-    store.setEditorMapData(data); // Re-set after reset
-    store.setEditorPreview(true); // Mark as editor preview for "Back to Editor" button
-    store.setFogOfWar(false); // Disable fog for easier testing
-    store.setStartingResources('insane'); // Start with lots of resources for testing
+    store.setCustomMap(gameData);
+    store.setEditorMapData(editorData);
+    store.setEditorPreview(true);
+    store.setStartingResources(settings.startingResources);
+    store.setGameSpeed(settings.gameSpeed);
+    store.setFogOfWar(settings.fogOfWar);
+
+    // Configure player slots: 1 human + (numPlayers - 1) AI
+    // Slot 1 is already human from reset(). Add extra AI slots as needed.
+    for (let i = 2; i < settings.numPlayers; i++) {
+      store.addPlayerSlot();
+    }
+
+    // Set AI difficulty on all AI slots
+    const currentSlots = useGameSetupStore.getState().playerSlots;
+    for (const slot of currentSlots) {
+      if (slot.type === 'ai') {
+        store.setPlayerSlotAIDifficulty(slot.id, settings.aiDifficulty);
+      }
+    }
+
     store.startGame();
 
-    // Navigate to game
+    setShowPreviewModal(false);
+    setPendingPreviewData(null);
     router.push('/game');
-  };
+  }, [pendingPreviewData, router]);
+
+  const handleCancelPreview = useCallback(() => {
+    setShowPreviewModal(false);
+    setPendingPreviewData(null);
+  }, []);
 
   const handleLoadMap = useCallback((mapId: string) => {
     setCurrentMapId(mapId);
@@ -142,19 +173,29 @@ function EditorPageContent() {
   }
 
   return (
-    <EditorCore
-      key={editorKey}
-      config={VOIDSTRIKE_EDITOR_CONFIG}
-      dataProvider={voidstrikeDataProvider}
-      mapId={initialMapData ? undefined : currentMapId}
-      initialMapData={initialMapData}
-      onCancel={handleCancel}
-      onPlay={handlePreview}
-      onChange={handleMapChange}
-      mapList={mapList}
-      onLoadMap={handleLoadMap}
-      onNewMap={handleNewMap}
-    />
+    <>
+      <EditorCore
+        key={editorKey}
+        config={VOIDSTRIKE_EDITOR_CONFIG}
+        dataProvider={voidstrikeDataProvider}
+        mapId={initialMapData ? undefined : currentMapId}
+        initialMapData={initialMapData}
+        onCancel={handleCancel}
+        onPlay={handlePreview}
+        onChange={handleMapChange}
+        mapList={mapList}
+        onLoadMap={handleLoadMap}
+        onNewMap={handleNewMap}
+      />
+
+      {showPreviewModal && pendingPreviewData && (
+        <MapPreviewModal
+          maxPlayers={pendingPreviewData.game.spawns?.length ?? 2}
+          onLaunch={handleLaunchPreview}
+          onCancel={handleCancelPreview}
+        />
+      )}
+    </>
   );
 }
 
