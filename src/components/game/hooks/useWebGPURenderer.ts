@@ -50,6 +50,7 @@ import {
   onVelocitySetupFailed,
 } from '@/rendering/tsl/InstancedVelocity';
 
+import { AudioManager } from '@/audio/AudioManager';
 import { useUIStore, FIXED_RESOLUTIONS } from '@/store/uiStore';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, getLocalPlayerId, isSpectatorMode } from '@/store/gameSetupStore';
@@ -1063,6 +1064,9 @@ export function useWebGPURenderer({
       vehicleEffectsRef.current?.setCamera(threeCamera);
 
       threeCamera.updateMatrixWorld();
+
+      // Sync camera position for audio distance culling (spatial sound pre-cull)
+      AudioManager.updateListenerPosition(threeCamera.position);
 
       // Update renderers
       const DETAILED_TIMING = useUIStore.getState().debugSettings.debugPerformance;
