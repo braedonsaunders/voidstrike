@@ -640,6 +640,7 @@ voidstrike/
     │   │   ├── buildingPlacementSystem.test.ts
     │   │   ├── combatSystem.test.ts
     │   │   ├── EnhancedAISystem.test.ts
+    │   │   ├── GameStateSystem.test.ts
     │   │   ├── MovementSystem.test.ts
     │   │   ├── pathfindingSystem.test.ts
     │   │   ├── productionSystem.test.ts
