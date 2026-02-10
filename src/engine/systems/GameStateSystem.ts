@@ -204,15 +204,12 @@ export class GameStateSystem extends System {
     // Skip victory conditions in battle simulator mode
     if (isBattleSimulatorMode()) return;
 
-    const players = new Set<string>();
+    // Use the stable set of game participants (from game setup), not current entities.
+    // Entity-based counting is unreliable: buildings are immediately destroyed on death,
+    // so eliminated players with no surviving units would disappear from entity queries,
+    // causing players.size to drop to 1 and preventing victory from ever being declared.
+    const players = new Set<string>(this.playerTeams.keys());
     const playersWithBuildings = new Set<string>();
-
-    // Collect all players
-    const allEntities = this.world.getEntitiesWith('Selectable');
-    for (const entity of allEntities) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      players.add(selectable.playerId);
-    }
 
     // Check which players still have complete buildings (not blueprints)
     const buildings = this.world.getEntitiesWith('Building', 'Selectable', 'Health');
@@ -290,14 +287,10 @@ export class GameStateSystem extends System {
   }
 
   private handleSurrender(playerId: string): void {
-    const players = new Set<string>();
-    const allEntities = this.world.getEntitiesWith('Selectable');
-    for (const entity of allEntities) {
-      const selectable = entity.get<Selectable>('Selectable')!;
-      players.add(selectable.playerId);
-    }
-
-    const remainingPlayers = [...players].filter((p) => p !== playerId);
+    const players = new Set<string>(this.playerTeams.keys());
+    const remainingPlayers = [...players].filter(
+      (p) => p !== playerId && !this.eliminatedPlayers.has(p)
+    );
     if (remainingPlayers.length === 1) {
       this.declareVictory(remainingPlayers[0], playerId, 'surrender');
     }
