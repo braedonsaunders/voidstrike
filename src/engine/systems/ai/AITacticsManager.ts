@@ -63,6 +63,7 @@ export class AITacticsManager {
 
   // RTS-style engagement tracking per AI player
   private lastEngagementCheck: Map<string, number> = new Map();
+  private lastEngagedTick: Map<string, number> = new Map(); // Tracks when engagement was last TRUE
   private lastReCommandTick: Map<string, number> = new Map();
   private lastDefenseCommandTick: Map<string, number> = new Map();
   private isEngaged: Map<string, boolean> = new Map();
@@ -751,59 +752,76 @@ export class AITacticsManager {
   /**
    * Find the enemy base location using primary enemy selection.
    */
-  public findEnemyBase(ai: AIPlayer, targetPlayerId?: string): { x: number; y: number } | null {
+  public findEnemyBase(
+    ai: AIPlayer,
+    targetPlayerId?: string
+  ): { x: number; y: number; entityId?: number } | null {
     const config = ai.config!;
     const baseTypes = config.roles.baseTypes;
 
     const enemyToTarget = targetPlayerId ?? ai.primaryEnemyId;
 
-    if (enemyToTarget) {
-      const relation = ai.enemyRelations.get(enemyToTarget);
-      if (relation?.basePosition) {
-        return relation.basePosition;
-      }
-    }
-
-    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+    // Always query live buildings so we return an entityId for direct targeting.
+    // The cached relation.basePosition is position-only and causes units to
+    // attack-move to a coordinate instead of attacking a specific building.
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
 
     if (enemyToTarget) {
+      // First pass: HQ buildings from the targeted enemy
       for (const entity of buildings) {
         const selectable = entity.get<Selectable>('Selectable')!;
         const building = entity.get<Building>('Building')!;
         const transform = entity.get<Transform>('Transform')!;
+        const health = entity.get<Health>('Health')!;
 
         if (selectable.playerId !== enemyToTarget) continue;
+        if (health.isDead()) continue;
+        if (!building.isOperational()) continue;
         if (baseTypes.includes(building.buildingId)) {
-          return { x: transform.x, y: transform.y };
+          return { x: transform.x, y: transform.y, entityId: entity.id };
         }
       }
 
+      // Second pass: any building from the targeted enemy
       for (const entity of buildings) {
         const selectable = entity.get<Selectable>('Selectable')!;
         const transform = entity.get<Transform>('Transform')!;
+        const health = entity.get<Health>('Health')!;
+        const building = entity.get<Building>('Building')!;
 
         if (selectable.playerId !== enemyToTarget) continue;
-        return { x: transform.x, y: transform.y };
+        if (health.isDead()) continue;
+        if (!building.isOperational()) continue;
+        return { x: transform.x, y: transform.y, entityId: entity.id };
       }
     }
 
+    // Fallback: any enemy HQ building
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const building = entity.get<Building>('Building')!;
       const transform = entity.get<Transform>('Transform')!;
+      const health = entity.get<Health>('Health')!;
 
       if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
+      if (health.isDead()) continue;
+      if (!building.isOperational()) continue;
       if (baseTypes.includes(building.buildingId)) {
-        return { x: transform.x, y: transform.y };
+        return { x: transform.x, y: transform.y, entityId: entity.id };
       }
     }
 
+    // Fallback: any enemy building
     for (const entity of buildings) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const transform = entity.get<Transform>('Transform')!;
+      const health = entity.get<Health>('Health')!;
+      const building = entity.get<Building>('Building')!;
 
       if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
-      return { x: transform.x, y: transform.y };
+      if (health.isDead()) continue;
+      if (!building.isOperational()) continue;
+      return { x: transform.x, y: transform.y, entityId: entity.id };
     }
 
     return null;
@@ -1063,6 +1081,10 @@ export class AITacticsManager {
       const engaged = this.checkEngagementStatus(ai, armyUnits);
       this.isEngaged.set(ai.playerId, engaged);
       this.lastEngagementCheck.set(ai.playerId, currentTick);
+      // Track when engagement was last true for disengage timeout
+      if (engaged) {
+        this.lastEngagedTick.set(ai.playerId, currentTick);
+      }
     }
 
     const engaged = this.isEngaged.get(ai.playerId) || false;
@@ -1189,7 +1211,7 @@ export class AITacticsManager {
     const shouldReCommand = currentTick - lastReCommand >= RE_COMMAND_IDLE_INTERVAL;
 
     if (shouldReCommand) {
-      const idleAssaultUnits = this.getIdleAssaultUnits(ai.playerId, armyUnits);
+      const idleAssaultUnits = this.getIdleAssaultUnits(ai.playerId, armyUnits, attackTarget);
 
       if (idleAssaultUnits.length > 0) {
         if (attackTarget.entityId !== undefined) {
@@ -1260,10 +1282,15 @@ export class AITacticsManager {
       }
     } else if (!engaged && !inHuntMode) {
       // Disengage timeout -- but never disengage during hunt mode
-      const disengagedDuration = currentTick - (this.lastEngagementCheck.get(ai.playerId) || 0);
+      // Use lastEngagedTick (when engagement was last true), not lastEngagementCheck
+      // (which just tracks when we last ran the check and resets every 10 ticks)
+      const lastEngaged =
+        this.lastEngagedTick.get(ai.playerId) ?? ai.activeAttackOperation?.startTick ?? currentTick;
+      const disengagedDuration = currentTick - lastEngaged;
       if (disengagedDuration > 100) {
+        this.returnUnitsToBase(ai, armyUnits, currentTick);
         ai.state = 'building';
-        ai.activeAttackOperation = null; // End operation on disengage
+        ai.activeAttackOperation = null;
         this.isEngaged.set(ai.playerId, false);
         debugAI.log(
           `[AITactics] ${ai.playerId}: Disengaged for ${disengagedDuration} ticks, returning to build`
@@ -1581,9 +1608,18 @@ export class AITacticsManager {
 
   /**
    * Find army units that are idle in assault mode.
+   * Skips units already at the target position to avoid the re-command cycle
+   * that resets assaultIdleTicks and prevents CombatSystem's timeout from firing.
    */
-  private getIdleAssaultUnits(playerId: string, armyUnits: number[]): number[] {
+  private getIdleAssaultUnits(
+    playerId: string,
+    armyUnits: number[],
+    attackTarget?: { x: number; y: number }
+  ): number[] {
     const idleUnits: number[] = [];
+    // Units within this distance of the target are "at target" — re-commanding
+    // them to the same spot just resets their assault idle timer for no benefit
+    const AT_TARGET_THRESHOLD = 8;
 
     for (const entityId of armyUnits) {
       const entity = this.world.getEntity(entityId);
@@ -1604,6 +1640,18 @@ export class AITacticsManager {
         !unit.isHoldingPosition;
 
       if (isIdleAssault || isCompletelyIdle) {
+        // Don't re-command units already at the target — this prevents the
+        // re-command → assaultIdleTicks reset cycle that kept units permanently stuck
+        if (attackTarget) {
+          const transform = entity.get<Transform>('Transform');
+          if (transform) {
+            const dx = transform.x - attackTarget.x;
+            const dy = transform.y - attackTarget.y;
+            if (deterministicMagnitude(dx, dy) < AT_TARGET_THRESHOLD) {
+              continue;
+            }
+          }
+        }
         idleUnits.push(entityId);
       }
     }
