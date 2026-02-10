@@ -23,14 +23,8 @@ export function MapPreviewModal({ maxPlayers, onLaunch, onCancel }: MapPreviewMo
   const [gameSpeed, setGameSpeed] = useState<GameSpeed>('normal');
   const [fogOfWar, setFogOfWar] = useState(false);
   const [aiDifficulty, setAiDifficulty] = useState<AIDifficulty>('medium');
-  const [numPlayers, setNumPlayers] = useState(2);
-
-  // Clamp player count if maxPlayers changes
-  useEffect(() => {
-    if (numPlayers > maxPlayers) {
-      setNumPlayers(maxPlayers);
-    }
-  }, [maxPlayers, numPlayers]);
+  const [numPlayersRaw, setNumPlayers] = useState(2);
+  const numPlayers = Math.min(numPlayersRaw, maxPlayers);
 
   const handleLaunch = useCallback(() => {
     onLaunch({ startingResources, gameSpeed, fogOfWar, aiDifficulty, numPlayers });
@@ -54,10 +48,7 @@ export function MapPreviewModal({ maxPlayers, onLaunch, onCancel }: MapPreviewMo
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/70 backdrop-blur-sm"
-        onClick={onCancel}
-      />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onCancel} />
 
       {/* Modal */}
       <div className="relative bg-void-950 border border-void-700/50 rounded-xl shadow-2xl shadow-void-900/50 w-full max-w-sm mx-4">
@@ -120,7 +111,8 @@ export function MapPreviewModal({ maxPlayers, onLaunch, onCancel }: MapPreviewMo
               className={`w-10 h-5 rounded-full transition-all duration-200 relative
                 ${fogOfWar ? 'bg-void-500' : 'bg-void-800'}`}
             >
-              <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all duration-200
+              <div
+                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all duration-200
                 ${fogOfWar ? 'left-5' : 'left-0.5'}`}
               />
             </button>
