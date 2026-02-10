@@ -317,6 +317,9 @@ export class AICoordinator extends System {
   /** Reactive defense tick tracking per player */
   private lastReactiveDefenseTick: Map<string, number> = new Map();
 
+  /** Players eliminated from the game (lost all buildings) - stop AI operations */
+  private eliminatedPlayers: Set<string> = new Set();
+
   // Subsystems
   private economyManager: AIEconomyManager;
   private buildOrderExecutor: AIBuildOrderExecutor;
@@ -399,6 +402,14 @@ export class AICoordinator extends System {
         }
       }
     );
+
+    // Stop AI operations for eliminated players
+    this.game.eventBus.on('game:playerEliminated', (data: { playerId: string }) => {
+      if (this.aiPlayers.has(data.playerId)) {
+        this.eliminatedPlayers.add(data.playerId);
+        debugAI.log(`[AICoordinator] ${data.playerId} eliminated - AI operations stopped`);
+      }
+    });
 
     // Track research completion
     this.game.eventBus.on(
@@ -1236,6 +1247,7 @@ export class AICoordinator extends System {
     // This ensures defense response isn't gated by the 40-tick medium delay
     if (currentTick % 10 === 0) {
       for (const [, ai] of this.aiPlayers) {
+        if (this.eliminatedPlayers.has(ai.playerId)) continue;
         if (this.tacticsManager.isUnderAttack(ai)) {
           if (ai.state === 'attacking' && ai.activeAttackOperation) {
             // During active attacks, trigger reactive defense for home units
@@ -1250,6 +1262,9 @@ export class AICoordinator extends System {
     }
 
     for (const [playerId, ai] of this.aiPlayers) {
+      // Skip eliminated players - their units become inert
+      if (this.eliminatedPlayers.has(playerId)) continue;
+
       const actionDelay = this.getActionDelay(ai.difficulty);
       if (currentTick - ai.lastActionTick < actionDelay) continue;
 
