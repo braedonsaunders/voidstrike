@@ -336,6 +336,14 @@ export const moveToAttackRange = asyncAction('MoveToAttackRange', (ctx) => {
   const targetTransform = target.get<Transform>('Transform');
   if (!targetTransform) return 'failure';
 
+  // If unit is already in 'attacking' state with a valid target, let CombatSystem +
+  // MovementOrchestrator handle approach via processAttackingUnit (dynamic entity tracking).
+  // Overriding to 'moving' here would replace dynamic tracking with a static position,
+  // causing state oscillation: attacking → moving → idle → attacking → ...
+  if (data.unit.state === 'attacking' && data.unit.targetEntityId !== null) {
+    return 'success';
+  }
+
   const dist = distance(data.transform.x, data.transform.y, targetTransform.x, targetTransform.y);
 
   // Already in range
@@ -591,7 +599,10 @@ export function createRangedCombatTree(): BehaviorNode {
       )
     ),
 
-    // Normal combat
+    // Continue attacking current valid target (CombatSystem handles chase + range)
+    sequence('AttackCurrent', condition('HasValidTarget', hasTarget, attackTarget)),
+
+    // Acquire NEW target and engage
     sequence(
       'NormalCombat',
       acquireTarget,
@@ -614,7 +625,10 @@ export function createMeleeCombatTree(): BehaviorNode {
       retreatToBase
     ),
 
-    // Aggressive engage - chase and attack
+    // Continue attacking current valid target (CombatSystem handles chase + range)
+    sequence('AttackCurrent', condition('HasValidTarget', hasTarget, attackTarget)),
+
+    // Aggressive engage - acquire NEW target, chase and attack
     sequence(
       'AggressiveEngage',
       acquireTarget,

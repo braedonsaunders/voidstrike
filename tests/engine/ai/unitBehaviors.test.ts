@@ -489,6 +489,59 @@ describe('UnitBehaviors', () => {
         expect(mockUnit.targetY).not.toBeNull();
         expect(mockUnit.state).toBe('moving');
       });
+
+      it('returns success without changing state when unit is already attacking with a target', () => {
+        const { entity: targetEntity } = createMockEntity({
+          id: 2,
+          transform: { x: 100, y: 50 }, // Far away - would normally return 'running'
+        });
+        const { entity, mockUnit } = createMockEntity({
+          unit: { attackRange: 5, state: 'attacking', targetEntityId: 2 },
+          transform: { x: 50, y: 50 },
+        });
+
+        const ctx = createMockContext();
+        ctx.blackboard.set('targetId', 2);
+
+        (ctx.world.getEntity as ReturnType<typeof vi.fn>).mockImplementation((id: number) => {
+          if (id === 1) return entity;
+          if (id === 2) return targetEntity;
+          return null;
+        });
+
+        const result = moveToAttackRange(ctx);
+
+        // Should return success and NOT override the attacking state
+        expect(result).toBe('success');
+        expect(mockUnit.state).toBe('attacking');
+        expect(mockUnit.targetEntityId).toBe(2);
+      });
+
+      it('still moves when unit is idle (not attacking) even if it has a blackboard target', () => {
+        const { entity: targetEntity } = createMockEntity({
+          id: 2,
+          transform: { x: 100, y: 50 }, // Far away
+        });
+        const { entity, mockUnit } = createMockEntity({
+          unit: { attackRange: 5, state: 'idle', targetEntityId: null },
+          transform: { x: 50, y: 50 },
+        });
+
+        const ctx = createMockContext();
+        ctx.blackboard.set('targetId', 2);
+
+        (ctx.world.getEntity as ReturnType<typeof vi.fn>).mockImplementation((id: number) => {
+          if (id === 1) return entity;
+          if (id === 2) return targetEntity;
+          return null;
+        });
+
+        const result = moveToAttackRange(ctx);
+
+        // Unit is idle with no targetEntityId, so should proceed with movement
+        expect(result).toBe('running');
+        expect(mockUnit.state).toBe('moving');
+      });
     });
   });
 
@@ -702,6 +755,65 @@ describe('UnitBehaviors', () => {
       expect(result).toBe('success');
       expect(mockUnit.targetX).not.toBeNull();
       expect(mockUnit.targetY).not.toBeNull();
+    });
+
+    it('melee tree does not override attacking state with moving (regression)', () => {
+      // Regression test: melee units in 'attacking' state should NOT have their
+      // state overridden to 'moving' by the behavior tree's moveToAttackRange.
+      // CombatSystem + MovementOrchestrator handle chasing targets dynamically.
+      const { entity: targetEntity } = createMockEntity({
+        id: 2,
+        transform: { x: 55, y: 50 }, // Nearby but not in melee range
+        selectable: { playerId: 'player2' },
+      });
+      const { entity, mockUnit } = createMockEntity({
+        unit: { attackRange: 1.5, state: 'attacking', targetEntityId: 2 },
+        transform: { x: 50, y: 50 },
+      });
+
+      const ctx = createMockContext();
+      (ctx.world.getEntity as ReturnType<typeof vi.fn>).mockImplementation((id: number) => {
+        if (id === 1) return entity;
+        if (id === 2) return targetEntity;
+        return null;
+      });
+
+      const tree = createMeleeCombatTree();
+      const runner = new BehaviorTreeRunner(tree);
+
+      runner.tick(1, ctx.world, ctx.game, 0.016);
+
+      // Unit should remain in 'attacking' state, not flipped to 'moving'
+      expect(mockUnit.state).toBe('attacking');
+    });
+
+    it('ranged tree does not override attacking state with moving (regression)', () => {
+      // Regression test: ranged units in 'attacking' state should NOT have their
+      // state overridden to 'moving' by the behavior tree's moveToAttackRange.
+      const { entity: targetEntity } = createMockEntity({
+        id: 2,
+        transform: { x: 65, y: 50 }, // Nearby but beyond 90% of attack range
+        selectable: { playerId: 'player2' },
+      });
+      const { entity, mockUnit } = createMockEntity({
+        unit: { attackRange: 6, state: 'attacking', targetEntityId: 2 },
+        transform: { x: 50, y: 50 },
+      });
+
+      const ctx = createMockContext();
+      (ctx.world.getEntity as ReturnType<typeof vi.fn>).mockImplementation((id: number) => {
+        if (id === 1) return entity;
+        if (id === 2) return targetEntity;
+        return null;
+      });
+
+      const tree = createRangedCombatTree();
+      const runner = new BehaviorTreeRunner(tree);
+
+      runner.tick(1, ctx.world, ctx.game, 0.016);
+
+      // Unit should remain in 'attacking' state, not flipped to 'moving'
+      expect(mockUnit.state).toBe('attacking');
     });
 
     it('defensive unit only attacks targets in range', () => {
