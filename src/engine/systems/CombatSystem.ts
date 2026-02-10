@@ -656,7 +656,7 @@ export class CombatSystem extends System {
       if (!transform || !unit || !health || health.isDead()) continue;
 
       // Auto-acquire targets for units that need them
-      // canAttackWhileMoving units also acquire targets while moving
+      // Moving units check attack range only (don't chase at sight range during move orders)
       // RTS-STYLE: Assault mode units ALWAYS need to acquire targets when idle
       const needsTarget =
         unit.targetEntityId === null &&
@@ -664,9 +664,9 @@ export class CombatSystem extends System {
           unit.state === 'patrolling' ||
           unit.state === 'attackmoving' ||
           unit.state === 'attacking' ||
+          unit.state === 'moving' || // All moving units check for immediate threats
           unit.isHoldingPosition ||
-          unit.isInAssaultMode || // RTS-STYLE: Assault mode units always scan
-          (unit.canAttackWhileMoving && unit.state === 'moving'));
+          unit.isInAssaultMode); // RTS-STYLE: Assault mode units always scan
 
       if (needsTarget) {
         // PERF: Use hot cell check instead of expensive spatial query for idle units
@@ -720,13 +720,19 @@ export class CombatSystem extends System {
           // This prevents the "blind zone" between attackRange (5-6) and sightRange (24-30)
           // where units can see enemies but won't engage them
           target = this.findBestTargetSpatial(attacker.id, transform, unit);
+        } else if (unit.state === 'moving') {
+          // Moving units only engage enemies within attack range (immediate threats).
+          // Don't chase at sight range — that would disrupt movement orders.
+          // This prevents units from walking right past enemies in their face.
+          target = this.findImmediateAttackTarget(attacker.id, transform, unit, currentTick);
         } else if (unit.isHoldingPosition) {
           // Holding position units only attack within attack range
           target = this.findImmediateAttackTarget(attacker.id, transform, unit, currentTick);
         }
 
         // If no immediate target found, use throttled search within sight range
-        if (target === null && !unit.isHoldingPosition) {
+        // (skip for moving/holding units — they only react to immediate threats)
+        if (target === null && !unit.isHoldingPosition && unit.state !== 'moving') {
           target = this.getTargetThrottled(attacker.id, transform, unit, currentTick);
         }
 
@@ -806,7 +812,7 @@ export class CombatSystem extends System {
       }
 
       // Threat-based retarget: units attacking buildings should periodically check
-      // for higher-priority combat unit threats within attack range.
+      // for higher-priority combat unit threats within sight range.
       // SC2-style: armies always prioritize nearby combat threats over structures.
       if (unit.targetEntityId !== null && unit.state === 'attacking') {
         if (this.threatRetargetThrottle.canExecute(attacker.id, currentTick)) {
@@ -1314,7 +1320,7 @@ export class CombatSystem extends System {
 
   /**
    * Find a higher-priority combat unit threat when currently attacking a building.
-   * Searches within attack range for enemy combat units (not buildings).
+   * Searches within sight range for enemy combat units (not buildings).
    * Returns the entity ID of the best threat, or null if no threats found.
    */
   private findThreatRetarget(
@@ -1327,10 +1333,13 @@ export class CombatSystem extends System {
     const selfSelectable = selfEntity.get<Selectable>('Selectable');
     if (!selfSelectable) return null;
 
+    // Use sight range so units attacking buildings detect approaching threats early,
+    // not just enemies already in attack range. Prevents armies from ignoring enemies
+    // walking right past them while they're focused on a structure.
     const result = findBestTargetShared(this.world, {
       x: selfTransform.x,
       y: selfTransform.y,
-      range: selfUnit.attackRange,
+      range: selfUnit.sightRange,
       attackerPlayerId: selfSelectable.playerId,
       attackerTeamId: selfSelectable.teamId,
       attackRange: selfUnit.attackRange,
