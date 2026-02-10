@@ -1192,7 +1192,25 @@ export class AITacticsManager {
       const idleAssaultUnits = this.getIdleAssaultUnits(ai.playerId, armyUnits);
 
       if (idleAssaultUnits.length > 0) {
-        if (attackTarget.entityId !== undefined) {
+        // Check for nearby enemy combat units that should be dealt with first.
+        // In FFA, third-party armies standing near ours must be engaged, not ignored.
+        const nearbyThreat = this.findNearbyArmyThreat(ai, armyUnits);
+
+        if (nearbyThreat) {
+          // Enemy combat units detected near our army - engage them first
+          const command: GameCommand = {
+            tick: currentTick,
+            playerId: ai.playerId,
+            type: 'ATTACK_MOVE',
+            entityIds: idleAssaultUnits,
+            targetPosition: nearbyThreat,
+          };
+          this.game.issueAICommand(command);
+          debugAI.log(
+            `[AITactics] ${ai.playerId}: Redirecting ${idleAssaultUnits.length} idle units to nearby threat at (${nearbyThreat.x.toFixed(0)}, ${nearbyThreat.y.toFixed(0)})`
+          );
+        } else if (attackTarget.entityId !== undefined) {
+          // No nearby threats - continue attacking the building.
           // Entity-targeted attack: units go directly to 'attacking' state with
           // the building as their target, bypassing the attack-move engagement
           // buffer. This prevents the idle→attackmove→idle cycle that caused
@@ -1554,6 +1572,65 @@ export class AITacticsManager {
     debugAI.log(`[AITactics] ${ai.playerId}: Harassing with ${harassUnits.length} units`);
 
     ai.state = 'building';
+  }
+
+  // === Near-Army Threat Detection ===
+
+  /**
+   * Find enemy combat units near the army centroid during attack operations.
+   * Detects third-party threats (e.g., AI 3's army near AI 1's army while both
+   * attack AI 2's base). Returns position of the nearest threat.
+   */
+  private findNearbyArmyThreat(ai: AIPlayer, armyUnits: number[]): { x: number; y: number } | null {
+    let sumX = 0;
+    let sumY = 0;
+    let count = 0;
+    for (const entityId of armyUnits) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+      sumX += transform.x;
+      sumY += transform.y;
+      count++;
+    }
+    if (count === 0) return null;
+
+    const centroidX = sumX / count;
+    const centroidY = sumY / count;
+
+    const THREAT_DETECTION_RADIUS = 25;
+    const units = this.coordinator.getCachedUnitsWithTransform();
+
+    let nearestThreat: { x: number; y: number; distance: number } | null = null;
+    let threatCount = 0;
+
+    for (const entity of units) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const transform = entity.get<Transform>('Transform')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId === ai.playerId) continue;
+      if (!isEnemy(ai.playerId, ai.teamId, selectable.playerId, selectable.teamId)) continue;
+      if (health.isDead()) continue;
+      if (unit.isWorker) continue;
+      if (unit.attackDamage === 0) continue;
+
+      const dx = transform.x - centroidX;
+      const dy = transform.y - centroidY;
+      const dist = deterministicMagnitude(dx, dy);
+      if (dist > THREAT_DETECTION_RADIUS) continue;
+
+      threatCount++;
+      if (!nearestThreat || dist < nearestThreat.distance) {
+        nearestThreat = { x: transform.x, y: transform.y, distance: dist };
+      }
+    }
+
+    // Only respond to meaningful threats (2+ enemy combat units)
+    if (threatCount < 2) return null;
+    return nearestThreat ? { x: nearestThreat.x, y: nearestThreat.y } : null;
   }
 
   // === Engagement Tracking ===

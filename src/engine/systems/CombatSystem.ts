@@ -96,6 +96,13 @@ export class CombatSystem extends System {
     maxEntries: 1000,
   });
 
+  // Threat retarget throttle - periodically re-evaluate targets for units attacking buildings.
+  // SC2-style: armies always prioritize nearby combat unit threats over structures.
+  private readonly threatRetargetThrottle = new ThrottledCache<number>({
+    cooldown: 15, // Every 15 ticks (~750ms)
+    maxEntries: 500,
+  });
+
   // Cache current targets to avoid re-searching
   private readonly targetCache = new ThrottledCache<number, number>({
     cooldown: 10, // TARGET_CACHE_DURATION - cache valid for 10 ticks (~0.5 sec)
@@ -503,6 +510,7 @@ export class CombatSystem extends System {
     // PERF: Clean up combat zone tracking
     this.combatAwareUnits.delete(data.entityId);
     this.combatZoneCheckTick.delete(data.entityId);
+    this.threatRetargetThrottle.delete(data.entityId);
   }
 
   private handleAttackCommand(command: {
@@ -751,9 +759,9 @@ export class CombatSystem extends System {
               } else {
                 distToTarget = transform.distanceTo(candidateTransform);
               }
-              // Engagement buffer: switch to attacking when within attack range + 3
-              // This gives the unit ~1 second to close while still maintaining formation for most of the march
-              if (distToTarget > unit.attackRange + 3) {
+              // Engagement buffer: switch to attacking when within attack range + 5
+              // Wider buffer ensures units respond to nearby threats during march
+              if (distToTarget > unit.attackRange + 5) {
                 target = null;
               }
             }
@@ -794,6 +802,40 @@ export class CombatSystem extends System {
         } else if (target && unit.isHoldingPosition) {
           // Holding position units only attack if in range (already confirmed by findImmediateAttackTarget)
           unit.setAttackTarget(target);
+        }
+      }
+
+      // Threat-based retarget: units attacking buildings should periodically check
+      // for higher-priority combat unit threats within attack range.
+      // SC2-style: armies always prioritize nearby combat threats over structures.
+      if (unit.targetEntityId !== null && unit.state === 'attacking') {
+        if (this.threatRetargetThrottle.canExecute(attacker.id, currentTick)) {
+          this.threatRetargetThrottle.markExecuted(attacker.id, currentTick);
+          const currentTargetEntity = this.world.getEntity(unit.targetEntityId);
+          if (currentTargetEntity) {
+            const isTargetBuilding = currentTargetEntity.get<Building>('Building') !== null;
+            if (isTargetBuilding) {
+              const betterTarget = this.findThreatRetarget(attacker.id, transform, unit);
+              if (betterTarget !== null) {
+                const savedAssaultDest = unit.assaultDestination;
+                const wasInAssaultMode = unit.isInAssaultMode;
+                const savedTargetX = unit.targetX;
+                const savedTargetY = unit.targetY;
+
+                unit.setAttackTarget(betterTarget);
+
+                if (wasInAssaultMode && savedAssaultDest) {
+                  unit.assaultDestination = savedAssaultDest;
+                  unit.isInAssaultMode = true;
+                  unit.assaultIdleTicks = 0;
+                }
+                if (savedTargetX !== null && savedTargetY !== null) {
+                  unit.targetX = savedTargetX;
+                  unit.targetY = savedTargetY;
+                }
+              }
+            }
+          }
         }
       }
 
@@ -1260,6 +1302,42 @@ export class CombatSystem extends System {
       canAttackGround: selfUnit.canAttackGround,
       canAttackNaval: selfUnit.canAttackNaval,
       includeBuildingsInSearch: selfUnit.canAttackGround,
+      attackerVisualRadius: AssetManager.getCachedVisualRadius(
+        selfUnit.unitId,
+        selfUnit.collisionRadius
+      ),
+      excludeEntityId: selfId,
+    });
+
+    return result?.entityId ?? null;
+  }
+
+  /**
+   * Find a higher-priority combat unit threat when currently attacking a building.
+   * Searches within attack range for enemy combat units (not buildings).
+   * Returns the entity ID of the best threat, or null if no threats found.
+   */
+  private findThreatRetarget(
+    selfId: number,
+    selfTransform: Transform,
+    selfUnit: Unit
+  ): number | null {
+    const selfEntity = this.world.getEntity(selfId);
+    if (!validateEntityAlive(selfEntity, selfId, 'CombatSystem:findThreatRetarget')) return null;
+    const selfSelectable = selfEntity.get<Selectable>('Selectable');
+    if (!selfSelectable) return null;
+
+    const result = findBestTargetShared(this.world, {
+      x: selfTransform.x,
+      y: selfTransform.y,
+      range: selfUnit.attackRange,
+      attackerPlayerId: selfSelectable.playerId,
+      attackerTeamId: selfSelectable.teamId,
+      attackRange: selfUnit.attackRange,
+      canAttackAir: selfUnit.canAttackAir,
+      canAttackGround: selfUnit.canAttackGround,
+      canAttackNaval: selfUnit.canAttackNaval,
+      includeBuildingsInSearch: false,
       attackerVisualRadius: AssetManager.getCachedVisualRadius(
         selfUnit.unitId,
         selfUnit.collisionRadius
