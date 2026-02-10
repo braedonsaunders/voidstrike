@@ -396,9 +396,12 @@ export class BuildingPlacementSystem extends System {
     const snappedX = Math.round(data.position.x);
     const snappedY = Math.round(data.position.y);
 
-    // Handle addon placement separately (no worker needed, instant build)
+    // Addon placement is handled by handleBuildAddon (via building:build_addon event).
+    // The building:place event should never carry isAddon for new addons.
     if (isAddon && parentBuildingId !== undefined) {
-      this.handleAddonPlacement(buildingType, snappedX, snappedY, playerId, parentBuildingId);
+      debugBuildingPlacement.warn(
+        `BuildingPlacementSystem: building:place with isAddon is deprecated, use building:build_addon instead`
+      );
       return;
     }
 
@@ -567,137 +570,7 @@ export class BuildingPlacementSystem extends System {
     );
   }
 
-  /**
-   * Handle addon placement (research_module, production_module)
-   * Addons don't require workers but build over time
-   */
-  private handleAddonPlacement(
-    buildingType: string,
-    x: number,
-    y: number,
-    playerId: string,
-    parentBuildingId: number
-  ): void {
-    const definition = BUILDING_DEFINITIONS[buildingType];
-    if (!definition) {
-      debugBuildingPlacement.warn(`BuildingPlacementSystem: Unknown addon type: ${buildingType}`);
-      return;
-    }
-
-    // Get and validate parent building
-    const parentEntity = this.world.getEntity(parentBuildingId);
-    if (!parentEntity) {
-      debugBuildingPlacement.warn(
-        `BuildingPlacementSystem: Parent building ${parentBuildingId} not found for addon`
-      );
-      return;
-    }
-
-    const parentBuilding = parentEntity.get<Building>('Building');
-    const parentSelectable = parentEntity.get<Selectable>('Selectable');
-    if (!parentBuilding || !parentSelectable) {
-      debugBuildingPlacement.warn(
-        `BuildingPlacementSystem: Parent building ${parentBuildingId} missing components`
-      );
-      return;
-    }
-
-    // Validate parent can have addon and doesn't already have one
-    if (!parentBuilding.canHaveAddon) {
-      debugBuildingPlacement.warn(
-        `BuildingPlacementSystem: ${parentBuilding.name} cannot have addons`
-      );
-      return;
-    }
-    if (parentBuilding.hasAddon()) {
-      debugBuildingPlacement.warn(
-        `BuildingPlacementSystem: ${parentBuilding.name} already has an addon`
-      );
-      return;
-    }
-    if (parentBuilding.state !== 'complete') {
-      debugBuildingPlacement.warn(
-        `BuildingPlacementSystem: ${parentBuilding.name} is not complete`
-      );
-      return;
-    }
-
-    // Check addon placement validity (exclude parent from collision)
-    if (!this.isValidAddonPlacement(x, y, definition.width, definition.height, parentBuildingId)) {
-      debugBuildingPlacement.warn(
-        `BuildingPlacementSystem: Addon position (${x}, ${y}) is blocked`
-      );
-      this.game.eventBus.emit('building:addonFailed', {
-        buildingId: parentBuildingId,
-        reason: 'Addon position blocked',
-      });
-      return;
-    }
-
-    // Create the addon entity - starts in 'constructing' state (no worker needed)
-    const addonEntity = this.world.createEntity();
-    const addonBuilding = new Building(definition);
-    addonBuilding.buildProgress = 0;
-    addonBuilding.state = 'constructing'; // Addons don't need workers, start constructing immediately
-    addonBuilding.attachedToId = parentBuildingId;
-
-    // Store addon type for later attachment when complete
-    const addonTypeForAttachment =
-      buildingType === 'research_module'
-        ? 'research_module'
-        : buildingType === 'production_module'
-          ? 'production_module'
-          : null;
-
-    const addonHealth = new Health(definition.maxHealth, definition.armor, 'structure');
-    addonHealth.current = definition.maxHealth * 0.1; // Start at 10% health like buildings
-    const addonTeamId = this.game.getPlayerTeam(playerId);
-
-    addonEntity
-      .add(new Transform(x, y, 0))
-      .add(addonBuilding)
-      .add(addonHealth)
-      .add(
-        new Selectable(
-          Math.max(definition.width, definition.height) * 0.6,
-          10,
-          playerId,
-          1,
-          0,
-          addonTeamId
-        )
-      );
-
-    // Store pending addon attachment info (will be attached when construction completes)
-    this.pendingAddonAttachments.set(addonEntity.id, {
-      parentBuildingId,
-      addonType: addonTypeForAttachment,
-    });
-
-    // Emit placement event
-    this.game.eventBus.emit('building:placed', {
-      entityId: addonEntity.id,
-      buildingType,
-      playerId,
-      position: { x, y },
-      width: definition.width,
-      height: definition.height,
-      isAddon: true,
-      parentBuildingId,
-    });
-
-    // Emit construction started event
-    this.game.eventBus.emit('building:addon_started', {
-      parentId: parentBuildingId,
-      addonId: addonEntity.id,
-      addonType: buildingType,
-      playerId,
-    });
-
-    debugBuildingPlacement.log(
-      `BuildingPlacementSystem: ${definition.name} addon construction started for ${parentBuilding.name} at (${x}, ${y})`
-    );
-  }
+  // Dead handleAddonPlacement removed - addon creation handled by handleBuildAddon
 
   /**
    * Find a plasma geyser at or near the given position
@@ -985,6 +858,19 @@ export class BuildingPlacementSystem extends System {
     this.pendingAddonAttachments.set(addonEntity.id, {
       parentBuildingId: buildingId,
       addonType: addonTypeForAttachment,
+    });
+
+    // Emit placement event so PathfindingSystem creates a navmesh obstacle.
+    // Without this, units path through addon buildings and get stuck inside.
+    this.game.eventBus.emit('building:placed', {
+      entityId: addonEntity.id,
+      buildingType: addonType,
+      playerId,
+      position: { x: addonX, y: addonY },
+      width: addonDef.width,
+      height: addonDef.height,
+      isAddon: true,
+      parentBuildingId: buildingId,
     });
 
     // Emit construction started event

@@ -251,7 +251,10 @@ describe('CombatSystem', () => {
       const qRadius = quantize(splashRadius, QUANT_DAMAGE);
       const qFalloff = QUANT_DAMAGE - Math.floor((qDistance * QUANT_DAMAGE * 0.5) / qRadius);
       const qBaseDamage = quantize(baseDamage, QUANT_DAMAGE);
-      const splashDamage = Math.max(1, Math.floor((qBaseDamage * qFalloff) / (QUANT_DAMAGE * QUANT_DAMAGE)));
+      const splashDamage = Math.max(
+        1,
+        Math.floor((qBaseDamage * qFalloff) / (QUANT_DAMAGE * QUANT_DAMAGE))
+      );
 
       return splashDamage;
     }
@@ -546,10 +549,7 @@ describe('CombatSystem', () => {
       pathIndex: number;
     }
 
-    function resolveTargetDeath(
-      unit: UnitState,
-      isAttackingWhileMoving: boolean
-    ): UnitState {
+    function resolveTargetDeath(unit: UnitState, isAttackingWhileMoving: boolean): UnitState {
       const result = { ...unit, path: [...unit.path] };
 
       if (isAttackingWhileMoving) {
@@ -776,14 +776,8 @@ describe('CombatSystem', () => {
     ): number {
       const halfW = buildingWidth / 2;
       const halfH = buildingHeight / 2;
-      const clampedX = Math.max(
-        buildingCenterX - halfW,
-        Math.min(unitX, buildingCenterX + halfW)
-      );
-      const clampedY = Math.max(
-        buildingCenterY - halfH,
-        Math.min(unitY, buildingCenterY + halfH)
-      );
+      const clampedX = Math.max(buildingCenterX - halfW, Math.min(unitX, buildingCenterX + halfW));
+      const clampedY = Math.max(buildingCenterY - halfH, Math.min(unitY, buildingCenterY + halfH));
       const edgeDx = unitX - clampedX;
       const edgeDy = unitY - clampedY;
       return Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
@@ -821,13 +815,229 @@ describe('CombatSystem', () => {
     it('edge distance is always <= center distance for buildings', () => {
       // Verify edge-to-edge is never greater than center-to-center
       const positions = [
-        [10, 0], [0, 10], [7, 7], [3, 8], [10, 10],
+        [10, 0],
+        [0, 10],
+        [7, 7],
+        [3, 8],
+        [10, 10],
       ];
       for (const [ux, uy] of positions) {
         const edgeDist = buildingEdgeDistance(ux, uy, 0, 0, 6, 6);
         const centerDist = Math.sqrt(ux * ux + uy * uy);
         expect(edgeDist).toBeLessThanOrEqual(centerDist);
       }
+    });
+  });
+
+  describe('addon cascade destruction on parent death', () => {
+    /**
+     * Replicates the addon cleanup logic from CombatSystem building death handler.
+     * When a parent building is destroyed, its addon should also be destroyed.
+     * When an addon is destroyed, the parent's addon reference should be cleared.
+     */
+    interface BuildingState {
+      id: number;
+      health: number;
+      state: string;
+      addonEntityId: number | null;
+      attachedToId: number | null;
+      buildingId: string;
+      width: number;
+      height: number;
+      playerId: string;
+      x: number;
+      y: number;
+    }
+
+    function processDestroyedBuildings(
+      buildings: Map<number, BuildingState>,
+      destroyedEvents: Array<{ entityId: number; playerId: string; buildingType: string }>,
+      destroyedEntityIds: number[]
+    ): void {
+      for (const [_id, building] of buildings) {
+        const shouldDestroy = building.health <= 0;
+        if (shouldDestroy && building.state !== 'destroyed') {
+          building.health = 0;
+          building.state = 'destroyed';
+
+          // Cascade: destroy orphaned addon
+          if (building.addonEntityId !== null) {
+            const addon = buildings.get(building.addonEntityId);
+            if (addon && addon.state !== 'destroyed') {
+              addon.health = 0;
+              addon.state = 'destroyed';
+              destroyedEvents.push({
+                entityId: addon.id,
+                playerId: addon.playerId,
+                buildingType: addon.buildingId,
+              });
+              destroyedEntityIds.push(addon.id);
+            }
+          }
+
+          // Clear parent's addon reference when addon dies
+          if (building.attachedToId !== null) {
+            const parent = buildings.get(building.attachedToId);
+            if (parent && parent.addonEntityId === building.id) {
+              parent.addonEntityId = null;
+            }
+          }
+
+          destroyedEvents.push({
+            entityId: building.id,
+            playerId: building.playerId,
+            buildingType: building.buildingId,
+          });
+          destroyedEntityIds.push(building.id);
+        }
+      }
+    }
+
+    it('destroys addon when parent building is destroyed', () => {
+      const buildings = new Map<number, BuildingState>();
+      buildings.set(1, {
+        id: 1,
+        health: 0,
+        state: 'complete',
+        addonEntityId: 2,
+        attachedToId: null,
+        buildingId: 'barracks',
+        width: 5,
+        height: 5,
+        playerId: 'enemy',
+        x: 50,
+        y: 50,
+      });
+      buildings.set(2, {
+        id: 2,
+        health: 100,
+        state: 'complete',
+        addonEntityId: null,
+        attachedToId: 1,
+        buildingId: 'research_module',
+        width: 2,
+        height: 2,
+        playerId: 'enemy',
+        x: 54,
+        y: 50,
+      });
+
+      const events: Array<{ entityId: number; playerId: string; buildingType: string }> = [];
+      const destroyed: number[] = [];
+      processDestroyedBuildings(buildings, events, destroyed);
+
+      // Both parent and addon should be destroyed
+      expect(destroyed).toContain(1);
+      expect(destroyed).toContain(2);
+      expect(events).toHaveLength(2);
+
+      // Addon should be marked destroyed
+      expect(buildings.get(2)!.state).toBe('destroyed');
+      expect(buildings.get(2)!.health).toBe(0);
+    });
+
+    it('clears parent addon reference when addon is destroyed directly', () => {
+      const buildings = new Map<number, BuildingState>();
+      buildings.set(1, {
+        id: 1,
+        health: 400,
+        state: 'complete',
+        addonEntityId: 2,
+        attachedToId: null,
+        buildingId: 'barracks',
+        width: 5,
+        height: 5,
+        playerId: 'enemy',
+        x: 50,
+        y: 50,
+      });
+      buildings.set(2, {
+        id: 2,
+        health: 0,
+        state: 'complete',
+        addonEntityId: null,
+        attachedToId: 1,
+        buildingId: 'research_module',
+        width: 2,
+        height: 2,
+        playerId: 'enemy',
+        x: 54,
+        y: 50,
+      });
+
+      const events: Array<{ entityId: number; playerId: string; buildingType: string }> = [];
+      const destroyed: number[] = [];
+      processDestroyedBuildings(buildings, events, destroyed);
+
+      // Only addon destroyed, parent survives
+      expect(destroyed).toContain(2);
+      expect(destroyed).not.toContain(1);
+
+      // Parent's addon reference should be cleared
+      expect(buildings.get(1)!.addonEntityId).toBeNull();
+      expect(buildings.get(1)!.state).toBe('complete');
+    });
+
+    it('does not destroy addon that is already destroyed', () => {
+      const buildings = new Map<number, BuildingState>();
+      buildings.set(1, {
+        id: 1,
+        health: 0,
+        state: 'complete',
+        addonEntityId: 2,
+        attachedToId: null,
+        buildingId: 'barracks',
+        width: 5,
+        height: 5,
+        playerId: 'enemy',
+        x: 50,
+        y: 50,
+      });
+      buildings.set(2, {
+        id: 2,
+        health: 0,
+        state: 'destroyed',
+        addonEntityId: null,
+        attachedToId: 1,
+        buildingId: 'research_module',
+        width: 2,
+        height: 2,
+        playerId: 'enemy',
+        x: 54,
+        y: 50,
+      });
+
+      const events: Array<{ entityId: number; playerId: string; buildingType: string }> = [];
+      const destroyed: number[] = [];
+      processDestroyedBuildings(buildings, events, destroyed);
+
+      // Only parent in events (addon was already destroyed)
+      expect(events).toHaveLength(1);
+      expect(events[0].entityId).toBe(1);
+    });
+
+    it('handles building with no addon gracefully', () => {
+      const buildings = new Map<number, BuildingState>();
+      buildings.set(1, {
+        id: 1,
+        health: 0,
+        state: 'complete',
+        addonEntityId: null,
+        attachedToId: null,
+        buildingId: 'barracks',
+        width: 5,
+        height: 5,
+        playerId: 'enemy',
+        x: 50,
+        y: 50,
+      });
+
+      const events: Array<{ entityId: number; playerId: string; buildingType: string }> = [];
+      const destroyed: number[] = [];
+      processDestroyedBuildings(buildings, events, destroyed);
+
+      expect(events).toHaveLength(1);
+      expect(destroyed).toEqual([1]);
     });
   });
 });

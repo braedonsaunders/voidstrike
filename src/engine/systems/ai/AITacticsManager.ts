@@ -464,7 +464,12 @@ export class AITacticsManager {
         const basePos = this.coordinator.findAIBase(ai);
         if (basePos) {
           const influenceMap = this.coordinator.getInfluenceMap();
-          const expansionArea = influenceMap.findBestExpansionArea(basePos.x, basePos.y, ai.playerId, 40);
+          const expansionArea = influenceMap.findBestExpansionArea(
+            basePos.x,
+            basePos.y,
+            ai.playerId,
+            40
+          );
           if (expansionArea && expansionArea.score > -10) {
             ai.state = 'expanding';
             ai.lastExpansionTick = currentTick;
@@ -899,9 +904,7 @@ export class AITacticsManager {
     }
 
     const influenceMap = this.coordinator.getInfluenceMap();
-    const expansionArea = influenceMap.findBestExpansionArea(
-      basePos.x, basePos.y, ai.playerId, 40
-    );
+    const expansionArea = influenceMap.findBestExpansionArea(basePos.x, basePos.y, ai.playerId, 40);
 
     if (!expansionArea) {
       ai.state = 'building';
@@ -910,14 +913,19 @@ export class AITacticsManager {
 
     // Check if expansion area is safe enough
     const threatAnalysis = influenceMap.getThreatAnalysis(
-      expansionArea.x, expansionArea.y, ai.playerId
+      expansionArea.x,
+      expansionArea.y,
+      ai.playerId
     );
 
     if (threatAnalysis.dangerLevel > 0.3) {
       // Expansion area is contested -- send army to secure it first
       const armyUnits = this.getArmyUnits(ai.playerId);
       if (armyUnits.length > 0) {
-        const escortCount = Math.min(armyUnits.length, Math.max(3, Math.floor(armyUnits.length * 0.3)));
+        const escortCount = Math.min(
+          armyUnits.length,
+          Math.max(3, Math.floor(armyUnits.length * 0.3))
+        );
         const escortUnits = armyUnits.slice(0, escortCount);
 
         const command: GameCommand = {
@@ -1084,12 +1092,16 @@ export class AITacticsManager {
           );
         } else {
           // Fallback: standard group attack-move
+          // Use entity-targeted attack when available (hunt mode) to prevent units
+          // attack-moving to the building center instead of attacking the building itself
           const command: GameCommand = {
             tick: currentTick,
             playerId: ai.playerId,
             type: 'ATTACK_MOVE',
             entityIds: armyUnits,
-            targetPosition: attackTarget,
+            ...(attackTarget.entityId !== undefined
+              ? { targetEntityId: attackTarget.entityId }
+              : { targetPosition: attackTarget }),
           };
           this.game.issueAICommand(command);
           debugAI.log(
@@ -1098,12 +1110,16 @@ export class AITacticsManager {
         }
       } else {
         // Small army: no formation needed
+        // Use entity-targeted attack when available (hunt mode) to prevent units
+        // attack-moving to the building center instead of attacking the building itself
         const command: GameCommand = {
           tick: currentTick,
           playerId: ai.playerId,
           type: 'ATTACK_MOVE',
           entityIds: armyUnits,
-          targetPosition: attackTarget,
+          ...(attackTarget.entityId !== undefined
+            ? { targetEntityId: attackTarget.entityId }
+            : { targetPosition: attackTarget }),
         };
         this.game.issueAICommand(command);
         debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units`);
@@ -1239,15 +1255,20 @@ export class AITacticsManager {
     if (threatAnalysis.dangerLevel > 0.7 && armyUnits.length < 5) {
       // Use InfluenceMap A* to find safe retreat path
       const safePath = influenceMap.findSafePath(
-        basePos.x, basePos.y,
+        basePos.x,
+        basePos.y,
         basePos.x + threatAnalysis.safeDirection.x * 30,
         basePos.y + threatAnalysis.safeDirection.y * 30,
         ai.playerId,
         1.0 // Maximum threat avoidance during desperate retreat
       );
-      const rallyPoint = safePath.length > 0
-        ? safePath[0]
-        : { x: basePos.x + threatAnalysis.safeDirection.x * 15, y: basePos.y + threatAnalysis.safeDirection.y * 15 };
+      const rallyPoint =
+        safePath.length > 0
+          ? safePath[0]
+          : {
+              x: basePos.x + threatAnalysis.safeDirection.x * 15,
+              y: basePos.y + threatAnalysis.safeDirection.y * 15,
+            };
 
       for (const entityId of armyUnits) {
         retreatCoordinator.forceRetreat(ai.playerId, entityId, rallyPoint, currentTick);
@@ -1444,14 +1465,20 @@ export class AITacticsManager {
       if (targetThreat.dangerLevel > 0.6) {
         // Find safe approach path using InfluenceMap A*
         const approachPath = influenceMap.findSafePath(
-          startPos.x, startPos.y,
-          harassTarget.x, harassTarget.y,
+          startPos.x,
+          startPos.y,
+          harassTarget.x,
+          harassTarget.y,
           ai.playerId,
           0.6 // Moderate threat avoidance for harassment
         );
-        const safeApproach = approachPath.length > 1
-          ? approachPath[Math.min(1, approachPath.length - 1)]
-          : { x: harassTarget.x + targetThreat.safeDirection.x * 10, y: harassTarget.y + targetThreat.safeDirection.y * 10 };
+        const safeApproach =
+          approachPath.length > 1
+            ? approachPath[Math.min(1, approachPath.length - 1)]
+            : {
+                x: harassTarget.x + targetThreat.safeDirection.x * 10,
+                y: harassTarget.y + targetThreat.safeDirection.y * 10,
+              };
         const command: GameCommand = {
           tick: currentTick,
           playerId: ai.playerId,
@@ -1761,8 +1788,10 @@ export class AITacticsManager {
 
     const influenceMap = this.coordinator.getInfluenceMap();
     const path = influenceMap.findSafePath(
-      fromPosition.x, fromPosition.y,
-      basePos.x, basePos.y,
+      fromPosition.x,
+      fromPosition.y,
+      basePos.x,
+      basePos.y,
       ai.playerId,
       0.8 // Strong threat avoidance for retreat
     );
