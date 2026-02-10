@@ -606,7 +606,8 @@ export class AITacticsManager {
   // === Army Unit Retrieval ===
 
   /**
-   * Get all army (non-worker) units for the AI.
+   * Get all army (non-worker, non-naval) units for the AI.
+   * Excludes naval units since they can't participate in land attacks.
    */
   public getArmyUnits(playerId: string): number[] {
     const armyUnits: number[] = [];
@@ -621,11 +622,60 @@ export class AITacticsManager {
       if (unit.isWorker) continue;
       if (health.isDead()) continue;
       if (unit.attackDamage === 0) continue;
+      if (unit.isNaval) continue; // Naval units can't attack land targets
 
       armyUnits.push(entity.id);
     }
 
     return armyUnits;
+  }
+
+  /**
+   * Get only ground army units (excludes flying and naval).
+   */
+  public getGroundArmyUnits(playerId: string): number[] {
+    const groundUnits: number[] = [];
+    const entities = this.coordinator.getCachedUnits();
+
+    for (const entity of entities) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId !== playerId) continue;
+      if (unit.isWorker) continue;
+      if (health.isDead()) continue;
+      if (unit.attackDamage === 0) continue;
+      if (unit.isFlying || unit.isNaval) continue;
+
+      groundUnits.push(entity.id);
+    }
+
+    return groundUnits;
+  }
+
+  /**
+   * Get only flying army units for air strike operations.
+   */
+  public getAirArmyUnits(playerId: string): number[] {
+    const airUnits: number[] = [];
+    const entities = this.coordinator.getCachedUnits();
+
+    for (const entity of entities) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId !== playerId) continue;
+      if (unit.isWorker) continue;
+      if (health.isDead()) continue;
+      if (unit.attackDamage === 0) continue;
+      if (!unit.isFlying) continue;
+
+      airUnits.push(entity.id);
+    }
+
+    return airUnits;
   }
 
   /**

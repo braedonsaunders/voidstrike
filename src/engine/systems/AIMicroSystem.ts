@@ -858,47 +858,49 @@ export class AIMicroSystem extends System {
     const currentMode = unit.getCurrentMode();
     if (!currentMode) return;
 
-    const isInFighterMode = currentMode.isFlying === true; // Fighter mode = flying
-    const isInAssaultMode = !isInFighterMode; // Assault mode = ground
-
-    // Decision logic:
-    // - In Fighter mode (air-only attacks): Transform to Assault if there are ground enemies and no air enemies
-    // - In Assault mode (ground-only attacks): Transform to Fighter if there are air enemies and no ground enemies
-    // - Also consider threat scores for more nuanced decisions
-
     let shouldTransform = false;
     let targetMode = '';
 
-    if (isInFighterMode) {
-      // Currently in Fighter mode (can only attack air)
-      // Transform to Assault if:
-      // 1. There are ground enemies nearby AND no air enemies nearby
-      // 2. OR ground threat score significantly outweighs air threat score
-      if (nearbyGroundEnemies > 0 && nearbyAirEnemies === 0) {
+    // Scorcher/Inferno: mobility vs AoE damage decision
+    if (unit.unitId === 'scorcher') {
+      const isInferno = currentMode.id === 'inferno';
+      const totalEnemies = nearbyGroundEnemies + nearbyAirEnemies;
+
+      if (!isInferno && totalEnemies >= 2) {
+        // Scorcher mode: transform to inferno when engaging multiple enemies
         shouldTransform = true;
-        targetMode = 'assault';
-      } else if (nearbyGroundEnemies > 0 && groundThreatScore > airThreatScore * 2) {
-        // Ground threat is much higher than air threat - might want to transform
-        // But only if there are no immediate air threats
-        if (nearbyAirEnemies <= 1 && nearbyGroundEnemies >= 3) {
+        targetMode = 'inferno';
+      } else if (isInferno && totalEnemies === 0) {
+        // Inferno mode: revert to scorcher for mobility when no enemies nearby
+        shouldTransform = true;
+        targetMode = 'scorcher';
+      }
+    } else {
+      // Valkyrie and other air transformers: air/ground mode decision
+      const isInFighterMode = currentMode.isFlying === true;
+      const isInAssaultMode = !isInFighterMode;
+
+      if (isInFighterMode) {
+        // Fighter mode (air-only attacks): switch to assault if ground enemies dominate
+        if (nearbyGroundEnemies > 0 && nearbyAirEnemies === 0) {
           shouldTransform = true;
           targetMode = 'assault';
+        } else if (nearbyGroundEnemies > 0 && groundThreatScore > airThreatScore * 2) {
+          if (nearbyAirEnemies <= 1 && nearbyGroundEnemies >= 3) {
+            shouldTransform = true;
+            targetMode = 'assault';
+          }
         }
-      }
-    } else if (isInAssaultMode) {
-      // Currently in Assault mode (can only attack ground)
-      // Transform to Fighter if:
-      // 1. There are air enemies nearby AND no ground enemies nearby
-      // 2. OR air threat score significantly outweighs ground threat score
-      // 3. OR being attacked by air and can't fight back
-      if (nearbyAirEnemies > 0 && nearbyGroundEnemies === 0) {
-        shouldTransform = true;
-        targetMode = 'fighter';
-      } else if (nearbyAirEnemies > 0 && airThreatScore > groundThreatScore * 2) {
-        // Air threat is much higher than ground threat
-        if (nearbyGroundEnemies <= 1 && nearbyAirEnemies >= 2) {
+      } else if (isInAssaultMode) {
+        // Assault mode (ground-only attacks): switch to fighter if air enemies dominate
+        if (nearbyAirEnemies > 0 && nearbyGroundEnemies === 0) {
           shouldTransform = true;
           targetMode = 'fighter';
+        } else if (nearbyAirEnemies > 0 && airThreatScore > groundThreatScore * 2) {
+          if (nearbyGroundEnemies <= 1 && nearbyAirEnemies >= 2) {
+            shouldTransform = true;
+            targetMode = 'fighter';
+          }
         }
       }
     }

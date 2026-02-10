@@ -31,7 +31,12 @@ import { RESEARCH_DEFINITIONS } from '@/data/research/dominion';
 import { debugAI } from '@/utils/debugLogger';
 import type { AICoordinator, AIPlayer } from './AICoordinator';
 import { AIEconomyManager } from './AIEconomyManager';
-import { type MacroAction, type AIStateSnapshot, evaluateRule } from '@/data/ai/aiConfig';
+import {
+  type MacroAction,
+  type AIStateSnapshot,
+  type CompositionGoal,
+  evaluateRule,
+} from '@/data/ai/aiConfig';
 import type { BuildOrderStep } from '@/data/ai/buildOrders';
 import { getCounterRecommendation, analyzeThreatGaps } from '../AIMicroSystem';
 import { deterministicMagnitude } from '@/utils/FixedPoint';
@@ -56,6 +61,18 @@ export class AIBuildOrderExecutor {
 
   public setEconomyManager(economyManager: AIEconomyManager): void {
     this.economyManager = economyManager;
+  }
+
+  /**
+   * Get the composition goals for this AI, respecting personality-specific overrides.
+   */
+  private getCompositionGoals(ai: AIPlayer): CompositionGoal[] {
+    const config = ai.config!;
+    const personalityGoals = config.tactical.personalityCompositionGoals;
+    if (personalityGoals && personalityGoals[ai.personality]) {
+      return personalityGoals[ai.personality]!;
+    }
+    return config.tactical.compositionGoals;
   }
 
   private getEconomyManager(): AIEconomyManager {
@@ -1018,9 +1035,8 @@ export class AIBuildOrderExecutor {
     // Hard block: can't produce what we don't have buildings for
     if (!this.canProduceUnit(ai, unitId)) return 0;
 
-    const config = ai.config!;
     const currentTick = this.game.getCurrentTick();
-    const goals = config.tactical.compositionGoals;
+    const goals = this.getCompositionGoals(ai);
     const unitDef = UNIT_DEFINITIONS[unitId];
     if (!unitDef) return 0;
 
@@ -1099,9 +1115,8 @@ export class AIBuildOrderExecutor {
    * (Fix #1: Resource reservation)
    */
   private updateResourceReservation(ai: AIPlayer): void {
-    const config = ai.config!;
     const currentTick = this.game.getCurrentTick();
-    const goals = config.tactical.compositionGoals;
+    const goals = this.getCompositionGoals(ai);
 
     // Only reserve in mid/late game when we have real composition goals
     let targetComposition: Record<string, number> | null = null;
@@ -1188,9 +1203,8 @@ export class AIBuildOrderExecutor {
    * (Fix #2: Savings threshold)
    */
   private shouldSaveForExpensiveUnit(ai: AIPlayer): { saving: boolean; targetUnit: string | null } {
-    const config = ai.config!;
     const currentTick = this.game.getCurrentTick();
-    const goals = config.tactical.compositionGoals;
+    const goals = this.getCompositionGoals(ai);
 
     // Don't save if army is critically small (need units to survive)
     let minArmySupply = 6;

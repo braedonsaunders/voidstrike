@@ -11,7 +11,13 @@
  * 4. Register in src/data/ai/index.ts
  */
 
-import { type FactionAIConfig, type MacroRule, registerFactionAIConfig } from '../aiConfig';
+import {
+  type AIPersonality,
+  type CompositionGoal,
+  type FactionAIConfig,
+  type MacroRule,
+  registerFactionAIConfig,
+} from '../aiConfig';
 
 // ==================== MACRO RULES ====================
 // These replace all hardcoded production logic in EnhancedAISystem
@@ -348,12 +354,12 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'research_module' },
-      { type: 'plasma', operator: '>=', value: 300 },
-      { type: 'minerals', operator: '>=', value: 400 },
-      { type: 'armySupply', operator: '>=', value: 20 }, // Need army to protect
+      { type: 'plasma', operator: '>=', value: 200 },
+      { type: 'minerals', operator: '>=', value: 300 },
+      { type: 'armySupply', operator: '>=', value: 12 },
     ],
     action: { type: 'train', targetId: 'dreadnought' },
-    cooldownTicks: 100,
+    cooldownTicks: 80,
   },
 
   {
@@ -466,8 +472,113 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     cooldownTicks: 35,
   },
 
+  // === Unit Production - Special Units ===
+  {
+    id: 'train_operative',
+    name: 'Train Operative',
+    description: 'Build stealth sniper for intel and assassinations',
+    priority: 45,
+    conditions: [
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'research_module' },
+      { type: 'plasma', operator: '>=', value: 100 },
+      { type: 'minerals', operator: '>=', value: 125 },
+      { type: 'armySupply', operator: '>=', value: 10 },
+    ],
+    action: { type: 'train', targetId: 'operative' },
+    cooldownTicks: 60,
+    difficulties: ['medium', 'hard', 'very_hard', 'insane'],
+  },
+
+  // === Unit Production - Support (Hangar) ===
+  {
+    id: 'train_lifter',
+    name: 'Train Lifter',
+    description: 'Build healer/transport for army sustain',
+    priority: 41,
+    conditions: [
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
+      { type: 'plasma', operator: '>=', value: 75 },
+      { type: 'minerals', operator: '>=', value: 75 },
+      { type: 'armySupply', operator: '>=', value: 10 },
+      { type: 'unitCount', operator: '<', value: 3, targetId: 'lifter' },
+    ],
+    action: { type: 'train', targetId: 'lifter' },
+    cooldownTicks: 80,
+    difficulties: ['medium', 'hard', 'very_hard', 'insane'],
+  },
+
+  {
+    id: 'train_overseer',
+    name: 'Train Overseer',
+    description: 'Build detector to reveal cloaked enemies',
+    priority: 39,
+    conditions: [
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
+      { type: 'plasma', operator: '>=', value: 150 },
+      { type: 'minerals', operator: '>=', value: 75 },
+      { type: 'unitCount', operator: '<', value: 2, targetId: 'overseer' },
+    ],
+    action: { type: 'train', targetId: 'overseer' },
+    cooldownTicks: 120,
+    difficulties: ['hard', 'very_hard', 'insane'],
+  },
+
+  // === Personality-Specific Rules ===
+  // Aggressive: extra production buildings earlier
+  {
+    id: 'aggressive_extra_production',
+    name: 'Aggressive Production Scaling',
+    description: 'Aggressive AIs build more production earlier',
+    priority: 72,
+    conditions: [
+      { type: 'workers', operator: '>=', value: 10 },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
+      { type: 'buildingCount', operator: '<', value: 3, targetId: 'infantry_bay' },
+      { type: 'minerals', operator: '>=', value: 150 },
+    ],
+    action: { type: 'build', targetId: 'infantry_bay' },
+    cooldownTicks: 150,
+    personalities: ['aggressive', 'cheese'],
+  },
+
+  // Economic: earlier expansion
+  {
+    id: 'economic_early_expand',
+    name: 'Economic Early Expansion',
+    description: 'Economic AIs expand earlier',
+    priority: 62,
+    conditions: [
+      { type: 'workers', operator: '>=', value: 12 },
+      { type: 'minerals', operator: '>=', value: 350 },
+      { type: 'bases', operator: '<', value: 3 },
+      { type: 'gameTime', operator: '>=', value: 1200 },
+    ],
+    action: { type: 'expand' },
+    cooldownTicks: 500,
+    personalities: ['economic'],
+  },
+
+  // Turtle: second hangar for air-heavy late game
+  {
+    id: 'turtle_second_hangar',
+    name: 'Turtle Second Hangar',
+    description: 'Turtle AIs build a second hangar for air army',
+    priority: 56,
+    conditions: [
+      { type: 'buildingCount', operator: '==', value: 1, targetId: 'hangar' },
+      { type: 'buildingCount', operator: '>=', value: 2, targetId: 'research_module' },
+      { type: 'minerals', operator: '>=', value: 150 },
+      { type: 'plasma', operator: '>=', value: 100 },
+      { type: 'gameTime', operator: '>=', value: 3000 },
+    ],
+    action: { type: 'build', targetId: 'hangar' },
+    cooldownTicks: 300,
+    personalities: ['turtle', 'defensive'],
+  },
+
   // === Mixed Army Production ===
-  // Aggressive production with variety based on available buildings
+  // Broader mixed production with slower cooldowns to allow resource accumulation for expensive units
   {
     id: 'train_mixed_army_with_vehicles',
     name: 'Mixed Army (With Vehicles)',
@@ -482,13 +593,14 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     action: {
       type: 'train',
       options: [
-        { id: 'trooper', weight: 6 },
+        { id: 'trooper', weight: 4 },
         { id: 'breacher', weight: 4 },
         { id: 'scorcher', weight: 5 },
-        { id: 'devastator', weight: 3 },
+        { id: 'devastator', weight: 4 },
+        { id: 'vanguard', weight: 3 },
       ],
     },
-    cooldownTicks: 12,
+    cooldownTicks: 30,
   },
 
   {
@@ -505,13 +617,15 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     action: {
       type: 'train',
       options: [
-        { id: 'trooper', weight: 5 },
+        { id: 'trooper', weight: 3 },
         { id: 'devastator', weight: 4 },
-        { id: 'valkyrie', weight: 4 },
-        { id: 'specter', weight: 2 },
+        { id: 'valkyrie', weight: 5 },
+        { id: 'specter', weight: 3 },
+        { id: 'colossus', weight: 2 },
+        { id: 'dreadnought', weight: 1 },
       ],
     },
-    cooldownTicks: 12,
+    cooldownTicks: 30,
   },
 
   {
@@ -521,18 +635,19 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     priority: 40,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
-      { type: 'minerals', operator: '>=', value: 50 }, // Lowered - always produce
-      { type: 'supplyRatio', operator: '<', value: 0.95 }, // More room to produce
+      { type: 'minerals', operator: '>=', value: 50 },
+      { type: 'supplyRatio', operator: '<', value: 0.95 },
     ],
     action: {
       type: 'train',
       options: [
-        { id: 'trooper', weight: 10 },
+        { id: 'trooper', weight: 6 },
         { id: 'breacher', weight: 4 },
-        { id: 'vanguard', weight: 3 },
+        { id: 'vanguard', weight: 4 },
+        { id: 'operative', weight: 1 },
       ],
     },
-    cooldownTicks: 10, // Faster production
+    cooldownTicks: 18,
   },
 
   // Army production with vehicle variety when forge is available
@@ -550,13 +665,14 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     action: {
       type: 'train',
       options: [
-        { id: 'trooper', weight: 5 },
+        { id: 'trooper', weight: 4 },
         { id: 'breacher', weight: 4 },
-        { id: 'scorcher', weight: 6 },
+        { id: 'scorcher', weight: 5 },
         { id: 'vanguard', weight: 3 },
+        { id: 'devastator', weight: 2 },
       ],
     },
-    cooldownTicks: 10,
+    cooldownTicks: 20,
   },
 
   {
@@ -570,29 +686,29 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
       { type: 'supplyRatio', operator: '<', value: 0.95 },
     ],
     action: { type: 'train', targetId: 'trooper' },
-    cooldownTicks: 18,
+    cooldownTicks: 22,
   },
 
   // === CATCHALL: Spend excess minerals ===
-  // If we have lots of minerals and infantry_bay, train units
   {
     id: 'train_excess_minerals',
     name: 'Spend Excess Minerals',
     description: 'Dont float minerals - produce something!',
-    priority: 25, // Low priority but catches stockpiling
+    priority: 25,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'infantry_bay' },
-      { type: 'minerals', operator: '>=', value: 200 }, // Floating too much
+      { type: 'minerals', operator: '>=', value: 250 },
     ],
     action: {
       type: 'train',
       options: [
-        { id: 'trooper', weight: 10 },
-        { id: 'breacher', weight: 5 },
+        { id: 'trooper', weight: 5 },
+        { id: 'breacher', weight: 4 },
         { id: 'vanguard', weight: 3 },
+        { id: 'scorcher', weight: 3 },
       ],
     },
-    cooldownTicks: 8, // Very fast - spend those minerals!
+    cooldownTicks: 12,
   },
 
   // === Expansion ===
@@ -640,6 +756,223 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     difficulties: ['medium', 'hard', 'very_hard', 'insane'],
   },
 ];
+
+// ==================== COMPOSITION GOALS BY PERSONALITY ====================
+// Each personality gets distinct army composition targets per game phase.
+// Values are percentages (should sum to ~100 per phase).
+
+const BALANCED_COMPOSITION_GOALS: CompositionGoal[] = [
+  {
+    timeRange: [0, 2000],
+    composition: { trooper: 40, breacher: 25, vanguard: 20, scorcher: 15 },
+    minArmySupply: 6,
+  },
+  {
+    timeRange: [2000, 5000],
+    composition: {
+      trooper: 15,
+      breacher: 15,
+      scorcher: 15,
+      devastator: 20,
+      valkyrie: 15,
+      colossus: 10,
+      vanguard: 10,
+    },
+    minArmySupply: 15,
+  },
+  {
+    timeRange: [5000, Infinity],
+    composition: {
+      devastator: 20,
+      colossus: 20,
+      valkyrie: 15,
+      breacher: 10,
+      trooper: 10,
+      specter: 10,
+      dreadnought: 10,
+      operative: 5,
+    },
+    minArmySupply: 30,
+  },
+];
+
+const AGGRESSIVE_COMPOSITION_GOALS: CompositionGoal[] = [
+  {
+    timeRange: [0, 1800],
+    composition: { trooper: 30, scorcher: 25, vanguard: 25, breacher: 20 },
+    minArmySupply: 4,
+  },
+  {
+    timeRange: [1800, 4500],
+    composition: {
+      scorcher: 20,
+      valkyrie: 20,
+      trooper: 15,
+      vanguard: 15,
+      devastator: 15,
+      breacher: 10,
+      specter: 5,
+    },
+    minArmySupply: 12,
+  },
+  {
+    timeRange: [4500, Infinity],
+    composition: {
+      valkyrie: 20,
+      scorcher: 15,
+      devastator: 15,
+      specter: 15,
+      vanguard: 10,
+      trooper: 10,
+      colossus: 10,
+      operative: 5,
+    },
+    minArmySupply: 25,
+  },
+];
+
+const DEFENSIVE_COMPOSITION_GOALS: CompositionGoal[] = [
+  {
+    timeRange: [0, 2200],
+    composition: { trooper: 35, breacher: 30, devastator: 20, vanguard: 15 },
+    minArmySupply: 6,
+  },
+  {
+    timeRange: [2200, 5500],
+    composition: {
+      devastator: 25,
+      breacher: 20,
+      colossus: 20,
+      trooper: 15,
+      valkyrie: 10,
+      scorcher: 10,
+    },
+    minArmySupply: 18,
+  },
+  {
+    timeRange: [5500, Infinity],
+    composition: {
+      colossus: 25,
+      devastator: 20,
+      valkyrie: 15,
+      breacher: 10,
+      dreadnought: 10,
+      trooper: 10,
+      specter: 5,
+      operative: 5,
+    },
+    minArmySupply: 30,
+  },
+];
+
+const ECONOMIC_COMPOSITION_GOALS: CompositionGoal[] = [
+  {
+    timeRange: [0, 2500],
+    composition: { trooper: 45, breacher: 30, vanguard: 15, scorcher: 10 },
+    minArmySupply: 6,
+  },
+  {
+    timeRange: [2500, 5000],
+    composition: {
+      colossus: 25,
+      devastator: 20,
+      valkyrie: 15,
+      breacher: 15,
+      trooper: 15,
+      scorcher: 10,
+    },
+    minArmySupply: 15,
+  },
+  {
+    timeRange: [5000, Infinity],
+    composition: {
+      dreadnought: 20,
+      colossus: 20,
+      devastator: 15,
+      valkyrie: 15,
+      specter: 10,
+      breacher: 10,
+      operative: 5,
+      trooper: 5,
+    },
+    minArmySupply: 25,
+  },
+];
+
+const CHEESE_COMPOSITION_GOALS: CompositionGoal[] = [
+  {
+    timeRange: [0, 1500],
+    composition: { trooper: 45, vanguard: 30, scorcher: 25 },
+    minArmySupply: 3,
+  },
+  {
+    timeRange: [1500, 4000],
+    composition: {
+      scorcher: 25,
+      trooper: 20,
+      vanguard: 20,
+      valkyrie: 15,
+      breacher: 10,
+      specter: 10,
+    },
+    minArmySupply: 10,
+  },
+  {
+    timeRange: [4000, Infinity],
+    composition: {
+      valkyrie: 20,
+      scorcher: 20,
+      specter: 15,
+      trooper: 15,
+      vanguard: 10,
+      operative: 10,
+      devastator: 10,
+    },
+    minArmySupply: 20,
+  },
+];
+
+const TURTLE_COMPOSITION_GOALS: CompositionGoal[] = [
+  {
+    timeRange: [0, 2500],
+    composition: { trooper: 30, breacher: 30, devastator: 25, vanguard: 15 },
+    minArmySupply: 8,
+  },
+  {
+    timeRange: [2500, 6000],
+    composition: {
+      colossus: 25,
+      devastator: 25,
+      valkyrie: 15,
+      breacher: 15,
+      specter: 10,
+      trooper: 10,
+    },
+    minArmySupply: 20,
+  },
+  {
+    timeRange: [6000, Infinity],
+    composition: {
+      dreadnought: 25,
+      colossus: 20,
+      valkyrie: 15,
+      specter: 15,
+      devastator: 10,
+      breacher: 10,
+      operative: 5,
+    },
+    minArmySupply: 35,
+  },
+];
+
+const PERSONALITY_COMPOSITION_GOALS: Partial<Record<AIPersonality, CompositionGoal[]>> = {
+  aggressive: AGGRESSIVE_COMPOSITION_GOALS,
+  defensive: DEFENSIVE_COMPOSITION_GOALS,
+  economic: ECONOMIC_COMPOSITION_GOALS,
+  balanced: BALANCED_COMPOSITION_GOALS,
+  cheese: CHEESE_COMPOSITION_GOALS,
+  turtle: TURTLE_COMPOSITION_GOALS,
+};
 
 // ==================== FACTION CONFIGURATION ====================
 
@@ -838,50 +1171,35 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
       valkyrie: ['trooper', 'colossus'],
       specter: ['trooper', 'valkyrie'],
       lifter: ['valkyrie', 'trooper'],
+      dreadnought: ['breacher', 'devastator', 'specter'],
+      operative: ['scorcher', 'valkyrie', 'overseer'],
+      stingray: ['corsair', 'valkyrie'],
+      corsair: ['stingray', 'trooper'],
+      leviathan: ['valkyrie', 'specter', 'corsair'],
     },
 
     // Threat assessment weights
     threatWeights: {
       damage: 1.0,
       priority: 0.8,
-      distance: 1.2, // Closer = more threatening
-      health: 0.5, // Lower health = finish it off
-      aggression: 1.5, // Attacking us = high priority
+      distance: 1.2,
+      health: 0.5,
+      aggression: 1.5,
     },
 
-    // Army composition goals by game phase
-    compositionGoals: [
-      {
-        timeRange: [0, 2000], // Early game
-        composition: { trooper: 60, breacher: 30, vanguard: 10 },
-        minArmySupply: 6,
-      },
-      {
-        timeRange: [2000, 5000], // Mid game
-        composition: { trooper: 30, breacher: 20, scorcher: 20, devastator: 20, valkyrie: 10 },
-        minArmySupply: 20,
-      },
-      {
-        timeRange: [5000, Infinity], // Late game
-        composition: {
-          trooper: 20,
-          breacher: 15,
-          devastator: 25,
-          colossus: 20,
-          valkyrie: 15,
-          specter: 5,
-        },
-        minArmySupply: 40,
-      },
-    ],
+    // Default composition goals (fallback when no personality-specific goals exist)
+    compositionGoals: BALANCED_COMPOSITION_GOALS,
 
-    // Attack thresholds by difficulty - lowered for more aggressive play
+    // Personality-specific composition goals for varied strategies
+    personalityCompositionGoals: PERSONALITY_COMPOSITION_GOALS,
+
+    // Attack thresholds by difficulty
     attackThresholds: {
-      easy: 15, // Lowered from 25 - attack earlier
-      medium: 12, // Lowered from 20
-      hard: 10, // Lowered from 15
-      very_hard: 8, // Lowered from 12
-      insane: 6, // Lowered from 8
+      easy: 15,
+      medium: 12,
+      hard: 10,
+      very_hard: 8,
+      insane: 6,
     },
 
     // Defense ratio (keep this % of army for defense)
@@ -894,7 +1212,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
     },
 
     // Harass units
-    harassUnits: ['scorcher', 'vanguard', 'valkyrie'],
+    harassUnits: ['scorcher', 'vanguard', 'valkyrie', 'specter'],
 
     // Scout unit
     scoutUnit: 'trooper',
@@ -944,7 +1262,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
         focusFireThreshold: 0.7,
       },
 
-      // Scorcher - fast vehicle, hit and run
+      // Scorcher - fast vehicle, transforms to inferno for close-range AoE
       scorcher: {
         kiting: {
           enabled: true,
@@ -952,8 +1270,18 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
           cooldownTicks: 12,
         },
         retreatThreshold: 0.3,
-        focusFire: false, // AoE unit, just attack
+        focusFire: false,
         focusFireThreshold: 0.7,
+        transformLogic: {
+          modeA: {
+            name: 'inferno',
+            conditions: [{ type: 'enemyArmyStrength', operator: '>', value: 0 }],
+          },
+          modeB: {
+            name: 'scorcher',
+            conditions: [{ type: 'enemyArmyStrength', operator: '==', value: 0 }],
+          },
+        },
       },
 
       // Devastator - siege tank, hold position
@@ -1028,8 +1356,28 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
         },
         retreatThreshold: 0.35,
         focusFire: true,
-        focusFireThreshold: 0.4, // Prioritize finishing kills
+        focusFireThreshold: 0.4,
         preferredRange: 8,
+      },
+
+      // Dreadnought - capital ship, very durable
+      dreadnought: {
+        kiting: false,
+        retreatThreshold: 0.1,
+        focusFire: true,
+        focusFireThreshold: 0.3,
+      },
+
+      // Overseer - detector, stay safe
+      overseer: {
+        kiting: {
+          enabled: true,
+          distance: 8,
+          cooldownTicks: 10,
+        },
+        retreatThreshold: 0.5,
+        focusFire: false,
+        focusFireThreshold: 0.7,
       },
     },
   },
