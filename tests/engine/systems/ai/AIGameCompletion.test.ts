@@ -980,4 +980,124 @@ describe('AI Game Completion', () => {
       expect(result).toBe(true); // justDefended bypasses cooldown
     });
   });
+
+  describe('Hunt mode stuck detection', () => {
+    // Mirror of hunt mode stuck disengage constant from AITacticsManager
+    const HUNT_MODE_STUCK_DISENGAGE_TICKS = 300;
+
+    /**
+     * Mirror of the disengage decision logic.
+     * Returns true if the army should return to base.
+     */
+    function shouldDisengage(
+      engaged: boolean,
+      inHuntMode: boolean,
+      disengagedDuration: number
+    ): boolean {
+      if (engaged) return false;
+
+      if (inHuntMode) {
+        // Hunt mode stuck detection: force disengage after prolonged non-engagement
+        return disengagedDuration > HUNT_MODE_STUCK_DISENGAGE_TICKS;
+      }
+
+      // Normal disengage: 100 ticks without combat
+      return disengagedDuration > 100;
+    }
+
+    it('allows normal disengage after 100 ticks when not in hunt mode', () => {
+      expect(shouldDisengage(false, false, 150)).toBe(true);
+    });
+
+    it('does NOT disengage when engaged', () => {
+      expect(shouldDisengage(true, false, 500)).toBe(false);
+      expect(shouldDisengage(true, true, 500)).toBe(false);
+    });
+
+    it('does NOT disengage within normal timeout', () => {
+      expect(shouldDisengage(false, false, 50)).toBe(false);
+    });
+
+    it('forces disengage in hunt mode after stuck timeout', () => {
+      // Army has been idle for 300+ ticks during hunt mode → must disengage
+      // This prevents armies sitting at destroyed bases forever
+      expect(shouldDisengage(false, true, 350)).toBe(true);
+    });
+
+    it('does NOT disengage in hunt mode before stuck timeout', () => {
+      // Hunt mode should persist for a reasonable duration to allow pathfinding
+      expect(shouldDisengage(false, true, 150)).toBe(false);
+      expect(shouldDisengage(false, true, 250)).toBe(false);
+    });
+
+    it('hunt mode stuck timeout is longer than normal disengage', () => {
+      // Normal disengage at 100 ticks. Hunt mode should allow more time
+      // before giving up (target may be far away, pathfinding takes time).
+      expect(HUNT_MODE_STUCK_DISENGAGE_TICKS).toBeGreaterThan(100);
+    });
+
+    it('handles the FFA scenario: army at destroyed base with remote enemy buildings', () => {
+      // Scenario: AI army destroys enemy base at position A.
+      // Enemy has 2 buildings left at remote position B.
+      // Army can't reach B (pathfinding blocked / too far).
+      // Without fix: army sits at A forever because hunt mode blocks disengage.
+      // With fix: after 300 ticks of no combat, army returns to base.
+      const primaryRelation = createRelation({ buildingCount: 2 });
+      const inHuntMode =
+        primaryRelation.buildingCount > 0 &&
+        primaryRelation.buildingCount <= HUNT_MODE_BUILDING_THRESHOLD;
+
+      expect(inHuntMode).toBe(true);
+      // Army has had no combat for 400 ticks
+      expect(shouldDisengage(false, inHuntMode, 400)).toBe(true);
+    });
+  });
+
+  describe('At-target idle unit re-commanding', () => {
+    const AT_TARGET_THRESHOLD = 8;
+
+    /**
+     * Mirror of getIdleAssaultUnits at-target skip logic.
+     * Returns true if a unit should be included in re-command list.
+     */
+    function shouldRecommandUnit(
+      isIdleAssault: boolean,
+      isCompletelyIdle: boolean,
+      distanceToTarget: number
+    ): boolean {
+      if (!isIdleAssault && !isCompletelyIdle) return false;
+
+      // Only skip assault-mode units near the target (to preserve assault idle timeout).
+      // Completely idle units (assault mode already timed out) must always be re-commanded
+      // to escape the dead zone where CombatSystem also skips them.
+      if (isIdleAssault && distanceToTarget < AT_TARGET_THRESHOLD) {
+        return false;
+      }
+
+      return true;
+    }
+
+    it('skips assault-mode units near target to preserve idle timeout', () => {
+      expect(shouldRecommandUnit(true, false, 5)).toBe(false);
+    });
+
+    it('includes assault-mode units far from target', () => {
+      expect(shouldRecommandUnit(true, false, 20)).toBe(true);
+    });
+
+    it('always includes completely idle units even near target', () => {
+      // These units already timed out of assault mode. CombatSystem skips them
+      // (not in hot cell / combat zone), so they MUST be re-commanded by the AI.
+      expect(shouldRecommandUnit(false, true, 3)).toBe(true);
+      expect(shouldRecommandUnit(false, true, 7)).toBe(true);
+    });
+
+    it('includes completely idle units far from target', () => {
+      expect(shouldRecommandUnit(false, true, 50)).toBe(true);
+    });
+
+    it('skips units that are neither idle-assault nor completely-idle', () => {
+      expect(shouldRecommandUnit(false, false, 5)).toBe(false);
+    });
+  });
 });

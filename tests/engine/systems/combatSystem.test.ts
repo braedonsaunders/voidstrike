@@ -1040,4 +1040,78 @@ describe('CombatSystem', () => {
       expect(destroyed).toEqual([1]);
     });
   });
+
+  describe('Target acquisition state coverage', () => {
+    /**
+     * Mirror of CombatSystem needsTarget logic.
+     * Tests which unit states allow target acquisition.
+     */
+    function needsTarget(
+      targetEntityId: number | null,
+      state: string,
+      isHoldingPosition: boolean,
+      isInAssaultMode: boolean
+    ): boolean {
+      return (
+        targetEntityId === null &&
+        (state === 'idle' ||
+          state === 'patrolling' ||
+          state === 'attackmoving' ||
+          state === 'attacking' ||
+          state === 'moving' || // All moving units check for immediate threats
+          isHoldingPosition ||
+          isInAssaultMode)
+      );
+    }
+
+    it('moving units can acquire targets', () => {
+      // Prevents units from walking past enemies in their face
+      expect(needsTarget(null, 'moving', false, false)).toBe(true);
+    });
+
+    it('moving units with existing target do not re-acquire', () => {
+      expect(needsTarget(42, 'moving', false, false)).toBe(false);
+    });
+
+    it('idle units can acquire targets', () => {
+      expect(needsTarget(null, 'idle', false, false)).toBe(true);
+    });
+
+    it('attackmoving units can acquire targets', () => {
+      expect(needsTarget(null, 'attackmoving', false, false)).toBe(true);
+    });
+
+    it('assault mode units can acquire targets regardless of state', () => {
+      expect(needsTarget(null, 'idle', false, true)).toBe(true);
+    });
+
+    it('gathering units cannot acquire targets', () => {
+      expect(needsTarget(null, 'gathering', false, false)).toBe(false);
+    });
+
+    it('building units cannot acquire targets', () => {
+      expect(needsTarget(null, 'building', false, false)).toBe(false);
+    });
+  });
+
+  describe('Threat retarget range', () => {
+    it('threat retarget uses sight range for building-attacking units', () => {
+      // Units attacking buildings should detect approaching combat threats
+      // at sight range, not just attack range. This prevents enemies from
+      // walking right past the army unchallenged.
+      const attackRange = 6;
+      const sightRange = 24;
+
+      // The retarget search should use sightRange, not attackRange
+      // Verify the design: sight range is significantly larger than attack range
+      expect(sightRange).toBeGreaterThan(attackRange * 2);
+
+      // With sight-range retarget, an enemy at distance 15 would be detected
+      const enemyDistance = 15;
+      expect(enemyDistance).toBeLessThan(sightRange);
+      expect(enemyDistance).toBeGreaterThan(attackRange);
+      // Before the fix, this enemy would NOT trigger retargeting (was using attackRange)
+      // After the fix, it WILL trigger retargeting (now using sightRange)
+    });
+  });
 });

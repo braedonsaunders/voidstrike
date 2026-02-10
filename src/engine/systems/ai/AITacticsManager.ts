@@ -46,6 +46,10 @@ const HUNT_MODE_BUILDING_THRESHOLD = 3; // Enter hunt mode when enemy has <= 3 b
 const COMMITMENT_SWITCH_SCORE_MULTIPLIER = 1.5; // New target must score 1.5x higher to switch
 const COMMITMENT_NEAR_ELIMINATION_SCORE_FLOOR = 0.05; // Near-dead enemies almost never abandoned
 
+// Hunt mode stuck detection: disengage even in hunt mode after prolonged non-engagement.
+// Prevents armies from sitting forever at a destroyed base while hunt mode blocks normal disengage.
+const HUNT_MODE_STUCK_DISENGAGE_TICKS = 300; // ~15 seconds with no combat → force disengage
+
 // Defense scaling during committed attacks
 const COMMITTED_ATTACK_DANGER_THRESHOLD = 0.8; // Higher danger required to interrupt cleanup
 const COMMITTED_ATTACK_BUILDING_DAMAGE_THRESHOLD = 0.3; // Only defend badly damaged buildings
@@ -1298,14 +1302,25 @@ export class AITacticsManager {
         this.isEngaged.set(ai.playerId, false);
         debugAI.log(`[AITactics] ${ai.playerId}: Enemy eliminated, returning units to base`);
       }
-    } else if (!engaged && !inHuntMode) {
-      // Disengage timeout -- but never disengage during hunt mode
-      // Use lastEngagedTick (when engagement was last true), not lastEngagementCheck
-      // (which just tracks when we last ran the check and resets every 10 ticks)
+    } else if (!engaged) {
       const lastEngaged =
         this.lastEngagedTick.get(ai.playerId) ?? ai.activeAttackOperation?.startTick ?? currentTick;
       const disengagedDuration = currentTick - lastEngaged;
-      if (disengagedDuration > 100) {
+
+      if (inHuntMode) {
+        // Hunt mode stuck detection: if army has had zero combat for an extended period,
+        // the target is likely unreachable or already destroyed by another player.
+        // Force disengage to prevent armies sitting at destroyed bases forever.
+        if (disengagedDuration > HUNT_MODE_STUCK_DISENGAGE_TICKS) {
+          this.returnUnitsToBase(ai, armyUnits, currentTick);
+          ai.state = 'building';
+          ai.activeAttackOperation = null;
+          this.isEngaged.set(ai.playerId, false);
+          debugAI.log(
+            `[AITactics] ${ai.playerId}: Hunt mode stuck for ${disengagedDuration} ticks with no combat, returning to build`
+          );
+        }
+      } else if (disengagedDuration > 100) {
         this.returnUnitsToBase(ai, armyUnits, currentTick);
         ai.state = 'building';
         ai.activeAttackOperation = null;
@@ -1315,7 +1330,6 @@ export class AITacticsManager {
         );
       }
     }
-    // When inHuntMode: never disengage, keep marching toward target
   }
 
   /**
@@ -1717,9 +1731,12 @@ export class AITacticsManager {
         !unit.isHoldingPosition;
 
       if (isIdleAssault || isCompletelyIdle) {
-        // Don't re-command units already at the target — this prevents the
-        // re-command → assaultIdleTicks reset cycle that kept units permanently stuck
-        if (attackTarget) {
+        // For units STILL in assault mode, skip if near target to avoid resetting
+        // assaultIdleTicks (which prevents CombatSystem's timeout from firing).
+        // For completely idle units (assault mode already timed out), ALWAYS include
+        // them — they're in a dead zone where CombatSystem skips them (not in hot cell)
+        // and they need an explicit ATTACK command to re-engage the target building.
+        if (isIdleAssault && attackTarget) {
           const transform = entity.get<Transform>('Transform');
           if (transform) {
             const dx = transform.x - attackTarget.x;
