@@ -931,7 +931,7 @@ export class AITacticsManager {
         const command: GameCommand = {
           tick: currentTick,
           playerId: ai.playerId,
-          type: 'ATTACK',
+          type: 'ATTACK_MOVE',
           entityIds: escortUnits,
           targetPosition: expansionArea,
         };
@@ -1076,12 +1076,12 @@ export class AITacticsManager {
         );
 
         if (slots.length > 0) {
-          // Issue per-unit attack commands to formation positions
+          // Issue per-unit attack-move commands to formation positions
           for (const slot of slots) {
             const command: GameCommand = {
               tick: currentTick,
               playerId: ai.playerId,
-              type: 'ATTACK',
+              type: 'ATTACK_MOVE',
               entityIds: [slot.entityId],
               targetPosition: slot.targetPosition,
             };
@@ -1091,13 +1091,13 @@ export class AITacticsManager {
             `[AITactics] ${ai.playerId}: Attacking in concave formation with ${slots.length} units`
           );
         } else {
-          // Fallback: standard group attack
+          // Fallback: standard group attack-move
           // Use entity-targeted attack when available (hunt mode) to prevent units
           // attack-moving to the building center instead of attacking the building itself
           const command: GameCommand = {
             tick: currentTick,
             playerId: ai.playerId,
-            type: 'ATTACK',
+            type: 'ATTACK_MOVE',
             entityIds: armyUnits,
             ...(attackTarget.entityId !== undefined
               ? { targetEntityId: attackTarget.entityId }
@@ -1115,7 +1115,7 @@ export class AITacticsManager {
         const command: GameCommand = {
           tick: currentTick,
           playerId: ai.playerId,
-          type: 'ATTACK',
+          type: 'ATTACK_MOVE',
           entityIds: armyUnits,
           ...(attackTarget.entityId !== undefined
             ? { targetEntityId: attackTarget.entityId }
@@ -1163,7 +1163,7 @@ export class AITacticsManager {
           const command: GameCommand = {
             tick: currentTick,
             playerId: ai.playerId,
-            type: 'ATTACK',
+            type: 'ATTACK_MOVE',
             entityIds: idleAssaultUnits,
             targetPosition: attackTarget,
           };
@@ -1194,7 +1194,7 @@ export class AITacticsManager {
           const command: GameCommand = {
             tick: currentTick,
             playerId: ai.playerId,
-            type: 'ATTACK',
+            type: 'ATTACK_MOVE',
             entityIds: armyUnits,
             targetPosition: enemyCluster,
           };
@@ -1338,7 +1338,7 @@ export class AITacticsManager {
       const command: GameCommand = {
         tick: currentTick,
         playerId: ai.playerId,
-        type: 'ATTACK',
+        type: 'ATTACK_MOVE',
         entityIds: idleDefenders,
         targetPosition: threatPos,
       };
@@ -1494,7 +1494,7 @@ export class AITacticsManager {
     const command: GameCommand = {
       tick: currentTick,
       playerId: ai.playerId,
-      type: 'ATTACK',
+      type: 'ATTACK_MOVE',
       entityIds: harassUnits,
       targetPosition: harassTarget,
     };

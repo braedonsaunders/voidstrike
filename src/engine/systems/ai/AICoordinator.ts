@@ -442,7 +442,7 @@ export class AICoordinator extends System {
     const command: GameCommand = {
       tick: currentTick,
       playerId: ai.playerId,
-      type: 'ATTACK' as const,
+      type: 'ATTACK_MOVE' as const,
       entityIds: armyUnits,
       targetPosition: threatPos,
     };
@@ -733,9 +733,7 @@ export class AICoordinator extends System {
     });
 
     // Register team for InfluenceMap alliance awareness
-    this.influenceMap.setPlayerTeams(
-      new Map([...this.getPlayerTeamsMap(), [playerId, teamId]])
-    );
+    this.influenceMap.setPlayerTeams(new Map([...this.getPlayerTeamsMap(), [playerId, teamId]]));
 
     this.aiPlayers.set(playerId, {
       playerId,
@@ -923,7 +921,9 @@ export class AICoordinator extends System {
       if (intel) {
         enemyStrategy = intel.strategy.strategy;
         enemyTechLevel = intel.tech.techLevel;
-        enemyHasAirTech = intel.tech.techBuildings.some(b => b.includes('hangar') || b.includes('starport'));
+        enemyHasAirTech = intel.tech.techBuildings.some(
+          (b) => b.includes('hangar') || b.includes('starport')
+        );
       }
     }
 
