@@ -287,7 +287,6 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
       ],
     },
     cooldownTicks: 10,
-    difficulties: ['hard', 'very_hard', 'insane'],
   },
 
   // === Scouting-Reactive Rules ===
@@ -342,7 +341,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
       ],
     },
     cooldownTicks: 10,
-    difficulties: ['hard', 'very_hard', 'insane'],
+    difficulties: ['medium', 'hard', 'very_hard', 'insane'],
   },
 
   // === Unit Production - Heavy Units (ALL DIFFICULTIES) ===
@@ -399,7 +398,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     id: 'train_valkyrie',
     name: 'Train Valkyrie',
     description: 'Build anti-air fighter',
-    priority: 50,
+    priority: 54,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
       { type: 'plasma', operator: '>=', value: 50 }, // Lowered
@@ -414,7 +413,7 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     id: 'train_specter',
     name: 'Train Specter',
     description: 'Build cloaked air unit',
-    priority: 48,
+    priority: 52,
     conditions: [
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
       { type: 'buildingCount', operator: '>=', value: 1, targetId: 'research_module' },
@@ -424,6 +423,22 @@ const DOMINION_MACRO_RULES: MacroRule[] = [
     action: { type: 'train', targetId: 'specter' },
     cooldownTicks: 50,
     // NO difficulty restriction
+  },
+
+  // Build more air when enemy has air (air superiority)
+  {
+    id: 'train_valkyrie_air_superiority',
+    name: 'Air Superiority Valkyrie',
+    description: 'Build Valkyrie fighters when enemy has air units',
+    priority: 75,
+    conditions: [
+      { type: 'enemyAirUnits', operator: '>', value: 0 },
+      { type: 'buildingCount', operator: '>=', value: 1, targetId: 'hangar' },
+      { type: 'plasma', operator: '>=', value: 50 },
+      { type: 'minerals', operator: '>=', value: 100 },
+    ],
+    action: { type: 'train', targetId: 'valkyrie' },
+    cooldownTicks: 30,
   },
 
   // === Unit Production - Vehicles (ALL DIFFICULTIES) ===
@@ -991,7 +1006,7 @@ export const DOMINION_AI_CONFIG: FactionAIConfig = {
     scout: 'trooper',
     antiAir: ['trooper', 'valkyrie', 'colossus', 'specter', 'breacher'],
     siege: ['devastator', 'colossus', 'dreadnought'],
-    harass: ['scorcher', 'vanguard', 'valkyrie'],
+    harass: ['scorcher', 'vanguard', 'valkyrie', 'specter'],
     baseTypes: ['headquarters', 'orbital_station', 'bastion'],
   },
 

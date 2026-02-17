@@ -50,6 +50,13 @@ const COMMITMENT_NEAR_ELIMINATION_SCORE_FLOOR = 0.05; // Near-dead enemies almos
 // Prevents armies from sitting forever at a destroyed base while hunt mode blocks normal disengage.
 const HUNT_MODE_STUCK_DISENGAGE_TICKS = 300; // ~15 seconds with no combat → force disengage
 
+// Air control constants
+const AIR_HARASS_MAX_UNITS = 3; // Max air units for harassment
+const AIR_FLANK_OFFSET = 20; // How far air units flank from the main army's attack vector
+const AIR_REGROUP_DISTANCE = 30; // Distance from base to regroup air units
+const AIR_COMMAND_INTERVAL = 30; // Re-command air units every 30 ticks (~1.5 sec)
+const SUPPORT_FOLLOW_DISTANCE = 12; // Support units stay this far behind army center
+
 // Defense scaling during committed attacks
 const COMMITTED_ATTACK_DANGER_THRESHOLD = 0.8; // Higher danger required to interrupt cleanup
 const COMMITTED_ATTACK_BUILDING_DAMAGE_THRESHOLD = 0.3; // Only defend badly damaged buildings
@@ -71,6 +78,10 @@ export class AITacticsManager {
   private lastReCommandTick: Map<string, number> = new Map();
   private lastDefenseCommandTick: Map<string, number> = new Map();
   private isEngaged: Map<string, boolean> = new Map();
+
+  // Air unit control tracking
+  private lastAirCommandTick: Map<string, number> = new Map();
+  private lastAirHarassTick: Map<string, number> = new Map();
 
   constructor(game: IGameInstance, coordinator: AICoordinator) {
     this.game = game;
@@ -684,6 +695,31 @@ export class AITacticsManager {
   }
 
   /**
+   * Get support air units (healers, detectors) that should follow the army.
+   */
+  public getSupportAirUnits(playerId: string): number[] {
+    const supportUnits: number[] = [];
+    const entities = this.coordinator.getCachedUnits();
+
+    for (const entity of entities) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId !== playerId) continue;
+      if (health.isDead()) continue;
+      if (!unit.isFlying) continue;
+      if (unit.isWorker) continue;
+      // Support air = flying + no attack damage
+      if (unit.attackDamage > 0) continue;
+
+      supportUnits.push(entity.id);
+    }
+
+    return supportUnits;
+  }
+
+  /**
    * Get army units with their positions for formation calculations.
    */
   private getArmyUnitsWithPositions(playerId: string): Array<{
@@ -1072,6 +1108,25 @@ export class AITacticsManager {
       }
     }
 
+    // Separate air units from ground army for independent control
+    const groundUnits: number[] = [];
+    const airCombatUnits: number[] = [];
+    for (const entityId of armyUnits) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+      const unit = entity.get<Unit>('Unit');
+      if (!unit) continue;
+      if (unit.isFlying) {
+        airCombatUnits.push(entityId);
+      } else {
+        groundUnits.push(entityId);
+      }
+    }
+
+    // Use ground units for main army operations, air operates independently.
+    // If no ground units exist, air units become the main force.
+    const mainArmyUnits = groundUnits.length > 0 ? groundUnits : armyUnits;
+
     // Per-enemy hunt mode: check if the PRIMARY enemy is near elimination
     const primaryEnemyId = ai.primaryEnemyId;
     const primaryRelation = primaryEnemyId ? ai.enemyRelations.get(primaryEnemyId) : null;
@@ -1152,8 +1207,8 @@ export class AITacticsManager {
       );
 
       // Use concave formation for initial attack to spread units naturally
-      if (armyUnits.length >= 6) {
-        const groupId = ai.formationControl.createGroup(this.world, armyUnits, ai.playerId);
+      if (mainArmyUnits.length >= 6) {
+        const groupId = ai.formationControl.createGroup(this.world, mainArmyUnits, ai.playerId);
         const slots = ai.formationControl.calculateConcaveFormation(
           this.world,
           groupId,
@@ -1183,14 +1238,14 @@ export class AITacticsManager {
             tick: currentTick,
             playerId: ai.playerId,
             type: 'ATTACK_MOVE',
-            entityIds: armyUnits,
+            entityIds: mainArmyUnits,
             ...(attackTarget.entityId !== undefined
               ? { targetEntityId: attackTarget.entityId }
               : { targetPosition: attackTarget }),
           };
           this.game.issueAICommand(command);
           debugAI.log(
-            `[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units (no formation)`
+            `[AITactics] ${ai.playerId}: Attacking with ${mainArmyUnits.length} units (no formation)`
           );
         }
       } else {
@@ -1201,13 +1256,13 @@ export class AITacticsManager {
           tick: currentTick,
           playerId: ai.playerId,
           type: 'ATTACK_MOVE',
-          entityIds: armyUnits,
+          entityIds: mainArmyUnits,
           ...(attackTarget.entityId !== undefined
             ? { targetEntityId: attackTarget.entityId }
             : { targetPosition: attackTarget }),
         };
         this.game.issueAICommand(command);
-        debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${armyUnits.length} units`);
+        debugAI.log(`[AITactics] ${ai.playerId}: Attacking with ${mainArmyUnits.length} units`);
       }
     } else {
       // Update target position (may have changed if building was destroyed)
@@ -1219,17 +1274,25 @@ export class AITacticsManager {
       }
     }
 
+    // Command air force independently for flanking attacks
+    if (airCombatUnits.length > 0 && groundUnits.length > 0) {
+      this.commandAirForce(ai, airCombatUnits, attackTarget, currentTick);
+    }
+
+    // Support air units follow the army
+    this.commandSupportAir(ai, currentTick);
+
     // Re-command idle assault units periodically
     const lastReCommand = this.lastReCommandTick.get(ai.playerId) || 0;
     const shouldReCommand = currentTick - lastReCommand >= RE_COMMAND_IDLE_INTERVAL;
 
     if (shouldReCommand) {
-      const idleAssaultUnits = this.getIdleAssaultUnits(ai.playerId, armyUnits, attackTarget);
+      const idleAssaultUnits = this.getIdleAssaultUnits(ai.playerId, mainArmyUnits, attackTarget);
 
       if (idleAssaultUnits.length > 0) {
         // Check for nearby enemy combat units that should be dealt with first.
         // In FFA, third-party armies standing near ours must be engaged, not ignored.
-        const nearbyThreat = this.findNearbyArmyThreat(ai, armyUnits);
+        const nearbyThreat = this.findNearbyArmyThreat(ai, mainArmyUnits);
 
         if (nearbyThreat) {
           // Enemy combat units detected near our army - engage them first
@@ -1468,6 +1531,22 @@ export class AITacticsManager {
       );
     }
 
+    // Air units help defend independently
+    const airDefenders = this.getAirArmyUnits(ai.playerId);
+    if (airDefenders.length > 0 && threatPos) {
+      const command: GameCommand = {
+        tick: currentTick,
+        playerId: ai.playerId,
+        type: 'ATTACK_MOVE',
+        entityIds: airDefenders,
+        targetPosition: threatPos,
+      };
+      this.game.issueAICommand(command);
+    }
+
+    // Support air follows during defense too
+    this.commandSupportAir(ai, currentTick);
+
     this.lastDefenseCommandTick.set(ai.playerId, currentTick);
 
     if (!this.isUnderAttack(ai)) {
@@ -1622,6 +1701,163 @@ export class AITacticsManager {
     debugAI.log(`[AITactics] ${ai.playerId}: Harassing with ${harassUnits.length} units`);
 
     ai.state = 'building';
+  }
+
+  /**
+   * Command air combat units independently during attacks.
+   * Air units flank the enemy from a different angle than the ground army,
+   * creating multi-pronged pressure. Prioritizes enemy air > support > workers.
+   */
+  private commandAirForce(
+    ai: AIPlayer,
+    airUnits: number[],
+    attackTarget: { x: number; y: number },
+    currentTick: number
+  ): void {
+    if (airUnits.length === 0) return;
+
+    const lastCommand = this.lastAirCommandTick.get(ai.playerId) || 0;
+    if (currentTick - lastCommand < AIR_COMMAND_INTERVAL) return;
+    this.lastAirCommandTick.set(ai.playerId, currentTick);
+
+    const basePos = this.coordinator.findAIBase(ai);
+    if (!basePos) return;
+
+    // Flank direction: perpendicular to the base->target vector
+    const dx = attackTarget.x - basePos.x;
+    const dy = attackTarget.y - basePos.y;
+    const dist = deterministicMagnitude(dx, dy);
+    if (dist === 0) return;
+
+    const normX = dx / dist;
+    const normY = dy / dist;
+    // Perpendicular offset for flanking (air approaches from the side)
+    const perpX = -normY;
+    const perpY = normX;
+
+    const flankTarget = {
+      x: attackTarget.x + perpX * AIR_FLANK_OFFSET,
+      y: attackTarget.y + perpY * AIR_FLANK_OFFSET,
+    };
+
+    // Clamp to map bounds
+    const mapWidth = this.game.config.mapWidth;
+    const mapHeight = this.game.config.mapHeight;
+    flankTarget.x = Math.max(5, Math.min(mapWidth - 5, flankTarget.x));
+    flankTarget.y = Math.max(5, Math.min(mapHeight - 5, flankTarget.y));
+
+    // Issue ATTACK_MOVE to flank position — air units auto-engage enemies along the way
+    const command: GameCommand = {
+      tick: currentTick,
+      playerId: ai.playerId,
+      type: 'ATTACK_MOVE',
+      entityIds: airUnits,
+      targetPosition: flankTarget,
+    };
+    this.game.issueAICommand(command);
+
+    debugAI.log(
+      `[AITactics] ${ai.playerId}: Air force (${airUnits.length} units) flanking to ` +
+        `(${flankTarget.x.toFixed(0)}, ${flankTarget.y.toFixed(0)})`
+    );
+  }
+
+  /**
+   * Command support air units (Lifter, Overseer) to follow the main army.
+   * Support units shadow the army centroid, staying slightly behind.
+   */
+  private commandSupportAir(
+    ai: AIPlayer,
+    currentTick: number
+  ): void {
+    const supportUnits = this.getSupportAirUnits(ai.playerId);
+    if (supportUnits.length === 0) return;
+
+    // Only re-command periodically
+    const lastCommand = this.lastAirCommandTick.get(`${ai.playerId}_support`) || 0;
+    if (currentTick - lastCommand < AIR_COMMAND_INTERVAL * 2) return;
+    this.lastAirCommandTick.set(`${ai.playerId}_support`, currentTick);
+
+    // Find army centroid
+    const armyUnits = this.getArmyUnits(ai.playerId);
+    if (armyUnits.length === 0) return;
+
+    let sumX = 0;
+    let sumY = 0;
+    let count = 0;
+    for (const entityId of armyUnits) {
+      const entity = this.world.getEntity(entityId);
+      if (!entity) continue;
+      const transform = entity.get<Transform>('Transform');
+      if (!transform) continue;
+      sumX += transform.x;
+      sumY += transform.y;
+      count++;
+    }
+    if (count === 0) return;
+
+    const centroidX = sumX / count;
+    const centroidY = sumY / count;
+
+    // Position support behind army center (toward own base)
+    const basePos = this.coordinator.findAIBase(ai);
+    if (!basePos) return;
+
+    const dx = centroidX - basePos.x;
+    const dy = centroidY - basePos.y;
+    const dist = deterministicMagnitude(dx, dy);
+    let followX = centroidX;
+    let followY = centroidY;
+    if (dist > 0) {
+      // Slightly behind the army, toward base
+      followX = centroidX - (dx / dist) * SUPPORT_FOLLOW_DISTANCE;
+      followY = centroidY - (dy / dist) * SUPPORT_FOLLOW_DISTANCE;
+    }
+
+    const command: GameCommand = {
+      tick: currentTick,
+      playerId: ai.playerId,
+      type: 'MOVE',
+      entityIds: supportUnits,
+      targetPosition: { x: followX, y: followY },
+    };
+    this.game.issueAICommand(command);
+  }
+
+  /**
+   * Execute air harassment against enemy economy.
+   * Sends a small group of air units to attack enemy worker lines.
+   * Air units bypass ground defenses (they fly over terrain/obstacles).
+   */
+  public executeAirHarassment(ai: AIPlayer, currentTick: number): void {
+    const airUnits = this.getAirArmyUnits(ai.playerId);
+    if (airUnits.length === 0) return;
+
+    const lastHarass = this.lastAirHarassTick.get(ai.playerId) || 0;
+    if (currentTick - lastHarass < 200) return; // 10-second cooldown between air harass
+    this.lastAirHarassTick.set(ai.playerId, currentTick);
+
+    // Select up to AIR_HARASS_MAX_UNITS for harassment
+    const harassGroup = airUnits.slice(0, AIR_HARASS_MAX_UNITS);
+
+    // Find enemy base/workers to harass
+    const harassTarget = this.findHarassTarget(ai);
+    if (!harassTarget) return;
+
+    // Air units don't need safe paths — they fly over obstacles
+    const command: GameCommand = {
+      tick: currentTick,
+      playerId: ai.playerId,
+      type: 'ATTACK_MOVE',
+      entityIds: harassGroup,
+      targetPosition: harassTarget,
+    };
+    this.game.issueAICommand(command);
+
+    debugAI.log(
+      `[AITactics] ${ai.playerId}: Air harassment with ${harassGroup.length} units to ` +
+        `(${harassTarget.x.toFixed(0)}, ${harassTarget.y.toFixed(0)})`
+    );
   }
 
   // === Near-Army Threat Detection ===

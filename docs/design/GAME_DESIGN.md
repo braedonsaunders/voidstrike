@@ -168,6 +168,34 @@ Units have restrictions on what they can attack based on air/ground targeting:
 
 **AI Counter-Building**: When AI units are attacked by enemies they cannot hit (e.g., air units attacking ground-only troops), the AI urgently prioritizes building anti-air capable units.
 
+### AI Air Unit Control
+
+The AI manages air units as an independent tactical arm:
+
+**Air Combat Units** (Valkyrie, Specter, Dreadnought):
+- Separated from ground army during attacks
+- Execute flanking maneuvers perpendicular to the main ground attack
+- Perform hit-and-run micro (reposition after attacking)
+- Disengage automatically when health drops below 30%
+- Used for worker harassment between major attacks
+
+**Air Support Units** (Lifter, Overseer):
+- Follow the main army at a safe distance behind the centroid
+- Provide healing (Lifter) and detection (Overseer) support
+- Not included in combat formations
+
+**Valkyrie Transform Intelligence**:
+- Switches to Fighter mode when air threats dominate (1.5x threshold)
+- Switches to Assault mode when ground threats dominate (1.5x threshold)
+- More aggressive mode-switching than previous 2x threshold
+
+**Air Production Priority**:
+- Valkyrie: priority 54 (primary air unit)
+- Specter: priority 52 (cloaked strike)
+- Dreadnought: priority 58 (capital ship)
+- Air Superiority response: priority 75 when enemy has air
+- Emergency anti-air: priority 95 on all difficulties
+
 ### AI Personality System
 
 Each AI player is assigned a personality that determines its strategic behavior, army composition, and build order selection. In multi-AI games, personalities are varied so no two AIs play identically.

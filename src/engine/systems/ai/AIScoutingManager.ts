@@ -53,7 +53,22 @@ export class AIScoutingManager {
 
     const entities = this.coordinator.getCachedUnits();
 
-    // First pass: find fast units
+    // First pass: prefer idle flying units (best scouts — bypass terrain)
+    for (const entity of entities) {
+      const selectable = entity.get<Selectable>('Selectable')!;
+      const unit = entity.get<Unit>('Unit')!;
+      const health = entity.get<Health>('Health')!;
+
+      if (selectable.playerId !== ai.playerId) continue;
+      if (health.isDead()) continue;
+      if (!unit.isFlying) continue;
+      if (unit.isWorker) continue;
+      if (unit.state !== 'idle') continue;
+
+      return entity.id;
+    }
+
+    // Second pass: find preferred fast ground units
     for (const entity of entities) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const unit = entity.get<Unit>('Unit')!;
@@ -67,7 +82,7 @@ export class AIScoutingManager {
       }
     }
 
-    // Second pass: find idle worker
+    // Third pass: find idle worker
     for (const entity of entities) {
       const selectable = entity.get<Selectable>('Selectable')!;
       const unit = entity.get<Unit>('Unit')!;

@@ -268,22 +268,25 @@ export class FormationControl {
       });
     }
 
-    // Air units hover above center
+    // Air units position in a wide spread targeting the enemy flank
+    // They approach from a perpendicular angle to the ground army
     const airUnits = unitsByRole.get('air') || [];
-    const airSlots = this.calculateLinePositions(
-      group.center,
-      facing,
-      airUnits.length,
-      2 // Slightly behind
-    );
+    if (airUnits.length > 0) {
+      const airSlots = this.calculateAirPositions(
+        group.center,
+        facing,
+        enemyCenter,
+        airUnits.length
+      );
 
-    for (let i = 0; i < airUnits.length; i++) {
-      slots.push({
-        entityId: airUnits[i].entityId,
-        role: 'air',
-        targetPosition: airSlots[i],
-        priority: 2,
-      });
+      for (let i = 0; i < airUnits.length; i++) {
+        slots.push({
+          entityId: airUnits[i].entityId,
+          role: 'air',
+          targetPosition: airSlots[i],
+          priority: 4, // Lowest priority — air acts independently
+        });
+      }
     }
 
     group.slots = slots;
@@ -364,6 +367,53 @@ export class FormationControl {
       positions.push({
         x: lineCenter.x + perpX * offset,
         y: lineCenter.y + perpY * offset,
+      });
+    }
+
+    return positions;
+  }
+
+  /**
+   * Calculate air unit positions for flanking attacks.
+   * Air units spread in a wide arc on the far side of the enemy,
+   * creating a pincer with the ground army.
+   */
+  private calculateAirPositions(
+    _armyCenter: { x: number; y: number },
+    facing: { x: number; y: number },
+    enemyCenter: { x: number; y: number },
+    count: number
+  ): Array<{ x: number; y: number }> {
+    if (count === 0) return [];
+
+    // Air units position past the enemy, flanking from perpendicular angle
+    const perpX = -facing.y;
+    const perpY = facing.x;
+
+    // Distance past the enemy center
+    const flankDepth = 8;
+    // Center of the air formation: offset to the side and slightly past enemy
+    const airCenter = {
+      x: enemyCenter.x + perpX * 10 + facing.x * flankDepth,
+      y: enemyCenter.y + perpY * 10 + facing.y * flankDepth,
+    };
+
+    const positions: Array<{ x: number; y: number }> = [];
+    const spacing = this.config.unitSpacing * 2; // Wider spread for air (anti-splash)
+
+    if (count === 1) {
+      return [airCenter];
+    }
+
+    // Spread along the perpendicular axis
+    const totalWidth = (count - 1) * spacing;
+    const startOffset = -totalWidth / 2;
+
+    for (let i = 0; i < count; i++) {
+      const offset = startOffset + i * spacing;
+      positions.push({
+        x: airCenter.x + perpX * offset,
+        y: airCenter.y + perpY * offset,
       });
     }
 
