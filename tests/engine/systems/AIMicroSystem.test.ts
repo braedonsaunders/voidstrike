@@ -1601,10 +1601,10 @@ describe('AIMicroSystem', () => {
       isDead: boolean;
     }
 
-    function getSupportAirUnits(units: MockSupportUnit[], playerId: string): number[] {
+    function getSupportAirUnits(units: MockSupportUnit[], _playerId: string): number[] {
       return units
-        .filter(u => !u.isDead && u.isFlying && !u.isWorker && u.attackDamage === 0)
-        .map(u => u.id);
+        .filter((u) => !u.isDead && u.isFlying && !u.isWorker && u.attackDamage === 0)
+        .map((u) => u.id);
     }
 
     it('should return Lifter-type units (flying, no attack)', () => {
@@ -1644,10 +1644,7 @@ describe('AIMicroSystem', () => {
       state: string;
     }
 
-    function getScoutUnit(
-      units: MockScoutUnit[],
-      preferredTypes: Set<string>
-    ): number | null {
+    function getScoutUnit(units: MockScoutUnit[], preferredTypes: Set<string>): number | null {
       // First: idle flying units
       for (const u of units) {
         if (u.isFlying && !u.isWorker && u.state === 'idle') return u.id;
