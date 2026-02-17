@@ -53,7 +53,7 @@ const HUNT_MODE_STUCK_DISENGAGE_TICKS = 300; // ~15 seconds with no combat → f
 // Air control constants
 const AIR_HARASS_MAX_UNITS = 3; // Max air units for harassment
 const AIR_FLANK_OFFSET = 20; // How far air units flank from the main army's attack vector
-const AIR_REGROUP_DISTANCE = 30; // Distance from base to regroup air units
+const _AIR_REGROUP_DISTANCE = 30; // Distance from base to regroup air units
 const AIR_COMMAND_INTERVAL = 30; // Re-command air units every 30 ticks (~1.5 sec)
 const SUPPORT_FOLLOW_DISTANCE = 12; // Support units stay this far behind army center
 
@@ -1766,10 +1766,7 @@ export class AITacticsManager {
    * Command support air units (Lifter, Overseer) to follow the main army.
    * Support units shadow the army centroid, staying slightly behind.
    */
-  private commandSupportAir(
-    ai: AIPlayer,
-    currentTick: number
-  ): void {
+  private commandSupportAir(ai: AIPlayer, currentTick: number): void {
     const supportUnits = this.getSupportAirUnits(ai.playerId);
     if (supportUnits.length === 0) return;
 
