@@ -51,6 +51,7 @@ voidstrike/
 │   │   │   └── page.tsx
 │   │   ├── globals.css
 │   │   ├── layout.tsx
+│   │   ├── manifest.ts
 │   │   └── page.tsx
 │   ├── assets/ # Asset management
 │   │   ├── AssetManager.ts
@@ -111,6 +112,9 @@ voidstrike/
 │   │   │   └── HomeBackground.tsx
 │   │   ├── lobby/
 │   │   │   └── LobbyBrowser.tsx
+│   │   ├── pwa/
+│   │   │   ├── InstallPrompt.tsx
+│   │   │   └── ServiceWorkerRegistrar.tsx
 │   │   └── ui/
 │   │       ├── CommandButton.tsx
 │   │       ├── CommandTooltip.tsx
@@ -486,8 +490,10 @@ voidstrike/
 │   │   ├── gameStore.ts
 │   │   ├── multiplayerStore.ts
 │   │   ├── projectionStore.ts
+│   │   ├── pwaStore.ts
 │   │   └── uiStore.ts
 │   ├── types/
+│   │   ├── pwa.d.ts
 │   │   └── three-webgpu.d.ts
 │   ├── utils/ # Utility functions
 │   │   ├── commandIcons.ts
@@ -567,9 +573,10 @@ voidstrike/
 │   │   └── units/
 │   ├── textures/ # Texture assets
 │   │   └── terrain/
-│   └── wasm/ # WASM module wrappers
-│       ├── boids_wasm.d.ts
-│       └── boids_wasm.js
+│   ├── wasm/ # WASM module wrappers
+│   │   ├── boids_wasm.d.ts
+│   │   └── boids_wasm.js
+│   └── sw.js
 └── tests/
     ├── data/ # Game data definitions
     │   ├── aiConfig.test.ts
