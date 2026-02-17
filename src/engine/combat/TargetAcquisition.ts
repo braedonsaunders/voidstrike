@@ -145,7 +145,8 @@ export function findBestTarget(world: World, options: TargetQueryOptions): Targe
       continue;
     }
 
-    const entity = world.getEntity(entityId);
+    // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+    const entity = world.getEntityByIndex(entityId);
     if (!entity) continue;
 
     const transform = entity.get<Transform>('Transform');
@@ -190,7 +191,7 @@ export function findBestTarget(world: World, options: TargetQueryOptions): Targe
     );
 
     if (!bestTarget || score > bestTarget.score) {
-      bestTarget = { entityId, score, distance, isBuilding: false };
+      bestTarget = { entityId: entity.id, score, distance, isBuilding: false };
     }
   }
 
@@ -203,7 +204,8 @@ export function findBestTarget(world: World, options: TargetQueryOptions): Targe
         continue;
       }
 
-      const entity = world.getEntity(entityId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const entity = world.getEntityByIndex(entityId);
       if (!entity) continue;
 
       const transform = entity.get<Transform>('Transform');
@@ -241,7 +243,7 @@ export function findBestTarget(world: World, options: TargetQueryOptions): Targe
       );
 
       if (!bestTarget || score > bestTarget.score) {
-        bestTarget = { entityId, score, distance, isBuilding: true };
+        bestTarget = { entityId: entity.id, score, distance, isBuilding: true };
       }
     }
   }
@@ -280,7 +282,8 @@ export function findAllTargets(
       continue;
     }
 
-    const entity = world.getEntity(entityId);
+    // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+    const entity = world.getEntityByIndex(entityId);
     if (!entity) continue;
 
     const transform = entity.get<Transform>('Transform');
@@ -322,7 +325,7 @@ export function findAllTargets(
       config
     );
 
-    targets.push({ entityId, score, distance, isBuilding: false });
+    targets.push({ entityId: entity.id, score, distance, isBuilding: false });
   }
 
   // Query buildings
@@ -334,7 +337,8 @@ export function findAllTargets(
         continue;
       }
 
-      const entity = world.getEntity(entityId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const entity = world.getEntityByIndex(entityId);
       if (!entity) continue;
 
       const transform = entity.get<Transform>('Transform');
@@ -376,7 +380,7 @@ export function findAllTargets(
         config
       );
 
-      targets.push({ entityId, score, distance, isBuilding: true });
+      targets.push({ entityId: entity.id, score, distance, isBuilding: true });
     }
   }
 

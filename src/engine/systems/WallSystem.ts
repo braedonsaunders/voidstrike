@@ -133,7 +133,8 @@ export class WallSystem extends System {
     );
 
     for (const unitId of nearbyUnitIds) {
-      const unitEntity = this.world.getEntity(unitId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const unitEntity = this.world.getEntityByIndex(unitId);
       if (!unitEntity) continue;
 
       const unitSelectable = unitEntity.get<Selectable>('Selectable');
@@ -164,7 +165,8 @@ export class WallSystem extends System {
     for (const buildingId of nearbyBuildingIds) {
       if (buildingId === droneEntity.id) continue;
 
-      const wallEntity = this.world.getEntity(buildingId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const wallEntity = this.world.getEntityByIndex(buildingId);
       if (!wallEntity) continue;
 
       // Check if this is a wall belonging to same player

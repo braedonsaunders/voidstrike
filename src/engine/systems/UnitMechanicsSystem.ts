@@ -106,7 +106,8 @@ export class UnitMechanicsSystem extends System {
     playerId?: string;
   }): void {
     const entity = this.world.getEntity(data.entityId);
-    if (!validateEntityAlive(entity, data.entityId, 'UnitMechanicsSystem:handleSetAutocast')) return;
+    if (!validateEntityAlive(entity, data.entityId, 'UnitMechanicsSystem:handleSetAutocast'))
+      return;
 
     const unit = entity.get<Unit>('Unit');
     if (!unit) return;
@@ -130,7 +131,8 @@ export class UnitMechanicsSystem extends System {
   private handleToggleAutocastRepair(data: { entityIds: number[] }): void {
     for (const entityId of data.entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!validateEntityAlive(entity, entityId, 'UnitMechanicsSystem:handleToggleAutocastRepair')) continue;
+      if (!validateEntityAlive(entity, entityId, 'UnitMechanicsSystem:handleToggleAutocastRepair'))
+        continue;
 
       const unit = entity.get<Unit>('Unit');
       if (!unit || !unit.canRepair) continue;
@@ -150,7 +152,8 @@ export class UnitMechanicsSystem extends System {
   private handleTransformCommand(command: TransformCommand): void {
     for (const entityId of command.entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!validateEntityAlive(entity, entityId, 'UnitMechanicsSystem:handleTransformCommand')) continue;
+      if (!validateEntityAlive(entity, entityId, 'UnitMechanicsSystem:handleTransformCommand'))
+        continue;
 
       const unit = entity.get<Unit>('Unit');
       if (!unit || !unit.canTransform) continue;
@@ -170,7 +173,8 @@ export class UnitMechanicsSystem extends System {
   private handleCloakCommand(command: CloakCommand): void {
     for (const entityId of command.entityIds) {
       const entity = this.world.getEntity(entityId);
-      if (!validateEntityAlive(entity, entityId, 'UnitMechanicsSystem:handleCloakCommand')) continue;
+      if (!validateEntityAlive(entity, entityId, 'UnitMechanicsSystem:handleCloakCommand'))
+        continue;
 
       const unit = entity.get<Unit>('Unit');
       if (!unit || !unit.canCloak) continue;
@@ -199,7 +203,14 @@ export class UnitMechanicsSystem extends System {
 
   private handleLoadCommand(command: LoadCommand): void {
     const transport = this.world.getEntity(command.transportId);
-    if (!validateEntityAlive(transport, command.transportId, 'UnitMechanicsSystem:handleLoadCommand:transport')) return;
+    if (
+      !validateEntityAlive(
+        transport,
+        command.transportId,
+        'UnitMechanicsSystem:handleLoadCommand:transport'
+      )
+    )
+      return;
 
     const transportUnit = transport.get<Unit>('Unit');
     const transportTransform = transport.get<Transform>('Transform');
@@ -210,7 +221,8 @@ export class UnitMechanicsSystem extends System {
 
     for (const unitId of command.unitIds) {
       const entity = this.world.getEntity(unitId);
-      if (!validateEntityAlive(entity, unitId, 'UnitMechanicsSystem:handleLoadCommand:unit')) continue;
+      if (!validateEntityAlive(entity, unitId, 'UnitMechanicsSystem:handleLoadCommand:unit'))
+        continue;
 
       const unit = entity.get<Unit>('Unit');
       const transform = entity.get<Transform>('Transform');
@@ -244,7 +256,14 @@ export class UnitMechanicsSystem extends System {
 
   private handleUnloadCommand(command: UnloadCommand): void {
     const transport = this.world.getEntity(command.transportId);
-    if (!validateEntityAlive(transport, command.transportId, 'UnitMechanicsSystem:handleUnloadCommand:transport')) return;
+    if (
+      !validateEntityAlive(
+        transport,
+        command.transportId,
+        'UnitMechanicsSystem:handleUnloadCommand:transport'
+      )
+    )
+      return;
 
     const transportUnit = transport.get<Unit>('Unit');
     const transportTransform = transport.get<Transform>('Transform');
@@ -261,7 +280,8 @@ export class UnitMechanicsSystem extends System {
       if (!transportUnit.unloadUnit(unitId)) continue;
 
       const entity = this.world.getEntity(unitId);
-      if (!validateEntityAlive(entity, unitId, 'UnitMechanicsSystem:handleUnloadCommand:unit')) continue;
+      if (!validateEntityAlive(entity, unitId, 'UnitMechanicsSystem:handleUnloadCommand:unit'))
+        continue;
 
       const unit = entity.get<Unit>('Unit');
       const transform = entity.get<Transform>('Transform');
@@ -289,7 +309,14 @@ export class UnitMechanicsSystem extends System {
 
   private handleLoadBunkerCommand(command: LoadIntoBunkerCommand): void {
     const bunker = this.world.getEntity(command.bunkerId);
-    if (!validateEntityAlive(bunker, command.bunkerId, 'UnitMechanicsSystem:handleLoadBunkerCommand:bunker')) return;
+    if (
+      !validateEntityAlive(
+        bunker,
+        command.bunkerId,
+        'UnitMechanicsSystem:handleLoadBunkerCommand:bunker'
+      )
+    )
+      return;
 
     const building = bunker.get<Building>('Building');
     const bunkerTransform = bunker.get<Transform>('Transform');
@@ -309,7 +336,8 @@ export class UnitMechanicsSystem extends System {
       if (data.loadedUnits.length >= data.maxCapacity) break;
 
       const entity = this.world.getEntity(unitId);
-      if (!validateEntityAlive(entity, unitId, 'UnitMechanicsSystem:handleLoadBunkerCommand:unit')) continue;
+      if (!validateEntityAlive(entity, unitId, 'UnitMechanicsSystem:handleLoadBunkerCommand:unit'))
+        continue;
 
       const unit = entity.get<Unit>('Unit');
       const transform = entity.get<Transform>('Transform');
@@ -339,7 +367,14 @@ export class UnitMechanicsSystem extends System {
 
   private handleUnloadBunkerCommand(command: UnloadFromBunkerCommand): void {
     const bunker = this.world.getEntity(command.bunkerId);
-    if (!validateEntityAlive(bunker, command.bunkerId, 'UnitMechanicsSystem:handleUnloadBunkerCommand:bunker')) return;
+    if (
+      !validateEntityAlive(
+        bunker,
+        command.bunkerId,
+        'UnitMechanicsSystem:handleUnloadBunkerCommand:bunker'
+      )
+    )
+      return;
 
     const bunkerTransform = bunker.get<Transform>('Transform');
     if (!bunkerTransform) return;
@@ -359,7 +394,10 @@ export class UnitMechanicsSystem extends System {
       data.loadedUnits.splice(index, 1);
 
       const entity = this.world.getEntity(unitId);
-      if (!validateEntityAlive(entity, unitId, 'UnitMechanicsSystem:handleUnloadBunkerCommand:unit')) continue;
+      if (
+        !validateEntityAlive(entity, unitId, 'UnitMechanicsSystem:handleUnloadBunkerCommand:unit')
+      )
+        continue;
 
       const unit = entity.get<Unit>('Unit');
       const transform = entity.get<Transform>('Transform');
@@ -385,7 +423,10 @@ export class UnitMechanicsSystem extends System {
 
   private handleSalvageBunkerCommand(data: { bunkerId: number; playerId: string }): void {
     const bunker = this.world.getEntity(data.bunkerId);
-    if (!validateEntityAlive(bunker, data.bunkerId, 'UnitMechanicsSystem:handleSalvageBunkerCommand')) return;
+    if (
+      !validateEntityAlive(bunker, data.bunkerId, 'UnitMechanicsSystem:handleSalvageBunkerCommand')
+    )
+      return;
 
     const building = bunker.get<Building>('Building');
     const selectable = bunker.get<Selectable>('Selectable');
@@ -421,7 +462,8 @@ export class UnitMechanicsSystem extends System {
 
   private handleHealCommand(command: HealCommand): void {
     const healer = this.world.getEntity(command.healerId);
-    if (!validateEntityAlive(healer, command.healerId, 'UnitMechanicsSystem:handleHealCommand')) return;
+    if (!validateEntityAlive(healer, command.healerId, 'UnitMechanicsSystem:handleHealCommand'))
+      return;
 
     const healerUnit = healer.get<Unit>('Unit');
     if (!healerUnit || !healerUnit.canHeal) return;
@@ -431,7 +473,10 @@ export class UnitMechanicsSystem extends System {
 
   private handleRepairCommand(command: RepairCommand): void {
     const repairer = this.world.getEntity(command.repairerId);
-    if (!validateEntityAlive(repairer, command.repairerId, 'UnitMechanicsSystem:handleRepairCommand')) return;
+    if (
+      !validateEntityAlive(repairer, command.repairerId, 'UnitMechanicsSystem:handleRepairCommand')
+    )
+      return;
 
     const repairerUnit = repairer.get<Unit>('Unit');
     if (!repairerUnit || !repairerUnit.canRepair) return;
@@ -566,7 +611,8 @@ export class UnitMechanicsSystem extends System {
     );
 
     for (const buildingId of nearbyBuildingIds) {
-      const buildingEntity = this.world.getEntity(buildingId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const buildingEntity = this.world.getEntityByIndex(buildingId);
       if (!buildingEntity) continue;
 
       const buildingSelectable = buildingEntity.get<Selectable>('Selectable');
@@ -605,7 +651,7 @@ export class UnitMechanicsSystem extends System {
 
       if (dist <= autocastRange) {
         if (!closestTarget || dist < closestTarget.distance) {
-          closestTarget = { id: buildingId, distance: dist };
+          closestTarget = { id: buildingEntity.id, distance: dist };
         }
       }
     }
@@ -620,7 +666,8 @@ export class UnitMechanicsSystem extends System {
     for (const unitId of nearbyUnitIds) {
       if (unitId === entity.id) continue; // Skip self
 
-      const unitEntity = this.world.getEntity(unitId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const unitEntity = this.world.getEntityByIndex(unitId);
       if (!unitEntity) continue;
 
       const targetUnit = unitEntity.get<Unit>('Unit');
@@ -650,7 +697,7 @@ export class UnitMechanicsSystem extends System {
 
       if (dist <= autocastRange) {
         if (!closestTarget || dist < closestTarget.distance) {
-          closestTarget = { id: unitId, distance: dist };
+          closestTarget = { id: unitEntity.id, distance: dist };
         }
       }
     }
@@ -922,7 +969,8 @@ export class UnitMechanicsSystem extends System {
 
     // Check units
     for (const unitId of nearbyUnitIds) {
-      const entity = this.world.getEntity(unitId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const entity = this.world.getEntityByIndex(unitId);
       if (!entity) continue;
 
       const selectable = entity.get<Selectable>('Selectable');
@@ -942,7 +990,8 @@ export class UnitMechanicsSystem extends System {
 
     // Check buildings
     for (const buildingId of nearbyBuildingIds) {
-      const entity = this.world.getEntity(buildingId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const entity = this.world.getEntityByIndex(buildingId);
       if (!entity) continue;
 
       const selectable = entity.get<Selectable>('Selectable');

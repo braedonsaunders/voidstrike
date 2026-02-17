@@ -372,7 +372,8 @@ export class ProjectileSystem extends System {
       // Skip primary target (already damaged)
       if (entityId === projectile.targetEntityId) continue;
 
-      const entity = this.world.getEntity(entityId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const entity = this.world.getEntityByIndex(entityId);
       if (!validateEntityAlive(entity, entityId, 'ProjectileSystem:applySplashDamage:units'))
         continue;
 
@@ -449,7 +450,8 @@ export class ProjectileSystem extends System {
     for (const entityId of nearbyBuildingIds) {
       if (entityId === projectile.targetEntityId) continue;
 
-      const entity = this.world.getEntity(entityId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const entity = this.world.getEntityByIndex(entityId);
       if (!validateEntityAlive(entity, entityId, 'ProjectileSystem:applySplashDamage:buildings'))
         continue;
 

@@ -1120,11 +1120,20 @@ export class AITacticsManager {
       if (!attackTarget) {
         attackTarget = this.findAnyEnemyBuilding(ai);
         if (!attackTarget) {
-          // No valid target - end operation
-          ai.state = 'building';
-          ai.activeAttackOperation = null;
-          this.isEngaged.set(ai.playerId, false);
-          return;
+          // No buildings found - check for enemy units (e.g., battle simulator)
+          if (this.hasRemainingEnemyUnits(ai)) {
+            const enemyCluster = this.findEnemyUnitCluster(ai);
+            if (enemyCluster) {
+              attackTarget = enemyCluster;
+            }
+          }
+          if (!attackTarget) {
+            // No valid target at all - end operation
+            ai.state = 'building';
+            ai.activeAttackOperation = null;
+            this.isEngaged.set(ai.playerId, false);
+            return;
+          }
         }
       }
     }

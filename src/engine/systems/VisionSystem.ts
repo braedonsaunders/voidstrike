@@ -1049,7 +1049,8 @@ export class VisionSystem extends System {
       );
 
       for (const unitId of nearbyUnitIds) {
-        const entity = this.world.getEntity(unitId);
+        // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+        const entity = this.world.getEntityByIndex(unitId);
         if (!entity) continue;
 
         const transform = entity.get<Transform>('Transform');
