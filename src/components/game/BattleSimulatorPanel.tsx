@@ -104,8 +104,12 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     // Collect units by team and compute team center positions
     const player1Units: number[] = [];
     const player2Units: number[] = [];
-    let p1SumX = 0, p1SumY = 0, p1Count = 0;
-    let p2SumX = 0, p2SumY = 0, p2Count = 0;
+    let p1SumX = 0,
+      p1SumY = 0,
+      p1Count = 0;
+    let p2SumX = 0,
+      p2SumY = 0,
+      p2Count = 0;
 
     const entities = worldAdapter.getEntitiesWith('Unit', 'Selectable', 'Transform', 'Health');
 
@@ -136,12 +140,12 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
     const player2Center = p2Count > 0 ? { x: p2SumX / p2Count, y: p2SumY / p2Count } : null;
 
     // Issue attack-move commands to each team toward the enemy center
-    // Attack-move triggers assault mode: units continuously seek and engage enemies
+    // ATTACK_MOVE routes to MovementOrchestrator which handles both pathfinding and combat
     if (player1Units.length > 0 && player2Center) {
       const command: GameCommand = {
         tick: currentTick,
         playerId: 'player1',
-        type: 'ATTACK',
+        type: 'ATTACK_MOVE',
         entityIds: player1Units,
         targetPosition: player2Center,
       };
@@ -152,7 +156,7 @@ export const BattleSimulatorPanel = memo(function BattleSimulatorPanel() {
       const command: GameCommand = {
         tick: currentTick,
         playerId: 'player2',
-        type: 'ATTACK',
+        type: 'ATTACK_MOVE',
         entityIds: player2Units,
         targetPosition: player1Center,
       };

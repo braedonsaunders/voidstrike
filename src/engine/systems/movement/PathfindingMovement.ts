@@ -45,6 +45,7 @@ const DROP_OFF_BUILDINGS = Object.freeze([
  */
 export interface PathfindingWorld {
   getEntity(id: number): Entity | undefined;
+  getEntityByIndex(index: number): Entity | undefined;
   buildingGrid: {
     queryRadius(x: number, y: number, radius: number): number[];
   };
@@ -444,7 +445,8 @@ export class PathfindingMovement {
       if (selfUnit.constructingBuildingId === buildingId) continue;
       if (gatheringExtractorId === buildingId) continue;
 
-      const entity = this.world.getEntity(buildingId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const entity = this.world.getEntityByIndex(buildingId);
       if (!entity) continue;
 
       const buildingTransform = entity.get<Transform>('Transform');
@@ -608,7 +610,8 @@ export class PathfindingMovement {
     for (const buildingId of nearbyBuildingIds) {
       if (unit.constructingBuildingId === buildingId) continue;
 
-      const entity = this.world.getEntity(buildingId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const entity = this.world.getEntityByIndex(buildingId);
       if (!entity) continue;
 
       const buildingTransform = entity.get<Transform>('Transform');

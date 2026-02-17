@@ -1163,7 +1163,8 @@ export class CombatSystem extends System {
       );
 
       for (const entityId of nearbyBuildingIds) {
-        const entity = this.world.getEntity(entityId);
+        // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+        const entity = this.world.getEntityByIndex(entityId);
         if (!validateEntityAlive(entity, entityId, 'CombatSystem:checkCombatZone:buildings'))
           continue;
 
@@ -1552,7 +1553,8 @@ export class CombatSystem extends System {
     for (const entityId of nearbyUnitIds) {
       if (entityId === attackerId) continue;
 
-      const entity = this.world.getEntity(entityId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const entity = this.world.getEntityByIndex(entityId);
       if (!validateEntityAlive(entity, entityId, 'CombatSystem:applySplashDamage:units')) continue;
 
       const transform = entity.get<Transform>('Transform');
@@ -1610,7 +1612,8 @@ export class CombatSystem extends System {
     );
 
     for (const entityId of nearbyBuildingIds) {
-      const entity = this.world.getEntity(entityId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const entity = this.world.getEntityByIndex(entityId);
       if (!validateEntityAlive(entity, entityId, 'CombatSystem:applySplashDamage:buildings'))
         continue;
 

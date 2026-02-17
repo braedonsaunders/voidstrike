@@ -114,8 +114,11 @@ function createMockContext(overrides: Partial<BehaviorContext> = {}): BehaviorCo
   const mockUnitGrid = new SpatialGrid(100, 100, 8);
   const mockBuildingGrid = new SpatialGrid(100, 100, 8);
 
+  const getEntityMock = vi.fn();
   const mockWorld = {
-    getEntity: vi.fn(),
+    getEntity: getEntityMock,
+    // SpatialGrid returns indices; getEntityByIndex delegates to same mock for tests
+    getEntityByIndex: (...args: unknown[]) => getEntityMock(...args),
     getEntitiesWith: vi.fn().mockReturnValue([]),
     unitGrid: mockUnitGrid,
     buildingGrid: mockBuildingGrid,

@@ -668,7 +668,8 @@ export class AIMicroSystem extends System {
     for (const nearbyId of nearbyUnits) {
       if (nearbyId === entityId) continue;
 
-      const nearbyEntity = this.world.getEntity(nearbyId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const nearbyEntity = this.world.getEntityByIndex(nearbyId);
       if (!nearbyEntity) continue;
 
       const nearbyUnit = nearbyEntity.get<Unit>('Unit');
@@ -823,7 +824,8 @@ export class AIMicroSystem extends System {
     for (const nearbyId of nearbyUnits) {
       if (nearbyId === entityId) continue;
 
-      const nearbyEntity = this.world.getEntity(nearbyId);
+      // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+      const nearbyEntity = this.world.getEntityByIndex(nearbyId);
       if (!nearbyEntity) continue;
 
       const nearbyUnit = nearbyEntity.get<Unit>('Unit');

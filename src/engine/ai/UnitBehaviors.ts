@@ -82,7 +82,8 @@ function getNearestEnemy(
   for (const id of nearbyIds) {
     if (id === ctx.entityId) continue;
 
-    const enemy = ctx.world.getEntity(id);
+    // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+    const enemy = ctx.world.getEntityByIndex(id);
     if (!enemy) continue;
 
     const enemySelectable = enemy.get<Selectable>('Selectable');
@@ -99,7 +100,7 @@ function getNearestEnemy(
     if (dist < nearestDist) {
       nearestDist = dist;
       nearest = {
-        entityId: id,
+        entityId: enemy.id,
         distance: dist,
         transform: enemyTransform,
         unit: enemyUnit,
@@ -127,7 +128,8 @@ function calculateThreatScore(ctx: BehaviorContext): number {
   for (const id of nearbyIds) {
     if (id === ctx.entityId) continue;
 
-    const enemy = ctx.world.getEntity(id);
+    // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+    const enemy = ctx.world.getEntityByIndex(id);
     if (!enemy) continue;
 
     const enemySelectable = enemy.get<Selectable>('Selectable');
@@ -263,7 +265,8 @@ export function hasMeleeThreatClose(ctx: BehaviorContext): boolean {
   for (const id of nearbyIds) {
     if (id === ctx.entityId) continue;
 
-    const enemy = ctx.world.getEntity(id);
+    // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+    const enemy = ctx.world.getEntityByIndex(id);
     if (!enemy) continue;
 
     const enemySelectable = enemy.get<Selectable>('Selectable');
@@ -383,7 +386,8 @@ export const kiteFromMelee = action('KiteFromMelee', (ctx) => {
   for (const id of nearbyIds) {
     if (id === ctx.entityId) continue;
 
-    const enemy = ctx.world.getEntity(id);
+    // SpatialGrid returns entity indices, use getEntityByIndex for lookup
+    const enemy = ctx.world.getEntityByIndex(id);
     if (!enemy) continue;
 
     const enemySelectable = enemy.get<Selectable>('Selectable');
