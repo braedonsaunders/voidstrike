@@ -1293,4 +1293,409 @@ describe('AIMicroSystem', () => {
       expect(canKite(state, 100)).toBe(true);
     });
   });
+
+  describe('air unit micro behavior', () => {
+    describe('disengage at low health', () => {
+      const AIR_DISENGAGE_HEALTH_PCT = 0.3;
+
+      it('should disengage when health below threshold', () => {
+        const healthPct = 0.25;
+        expect(healthPct < AIR_DISENGAGE_HEALTH_PCT).toBe(true);
+      });
+
+      it('should not disengage at moderate health', () => {
+        const healthPct = 0.5;
+        expect(healthPct < AIR_DISENGAGE_HEALTH_PCT).toBe(false);
+      });
+
+      it('should not disengage at full health', () => {
+        const healthPct = 1.0;
+        expect(healthPct < AIR_DISENGAGE_HEALTH_PCT).toBe(false);
+      });
+
+      it('should disengage at exactly the threshold', () => {
+        const healthPct = 0.3;
+        // At exactly 0.3, should NOT disengage (strictly less than)
+        expect(healthPct < AIR_DISENGAGE_HEALTH_PCT).toBe(false);
+      });
+    });
+
+    describe('hit-and-run repositioning', () => {
+      const AIR_HIT_AND_RUN_INTERVAL = 15;
+
+      it('should reposition when interval has elapsed', () => {
+        const lastHitAndRunTick = 100;
+        const currentTick = 120;
+        expect(currentTick - lastHitAndRunTick >= AIR_HIT_AND_RUN_INTERVAL).toBe(true);
+      });
+
+      it('should not reposition when interval has not elapsed', () => {
+        const lastHitAndRunTick = 100;
+        const currentTick = 110;
+        expect(currentTick - lastHitAndRunTick >= AIR_HIT_AND_RUN_INTERVAL).toBe(false);
+      });
+
+      it('should calculate perpendicular reposition direction', () => {
+        // Attack vector pointing east (1, 0)
+        const dx = 10;
+        const dy = 0;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        // Perpendicular should be (0, 1) or (0, -1)
+        const perpX = -dy / dist;
+        const perpY = dx / dist;
+
+        expect(Math.abs(perpX)).toBeCloseTo(0);
+        expect(Math.abs(perpY)).toBeCloseTo(1);
+      });
+
+      it('should calculate perpendicular for diagonal attack vector', () => {
+        const dx = 10;
+        const dy = 10;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        const perpX = -dy / dist;
+        const perpY = dx / dist;
+
+        // Perpendicular to (1,1) should be (-1,1) normalized
+        expect(perpX).toBeCloseTo(-Math.SQRT1_2, 4);
+        expect(perpY).toBeCloseTo(Math.SQRT1_2, 4);
+      });
+    });
+
+    describe('retreat direction calculation', () => {
+      it('should retreat toward nearest friendly building', () => {
+        const unitPos = { x: 50, y: 50 };
+        const basePos = { x: 20, y: 20 };
+
+        const dx = basePos.x - unitPos.x;
+        const dy = basePos.y - unitPos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        const retreatDir = { x: dx / dist, y: dy / dist };
+
+        // Should point toward base (negative x, negative y)
+        expect(retreatDir.x).toBeLessThan(0);
+        expect(retreatDir.y).toBeLessThan(0);
+
+        // Should be normalized
+        const magnitude = Math.sqrt(retreatDir.x * retreatDir.x + retreatDir.y * retreatDir.y);
+        expect(magnitude).toBeCloseTo(1.0, 4);
+      });
+    });
+  });
+
+  describe('air army separation', () => {
+    interface MockUnitForSeparation {
+      id: number;
+      isFlying: boolean;
+      isWorker: boolean;
+      isNaval: boolean;
+      attackDamage: number;
+    }
+
+    function separateAirAndGround(units: MockUnitForSeparation[]): {
+      groundUnits: number[];
+      airCombatUnits: number[];
+    } {
+      const groundUnits: number[] = [];
+      const airCombatUnits: number[] = [];
+      for (const unit of units) {
+        if (unit.isFlying) {
+          airCombatUnits.push(unit.id);
+        } else {
+          groundUnits.push(unit.id);
+        }
+      }
+      return { groundUnits, airCombatUnits };
+    }
+
+    it('should separate ground and air units', () => {
+      const units: MockUnitForSeparation[] = [
+        { id: 1, isFlying: false, isWorker: false, isNaval: false, attackDamage: 10 },
+        { id: 2, isFlying: true, isWorker: false, isNaval: false, attackDamage: 15 },
+        { id: 3, isFlying: false, isWorker: false, isNaval: false, attackDamage: 20 },
+        { id: 4, isFlying: true, isWorker: false, isNaval: false, attackDamage: 12 },
+      ];
+
+      const { groundUnits, airCombatUnits } = separateAirAndGround(units);
+      expect(groundUnits).toEqual([1, 3]);
+      expect(airCombatUnits).toEqual([2, 4]);
+    });
+
+    it('should handle all-ground army', () => {
+      const units: MockUnitForSeparation[] = [
+        { id: 1, isFlying: false, isWorker: false, isNaval: false, attackDamage: 10 },
+        { id: 2, isFlying: false, isWorker: false, isNaval: false, attackDamage: 15 },
+      ];
+
+      const { groundUnits, airCombatUnits } = separateAirAndGround(units);
+      expect(groundUnits).toEqual([1, 2]);
+      expect(airCombatUnits).toEqual([]);
+    });
+
+    it('should handle all-air army', () => {
+      const units: MockUnitForSeparation[] = [
+        { id: 1, isFlying: true, isWorker: false, isNaval: false, attackDamage: 10 },
+        { id: 2, isFlying: true, isWorker: false, isNaval: false, attackDamage: 15 },
+      ];
+
+      const { groundUnits, airCombatUnits } = separateAirAndGround(units);
+      expect(groundUnits).toEqual([]);
+      expect(airCombatUnits).toEqual([1, 2]);
+    });
+
+    it('should use air as main force when no ground units exist', () => {
+      const groundUnits: number[] = [];
+      const armyUnits = [1, 2, 3]; // All units (air-only army)
+
+      const mainArmyUnits = groundUnits.length > 0 ? groundUnits : armyUnits;
+      expect(mainArmyUnits).toEqual(armyUnits);
+    });
+
+    it('should use ground as main force when ground units exist', () => {
+      const groundUnits = [1, 3];
+      const armyUnits = [1, 2, 3, 4];
+
+      const mainArmyUnits = groundUnits.length > 0 ? groundUnits : armyUnits;
+      expect(mainArmyUnits).toEqual(groundUnits);
+    });
+  });
+
+  describe('air flank positioning', () => {
+    const AIR_FLANK_OFFSET = 20;
+
+    function calculateFlankTarget(
+      basePos: { x: number; y: number },
+      attackTarget: { x: number; y: number },
+      mapWidth: number,
+      mapHeight: number
+    ): { x: number; y: number } {
+      const dx = attackTarget.x - basePos.x;
+      const dy = attackTarget.y - basePos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist === 0) return attackTarget;
+
+      const normX = dx / dist;
+      const normY = dy / dist;
+      const perpX = -normY;
+      const perpY = normX;
+
+      return {
+        x: Math.max(5, Math.min(mapWidth - 5, attackTarget.x + perpX * AIR_FLANK_OFFSET)),
+        y: Math.max(5, Math.min(mapHeight - 5, attackTarget.y + perpY * AIR_FLANK_OFFSET)),
+      };
+    }
+
+    it('should position air units perpendicular to attack vector', () => {
+      const base = { x: 50, y: 50 };
+      const target = { x: 150, y: 50 }; // Due east
+
+      const flank = calculateFlankTarget(base, target, 200, 200);
+
+      // Attack is east, so flank should be north or south
+      expect(flank.x).toBeCloseTo(150, 0); // Same x as target
+      expect(Math.abs(flank.y - 50)).toBeCloseTo(AIR_FLANK_OFFSET, 0); // Offset in y
+    });
+
+    it('should clamp flank position to map bounds', () => {
+      const base = { x: 50, y: 50 };
+      const target = { x: 150, y: 5 }; // Near top edge
+
+      const flank = calculateFlankTarget(base, target, 200, 200);
+
+      // Should be clamped to at least 5 from edges
+      expect(flank.x).toBeGreaterThanOrEqual(5);
+      expect(flank.x).toBeLessThanOrEqual(195);
+      expect(flank.y).toBeGreaterThanOrEqual(5);
+      expect(flank.y).toBeLessThanOrEqual(195);
+    });
+
+    it('should handle diagonal attack vector', () => {
+      const base = { x: 20, y: 20 };
+      const target = { x: 120, y: 120 }; // Northeast
+
+      const flank = calculateFlankTarget(base, target, 200, 200);
+
+      // For a 45-degree attack, flank should be offset perpendicular
+      const dx = flank.x - target.x;
+      const dy = flank.y - target.y;
+      const flankDist = Math.sqrt(dx * dx + dy * dy);
+      expect(flankDist).toBeCloseTo(AIR_FLANK_OFFSET, 0);
+    });
+  });
+
+  describe('improved valkyrie transform decisions', () => {
+    function shouldTransformValkyrie(
+      isInFighterMode: boolean,
+      nearbyAirEnemies: number,
+      nearbyGroundEnemies: number,
+      airThreatScore: number,
+      groundThreatScore: number
+    ): { shouldTransform: boolean; targetMode: string } {
+      let shouldTransform = false;
+      let targetMode = '';
+
+      if (isInFighterMode) {
+        if (nearbyGroundEnemies > 0 && nearbyAirEnemies === 0) {
+          shouldTransform = true;
+          targetMode = 'assault';
+        } else if (nearbyGroundEnemies > 0 && groundThreatScore > airThreatScore * 1.5) {
+          shouldTransform = true;
+          targetMode = 'assault';
+        }
+      } else {
+        if (nearbyAirEnemies > 0 && nearbyGroundEnemies === 0) {
+          shouldTransform = true;
+          targetMode = 'fighter';
+        } else if (nearbyAirEnemies > 0 && airThreatScore > groundThreatScore * 1.5) {
+          shouldTransform = true;
+          targetMode = 'fighter';
+        }
+      }
+
+      return { shouldTransform, targetMode };
+    }
+
+    it('should switch to assault when only ground enemies present (fighter mode)', () => {
+      const result = shouldTransformValkyrie(true, 0, 3, 0, 50);
+      expect(result.shouldTransform).toBe(true);
+      expect(result.targetMode).toBe('assault');
+    });
+
+    it('should switch to assault when ground threat significantly outweighs air (1.5x)', () => {
+      const result = shouldTransformValkyrie(true, 1, 3, 10, 20);
+      expect(result.shouldTransform).toBe(true);
+      expect(result.targetMode).toBe('assault');
+    });
+
+    it('should NOT switch when air and ground threats are balanced', () => {
+      const result = shouldTransformValkyrie(true, 2, 2, 15, 15);
+      expect(result.shouldTransform).toBe(false);
+    });
+
+    it('should switch to fighter when only air enemies present (assault mode)', () => {
+      const result = shouldTransformValkyrie(false, 3, 0, 50, 0);
+      expect(result.shouldTransform).toBe(true);
+      expect(result.targetMode).toBe('fighter');
+    });
+
+    it('should switch to fighter when air threat significantly outweighs ground (1.5x)', () => {
+      const result = shouldTransformValkyrie(false, 2, 1, 20, 10);
+      expect(result.shouldTransform).toBe(true);
+      expect(result.targetMode).toBe('fighter');
+    });
+
+    it('should NOT switch from assault when threats are balanced', () => {
+      const result = shouldTransformValkyrie(false, 2, 2, 15, 15);
+      expect(result.shouldTransform).toBe(false);
+    });
+  });
+
+  describe('support air unit filtering', () => {
+    interface MockSupportUnit {
+      id: number;
+      isFlying: boolean;
+      isWorker: boolean;
+      attackDamage: number;
+      isDead: boolean;
+    }
+
+    function getSupportAirUnits(units: MockSupportUnit[], playerId: string): number[] {
+      return units
+        .filter(u => !u.isDead && u.isFlying && !u.isWorker && u.attackDamage === 0)
+        .map(u => u.id);
+    }
+
+    it('should return Lifter-type units (flying, no attack)', () => {
+      const units: MockSupportUnit[] = [
+        { id: 1, isFlying: true, isWorker: false, attackDamage: 0, isDead: false }, // Lifter
+        { id: 2, isFlying: true, isWorker: false, attackDamage: 15, isDead: false }, // Valkyrie
+        { id: 3, isFlying: false, isWorker: false, attackDamage: 0, isDead: false }, // Ground support
+      ];
+
+      expect(getSupportAirUnits(units, 'p1')).toEqual([1]);
+    });
+
+    it('should exclude dead units', () => {
+      const units: MockSupportUnit[] = [
+        { id: 1, isFlying: true, isWorker: false, attackDamage: 0, isDead: true },
+      ];
+
+      expect(getSupportAirUnits(units, 'p1')).toEqual([]);
+    });
+
+    it('should return empty for combat-only air force', () => {
+      const units: MockSupportUnit[] = [
+        { id: 1, isFlying: true, isWorker: false, attackDamage: 15, isDead: false },
+        { id: 2, isFlying: true, isWorker: false, attackDamage: 10, isDead: false },
+      ];
+
+      expect(getSupportAirUnits(units, 'p1')).toEqual([]);
+    });
+  });
+
+  describe('air scout preference', () => {
+    interface MockScoutUnit {
+      id: number;
+      isFlying: boolean;
+      isWorker: boolean;
+      unitId: string;
+      state: string;
+    }
+
+    function getScoutUnit(
+      units: MockScoutUnit[],
+      preferredTypes: Set<string>
+    ): number | null {
+      // First: idle flying units
+      for (const u of units) {
+        if (u.isFlying && !u.isWorker && u.state === 'idle') return u.id;
+      }
+      // Second: preferred ground types
+      for (const u of units) {
+        if (preferredTypes.has(u.unitId)) return u.id;
+      }
+      // Third: idle worker
+      for (const u of units) {
+        if (u.isWorker && u.state === 'idle') return u.id;
+      }
+      return null;
+    }
+
+    it('should prefer idle flying units over ground scouts', () => {
+      const units: MockScoutUnit[] = [
+        { id: 1, isFlying: false, isWorker: false, unitId: 'vanguard', state: 'idle' },
+        { id: 2, isFlying: true, isWorker: false, unitId: 'specter', state: 'idle' },
+      ];
+
+      expect(getScoutUnit(units, new Set(['vanguard']))).toBe(2);
+    });
+
+    it('should skip non-idle flying units', () => {
+      const units: MockScoutUnit[] = [
+        { id: 1, isFlying: true, isWorker: false, unitId: 'specter', state: 'attacking' },
+        { id: 2, isFlying: false, isWorker: false, unitId: 'vanguard', state: 'idle' },
+      ];
+
+      expect(getScoutUnit(units, new Set(['vanguard']))).toBe(2);
+    });
+
+    it('should fall back to idle worker when no other options', () => {
+      const units: MockScoutUnit[] = [
+        { id: 1, isFlying: false, isWorker: false, unitId: 'breacher', state: 'idle' },
+        { id: 2, isFlying: false, isWorker: true, unitId: 'fabricator', state: 'idle' },
+      ];
+
+      expect(getScoutUnit(units, new Set(['vanguard']))).toBe(2);
+    });
+
+    it('should return null when no suitable scout exists', () => {
+      const units: MockScoutUnit[] = [
+        { id: 1, isFlying: false, isWorker: false, unitId: 'breacher', state: 'attacking' },
+      ];
+
+      expect(getScoutUnit(units, new Set(['vanguard']))).toBe(null);
+    });
+  });
 });

@@ -24,6 +24,8 @@ const THREAT_ASSESSMENT_INTERVAL = DOMINION_AI_CONFIG.micro.global.threatUpdateI
 const FOCUS_FIRE_THRESHOLD = DOMINION_AI_CONFIG.micro.global.focusFireThreshold;
 const TRANSFORM_DECISION_INTERVAL = 20; // Update transform decision every 20 ticks (1 second at 20 TPS)
 const TRANSFORM_SCAN_RANGE = 15; // Range to scan for potential targets when deciding to transform
+const AIR_DISENGAGE_HEALTH_PCT = 0.3; // Air units flee below 30% health
+const AIR_HIT_AND_RUN_INTERVAL = 15; // Ticks between hit-and-run repositions
 
 interface UnitMicroState {
   behaviorTree: BehaviorTreeRunner;
@@ -34,6 +36,7 @@ interface UnitMicroState {
   primaryTarget: number | null;
   retreating: boolean;
   retreatEndTick: number | null; // Tick when retreat should end (replaces setTimeout)
+  lastHitAndRunTick: number; // Tick when last hit-and-run reposition happened
 }
 
 // Delayed command to be processed at a specific tick
@@ -230,6 +233,7 @@ export class AIMicroSystem extends System {
           primaryTarget: decision.targetId ?? null,
           retreating: false,
           retreatEndTick: null,
+          lastHitAndRunTick: 0,
         };
         this.unitStates.set(decision.unitId, state);
       }
@@ -380,6 +384,7 @@ export class AIMicroSystem extends System {
           primaryTarget: null,
           retreating: false,
           retreatEndTick: null,
+          lastHitAndRunTick: 0,
         };
         this.unitStates.set(entity.id, state);
       }
@@ -439,6 +444,7 @@ export class AIMicroSystem extends System {
           primaryTarget: null,
           retreating: false,
           retreatEndTick: null,
+          lastHitAndRunTick: 0,
         };
         this.unitStates.set(entity.id, state);
       }
@@ -469,6 +475,11 @@ export class AIMicroSystem extends System {
         currentTick - state.lastTransformDecision > TRANSFORM_DECISION_INTERVAL
       ) {
         this.handleTransformDecision(entity.id, selectable.playerId, unit, state, currentTick);
+      }
+
+      // Air unit micro: disengage, hit-and-run
+      if (unit.isFlying && unit.attackDamage > 0) {
+        this.handleAirMicro(entity.id, selectable.playerId, unit, state, currentTick);
       }
 
       // Focus fire logic
@@ -883,26 +894,24 @@ export class AIMicroSystem extends System {
       const isInAssaultMode = !isInFighterMode;
 
       if (isInFighterMode) {
-        // Fighter mode (air-only attacks): switch to assault if ground enemies dominate
+        // Switch to assault if ground enemies present and no/few air threats
         if (nearbyGroundEnemies > 0 && nearbyAirEnemies === 0) {
           shouldTransform = true;
           targetMode = 'assault';
-        } else if (nearbyGroundEnemies > 0 && groundThreatScore > airThreatScore * 2) {
-          if (nearbyAirEnemies <= 1 && nearbyGroundEnemies >= 3) {
-            shouldTransform = true;
-            targetMode = 'assault';
-          }
+        } else if (nearbyGroundEnemies > 0 && groundThreatScore > airThreatScore * 1.5) {
+          // Lower threshold: switch to ground when ground threat significantly outweighs air
+          shouldTransform = true;
+          targetMode = 'assault';
         }
       } else if (isInAssaultMode) {
-        // Assault mode (ground-only attacks): switch to fighter if air enemies dominate
+        // Switch to fighter if air enemies present and no/few ground threats
         if (nearbyAirEnemies > 0 && nearbyGroundEnemies === 0) {
           shouldTransform = true;
           targetMode = 'fighter';
-        } else if (nearbyAirEnemies > 0 && airThreatScore > groundThreatScore * 2) {
-          if (nearbyGroundEnemies <= 1 && nearbyAirEnemies >= 2) {
-            shouldTransform = true;
-            targetMode = 'fighter';
-          }
+        } else if (nearbyAirEnemies > 0 && airThreatScore > groundThreatScore * 1.5) {
+          // Lower threshold: switch to air when air threat significantly outweighs ground
+          shouldTransform = true;
+          targetMode = 'fighter';
         }
       }
     }
@@ -918,6 +927,147 @@ export class AIMicroSystem extends System {
       };
       this.game.issueAICommand(command);
     }
+  }
+
+  /**
+   * Handle air unit micro-management.
+   * - Disengage when health is low (air units are fast — use that speed)
+   * - Avoid anti-air clusters
+   * - Hit-and-run: attack, reposition, attack
+   * - Focus high-value targets (workers, support, siege)
+   */
+  private handleAirMicro(
+    entityId: number,
+    playerId: string,
+    unit: Unit,
+    state: UnitMicroState,
+    currentTick: number
+  ): void {
+    const entity = this.world.getEntity(entityId);
+    if (!entity) return;
+
+    const transform = entity.get<Transform>('Transform');
+    const health = entity.get<Health>('Health');
+    if (!transform || !health) return;
+
+    const healthPct = health.getHealthPercent();
+
+    // Priority 1: Disengage at low health — air units are fast enough to escape
+    if (healthPct < AIR_DISENGAGE_HEALTH_PCT && unit.state !== 'dead') {
+      // Flee toward own base (use rally point as proxy)
+      const baseDir = this.findRetreatDirection(entityId, playerId, transform);
+      if (baseDir && !state.retreating) {
+        const command: GameCommand = {
+          tick: currentTick,
+          playerId,
+          type: 'MOVE',
+          entityIds: [entityId],
+          targetPosition: {
+            x: transform.x + baseDir.x * 20,
+            y: transform.y + baseDir.y * 20,
+          },
+        };
+        this.game.issueAICommand(command);
+        state.retreating = true;
+        state.retreatEndTick = currentTick + 60; // 3 seconds retreat
+        return;
+      }
+    }
+
+    // Priority 2: Hit-and-run repositioning
+    // After attacking for a bit, reposition to a different angle
+    if (
+      unit.state === 'attacking' &&
+      unit.attackDamage > 0 &&
+      currentTick - state.lastHitAndRunTick >= AIR_HIT_AND_RUN_INTERVAL
+    ) {
+      state.lastHitAndRunTick = currentTick;
+
+      // Find the attack target position
+      if (unit.targetEntityId !== null) {
+        const targetEntity = this.world.getEntity(unit.targetEntityId);
+        if (targetEntity) {
+          const targetTransform = targetEntity.get<Transform>('Transform');
+          if (targetTransform) {
+            // Reposition perpendicular to the attack vector
+            const dx = targetTransform.x - transform.x;
+            const dy = targetTransform.y - transform.y;
+            const dist = distance(transform.x, transform.y, targetTransform.x, targetTransform.y);
+            if (dist > 0) {
+              // Move perpendicular to attack direction
+              const perpX = -dy / dist;
+              const perpY = dx / dist;
+              const repositionDist = 4 + (entityId % 3); // Slight variation per unit
+
+              const moveCommand: GameCommand = {
+                tick: currentTick,
+                playerId,
+                type: 'MOVE',
+                entityIds: [entityId],
+                targetPosition: {
+                  x: transform.x + perpX * repositionDist,
+                  y: transform.y + perpY * repositionDist,
+                },
+              };
+              this.game.issueAICommand(moveCommand);
+
+              // Re-engage after repositioning
+              const retargetCommand: GameCommand = {
+                tick: currentTick + 5,
+                playerId,
+                type: 'ATTACK',
+                entityIds: [entityId],
+                targetEntityId: unit.targetEntityId,
+              };
+              this.pendingCommands.push({
+                executeTick: currentTick + 5,
+                command: retargetCommand,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Find retreat direction for a unit (toward friendly base).
+   */
+  private findRetreatDirection(
+    _entityId: number,
+    playerId: string,
+    transform: Transform
+  ): { x: number; y: number } | null {
+    // Find friendly buildings as retreat anchor
+    const buildings = this.world.getEntitiesWith('Building', 'Transform', 'Selectable');
+    let nearestBaseX = 0;
+    let nearestBaseY = 0;
+    let found = false;
+    let minDist = Infinity;
+
+    for (const building of buildings) {
+      const selectable = building.get<Selectable>('Selectable');
+      if (!selectable || selectable.playerId !== playerId) continue;
+      const bTransform = building.get<Transform>('Transform');
+      if (!bTransform) continue;
+
+      const d = distance(transform.x, transform.y, bTransform.x, bTransform.y);
+      if (d < minDist) {
+        minDist = d;
+        nearestBaseX = bTransform.x;
+        nearestBaseY = bTransform.y;
+        found = true;
+      }
+    }
+
+    if (!found) return null;
+
+    const dx = nearestBaseX - transform.x;
+    const dy = nearestBaseY - transform.y;
+    const dist = distance(transform.x, transform.y, nearestBaseX, nearestBaseY);
+    if (dist === 0) return null;
+
+    return { x: dx / dist, y: dy / dist };
   }
 }
 

@@ -2854,6 +2854,46 @@ Multiple build order variants exist per difficulty level (2-4 variants each), ta
 
 Naval units are excluded from land attack operations to prevent them being sent to unreachable targets.
 
+#### Air Unit Control System
+
+The AI controls air units independently from ground forces through a multi-layered system:
+
+**Army Separation** (`AITacticsManager`)
+- During attacks, the army is split into `groundUnits` and `airCombatUnits`
+- Ground units form the main army with concave formations
+- Air units receive independent flanking commands perpendicular to the main attack vector
+- If no ground units exist, air becomes the main force (no wasted air units)
+
+**Air Formations** (`FormationControl`)
+- Air units are positioned past the enemy center at a perpendicular offset
+- Wide spacing (2x ground) reduces splash damage vulnerability
+- Independent priority level (4) prevents air from interfering with ground formations
+
+**Air Harassment** (`AITacticsManager.executeAirHarassment()`)
+- Up to 3 air units sent to enemy worker lines
+- Air bypasses terrain and ground defenses (direct paths)
+- 10-second cooldown between harassment waves
+
+**Support Air** (`AITacticsManager.commandSupportAir()`)
+- Lifter and Overseer units follow the army centroid
+- Positioned behind the army toward the AI's own base
+- Provides healing and detection support during combat
+
+**Air Micro** (`AIMicroSystem`)
+- Health-based disengage: air units flee below 30% health
+- Hit-and-run repositioning: perpendicular movement every 15 ticks while attacking
+- Proactive Valkyrie transformation: lower threshold (1.5x) for mode switching
+
+**Anti-Air Response**
+- Emergency counter-air production on ALL difficulties (not just hard+)
+- Preemptive anti-air when enemy air tech detected (medium+)
+- Air superiority Valkyrie production (priority 75) when enemy has air units
+- `enemyAirUnits` tracking feeds into production decisions
+
+**Air Scouting** (`AIScoutingManager`)
+- Flying units preferred as scouts (bypass terrain, fastest paths)
+- Falls back to ground scouts, then idle workers
+
 #### Unit Production Coverage
 
 All Dominion combat and support units have dedicated macro rules:
