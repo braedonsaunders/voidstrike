@@ -7,10 +7,6 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
-declare global {
-  interface WindowEventMap {
-    beforeinstallprompt: BeforeInstallPromptEvent;
-  }
+interface WindowEventMap {
+  beforeinstallprompt: BeforeInstallPromptEvent;
 }
-
-export {};
