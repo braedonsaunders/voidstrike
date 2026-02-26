@@ -113,6 +113,17 @@ export function useLLMGeneration(): [LLMGenerationState, LLMGenerationActions] {
 
   // Load stored API key on mount
   useEffect(() => {
+    if (state.provider === 'internal') {
+      requestAnimationFrame(() => {
+        setState((prev: LLMGenerationState) => ({
+          ...prev,
+          apiKey: '',
+          isKeyValid: true,
+        }));
+      });
+      return;
+    }
+
     const storedKey = getStoredApiKey(state.provider);
     if (storedKey) {
       // Use requestAnimationFrame to avoid cascading renders
@@ -124,6 +135,16 @@ export function useLLMGeneration(): [LLMGenerationState, LLMGenerationActions] {
 
   // Provider management
   const setProvider = useCallback((provider: LLMProvider) => {
+    if (provider === 'internal') {
+      setState((prev: LLMGenerationState) => ({
+        ...prev,
+        provider,
+        apiKey: '',
+        isKeyValid: true,
+      }));
+      return;
+    }
+
     const storedKey = getStoredApiKey(provider);
     setState((prev: LLMGenerationState) => ({
       ...prev,
@@ -142,6 +163,16 @@ export function useLLMGeneration(): [LLMGenerationState, LLMGenerationActions] {
   }, []);
 
   const validateApiKey = useCallback(async (): Promise<boolean> => {
+    if (state.provider === 'internal') {
+      setState((prev: LLMGenerationState) => ({
+        ...prev,
+        isKeyValid: true,
+        isTestingKey: false,
+        error: null,
+      }));
+      return true;
+    }
+
     setState((prev: LLMGenerationState) => ({ ...prev, isTestingKey: true, error: null }));
 
     try {
@@ -195,7 +226,7 @@ export function useLLMGeneration(): [LLMGenerationState, LLMGenerationActions] {
 
   // Generation
   const generate = useCallback(async (): Promise<GenerationResult> => {
-    if (!state.apiKey) {
+    if (state.provider !== 'internal' && !state.apiKey) {
       return { success: false, error: 'API key not configured' };
     }
 
@@ -262,7 +293,7 @@ export function useLLMGeneration(): [LLMGenerationState, LLMGenerationActions] {
       }));
 
       // Then generate (will use updated settings)
-      if (!state.apiKey) {
+      if (state.provider !== 'internal' && !state.apiKey) {
         return { success: false, error: 'API key not configured' };
       }
 
@@ -323,7 +354,9 @@ export function useLLMGeneration(): [LLMGenerationState, LLMGenerationActions] {
   // History management
   const loadFromHistory = useCallback(
     (id: string): MapBlueprint | null => {
-      const entry = state.generationHistory.find((h: LLMGenerationState['generationHistory'][0]) => h.id === id);
+      const entry = state.generationHistory.find(
+        (h: LLMGenerationState['generationHistory'][0]) => h.id === id
+      );
       if (entry) {
         setState((prev: LLMGenerationState) => ({
           ...prev,

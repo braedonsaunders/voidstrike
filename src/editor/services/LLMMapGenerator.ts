@@ -14,17 +14,13 @@ import type {
 } from '@/data/maps/core/ElevationMap';
 import { generateMapWithResult } from '@/data/maps/core/ElevationMapGenerator';
 import type { MapData } from '@/data/maps/MapTypes';
-import {
-  createBaseResources,
-  DIR,
-  MINERAL_DISTANCE_NATURAL,
-} from '@/data/maps/MapTypes';
+import { createBaseResources, DIR, MINERAL_DISTANCE_NATURAL } from '@/data/maps/MapTypes';
 
 // ============================================================================
 // TYPES
 // ============================================================================
 
-export type LLMProvider = 'claude' | 'openai' | 'gemini';
+export type LLMProvider = 'claude' | 'openai' | 'gemini' | 'internal';
 
 export interface LLMConfig {
   provider: LLMProvider;
@@ -64,6 +60,7 @@ const DEFAULT_MODELS: Record<LLMProvider, string> = {
   claude: 'claude-sonnet-4-20250514',
   openai: 'gpt-4o',
   gemini: 'gemini-2.0-flash',
+  internal: 'internal-heuristic-v1',
 };
 
 // ============================================================================
@@ -85,7 +82,10 @@ const MAP_BLUEPRINT_SCHEMA = {
         id: { type: 'string', description: 'Unique snake_case identifier' },
         name: { type: 'string', description: 'Display name for the map' },
         author: { type: 'string', description: 'Map author (use "AI Generator")' },
-        description: { type: 'string', description: 'Brief description of the map theme and gameplay' },
+        description: {
+          type: 'string',
+          description: 'Brief description of the map theme and gameplay',
+        },
         players: { type: 'number', enum: [2, 4, 6, 8], description: 'Number of players' },
       },
     },
@@ -104,7 +104,8 @@ const MAP_BLUEPRINT_SCHEMA = {
     },
     paint: {
       type: 'array',
-      description: 'Paint commands executed in order to build terrain. Order matters - later commands override earlier ones.',
+      description:
+        'Paint commands executed in order to build terrain. Order matters - later commands override earlier ones.',
       items: {
         oneOf: [
           {
@@ -170,7 +171,11 @@ const MAP_BLUEPRINT_SCHEMA = {
               radius: { type: 'number', description: 'For circular water' },
               width: { type: 'number', description: 'For rectangular water' },
               height: { type: 'number', description: 'For rectangular water' },
-              depth: { type: 'string', enum: ['shallow', 'deep'], description: 'shallow=walkable slow, deep=impassable' },
+              depth: {
+                type: 'string',
+                enum: ['shallow', 'deep'],
+                description: 'shallow=walkable slow, deep=impassable',
+              },
             },
           },
           {
@@ -243,7 +248,8 @@ const MAP_BLUEPRINT_SCHEMA = {
     },
     bases: {
       type: 'array',
-      description: 'Base locations including spawns and expansions. Each player needs main + natural + third minimum.',
+      description:
+        'Base locations including spawns and expansions. Each player needs main + natural + third minimum.',
       items: {
         type: 'object',
         required: ['x', 'y', 'type'],
@@ -253,7 +259,8 @@ const MAP_BLUEPRINT_SCHEMA = {
           type: {
             type: 'string',
             enum: ['main', 'natural', 'third', 'fourth', 'fifth', 'gold', 'pocket'],
-            description: 'main=spawn, natural=first expansion, third/fourth=later expansions, gold=rich minerals',
+            description:
+              'main=spawn, natural=first expansion, third/fourth=later expansions, gold=rich minerals',
           },
           playerSlot: { type: 'number', description: 'Player number (1-8) for main bases' },
           mineralDirection: {
@@ -299,7 +306,10 @@ const MAP_BLUEPRINT_SCHEMA = {
         border: {
           type: 'object',
           properties: {
-            style: { type: 'string', enum: ['rocks', 'crystals', 'trees', 'mixed', 'alien', 'dead_trees'] },
+            style: {
+              type: 'string',
+              enum: ['rocks', 'crystals', 'trees', 'mixed', 'alien', 'dead_trees'],
+            },
             density: { type: 'number', description: '0-1, how densely packed' },
             scale: {
               type: 'array',
@@ -357,9 +367,20 @@ const MAP_BLUEPRINT_SCHEMA = {
           type: {
             type: 'string',
             enum: [
-              'rocks_small', 'rocks_large', 'rock_single', 'crystal_formation',
-              'tree_dead', 'tree_alien', 'tree_pine_tall', 'tree_palm', 'tree_mushroom',
-              'bush', 'grass_clump', 'debris', 'ruined_wall', 'escape_pod',
+              'rocks_small',
+              'rocks_large',
+              'rock_single',
+              'crystal_formation',
+              'tree_dead',
+              'tree_alien',
+              'tree_pine_tall',
+              'tree_palm',
+              'tree_mushroom',
+              'bush',
+              'grass_clump',
+              'debris',
+              'ruined_wall',
+              'escape_pod',
             ],
           },
           x: { type: 'number' },
@@ -386,7 +407,10 @@ const GEMINI_SCHEMA = {
         id: { type: 'string', description: 'Unique snake_case identifier' },
         name: { type: 'string', description: 'Display name for the map' },
         author: { type: 'string', description: 'Map author (use "AI Generator")' },
-        description: { type: 'string', description: 'Brief description of the map theme and gameplay' },
+        description: {
+          type: 'string',
+          description: 'Brief description of the map theme and gameplay',
+        },
         players: { type: 'integer', description: 'Number of players: 2, 4, 6, or 8' },
       },
     },
@@ -405,14 +429,27 @@ const GEMINI_SCHEMA = {
     },
     paint: {
       type: 'array',
-      description: 'Paint commands executed in order. Each object has cmd (fill/plateau/rect/ramp/water/forest/void/road/unwalkable/border/mud) plus relevant properties.',
+      description:
+        'Paint commands executed in order. Each object has cmd (fill/plateau/rect/ramp/water/forest/void/road/unwalkable/border/mud) plus relevant properties.',
       items: {
         type: 'object',
         required: ['cmd'],
         properties: {
           cmd: {
             type: 'string',
-            enum: ['fill', 'plateau', 'rect', 'ramp', 'water', 'forest', 'void', 'road', 'unwalkable', 'border', 'mud'],
+            enum: [
+              'fill',
+              'plateau',
+              'rect',
+              'ramp',
+              'water',
+              'forest',
+              'void',
+              'road',
+              'unwalkable',
+              'border',
+              'mud',
+            ],
             description: 'Command type',
           },
           elevation: { type: 'integer', description: 'Elevation: 60=LOW, 140=MID, 220=HIGH' },
@@ -433,7 +470,11 @@ const GEMINI_SCHEMA = {
             description: '[x, y] end point for ramps/roads',
           },
           depth: { type: 'string', enum: ['shallow', 'deep'], description: 'Water depth' },
-          density: { type: 'string', enum: ['sparse', 'light', 'medium', 'dense'], description: 'Forest density' },
+          density: {
+            type: 'string',
+            enum: ['sparse', 'light', 'medium', 'dense'],
+            description: 'Forest density',
+          },
         },
       },
     },
@@ -495,7 +536,10 @@ const GEMINI_SCHEMA = {
         border: {
           type: 'object',
           properties: {
-            style: { type: 'string', enum: ['rocks', 'crystals', 'trees', 'mixed', 'alien', 'dead_trees'] },
+            style: {
+              type: 'string',
+              enum: ['rocks', 'crystals', 'trees', 'mixed', 'alien', 'dead_trees'],
+            },
             density: { type: 'number', description: '0-1' },
             scale: {
               type: 'array',
@@ -594,7 +638,10 @@ interface ToolCallResult {
 /**
  * Call Claude API with tool use
  */
-async function callClaude(config: LLMConfig, settings: MapGenerationSettings): Promise<ToolCallResult> {
+async function callClaude(
+  config: LLMConfig,
+  settings: MapGenerationSettings
+): Promise<ToolCallResult> {
   const model = config.model || DEFAULT_MODELS.claude;
   const size = MAP_SIZES[settings.mapSize];
 
@@ -643,7 +690,10 @@ async function callClaude(config: LLMConfig, settings: MapGenerationSettings): P
 /**
  * Call OpenAI API with function calling
  */
-async function callOpenAI(config: LLMConfig, settings: MapGenerationSettings): Promise<ToolCallResult> {
+async function callOpenAI(
+  config: LLMConfig,
+  settings: MapGenerationSettings
+): Promise<ToolCallResult> {
   const model = config.model || DEFAULT_MODELS.openai;
   const size = MAP_SIZES[settings.mapSize];
 
@@ -653,7 +703,7 @@ async function callOpenAI(config: LLMConfig, settings: MapGenerationSettings): P
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${config.apiKey}`,
+      Authorization: `Bearer ${config.apiKey}`,
     },
     body: JSON.stringify({
       model,
@@ -667,7 +717,8 @@ async function callOpenAI(config: LLMConfig, settings: MapGenerationSettings): P
           type: 'function',
           function: {
             name: 'generate_map_blueprint',
-            description: 'Generate a complete RTS map blueprint with terrain, bases, and decorations',
+            description:
+              'Generate a complete RTS map blueprint with terrain, bases, and decorations',
             parameters: MAP_BLUEPRINT_SCHEMA,
           },
         },
@@ -696,7 +747,10 @@ async function callOpenAI(config: LLMConfig, settings: MapGenerationSettings): P
 /**
  * Call Gemini API with function calling
  */
-async function callGemini(config: LLMConfig, settings: MapGenerationSettings): Promise<ToolCallResult> {
+async function callGemini(
+  config: LLMConfig,
+  settings: MapGenerationSettings
+): Promise<ToolCallResult> {
   const model = config.model || DEFAULT_MODELS.gemini;
   const size = MAP_SIZES[settings.mapSize];
 
@@ -725,7 +779,8 @@ async function callGemini(config: LLMConfig, settings: MapGenerationSettings): P
             functionDeclarations: [
               {
                 name: 'generate_map_blueprint',
-                description: 'Generate a complete RTS map blueprint with terrain, bases, and decorations',
+                description:
+                  'Generate a complete RTS map blueprint with terrain, bases, and decorations',
                 parameters: GEMINI_SCHEMA,
               },
             ],
@@ -767,7 +822,10 @@ async function callGemini(config: LLMConfig, settings: MapGenerationSettings): P
 // PROMPT BUILDING
 // ============================================================================
 
-function buildUserPrompt(settings: MapGenerationSettings, size: { width: number; height: number }): string {
+function buildUserPrompt(
+  settings: MapGenerationSettings,
+  size: { width: number; height: number }
+): string {
   const lines: string[] = [
     `Create a ${settings.playerCount}-player competitive RTS map with the following specifications:`,
     '',
@@ -864,10 +922,280 @@ function buildUserPrompt(settings: MapGenerationSettings, size: { width: number;
     '- Create a unique, interesting layout - avoid generic symmetric patterns',
     '- Consider asymmetric elements that are still competitively balanced',
     '- Vary elevation patterns - not everything needs to be a simple plateau',
-    '- Add interesting terrain features that create strategic decisions',
+    '- Add interesting terrain features that create strategic decisions'
   );
 
   return lines.join('\n');
+}
+
+function toResourceDirection(dx: number, dy: number): ResourceDirection {
+  const angle = Math.atan2(dy, dx);
+  const octant = Math.round((8 * angle) / (2 * Math.PI) + 8) % 8;
+  switch (octant) {
+    case 0:
+      return 'right';
+    case 1:
+      return 'down_right';
+    case 2:
+      return 'down';
+    case 3:
+      return 'down_left';
+    case 4:
+      return 'left';
+    case 5:
+      return 'up_left';
+    case 6:
+      return 'up';
+    case 7:
+      return 'up_right';
+    default:
+      return 'down';
+  }
+}
+
+function clampToMap(value: number, maxExclusive: number, margin: number): number {
+  return Math.max(margin, Math.min(maxExclusive - margin, Math.round(value)));
+}
+
+function buildInternalBlueprint(settings: MapGenerationSettings): MapBlueprint {
+  const size = MAP_SIZES[settings.mapSize];
+  const centerX = size.width / 2;
+  const centerY = size.height / 2;
+  const minDimension = Math.min(size.width, size.height);
+  const mainRadius = Math.max(36, minDimension * 0.37);
+  const naturalRadius = Math.max(24, minDimension * 0.26);
+  const thirdRadius = Math.max(16, minDimension * 0.15);
+  const lateralThirdOffset = Math.max(10, minDimension * 0.06);
+  const mapMargin = 14;
+
+  const paint: MapBlueprint['paint'] = [{ cmd: 'fill', elevation: ELEVATION_LOW }];
+  const bases: MapBlueprint['bases'] = [];
+
+  for (let i = 0; i < settings.playerCount; i++) {
+    const angle = (2 * Math.PI * i) / settings.playerCount - Math.PI / 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const perpX = -sin;
+    const perpY = cos;
+    const side = i % 2 === 0 ? 1 : -1;
+
+    const mainX = clampToMap(centerX + cos * mainRadius, size.width, mapMargin);
+    const mainY = clampToMap(centerY + sin * mainRadius, size.height, mapMargin);
+    const naturalX = clampToMap(centerX + cos * naturalRadius, size.width, mapMargin);
+    const naturalY = clampToMap(centerY + sin * naturalRadius, size.height, mapMargin);
+    const thirdX = clampToMap(
+      centerX + cos * thirdRadius + perpX * lateralThirdOffset * side,
+      size.width,
+      mapMargin
+    );
+    const thirdY = clampToMap(
+      centerY + sin * thirdRadius + perpY * lateralThirdOffset * side,
+      size.height,
+      mapMargin
+    );
+
+    const mainMineralDirection = toResourceDirection(centerX - mainX, centerY - mainY);
+    const naturalMineralDirection = toResourceDirection(centerX - naturalX, centerY - naturalY);
+    const thirdMineralDirection = toResourceDirection(centerX - thirdX, centerY - thirdY);
+
+    bases.push({
+      x: mainX,
+      y: mainY,
+      type: 'main',
+      playerSlot: i + 1,
+      mineralDirection: mainMineralDirection,
+    });
+    bases.push({
+      x: naturalX,
+      y: naturalY,
+      type: 'natural',
+      mineralDirection: naturalMineralDirection,
+    });
+    bases.push({
+      x: thirdX,
+      y: thirdY,
+      type: 'third',
+      mineralDirection: thirdMineralDirection,
+    });
+
+    paint.push({ cmd: 'plateau', x: mainX, y: mainY, radius: 20, elevation: ELEVATION_HIGH });
+    paint.push({ cmd: 'plateau', x: naturalX, y: naturalY, radius: 16, elevation: ELEVATION_MID });
+    paint.push({ cmd: 'plateau', x: thirdX, y: thirdY, radius: 13, elevation: ELEVATION_LOW });
+
+    paint.push({
+      cmd: 'ramp',
+      from: [
+        clampToMap(mainX + cos * 18, size.width, mapMargin),
+        clampToMap(mainY + sin * 18, size.height, mapMargin),
+      ],
+      to: [
+        clampToMap(naturalX - cos * 8, size.width, mapMargin),
+        clampToMap(naturalY - sin * 8, size.height, mapMargin),
+      ],
+      width: 10,
+    });
+
+    paint.push({
+      cmd: 'ramp',
+      from: [
+        clampToMap(naturalX + cos * 10, size.width, mapMargin),
+        clampToMap(naturalY + sin * 10, size.height, mapMargin),
+      ],
+      to: [
+        clampToMap(thirdX - cos * 7, size.width, mapMargin),
+        clampToMap(thirdY - sin * 7, size.height, mapMargin),
+      ],
+      width: 12,
+    });
+  }
+
+  if (settings.includeWater) {
+    if (settings.islandMap) {
+      paint.push({
+        cmd: 'water',
+        x: Math.round(centerX),
+        y: Math.round(centerY),
+        radius: Math.max(20, Math.round(minDimension * 0.16)),
+        depth: 'shallow',
+      });
+      paint.push({
+        cmd: 'water',
+        x: Math.round(centerX),
+        y: Math.round(centerY),
+        radius: Math.max(12, Math.round(minDimension * 0.1)),
+        depth: 'deep',
+      });
+    } else {
+      paint.push({
+        cmd: 'water',
+        x: Math.round(centerX),
+        y: Math.round(centerY),
+        radius: Math.max(12, Math.round(minDimension * 0.1)),
+        depth: 'shallow',
+      });
+      paint.push({
+        cmd: 'water',
+        x: Math.round(centerX),
+        y: Math.round(centerY),
+        radius: Math.max(8, Math.round(minDimension * 0.06)),
+        depth: 'deep',
+      });
+    }
+  }
+
+  if (settings.includeForests) {
+    const forestRadius = Math.max(8, Math.round(minDimension * 0.05));
+    paint.push({
+      cmd: 'forest',
+      x: Math.round(centerX * 0.55),
+      y: Math.round(centerY * 0.55),
+      radius: forestRadius,
+      density: 'light',
+    });
+    paint.push({
+      cmd: 'forest',
+      x: Math.round(centerX * 1.45),
+      y: Math.round(centerY * 0.55),
+      radius: forestRadius,
+      density: 'light',
+    });
+    paint.push({
+      cmd: 'forest',
+      x: Math.round(centerX * 0.55),
+      y: Math.round(centerY * 1.45),
+      radius: forestRadius,
+      density: 'light',
+    });
+    paint.push({
+      cmd: 'forest',
+      x: Math.round(centerX * 1.45),
+      y: Math.round(centerY * 1.45),
+      radius: forestRadius,
+      density: 'light',
+    });
+  }
+
+  paint.push({ cmd: 'border', thickness: 12 });
+
+  const borderStyle =
+    settings.borderStyle === 'none' ? undefined : (settings.borderStyle as DecorationStyle);
+
+  const watchTowerCount = settings.playerCount >= 6 ? 4 : 2;
+  const watchTowers = Array.from({ length: watchTowerCount }, (_, idx) => {
+    const angle = (2 * Math.PI * idx) / watchTowerCount - Math.PI / 2;
+    return {
+      x: clampToMap(centerX + Math.cos(angle) * minDimension * 0.12, size.width, mapMargin),
+      y: clampToMap(centerY + Math.sin(angle) * minDimension * 0.12, size.height, mapMargin),
+      vision: 28,
+    };
+  });
+
+  const themeSlug = settings.theme
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 32);
+
+  return {
+    meta: {
+      id: themeSlug ? `internal_${themeSlug}` : `internal_${settings.playerCount}p_map`,
+      name: themeSlug ? `Internal ${themeSlug.replace(/_/g, ' ')}` : 'Internal Generated Map',
+      author: 'Internal Generator',
+      description:
+        settings.theme.trim() ||
+        `Internal keyless ${settings.playerCount}-player ${settings.biome} map`,
+      players: settings.playerCount,
+    },
+    canvas: {
+      width: size.width,
+      height: size.height,
+      biome: settings.biome,
+    },
+    paint,
+    bases,
+    watchTowers,
+    destructibles: [
+      {
+        x: Math.round(centerX - minDimension * 0.08),
+        y: Math.round(centerY),
+        health: 1200,
+        size: 'medium',
+      },
+      {
+        x: Math.round(centerX + minDimension * 0.08),
+        y: Math.round(centerY),
+        health: 1200,
+        size: 'medium',
+      },
+    ],
+    decorationRules: {
+      border: borderStyle
+        ? {
+            style: borderStyle,
+            density: 0.7,
+            scale: [1.3, 2.4],
+            innerOffset: 12,
+            outerOffset: 4,
+          }
+        : undefined,
+      scatter: {
+        rocks: 0.14,
+        debris: 0.08,
+        trees: settings.includeForests ? 0.08 : 0.02,
+      },
+      baseRings: {
+        rocks: 10,
+        trees: settings.includeForests ? 8 : 3,
+      },
+      seed: settings.playerCount * 7919 + size.width,
+    },
+  };
+}
+
+async function callInternalGenerator(settings: MapGenerationSettings): Promise<ToolCallResult> {
+  return {
+    blueprint: buildInternalBlueprint(settings),
+  };
 }
 
 // ============================================================================
@@ -895,6 +1223,9 @@ export async function generateMapWithLLM(
       case 'gemini':
         result = await callGemini(config, settings);
         break;
+      case 'internal':
+        result = await callInternalGenerator(settings);
+        break;
       default:
         throw new Error(`Unknown provider: ${config.provider}`);
     }
@@ -918,7 +1249,7 @@ export async function generateMapWithLLM(
     if (mapResult.connectivity && !mapResult.connectivity.valid) {
       debugInitialization.warn(
         `[LLMMapGenerator] Map has connectivity issues that could not be auto-fixed. ` +
-        `${mapResult.connectivity.issues.length} issues remain.`
+          `${mapResult.connectivity.issues.length} issues remain.`
       );
     }
 
@@ -938,8 +1269,8 @@ export async function generateMapWithLLM(
 
 // Elevation constants for base generation
 const ELEVATION_HIGH = 220; // Main base level
-const ELEVATION_MID = 140;  // Natural expansion level
-const ELEVATION_LOW = 60;   // Ground level
+const ELEVATION_MID = 140; // Natural expansion level
+const ELEVATION_LOW = 60; // Ground level
 
 /**
  * Check if a plateau command exists near a given position
@@ -950,7 +1281,7 @@ function hasPlateauNear(
   y: number,
   minElevation: number
 ): boolean {
-  return paint.some(cmd => {
+  return paint.some((cmd) => {
     if (cmd.cmd === 'plateau') {
       const dx = cmd.x - x;
       const dy = cmd.y - y;
@@ -978,7 +1309,7 @@ function hasRampBetween(
   x2: number,
   y2: number
 ): boolean {
-  return paint.some(cmd => {
+  return paint.some((cmd) => {
     if (cmd.cmd !== 'ramp') return false;
 
     // Skip malformed ramp commands missing from/to
@@ -1044,22 +1375,37 @@ function calculateRampPosition(
 
 /** All possible mineral directions */
 const ALL_MINERAL_DIRECTIONS: ResourceDirection[] = [
-  'up', 'down', 'left', 'right',
-  'up_left', 'up_right', 'down_left', 'down_right',
+  'up',
+  'down',
+  'left',
+  'right',
+  'up_left',
+  'up_right',
+  'down_left',
+  'down_right',
 ];
 
 /** Convert ResourceDirection string to radians */
 function directionToRadians(dir: ResourceDirection): number {
   switch (dir) {
-    case 'up': return DIR.UP;
-    case 'down': return DIR.DOWN;
-    case 'left': return DIR.LEFT;
-    case 'right': return DIR.RIGHT;
-    case 'up_left': return DIR.UP_LEFT;
-    case 'up_right': return DIR.UP_RIGHT;
-    case 'down_left': return DIR.DOWN_LEFT;
-    case 'down_right': return DIR.DOWN_RIGHT;
-    default: return DIR.DOWN;
+    case 'up':
+      return DIR.UP;
+    case 'down':
+      return DIR.DOWN;
+    case 'left':
+      return DIR.LEFT;
+    case 'right':
+      return DIR.RIGHT;
+    case 'up_left':
+      return DIR.UP_LEFT;
+    case 'up_right':
+      return DIR.UP_RIGHT;
+    case 'down_left':
+      return DIR.DOWN_LEFT;
+    case 'down_right':
+      return DIR.DOWN_RIGHT;
+    default:
+      return DIR.DOWN;
   }
 }
 
@@ -1077,7 +1423,15 @@ function getMineralPositions(
 ): Array<{ x: number; y: number }> {
   const dirRadians = directionToRadians(direction);
   const mineralDistance = isNatural ? MINERAL_DISTANCE_NATURAL : 7;
-  const resources = createBaseResources(baseX, baseY, dirRadians, 1500, 2250, false, mineralDistance);
+  const resources = createBaseResources(
+    baseX,
+    baseY,
+    dirRadians,
+    1500,
+    2250,
+    false,
+    mineralDistance
+  );
 
   const positions: Array<{ x: number; y: number }> = [];
   for (const mineral of resources.minerals) {
@@ -1115,8 +1469,7 @@ function isPositionInWaterOrVoid(
         }
       } else if (cmd.width !== undefined && cmd.height !== undefined) {
         // Rectangular water/void
-        if (x >= cmd.x && x <= cmd.x + cmd.width &&
-            y >= cmd.y && y <= cmd.y + cmd.height) {
+        if (x >= cmd.x && x <= cmd.x + cmd.width && y >= cmd.y && y <= cmd.y + cmd.height) {
           return true;
         }
       }
@@ -1138,14 +1491,14 @@ function findNearestWaterDirection(
 ): { dx: number; dy: number } | null {
   // Sample in 8 directions to find nearest water
   const directions = [
-    { dx: 0, dy: -1 },   // up
-    { dx: 1, dy: -1 },   // up-right
-    { dx: 1, dy: 0 },    // right
-    { dx: 1, dy: 1 },    // down-right
-    { dx: 0, dy: 1 },    // down
-    { dx: -1, dy: 1 },   // down-left
-    { dx: -1, dy: 0 },   // left
-    { dx: -1, dy: -1 },  // up-left
+    { dx: 0, dy: -1 }, // up
+    { dx: 1, dy: -1 }, // up-right
+    { dx: 1, dy: 0 }, // right
+    { dx: 1, dy: 1 }, // down-right
+    { dx: 0, dy: 1 }, // down
+    { dx: -1, dy: 1 }, // down-left
+    { dx: -1, dy: 0 }, // left
+    { dx: -1, dy: -1 }, // up-left
   ];
 
   let nearestDir: { dx: number; dy: number } | null = null;
@@ -1212,9 +1565,9 @@ function doesCircleOverlapWater(
 
 /** Minimum land radius requirements for base types */
 const MIN_LAND_RADIUS = {
-  main: 35,     // Main bases need largest area
-  natural: 25,  // Naturals need medium area
-  third: 20,    // Expansion bases need smaller area
+  main: 35, // Main bases need largest area
+  natural: 25, // Naturals need medium area
+  third: 20, // Expansion bases need smaller area
   fourth: 20,
   fifth: 20,
   gold: 20,
@@ -1305,7 +1658,7 @@ function findValidMineralDirection(
 ): { direction: ResourceDirection; clearPercent: number } | null {
   // Start with preferred direction, then try others
   const directionsToTry: ResourceDirection[] = preferredDirection
-    ? [preferredDirection, ...ALL_MINERAL_DIRECTIONS.filter(d => d !== preferredDirection)]
+    ? [preferredDirection, ...ALL_MINERAL_DIRECTIONS.filter((d) => d !== preferredDirection)]
     : ALL_MINERAL_DIRECTIONS;
 
   let bestDirection: ResourceDirection | null = null;
@@ -1375,14 +1728,16 @@ function validateAndFixBlueprint(
   }
 
   // Filter out malformed ramp commands (missing from/to coordinates)
-  const malformedRamps = fixed.paint.filter(cmd => cmd.cmd === 'ramp' && (!cmd.from || !cmd.to));
+  const malformedRamps = fixed.paint.filter((cmd) => cmd.cmd === 'ramp' && (!cmd.from || !cmd.to));
   if (malformedRamps.length > 0) {
-    debugInitialization.warn(`Removing ${malformedRamps.length} malformed ramp command(s) missing from/to coordinates`);
-    fixed.paint = fixed.paint.filter(cmd => !(cmd.cmd === 'ramp' && (!cmd.from || !cmd.to)));
+    debugInitialization.warn(
+      `Removing ${malformedRamps.length} malformed ramp command(s) missing from/to coordinates`
+    );
+    fixed.paint = fixed.paint.filter((cmd) => !(cmd.cmd === 'ramp' && (!cmd.from || !cmd.to)));
   }
 
   // Ensure border command exists
-  const hasBorder = fixed.paint.some(cmd => cmd.cmd === 'border');
+  const hasBorder = fixed.paint.some((cmd) => cmd.cmd === 'border');
   if (!hasBorder) {
     fixed.paint.push({ cmd: 'border', thickness: 12 });
   }
@@ -1398,10 +1753,10 @@ function validateAndFixBlueprint(
   // ============================================================================
 
   // Group bases by type
-  const mainBases = fixed.bases.filter(b => b.type === 'main' && b.playerSlot !== undefined);
-  const naturalBases = fixed.bases.filter(b => b.type === 'natural');
-  const thirdBases = fixed.bases.filter(b => b.type === 'third');
-  const otherBases = fixed.bases.filter(b => b.type === 'fourth' || b.type === 'gold');
+  const mainBases = fixed.bases.filter((b) => b.type === 'main' && b.playerSlot !== undefined);
+  const naturalBases = fixed.bases.filter((b) => b.type === 'natural');
+  const thirdBases = fixed.bases.filter((b) => b.type === 'third');
+  const otherBases = fixed.bases.filter((b) => b.type === 'fourth' || b.type === 'gold');
 
   // Commands to insert (after fill, before border)
   const elevationCommands: MapBlueprint['paint'] = [];
@@ -1515,7 +1870,7 @@ function validateAndFixBlueprint(
   // Insert ramps after elevation commands
   if (elevationCommands.length > 0 || rampCommands.length > 0) {
     // Find border index
-    const borderIndex = fixed.paint.findIndex(cmd => cmd.cmd === 'border');
+    const borderIndex = fixed.paint.findIndex((cmd) => cmd.cmd === 'border');
     const insertIndex = borderIndex > 0 ? borderIndex : fixed.paint.length;
 
     // Insert elevation first, then ramps (order matters - ramps read elevation)
@@ -1544,7 +1899,7 @@ function validateAndFixBlueprint(
       // This plateau will be painted AFTER water, overwriting it with land
       debugInitialization.warn(
         `Base at (${base.x}, ${base.y}) type='${base.type}' is in water or lacks adequate land. ` +
-        `Adding land plateau with radius ${requiredRadius}.`
+          `Adding land plateau with radius ${requiredRadius}.`
       );
 
       landPlateauCommands.push({
@@ -1560,7 +1915,7 @@ function validateAndFixBlueprint(
   // Insert land plateaus AFTER water commands but BEFORE border
   // This ensures land is painted over water where bases need to be
   if (landPlateauCommands.length > 0) {
-    const borderIndex = fixed.paint.findIndex(cmd => cmd.cmd === 'border');
+    const borderIndex = fixed.paint.findIndex((cmd) => cmd.cmd === 'border');
     const insertIndex = borderIndex > 0 ? borderIndex : fixed.paint.length;
     fixed.paint.splice(insertIndex, 0, ...landPlateauCommands);
   }
@@ -1570,14 +1925,14 @@ function validateAndFixBlueprint(
   // ============================================================================
 
   // Build list of base protection zones
-  const baseProtectionZones = fixed.bases.map(base => ({
+  const baseProtectionZones = fixed.bases.map((base) => ({
     x: base.x,
     y: base.y,
     radius: MIN_LAND_RADIUS[base.type as keyof typeof MIN_LAND_RADIUS] || 20,
   }));
 
   // Remove water commands that are entirely within a base protection zone
-  fixed.paint = fixed.paint.filter(cmd => {
+  fixed.paint = fixed.paint.filter((cmd) => {
     if (cmd.cmd !== 'water') return true;
 
     // Check if this water command is entirely inside any base zone
@@ -1619,15 +1974,23 @@ function validateAndFixBlueprint(
       const baseRadius = MIN_LAND_RADIUS[base.type as keyof typeof MIN_LAND_RADIUS] || 20;
 
       // Find the direction to the nearest water
-      const waterDirection = findNearestWaterDirection(base.x, base.y, baseRadius, fixed.paint, size);
+      const waterDirection = findNearestWaterDirection(
+        base.x,
+        base.y,
+        baseRadius,
+        fixed.paint,
+        size
+      );
 
       if (waterDirection) {
         // Check if a beach access ramp already exists in this direction
         const beachX = base.x + waterDirection.dx * (baseRadius + 10);
         const beachY = base.y + waterDirection.dy * (baseRadius + 10);
 
-        if (!hasRampBetween(fixed.paint, base.x, base.y, beachX, beachY) &&
-            !hasRampBetween(beachAccessRamps, base.x, base.y, beachX, beachY)) {
+        if (
+          !hasRampBetween(fixed.paint, base.x, base.y, beachX, beachY) &&
+          !hasRampBetween(beachAccessRamps, base.x, base.y, beachX, beachY)
+        ) {
           // Calculate beach access ramp position
           const rampStart = baseRadius - 5; // Start just inside plateau edge
           const rampLength = 15; // Length to reach beach level
@@ -1653,7 +2016,7 @@ function validateAndFixBlueprint(
 
     // Insert beach access ramps
     if (beachAccessRamps.length > 0) {
-      const borderIndex = fixed.paint.findIndex(cmd => cmd.cmd === 'border');
+      const borderIndex = fixed.paint.findIndex((cmd) => cmd.cmd === 'border');
       const insertIndex = borderIndex > 0 ? borderIndex : fixed.paint.length;
       fixed.paint.splice(insertIndex, 0, ...beachAccessRamps);
     }
@@ -1670,7 +2033,13 @@ function validateAndFixBlueprint(
 
     // Check if current mineral direction would place minerals in water/void
     const inWater = checkMineralsInWater(base.x, base.y, currentDirection, isNatural, fixed.paint);
-    const clearPercent = checkMineralSpaceAvailable(base.x, base.y, currentDirection, isNatural, fixed.paint);
+    const clearPercent = checkMineralSpaceAvailable(
+      base.x,
+      base.y,
+      currentDirection,
+      isNatural,
+      fixed.paint
+    );
 
     if (inWater || clearPercent < 0.8) {
       // Try to find a better direction
@@ -1698,7 +2067,7 @@ function validateAndFixBlueprint(
         // No valid direction found - warn user
         debugInitialization.warn(
           `WARNING: Base at (${base.x}, ${base.y}) cannot place minerals without overlapping water/void. ` +
-          `Consider moving this base or adjusting nearby water features.`
+            `Consider moving this base or adjusting nearby water features.`
         );
       }
     }
@@ -1751,7 +2120,7 @@ function validateAndFixBlueprint(
   if (fixed.explicitDecorations && fixed.explicitDecorations.length > 0) {
     const originalCount = fixed.explicitDecorations.length;
 
-    fixed.explicitDecorations = fixed.explicitDecorations.filter(deco => {
+    fixed.explicitDecorations = fixed.explicitDecorations.filter((deco) => {
       const inWater = isPositionInWaterOrVoid(deco.x, deco.y, fixed.paint);
       if (inWater) {
         debugInitialization.warn(
@@ -1783,6 +2152,7 @@ const API_KEY_STORAGE_PREFIX = 'voidstrike_llm_key_';
  * Store API key in session storage
  */
 export function storeApiKey(provider: LLMProvider, apiKey: string): void {
+  if (provider === 'internal') return;
   if (typeof window !== 'undefined') {
     sessionStorage.setItem(`${API_KEY_STORAGE_PREFIX}${provider}`, apiKey);
   }
@@ -1792,6 +2162,7 @@ export function storeApiKey(provider: LLMProvider, apiKey: string): void {
  * Retrieve API key from session storage
  */
 export function getStoredApiKey(provider: LLMProvider): string | null {
+  if (provider === 'internal') return null;
   if (typeof window !== 'undefined') {
     return sessionStorage.getItem(`${API_KEY_STORAGE_PREFIX}${provider}`);
   }
@@ -1802,6 +2173,7 @@ export function getStoredApiKey(provider: LLMProvider): string | null {
  * Clear stored API key
  */
 export function clearApiKey(provider: LLMProvider): void {
+  if (provider === 'internal') return;
   if (typeof window !== 'undefined') {
     sessionStorage.removeItem(`${API_KEY_STORAGE_PREFIX}${provider}`);
   }
@@ -1813,6 +2185,8 @@ export function clearApiKey(provider: LLMProvider): void {
 export async function testApiKey(provider: LLMProvider, apiKey: string): Promise<boolean> {
   try {
     switch (provider) {
+      case 'internal':
+        return true;
       case 'claude': {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -1832,7 +2206,7 @@ export async function testApiKey(provider: LLMProvider, apiKey: string): Promise
       }
       case 'openai': {
         const response = await fetch('https://api.openai.com/v1/models', {
-          headers: { 'Authorization': `Bearer ${apiKey}` },
+          headers: { Authorization: `Bearer ${apiKey}` },
         });
         return response.ok;
       }

@@ -61,6 +61,7 @@ function getPresetsByCategory(categoryId: string): MapPreset[] {
 // ============================================================================
 
 const PROVIDERS: Array<{ id: LLMProvider; label: string }> = [
+  { id: 'internal', label: 'Internal' },
   { id: 'claude', label: 'Claude' },
   { id: 'openai', label: 'GPT' },
   { id: 'gemini', label: 'Gemini' },
@@ -136,7 +137,10 @@ function Toggle({
           style={{ transform: checked ? 'translateX(12px)' : 'translateX(2px)' }}
         />
       </div>
-      <span className="text-[9px]" style={{ color: checked ? theme.text.primary : theme.text.muted }}>
+      <span
+        className="text-[9px]"
+        style={{ color: checked ? theme.text.primary : theme.text.muted }}
+      >
         {label}
       </span>
     </button>
@@ -159,7 +163,10 @@ function Collapsible({
   const [open, setOpen] = useState(defaultOpen);
 
   return (
-    <div className="rounded overflow-hidden flex-shrink-0" style={{ backgroundColor: `${theme.surface}80` }}>
+    <div
+      className="rounded overflow-hidden flex-shrink-0"
+      style={{ backgroundColor: `${theme.surface}80` }}
+    >
       <button
         onClick={() => setOpen(!open)}
         className="w-full px-2 py-1.5 flex items-center justify-between hover:bg-white/5 transition-colors"
@@ -213,15 +220,16 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
   }, [state.lastGeneration, onMapGenerated]);
 
   const handleGenerate = async () => {
-    if (!state.isKeyValid) {
+    if (state.provider !== 'internal' && !state.isKeyValid) {
       const valid = await actions.validateApiKey();
       if (!valid) return;
     }
     await actions.generate();
   };
 
-  const canGenerate = state.apiKey.length > 0 && !state.isGenerating;
-  const hasValidKey = state.isKeyValid === true;
+  const canGenerate =
+    (state.provider === 'internal' || state.apiKey.length > 0) && !state.isGenerating;
+  const hasValidKey = state.provider === 'internal' || state.isKeyValid === true;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -254,7 +262,8 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
                       className="flex-1 py-1.5 text-[8px] font-medium transition-colors"
                       style={{
                         color: selectedCategory === cat.id ? theme.primary : theme.text.muted,
-                        backgroundColor: selectedCategory === cat.id ? `${theme.primary}10` : 'transparent',
+                        backgroundColor:
+                          selectedCategory === cat.id ? `${theme.primary}10` : 'transparent',
                       }}
                     >
                       {cat.name}
@@ -267,9 +276,15 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
                       key={preset.id}
                       onClick={() => applyPreset(preset)}
                       className="w-full px-2 py-1.5 text-left transition-colors hover:bg-white/5 h-10 flex flex-col justify-center"
-                      style={{ backgroundColor: selectedPresetId === preset.id ? `${theme.primary}15` : 'transparent' }}
+                      style={{
+                        backgroundColor:
+                          selectedPresetId === preset.id ? `${theme.primary}15` : 'transparent',
+                      }}
                     >
-                      <div className="text-[9px] font-medium truncate" style={{ color: theme.text.primary }}>
+                      <div
+                        className="text-[9px] font-medium truncate"
+                        style={{ color: theme.text.primary }}
+                      >
                         {preset.name}
                       </div>
                       <div className="text-[8px] truncate" style={{ color: theme.text.muted }}>
@@ -292,7 +307,10 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
               {selectedPreset.name}
             </span>
             <button
-              onClick={() => { setSelectedPresetId(null); actions.updateSettings({ theme: '' }); }}
+              onClick={() => {
+                setSelectedPresetId(null);
+                actions.updateSettings({ theme: '' });
+              }}
               className="text-[9px] px-1 hover:bg-white/10 rounded flex-shrink-0"
               style={{ color: theme.text.muted }}
             >
@@ -320,13 +338,26 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
       </div>
 
       {/* MAP CONFIG - Fixed height */}
-      <div className="p-2 rounded space-y-1.5 flex-shrink-0 mb-2" style={{ backgroundColor: `${theme.surface}60` }}>
+      <div
+        className="p-2 rounded space-y-1.5 flex-shrink-0 mb-2"
+        style={{ backgroundColor: `${theme.surface}60` }}
+      >
         {/* Players */}
         <div className="flex items-center gap-2">
-          <span className="text-[8px] uppercase w-10 flex-shrink-0" style={{ color: theme.text.muted }}>Players</span>
+          <span
+            className="text-[8px] uppercase w-10 flex-shrink-0"
+            style={{ color: theme.text.muted }}
+          >
+            Players
+          </span>
           <div className="flex gap-px">
             {PLAYER_COUNTS.map((n) => (
-              <Pill key={n} active={state.settings.playerCount === n} onClick={() => actions.updateSettings({ playerCount: n })} theme={theme}>
+              <Pill
+                key={n}
+                active={state.settings.playerCount === n}
+                onClick={() => actions.updateSettings({ playerCount: n })}
+                theme={theme}
+              >
                 {n}
               </Pill>
             ))}
@@ -335,10 +366,20 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
 
         {/* Size */}
         <div className="flex items-center gap-2">
-          <span className="text-[8px] uppercase w-10 flex-shrink-0" style={{ color: theme.text.muted }}>Size</span>
+          <span
+            className="text-[8px] uppercase w-10 flex-shrink-0"
+            style={{ color: theme.text.muted }}
+          >
+            Size
+          </span>
           <div className="flex gap-px">
             {MAP_SIZES.map((s) => (
-              <Pill key={s.id} active={state.settings.mapSize === s.id} onClick={() => actions.updateSettings({ mapSize: s.id })} theme={theme}>
+              <Pill
+                key={s.id}
+                active={state.settings.mapSize === s.id}
+                onClick={() => actions.updateSettings({ mapSize: s.id })}
+                theme={theme}
+              >
                 {s.label}
               </Pill>
             ))}
@@ -347,10 +388,20 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
 
         {/* Biome */}
         <div className="flex items-center gap-2">
-          <span className="text-[8px] uppercase w-10 flex-shrink-0" style={{ color: theme.text.muted }}>Biome</span>
+          <span
+            className="text-[8px] uppercase w-10 flex-shrink-0"
+            style={{ color: theme.text.muted }}
+          >
+            Biome
+          </span>
           <div className="flex gap-px flex-wrap">
             {BIOMES.map((b) => (
-              <Pill key={b.id} active={state.settings.biome === b.id} onClick={() => actions.updateSettings({ biome: b.id })} theme={theme}>
+              <Pill
+                key={b.id}
+                active={state.settings.biome === b.id}
+                onClick={() => actions.updateSettings({ biome: b.id })}
+                theme={theme}
+              >
                 {b.label}
               </Pill>
             ))}
@@ -359,10 +410,30 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
 
         {/* Features */}
         <div className="flex items-center gap-3 pt-1">
-          <Toggle checked={state.settings.includeForests} onChange={(v) => actions.updateSettings({ includeForests: v })} label="Forests" theme={theme} />
-          <Toggle checked={state.settings.includeWater} onChange={(v) => actions.updateSettings({ includeWater: v, islandMap: v ? state.settings.islandMap : false })} label="Water" theme={theme} />
+          <Toggle
+            checked={state.settings.includeForests}
+            onChange={(v) => actions.updateSettings({ includeForests: v })}
+            label="Forests"
+            theme={theme}
+          />
+          <Toggle
+            checked={state.settings.includeWater}
+            onChange={(v) =>
+              actions.updateSettings({
+                includeWater: v,
+                islandMap: v ? state.settings.islandMap : false,
+              })
+            }
+            label="Water"
+            theme={theme}
+          />
           {state.settings.includeWater && (
-            <Toggle checked={state.settings.islandMap} onChange={(v) => actions.updateSettings({ islandMap: v })} label="Islands" theme={theme} />
+            <Toggle
+              checked={state.settings.islandMap}
+              onChange={(v) => actions.updateSettings({ islandMap: v })}
+              label="Islands"
+              theme={theme}
+            />
           )}
         </div>
       </div>
@@ -379,7 +450,9 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
         }}
       >
         {state.isGenerating ? (
-          <><span className="animate-spin">◌</span>Generating...</>
+          <>
+            <span className="animate-spin">◌</span>Generating...
+          </>
         ) : (
           'Generate Map'
         )}
@@ -387,20 +460,31 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
 
       {/* STATUS MESSAGES */}
       {state.error && (
-        <div className="p-2 rounded text-[9px] flex-shrink-0 mb-2" style={{ backgroundColor: `${theme.error}10`, border: `1px solid ${theme.error}30`, color: theme.error }}>
+        <div
+          className="p-2 rounded text-[9px] flex-shrink-0 mb-2"
+          style={{
+            backgroundColor: `${theme.error}10`,
+            border: `1px solid ${theme.error}30`,
+            color: theme.error,
+          }}
+        >
           <div className="font-medium">Failed</div>
           <div className="mt-0.5 opacity-80 truncate">{state.error}</div>
         </div>
       )}
 
       {state.lastGeneration && !state.isGenerating && !state.error && (
-        <div className="p-2 rounded text-[9px] flex-shrink-0 mb-2" style={{ backgroundColor: `${theme.success}10`, border: `1px solid ${theme.success}30` }}>
+        <div
+          className="p-2 rounded text-[9px] flex-shrink-0 mb-2"
+          style={{ backgroundColor: `${theme.success}10`, border: `1px solid ${theme.success}30` }}
+        >
           <div className="flex items-center justify-between">
             <span className="font-medium truncate" style={{ color: theme.success }}>
               ✓ {state.lastGeneration.blueprint.meta.name}
             </span>
             <span style={{ color: theme.text.muted }}>
-              {state.lastGeneration.blueprint.canvas.width}×{state.lastGeneration.blueprint.canvas.height}
+              {state.lastGeneration.blueprint.canvas.width}×
+              {state.lastGeneration.blueprint.canvas.height}
             </span>
           </div>
           <button
@@ -418,49 +502,80 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
         title="API"
         defaultOpen={!hasValidKey}
         theme={theme}
-        badge={hasValidKey ? <span className="text-[8px] px-1 py-0.5 rounded" style={{ backgroundColor: `${theme.success}20`, color: theme.success }}>OK</span> : null}
+        badge={
+          hasValidKey ? (
+            <span
+              className="text-[8px] px-1 py-0.5 rounded"
+              style={{ backgroundColor: `${theme.success}20`, color: theme.success }}
+            >
+              OK
+            </span>
+          ) : null
+        }
       >
         <div className="space-y-2">
           <div className="flex gap-0.5">
             {PROVIDERS.map((p) => (
-              <Pill key={p.id} active={state.provider === p.id} onClick={() => actions.setProvider(p.id)} theme={theme}>
+              <Pill
+                key={p.id}
+                active={state.provider === p.id}
+                onClick={() => actions.setProvider(p.id)}
+                theme={theme}
+              >
                 {p.label}
               </Pill>
             ))}
           </div>
-          <div className="relative">
-            <input
-              type={showApiKey ? 'text' : 'password'}
-              value={state.apiKey}
-              onChange={(e) => actions.setApiKey(e.target.value)}
-              placeholder="API key"
-              className="w-full px-2 py-1 pr-10 rounded text-[9px] font-mono"
+          {state.provider === 'internal' ? (
+            <div
+              className="p-2 rounded text-[8px]"
               style={{
-                backgroundColor: theme.background,
-                border: `1px solid ${state.isKeyValid === true ? theme.success : state.isKeyValid === false ? theme.error : theme.border}`,
-                color: theme.text.primary,
+                backgroundColor: `${theme.success}12`,
+                border: `1px solid ${theme.success}35`,
+                color: theme.text.secondary,
               }}
-            />
-            <button
-              onClick={() => setShowApiKey(!showApiKey)}
-              className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] px-1 rounded hover:bg-white/10"
-              style={{ color: theme.text.muted }}
             >
-              {showApiKey ? 'Hide' : 'Show'}
-            </button>
-          </div>
-          {state.apiKey && state.isKeyValid === null && (
-            <button
-              onClick={actions.validateApiKey}
-              disabled={state.isTestingKey}
-              className="w-full py-1 rounded text-[9px]"
-              style={{ backgroundColor: theme.surface, color: theme.text.secondary }}
-            >
-              {state.isTestingKey ? 'Checking...' : 'Validate'}
-            </button>
-          )}
-          {state.isKeyValid === false && (
-            <div className="text-[8px]" style={{ color: theme.error }}>Invalid key</div>
+              Internal mode runs keyless map generation in-editor.
+            </div>
+          ) : (
+            <>
+              <div className="relative">
+                <input
+                  type={showApiKey ? 'text' : 'password'}
+                  value={state.apiKey}
+                  onChange={(e) => actions.setApiKey(e.target.value)}
+                  placeholder="API key"
+                  className="w-full px-2 py-1 pr-10 rounded text-[9px] font-mono"
+                  style={{
+                    backgroundColor: theme.background,
+                    border: `1px solid ${state.isKeyValid === true ? theme.success : state.isKeyValid === false ? theme.error : theme.border}`,
+                    color: theme.text.primary,
+                  }}
+                />
+                <button
+                  onClick={() => setShowApiKey(!showApiKey)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 text-[8px] px-1 rounded hover:bg-white/10"
+                  style={{ color: theme.text.muted }}
+                >
+                  {showApiKey ? 'Hide' : 'Show'}
+                </button>
+              </div>
+              {state.apiKey && state.isKeyValid === null && (
+                <button
+                  onClick={actions.validateApiKey}
+                  disabled={state.isTestingKey}
+                  className="w-full py-1 rounded text-[9px]"
+                  style={{ backgroundColor: theme.surface, color: theme.text.secondary }}
+                >
+                  {state.isTestingKey ? 'Checking...' : 'Validate'}
+                </button>
+              )}
+              {state.isKeyValid === false && (
+                <div className="text-[8px]" style={{ color: theme.error }}>
+                  Invalid key
+                </div>
+              )}
+            </>
           )}
         </div>
       </Collapsible>
@@ -478,8 +593,15 @@ export function AIGeneratePanel({ config, onMapGenerated }: AIGeneratePanelProps
                   style={{ backgroundColor: theme.background }}
                 >
                   <div className="flex justify-between">
-                    <span style={{ color: theme.text.secondary }}>{entry.settings.playerCount}P {entry.settings.mapSize}</span>
-                    <span style={{ color: theme.text.muted }}>{new Date(entry.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span style={{ color: theme.text.secondary }}>
+                      {entry.settings.playerCount}P {entry.settings.mapSize}
+                    </span>
+                    <span style={{ color: theme.text.muted }}>
+                      {new Date(entry.timestamp).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
                   </div>
                 </button>
               ))}
