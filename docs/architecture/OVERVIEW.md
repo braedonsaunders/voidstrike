@@ -2204,6 +2204,15 @@ editor/
     └── ObjectPlacer.ts      # Object placement tool
 ```
 
+### AI Map Generation Modes
+
+`AIGeneratePanel` + `useLLMGeneration` support multiple provider modes via `LLMMapGenerator`:
+
+- **External providers**: Claude, OpenAI, Gemini (API key required).
+- **Internal provider**: keyless in-editor generation path (`provider: 'internal'`) that synthesizes a blueprint locally, then runs the same validation + auto-fix pipeline (`generateMapWithResult(..., { validate: true, autoFix: true })`).
+
+All generation modes converge on the same post-processing path (blueprint validation, connectivity checks, auto-remediation), so locally generated maps and API-generated maps follow the same map-quality constraints.
+
 ### Editor State (`useEditorState.ts`)
 
 ```typescript
@@ -2866,38 +2875,45 @@ Naval units are excluded from land attack operations to prevent them being sent 
 The AI controls air units independently from ground forces through a multi-layered system:
 
 **Army Separation** (`AITacticsManager`)
+
 - During attacks, the army is split into `groundUnits` and `airCombatUnits`
 - Ground units form the main army with concave formations
 - Air units receive independent flanking commands perpendicular to the main attack vector
 - If no ground units exist, air becomes the main force (no wasted air units)
 
 **Air Formations** (`FormationControl`)
+
 - Air units are positioned past the enemy center at a perpendicular offset
 - Wide spacing (2x ground) reduces splash damage vulnerability
 - Independent priority level (4) prevents air from interfering with ground formations
 
 **Air Harassment** (`AITacticsManager.executeAirHarassment()`)
+
 - Up to 3 air units sent to enemy worker lines
 - Air bypasses terrain and ground defenses (direct paths)
 - 10-second cooldown between harassment waves
 
 **Support Air** (`AITacticsManager.commandSupportAir()`)
+
 - Lifter and Overseer units follow the army centroid
 - Positioned behind the army toward the AI's own base
 - Provides healing and detection support during combat
 
 **Air Micro** (`AIMicroSystem`)
+
 - Health-based disengage: air units flee below 30% health
 - Hit-and-run repositioning: perpendicular movement every 15 ticks while attacking
 - Proactive Valkyrie transformation: lower threshold (1.5x) for mode switching
 
 **Anti-Air Response**
+
 - Emergency counter-air production on ALL difficulties (not just hard+)
 - Preemptive anti-air when enemy air tech detected (medium+)
 - Air superiority Valkyrie production (priority 75) when enemy has air units
 - `enemyAirUnits` tracking feeds into production decisions
 
 **Air Scouting** (`AIScoutingManager`)
+
 - Flying units preferred as scouts (bypass terrain, fastest paths)
 - Falls back to ground scouts, then idle workers
 
@@ -3265,42 +3281,37 @@ pathfinding.resolveHardBuildingCollision(entityId, transform, unit);
 
 ### NavMesh Configuration
 
-Tuned for RTS gameplay with strict cliff handling:
+Tuned for RTS gameplay with permissive ramp traversal and explicit terrain semantics:
 
 ```typescript
 const NAVMESH_CONFIG = {
   // Cell sizing
-  cs: 0.5, // Cell size (0.5 units for Safari compatibility)
-  ch: 0.2, // Cell height (finer vertical precision for cliffs)
+  cs: 0.5,
+  ch: 0.2,
 
-  // Agent parameters - STRICT for cliff blocking
-  walkableRadius: 0.6, // Must exceed unit collision radius (0.5)
+  // Agent parameters
+  walkableRadius: 0.8,
   walkableHeight: 2.0,
-  walkableClimb: 0.3, // CRITICAL: Low value prevents stepping between elevations
-  walkableSlopeAngle: 50, // Max 50° slopes (cliffs are 90°, ramps are 30-40°)
+  walkableClimb: 2.0,
+  walkableSlopeAngle: 75,
 
-  // NavMesh quality - tighter for cliff edge precision
+  // Tile/navmesh quality
   maxSimplificationError: 0.5,
-  tileSize: 48,
+  tileSize: 32,
+  expectedLayersPerTile: 4,
   maxObstacles: 512,
 };
 ```
 
-### RTS-Style Cliff Blocking
+### Traversal & Cliff Blocking Model
 
-Three-layer defense prevents units from walking up/down cliffs:
+Current traversal behavior is enforced primarily by terrain semantics and navmesh projection:
 
-1. **Low walkableClimb (0.3)** - Elevation level gaps are 3.2+ units, so stepping is impossible
-2. **Reasonable walkableSlopeAngle (50°)** - Rejects near-vertical navmesh connections
-3. **Explicit cliff wall geometry** - Physical barriers generated at elevation boundaries
+1. **Terrain typing/features** (`unwalkable`, `void`, deep water, cliffs) remove surfaces from walkable geometry.
+2. **Per-cell walkable mesh generation** keeps discontinuities explicit between neighboring cells at different elevations.
+3. **Projection + height-aware queries** prevent snapping to unrelated vertical layers near ramps/platform transitions.
 
-```typescript
-// Elevation levels and gaps
-// Low ground:  elevation 60  → 2.4 height units
-// Mid ground:  elevation 140 → 5.6 height units
-// High ground: elevation 220 → 8.8 height units
-// Gap between levels: 3.2 units >> 0.3 walkableClimb
-```
+This means ramps are intentionally permissive, while non-walkable terrain definitions and disconnected regions provide the primary cliff/void protection model.
 
 ### Building Obstacle Expansion
 
@@ -3396,24 +3407,20 @@ Units are automatically sorted (melee front, ranged back, support center) based 
 
 ### Terrain Integration (`Terrain.ts`)
 
-The terrain generates walkable geometry with cliff walls for navmesh creation:
+The terrain generates walkable navmesh input using a per-cell quad mesh:
 
 ```typescript
-// Generate walkable mesh with cliff barriers
+// Generate walkable mesh for recast
 public generateWalkableGeometry(): {
   positions: Float32Array;
   indices: Uint32Array;
 }
 
-// Two-pass generation:
-// PASS 1: Floor geometry for walkable cells
-//   - Ramps use smooth heightMap for natural slope traversal
-//   - Non-ramp terrain uses quantized elevation for strict height gaps
-//
-// PASS 2: Cliff wall geometry at elevation boundaries
-//   - Walls generated between cells with elevation diff > 40
-//   - Walls extend 4 units vertically as physical barriers
-//   - Both front and back faces for robust blocking
+// Current runtime approach:
+// - Each walkable cell emits its own flat quad at cell elevation
+// - Non-walkable cells are skipped entirely
+// - No explicit cliff-wall pass is generated in Terrain.ts
+// - Recast connectivity and walkability filtering handle transitions
 ```
 
 ## AI Micro System

@@ -23,7 +23,7 @@ const WORKER_SPAWN_OFFSETS: ReadonlyArray<readonly [number, number]> = [
   [0, 4],
 ];
 
-const EXPECTED_SOLO_FALLBACK_MAPS = new Set(['scorched_basin', 'titans_colosseum']);
+const EXPECTED_SOLO_FALLBACK_MAPS = new Set(['titans_colosseum']);
 
 interface WalkableGeometry {
   positions: Float32Array;
@@ -152,7 +152,7 @@ function projectPoint(query: NavMeshQuery, x: number, y: number, queryHeight: nu
   );
 }
 
-function selectPrimaryPathTarget(map: MapData, spawn: { x: number; y: number }) {
+function selectPrimaryPathTarget(map: MapData, spawn: MapData['spawns'][number]) {
   const naturalTargets = map.expansions.filter((expansion) => expansion.isNatural);
   if (naturalTargets.length > 0) {
     return naturalTargets.reduce((best, candidate) => {
@@ -270,6 +270,6 @@ describe('Bundled map navmesh regression', () => {
       );
     }
 
-    console.log(`[navmeshRegression] ${summaries.join(' | ')}`);
+    expect(summaries.length).toBeGreaterThan(0);
   });
 });
