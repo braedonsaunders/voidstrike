@@ -2,7 +2,7 @@
 
 # VOIDSTRIKE
 
-**Browser-native RTS. 100,000+ lines of TypeScript. Written entirely by AI.**
+**Browser-native RTS. 100,000+ lines of TypeScript.**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-r182-black?logo=three.js)](https://threejs.org/)
@@ -21,23 +21,6 @@
 
 - **Other factions/races** — Additional playable factions beyond Dominion
 - **Multiplayer testing** — Stress testing P2P netcode at scale
-
----
-
-## The Experiment
-
-Can AI produce production-quality game code? Not a prototype or tech demo - an actual shippable codebase with deterministic netcode, custom shaders, and real game design.
-
-| Component | Source |
-|-----------|--------|
-| **Engine & Game Logic** | Claude (Anthropic) |
-| **Shaders & Rendering** | Claude |
-| **Networking** | Claude |
-| **3D Models** | Meshy AI |
-| **Music** | Suno |
-| **Sound Effects & Voice** | ElevenLabs |
-
-No human-written code. MIT licensed. Study it, fork it, extract pieces for your own projects.
 
 ---
 
