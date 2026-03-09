@@ -17,13 +17,6 @@
 
 ---
 
-## ⚠️ Work in Progress
-
-- **Other factions/races** — Additional playable factions beyond Dominion
-- **Multiplayer testing** — Stress testing P2P netcode at scale
-
----
-
 ## Technical Architecture
 
 Browser games typically compromise on one or more axes: graphics fidelity, networking architecture, or simulation determinism. This project attempts to avoid those tradeoffs. Here's what's under the hood.
