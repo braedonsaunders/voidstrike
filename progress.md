@@ -84,3 +84,16 @@ Original prompt: cant get this app to start locally
 - Verified `npm test -- tests/engine/systems/pathfindingSystem.test.ts` passes.
 - Verified `npm run build` passes on the production path after the height fix.
 - TODO: Restart the production server on `3001`, clear `output/live-pathfinding.jsonl`, and have the user rerun the same elevated worker move to confirm worker `path_result` events switch from `found:false` to real Recast paths.
+
+- Investigated the economy/UI desync where workers visibly mine and return cargo but the mineral counter never increases.
+- Root cause: in worker mode, `ResourceSystem` was crediting minerals into the worker's authoritative `playerResources` map and `GameWorker.sendRenderState()` was serializing that updated resource state, but `useWorkerBridge` only copied `gameTime` out of each render snapshot. The HUD reads from the main-thread Zustand store, so gathered minerals and worker-side supply changes never reached the UI.
+- Applied fix:
+  - added `syncPlayerResources()` to `src/store/gameStore.ts` so the main thread can atomically mirror minerals, plasma, supply, and max supply from worker authority
+  - added `src/components/game/hooks/syncWorkerPlayerResources.ts` and wired `useWorkerBridge` to copy the local player's `renderState.playerResources` into Zustand on every worker render update
+  - updated `docs/architecture/OVERVIEW.md` to document that worker snapshots now drive the local HUD resource state
+- Added regression coverage in `tests/components/game/hooks/syncWorkerPlayerResources.test.ts` for both successful local-player sync and no-op behavior when the player is absent/spectating.
+- Verified `npm test -- tests/components/game/hooks/syncWorkerPlayerResources.test.ts` passes.
+- Verified `npm test -- tests/engine/systems/resourceSystem.test.ts tests/components/game/hooks/syncWorkerPlayerResources.test.ts` passes (`62` tests).
+- Verified targeted ESLint on the touched files passes cleanly.
+- `npm run type-check` is still blocked by the pre-existing Vitest globals issue in `tests/launch/launch-voidstrike.test.ts`.
+- Ran the required Playwright smoke script against `http://localhost:3001/game/setup` and inspected `output/web-game-resource-sync/shot-0.png` plus `shot-1.png`; automation still stayed on the setup screen after the `Start Game` click, so live gameplay verification of mining remains blocked by the existing setup-flow automation limitation rather than this resource-sync fix.

@@ -918,6 +918,8 @@ When tab is visible, Phaser uses its normal RAF-based loop. When hidden, the wor
 
 Debug categories are toggled in the Options menu and forwarded to the game worker via `WorkerBridge` (`setDebugSettings`). Worker-side systems use `debugLogger` with worker-local settings so AI/pathfinding logs respect the same category filters as the main thread.
 
+`useWorkerBridge` also mirrors the local player's authoritative `renderState.playerResources` snapshot into the main-thread Zustand store on each worker update, so the HUD and command-cost checks stay in sync with worker-side gathering, refunds, supply, and spend events.
+
 For live pathfinding investigations on a local build, the browser can also stream structured movement telemetry into `output/live-pathfinding.jsonl` through `POST /api/debug/pathfinding`. `GameplayInputHandler` logs the clicked screen/world target, `PathfindingSystem` logs path requests/results, and `WorkerGame` emits short-lived per-unit snapshots plus stall events back through `WorkerBridge`, so local reproductions can be inspected after the fact without relying on browser DevTools history.
 
 ### Performance Workers

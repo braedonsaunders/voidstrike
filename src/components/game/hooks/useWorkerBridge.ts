@@ -31,6 +31,7 @@ import { useGameStore } from '@/store/gameStore';
 import { isMultiplayerMode } from '@/store/multiplayerStore';
 import { MapData } from '@/data/maps';
 import { debugInitialization, debugNetworking } from '@/utils/debugLogger';
+import { syncWorkerPlayerResources } from './syncWorkerPlayerResources';
 
 export interface UseWorkerBridgeProps {
   map: MapData;
@@ -94,6 +95,8 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
       });
       firstRenderStateLoggedRef.current = true;
     }
+
+    syncWorkerPlayerResources(state.playerResources, getLocalPlayerId());
 
     // Update game time in store
     useGameStore.getState().setGameTime(state.gameTime);

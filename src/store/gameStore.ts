@@ -90,6 +90,12 @@ export interface GameState {
   getControlGroup: (key: number) => number[];
   addResources: (minerals: number, plasma: number) => void;
   setResources: (minerals: number, plasma: number) => void;
+  syncPlayerResources: (resources: {
+    minerals: number;
+    plasma: number;
+    supply: number;
+    maxSupply: number;
+  }) => void;
   addSupply: (amount: number) => void;
   addMaxSupply: (amount: number) => void;
   setGameTime: (time: number) => void;
@@ -111,7 +117,12 @@ export interface GameState {
   setCamera: (x: number, y: number, zoom?: number) => void;
   moveCameraTo: (x: number, y: number) => void;
   clearPendingCameraMove: () => void;
-  addResearch: (playerId: string, upgradeId: string, effects: UpgradeEffect[], completedAt: number) => void;
+  addResearch: (
+    playerId: string,
+    upgradeId: string,
+    effects: UpgradeEffect[],
+    completedAt: number
+  ) => void;
   hasResearch: (playerId: string, upgradeId: string) => boolean;
   getUpgradeBonus: (playerId: string, unitId: string, effectType: UpgradeEffect['type']) => number;
   setShowTechTree: (show: boolean) => void;
@@ -207,6 +218,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       plasma: Math.max(0, plasma),
     })),
 
+  syncPlayerResources: (resources) =>
+    set(() => {
+      const maxSupply = clamp(resources.maxSupply, 0, 200);
+      return {
+        minerals: Math.max(0, resources.minerals),
+        plasma: Math.max(0, resources.plasma),
+        supply: clamp(resources.supply, 0, maxSupply),
+        maxSupply,
+      };
+    }),
+
   addSupply: (amount) =>
     set((state) => ({
       supply: clamp(state.supply + amount, 0, state.maxSupply),
@@ -253,8 +275,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       buildingPlacementQueue: [...state.buildingPlacementQueue, placement],
     })),
 
-  clearBuildingQueue: () =>
-    set({ buildingPlacementQueue: [] }),
+  clearBuildingQueue: () => set({ buildingPlacementQueue: [] }),
 
   setWallPlacementMode: (isActive, buildingType = 'wall_segment') =>
     set({
@@ -349,7 +370,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setLandingMode: (isActive, buildingId = null) =>
     set({
       isLandingMode: isActive,
-      landingBuildingId: isActive ? buildingId ?? null : null,
+      landingBuildingId: isActive ? (buildingId ?? null) : null,
       isBuilding: false,
       buildingType: null,
       isSettingRallyPoint: false,
@@ -389,11 +410,9 @@ export const useGameStore = create<GameState>((set, get) => ({
       cameraZoom: zoom ?? state.cameraZoom,
     })),
 
-  moveCameraTo: (x, y) =>
-    set({ pendingCameraMove: { x, y } }),
+  moveCameraTo: (x, y) => set({ pendingCameraMove: { x, y } }),
 
-  clearPendingCameraMove: () =>
-    set({ pendingCameraMove: null }),
+  clearPendingCameraMove: () => set({ pendingCameraMove: null }),
 
   addResearch: (playerId, upgradeId, effects, completedAt) =>
     set((state) => {
@@ -425,7 +444,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         // Check if effect applies to this unit
         const appliesToUnit =
           (!effect.targets || effect.targets.length === 0 || effect.targets.includes(unitId)) &&
-          (!effect.unitTypes || effect.unitTypes.length === 0 || (unitType && effect.unitTypes.includes(unitType)));
+          (!effect.unitTypes ||
+            effect.unitTypes.length === 0 ||
+            (unitType && effect.unitTypes.includes(unitType)));
 
         if (appliesToUnit) {
           bonus += effect.value;
