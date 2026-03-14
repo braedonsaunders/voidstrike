@@ -75,6 +75,7 @@ voidstrike/
 │   │   │   │   └── types.ts
 │   │   │   ├── hooks/ # React hooks
 │   │   │   │   ├── index.ts
+│   │   │   │   ├── syncWorkerPlayerResources.ts
 │   │   │   │   ├── useCameraControl.ts
 │   │   │   │   ├── useGameInput.ts
 │   │   │   │   ├── useLoadingState.ts
@@ -585,6 +586,10 @@ voidstrike/
 │   │   └── boids_wasm.js
 │   └── sw.js
 └── tests/
+    ├── components/ # React components
+    │   └── game/
+    │       └── hooks/ # React hooks
+    │           └── syncWorkerPlayerResources.test.ts
     ├── data/ # Game data definitions
     │   ├── aiConfig.test.ts
     │   ├── audioConfig.test.ts
