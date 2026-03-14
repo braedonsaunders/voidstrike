@@ -43,6 +43,10 @@ voidstrike/
 │   ├── adapters/
 │   │   └── ZustandStateAdapter.ts
 │   ├── app/ # Next.js App Router
+│   │   ├── api/
+│   │   │   └── debug/
+│   │   │       └── pathfinding/ # Navigation & pathfinding
+│   │   │           └── ...
 │   │   ├── game/
 │   │   │   ├── setup/
 │   │   │   │   ├── editor/ # 3D Map Editor
@@ -160,6 +164,8 @@ voidstrike/
 │   │   │   │   ├── titans_colosseum.json
 │   │   │   │   ├── void_assault.json
 │   │   │   │   └── webpack.d.ts
+│   │   │   ├── navmesh/
+│   │   │   │   └── generateWalkableNavmeshGeometry.ts
 │   │   │   ├── schema/
 │   │   │   │   ├── index.ts
 │   │   │   │   └── MapJsonSchema.ts
@@ -311,7 +317,8 @@ voidstrike/
 │   │   │   └── SystemRegistry.ts
 │   │   ├── debug/
 │   │   │   ├── ConsoleEngine.ts
-│   │   │   └── index.ts
+│   │   │   ├── index.ts
+│   │   │   └── pathTelemetry.ts
 │   │   ├── definitions/ # Definition registry
 │   │   │   ├── bootstrap.ts
 │   │   │   ├── DefinitionLoader.ts
@@ -631,6 +638,9 @@ voidstrike/
     │   │   ├── lockstep.test.ts
     │   │   ├── merkleTree.test.ts
     │   │   └── types.test.ts
+    │   ├── pathfinding/ # Navigation & pathfinding
+    │   │   ├── recastDynamicObstacleElevation.test.ts
+    │   │   └── recastRampConnectivity.test.ts
     │   ├── systems/ # ECS Systems
     │   │   ├── ai/ # AI subsystems
     │   │   │   ├── AIBuildOrderExecutor.test.ts
@@ -657,6 +667,8 @@ voidstrike/
     │   │   └── visionSystem.test.ts
     │   └── workers/ # Web Workers
     │       └── gameWorker.test.ts
+    ├── launch/
+    │   └── launch-voidstrike.test.ts
     ├── rendering/ # Rendering systems
     │   ├── effects/ # Visual effects
     │   │   └── BattleEffectsRenderer.test.ts
