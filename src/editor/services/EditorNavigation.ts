@@ -11,20 +11,15 @@
  * 4. Pathfinding queries use same findPath logic
  */
 
-import {
-  init,
-  NavMesh,
-  NavMeshQuery,
-  TileCache,
-} from 'recast-navigation';
+import { init, NavMesh, NavMeshQuery, TileCache } from 'recast-navigation';
 import { generateTileCache, generateSoloNavMesh } from '@recast-navigation/generators';
 import type { EditorMapData, EditorObject } from '../config/EditorConfig';
+import { NAVMESH_CONFIG, SOLO_NAVMESH_CONFIG } from '@/data/pathfinding.config';
 import {
-  NAVMESH_CONFIG,
-  SOLO_NAVMESH_CONFIG,
-  ELEVATION_TO_HEIGHT_FACTOR,
-} from '@/data/pathfinding.config';
-import { TERRAIN_FEATURE_CONFIG, type TerrainFeature } from '@/data/maps/MapTypes';
+  sampleNavMeshHeightMap,
+  generateWalkableNavmeshGeometry,
+} from '@/data/maps/navmesh/generateWalkableNavmeshGeometry';
+import type { MapCell, TerrainFeature } from '@/data/maps/MapTypes';
 
 // Decoration radius mapping for obstacles (matches game's decoration configs)
 const DECORATION_OBSTACLE_RADII: Record<string, number> = {
@@ -42,6 +37,12 @@ const DECORATION_OBSTACLE_RADII: Record<string, number> = {
 
 // Only add obstacles for decorations with radius > this threshold
 const MIN_OBSTACLE_RADIUS = 0.5;
+const WALKABLE_DISTANCE_TOLERANCE = Math.max(
+  NAVMESH_CONFIG.walkableRadius * 1.5,
+  NAVMESH_CONFIG.cs * 1.5
+);
+const WALKABLE_HEIGHT_TOLERANCE = NAVMESH_CONFIG.walkableClimb * 2;
+const MAX_TILE_CACHE_UPDATES = 8;
 
 export interface PathResult {
   path: Array<{ x: number; y: number }>;
@@ -72,6 +73,7 @@ export class EditorNavigation {
   private navMesh: NavMesh | null = null;
   private navMeshQuery: NavMeshQuery | null = null;
   private tileCache: TileCache | null = null;
+  private navMeshHeightMap: Float32Array | null = null;
   private mapWidth: number = 0;
   private mapHeight: number = 0;
 
@@ -113,6 +115,7 @@ export class EditorNavigation {
 
       this.mapWidth = mapData.width;
       this.mapHeight = mapData.height;
+      this.navMeshHeightMap = null;
 
       // Generate walkable geometry (same logic as Terrain.generateWalkableGeometry)
       const { positions, indices } = this.generateWalkableGeometry(mapData);
@@ -124,7 +127,9 @@ export class EditorNavigation {
         };
       }
 
-      console.log(`[EditorNavigation] Generated geometry: ${positions.length / 3} vertices, ${indices.length / 3} triangles`);
+      console.log(
+        `[EditorNavigation] Generated geometry: ${positions.length / 3} vertices, ${indices.length / 3} triangles`
+      );
 
       // Try tile cache first (supports dynamic obstacles)
       const result = generateTileCache(positions, indices, NAVMESH_CONFIG);
@@ -179,60 +184,62 @@ export class EditorNavigation {
    * Generate walkable geometry from editor map data
    * Mirrors Terrain.generateWalkableGeometry() exactly
    */
-  private generateWalkableGeometry(mapData: EditorMapData): { positions: Float32Array; indices: Uint32Array } {
-    const terrain = mapData.terrain;
-    const width = mapData.width;
-    const height = mapData.height;
+  private generateWalkableGeometry(mapData: EditorMapData): {
+    positions: Float32Array;
+    indices: Uint32Array;
+  } {
+    const terrain: MapCell[][] = mapData.terrain.map((row) =>
+      row.map((cell) => ({
+        terrain: cell.isRamp
+          ? 'ramp'
+          : cell.isPlatform
+            ? 'platform'
+            : cell.walkable
+              ? 'ground'
+              : 'unwalkable',
+        elevation: cell.elevation,
+        feature: (cell.feature as TerrainFeature) || 'none',
+        textureId: cell.textureId || 0,
+      }))
+    );
 
-    const vertices: number[] = [];
-    const indices: number[] = [];
-    let vertexIndex = 0;
-
-    // Helper: Check if a cell is walkable for pathfinding
-    const isCellWalkable = (cx: number, cy: number): boolean => {
-      if (cx < 0 || cx >= width || cy < 0 || cy >= height) return false;
-      const cell = terrain[cy]?.[cx];
-      if (!cell) return false;
-      if (!cell.walkable) return false;
-      const feature = (cell.feature || 'none') as TerrainFeature;
-      const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
-      return featureConfig?.walkable ?? true;
-    };
-
-    // Each walkable cell is a flat quad at its elevation
-    // No vertex sharing between cells - Recast handles step-ups via walkableClimb
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (!isCellWalkable(x, y)) continue;
-
-        const cell = terrain[y][x];
-        const h = cell.elevation * ELEVATION_TO_HEIGHT_FACTOR;
-
-        // World coordinates for cell corners
-        const x0 = x;
-        const x1 = x + 1;
-        const z0 = y;
-        const z1 = y + 1;
-
-        // Add 4 vertices for this cell (flat quad at cell elevation)
-        const baseIdx = vertexIndex;
-        vertices.push(x0, h, z0);  // NW corner
-        vertices.push(x1, h, z0);  // NE corner
-        vertices.push(x0, h, z1);  // SW corner
-        vertices.push(x1, h, z1);  // SE corner
-
-        // Two triangles for the quad (CCW winding)
-        indices.push(baseIdx, baseIdx + 2, baseIdx + 1);      // NW, SW, NE
-        indices.push(baseIdx + 1, baseIdx + 2, baseIdx + 3);  // NE, SW, SE
-
-        vertexIndex += 4;
-      }
-    }
+    const geometry = generateWalkableNavmeshGeometry({
+      terrain,
+      width: mapData.width,
+      height: mapData.height,
+    });
+    this.navMeshHeightMap = geometry.navMeshHeightMap;
 
     return {
-      positions: new Float32Array(vertices),
-      indices: new Uint32Array(indices),
+      positions: geometry.positions,
+      indices: geometry.indices,
     };
+  }
+
+  private getQueryHalfExtents(searchRadius: number): { x: number; y: number; z: number } {
+    const heightTolerance = this.navMeshHeightMap ? WALKABLE_HEIGHT_TOLERANCE * 1.5 : 20;
+    return { x: searchRadius, y: heightTolerance, z: searchRadius };
+  }
+
+  private getQueryHeight(x: number, y: number): number {
+    if (!this.navMeshHeightMap) return 0;
+    return sampleNavMeshHeightMap(this.navMeshHeightMap, this.mapWidth, this.mapHeight, x, y);
+  }
+
+  private getObstacleHeight(x: number, y: number): number {
+    const height = this.getQueryHeight(x, y);
+    return Number.isFinite(height) ? height : 0;
+  }
+
+  private applyTileCacheUpdates(): void {
+    if (!this.tileCache || !this.navMesh) return;
+
+    for (let i = 0; i < MAX_TILE_CACHE_UPDATES; i++) {
+      const { upToDate } = this.tileCache.update(this.navMesh);
+      if (upToDate) {
+        break;
+      }
+    }
   }
 
   /**
@@ -259,9 +266,11 @@ export class EditorNavigation {
       if (scaledRadius < MIN_OBSTACLE_RADIUS) continue;
 
       try {
+        const obstacleY = this.getObstacleHeight(obj.x, obj.y);
+
         // Add as cylinder obstacle
         const result = this.tileCache.addCylinderObstacle(
-          { x: obj.x, y: 0, z: obj.y },
+          { x: obj.x, y: obstacleY, z: obj.y },
           scaledRadius + 0.1, // Small expansion for precision
           2.0 // Height
         );
@@ -276,7 +285,7 @@ export class EditorNavigation {
 
     // Update navmesh with obstacles
     if (obstacleCount > 0) {
-      this.tileCache.update(this.navMesh);
+      this.applyTileCacheUpdates();
       console.log(`[EditorNavigation] Added ${obstacleCount} decoration obstacles`);
     }
   }
@@ -298,14 +307,10 @@ export class EditorNavigation {
 
     try {
       const searchRadius = Math.max(agentRadius * 4, 2);
-      const halfExtents = {
-        x: searchRadius,
-        y: 3,
-        z: searchRadius,
-      };
+      const halfExtents = this.getQueryHalfExtents(searchRadius);
 
-      const startQuery = { x: startX, y: 0, z: startY };
-      const endQuery = { x: endX, y: 0, z: endY };
+      const startQuery = { x: startX, y: this.getQueryHeight(startX, startY), z: startY };
+      const endQuery = { x: endX, y: this.getQueryHeight(endX, endY), z: endY };
 
       const startOnMesh = this.navMeshQuery.findClosestPoint(startQuery, { halfExtents });
       const endOnMesh = this.navMeshQuery.findClosestPoint(endQuery, { halfExtents });
@@ -341,18 +346,19 @@ export class EditorNavigation {
     if (!this.navMeshQuery) return false;
 
     try {
-      const halfExtents = { x: 2, y: 3, z: 2 };
-      const query = { x, y: 0, z: y };
+      const queryHeight = this.getQueryHeight(x, y);
+      const halfExtents = this.getQueryHalfExtents(2);
+      const query = { x, y: queryHeight, z: y };
 
       const result = this.navMeshQuery.findClosestPoint(query, { halfExtents });
       if (!result.success || !result.point) return false;
 
-      // Check if the closest point is within tolerance
       const dx = result.point.x - x;
       const dz = result.point.z - y;
       const dist = Math.sqrt(dx * dx + dz * dz);
+      const heightDiff = Math.abs(result.point.y - queryHeight);
 
-      return dist < 2.0;
+      return dist < WALKABLE_DISTANCE_TOLERANCE && heightDiff <= WALKABLE_HEIGHT_TOLERANCE;
     } catch {
       return false;
     }
@@ -405,7 +411,12 @@ export class EditorNavigation {
       }
 
       if (closestNatural) {
-        const pathResult = this.findPath(mainBase.x, mainBase.y, closestNatural.x, closestNatural.y);
+        const pathResult = this.findPath(
+          mainBase.x,
+          mainBase.y,
+          closestNatural.x,
+          closestNatural.y
+        );
 
         results.push({
           from: `Main Base ${i + 1}`,
@@ -439,6 +450,7 @@ export class EditorNavigation {
     this.navMesh = null;
     this.navMeshQuery = null;
     this.tileCache = null;
+    this.navMeshHeightMap = null;
   }
 }
 

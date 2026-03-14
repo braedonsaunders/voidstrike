@@ -38,6 +38,7 @@ import {
 } from '@/store/multiplayerStore';
 import { debugInitialization } from '@/utils/debugLogger';
 import { PerformanceMonitor } from '../core/PerformanceMonitor';
+import { recordPathTelemetry } from '@/engine/debug/pathTelemetry';
 
 // ============================================================================
 // TYPES
@@ -290,6 +291,17 @@ export class WorkerBridge {
           message.metrics.systemTimings,
           message.metrics.entityCounts
         );
+        break;
+
+      case 'pathTelemetry':
+        recordPathTelemetry({
+          ...message.event,
+          source: 'bridge',
+          payload: {
+            ...message.event.payload,
+            workerSource: message.event.source,
+          },
+        });
         break;
     }
   }

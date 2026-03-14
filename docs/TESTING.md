@@ -14,98 +14,98 @@ npm run test:coverage # With coverage report
 
 ## Current Coverage Summary
 
-| Category | Statements | Branches | Functions | Lines |
-|----------|------------|----------|-----------|-------|
-| **Overall** | 56.89% | 48.21% | 49.12% | 58.34% |
+| Category    | Statements | Branches | Functions | Lines  |
+| ----------- | ---------- | -------- | --------- | ------ |
+| **Overall** | 56.89%     | 48.21%   | 49.12%    | 58.34% |
 
 ### Module Breakdown
 
-| Module | Stmts | Branch | Funcs | Lines | Status |
-|--------|-------|--------|-------|-------|--------|
-| **engine/ai** |
-| BehaviorTree.ts | 87.69% | 85.22% | 88.52% | 86.74% | Covered |
+| Module                | Stmts  | Branch | Funcs  | Lines  | Status   |
+| --------------------- | ------ | ------ | ------ | ------ | -------- |
+| **engine/ai**         |
+| BehaviorTree.ts       | 87.69% | 85.22% | 88.52% | 86.74% | Covered  |
 | **engine/components** |
-| Health.ts | 94.44% | 96.55% | 100% | 94.23% | Covered |
-| Transform.ts | 100% | 100% | 100% | 100% | Complete |
-| Velocity.ts | 100% | 100% | 100% | 100% | Complete |
-| **engine/core** |
-| EventBus.ts | 95.34% | 84.61% | 100% | 97.43% | Covered |
-| GameLoop.ts | 68.57% | 55.88% | 69.23% | 69.23% | Partial |
-| PerformanceMonitor.ts | 51.87% | 34.37% | 71.05% | 53.95% | Partial |
-| SpatialGrid.ts | 65.00% | 49.06% | 71.87% | 66.29% | Partial |
-| SystemRegistry.ts | 88.31% | 80.00% | 90.90% | 89.33% | Covered |
-| **engine/ecs** |
-| Entity.ts | 100% | 100% | 100% | 100% | Complete |
-| EntityId.ts | 82.35% | 64.70% | 85.71% | 89.36% | Covered |
-| World.ts | 81.21% | 71.62% | 69.23% | 83.33% | Covered |
-| **engine/network** |
-| DesyncDetection.ts | 21.87% | 13.25% | 40% | 22.58% | Minimal |
-| MerkleTree.ts | 74.48% | 52.50% | 90% | 77.52% | Covered |
-| ConnectionCode.ts | 19.04% | 12.30% | 13.33% | 19.25% | Minimal |
-| types.ts | 100% | 100% | 100% | 100% | Complete |
-| **utils** |
-| math.ts | 100% | 100% | 100% | 100% | Complete |
-| FixedPoint.ts | 67.32% | 55.55% | 55% | 70.65% | Partial |
-| debugLogger.ts | 27.27% | 37.50% | 6.94% | 27.27% | Minimal |
+| Health.ts             | 94.44% | 96.55% | 100%   | 94.23% | Covered  |
+| Transform.ts          | 100%   | 100%   | 100%   | 100%   | Complete |
+| Velocity.ts           | 100%   | 100%   | 100%   | 100%   | Complete |
+| **engine/core**       |
+| EventBus.ts           | 95.34% | 84.61% | 100%   | 97.43% | Covered  |
+| GameLoop.ts           | 68.57% | 55.88% | 69.23% | 69.23% | Partial  |
+| PerformanceMonitor.ts | 51.87% | 34.37% | 71.05% | 53.95% | Partial  |
+| SpatialGrid.ts        | 65.00% | 49.06% | 71.87% | 66.29% | Partial  |
+| SystemRegistry.ts     | 88.31% | 80.00% | 90.90% | 89.33% | Covered  |
+| **engine/ecs**        |
+| Entity.ts             | 100%   | 100%   | 100%   | 100%   | Complete |
+| EntityId.ts           | 82.35% | 64.70% | 85.71% | 89.36% | Covered  |
+| World.ts              | 81.21% | 71.62% | 69.23% | 83.33% | Covered  |
+| **engine/network**    |
+| DesyncDetection.ts    | 21.87% | 13.25% | 40%    | 22.58% | Minimal  |
+| MerkleTree.ts         | 74.48% | 52.50% | 90%    | 77.52% | Covered  |
+| ConnectionCode.ts     | 19.04% | 12.30% | 13.33% | 19.25% | Minimal  |
+| types.ts              | 100%   | 100%   | 100%   | 100%   | Complete |
+| **utils**             |
+| math.ts               | 100%   | 100%   | 100%   | 100%   | Complete |
+| FixedPoint.ts         | 67.32% | 55.55% | 55%    | 70.65% | Partial  |
+| debugLogger.ts        | 27.27% | 37.50% | 6.94%  | 27.27% | Minimal  |
 
 ---
 
 ## Test File Inventory
 
-| Test File | Tests | Status |
-|-----------|-------|--------|
-| `tests/engine/ai/behaviorTree.test.ts` | 55 | Active |
-| `tests/engine/components/ability.test.ts` | 48 | Active |
-| `tests/engine/components/building.test.ts` | 99 | Active |
-| `tests/engine/components/health.test.ts` | 38 | Active |
-| `tests/engine/components/projectile.test.ts` | 24 | Active |
-| `tests/engine/components/resource.test.ts` | 38 | Active |
-| `tests/engine/components/selectable.test.ts` | 16 | Active |
-| `tests/engine/components/transform.test.ts` | 20 | Active |
-| `tests/engine/components/unit.test.ts` | 96 | Active |
-| `tests/engine/components/velocity.test.ts` | 18 | Active |
-| `tests/engine/components/wall.test.ts` | 83 | Active |
-| `tests/engine/core/eventBus.test.ts` | 5 | Active |
-| `tests/engine/core/gameLoop.test.ts` | 2 | Active |
-| `tests/engine/core/performanceMonitor.test.ts` | 19 | Active |
-| `tests/engine/core/spatialGrid.test.ts` | 4 | Active |
-| `tests/engine/core/systemRegistry.test.ts` | 23 | Active |
-| `tests/engine/ecs/entity.test.ts` | 16 | Active |
-| `tests/engine/ecs/entityId.test.ts` | 6 | Active |
-| `tests/engine/ecs/world.test.ts` | 25 | Active |
-| `tests/engine/network/connectionCode.test.ts` | 11 | Active |
-| `tests/engine/network/desyncDetection.test.ts` | 16 | Active |
-| `tests/engine/network/merkleTree.test.ts` | 3 | Active |
-| `tests/engine/network/types.test.ts` | 9 | Active |
-| `tests/engine/pathfinding/grid.test.ts` | 23 | Active |
-| `tests/utils/fixedPoint.test.ts` | 7 | Active |
-| `tests/utils/math.test.ts` | 7 | Active |
-| `tests/utils/vectorPool.test.ts` | 28 | Active |
-| `tests/data/combat.test.ts` | 51 | Active |
-| `tests/data/projectileTypes.test.ts` | 42 | Active |
-| `tests/data/formations.test.ts` | 34 | Active |
-| `tests/data/categories.test.ts` | 55 | Active |
-| `tests/data/resources.test.ts` | 45 | Active |
-| `tests/data/walls.test.ts` | 49 | Active |
-| `tests/data/aiConfig.test.ts` | 38 | Active |
-| `tests/data/movementConfig.test.ts` | 45 | Active |
-| `tests/data/techTree.test.ts` | 34 | Active |
-| `tests/data/pathfindingConfig.test.ts` | 52 | Active |
-| `tests/data/buildOrders.test.ts` | 55 | Active |
-| `tests/data/audioConfig.test.ts` | 18 | Active |
-| `tests/data/renderingConfig.test.ts` | 63 | Active |
-| `tests/data/collisionConfig.test.ts` | 54 | Active |
-| `tests/engine/definitions/definitionRegistry.test.ts` | 52 | Active |
-| `tests/engine/definitions/definitionValidator.test.ts` | 70 | Active |
-| `tests/engine/systems/combatSystem.test.ts` | 67 | Active |
-| `tests/engine/systems/resourceSystem.test.ts` | 59 | Active |
-| `tests/engine/systems/productionSystem.test.ts` | 51 | Active |
-| `tests/engine/systems/pathfindingSystem.test.ts` | 17 | Active |
-| `tests/engine/systems/visionSystem.test.ts` | 19 | Active |
-| `tests/engine/systems/projectileSystem.test.ts` | 27 | Active |
-| `tests/engine/systems/abilitySystem.test.ts` | 28 | Active |
-| `tests/engine/systems/buildingPlacementSystem.test.ts` | 27 | Active |
-| **Total** | **1791** | |
+| Test File                                              | Tests    | Status |
+| ------------------------------------------------------ | -------- | ------ |
+| `tests/engine/ai/behaviorTree.test.ts`                 | 55       | Active |
+| `tests/engine/components/ability.test.ts`              | 48       | Active |
+| `tests/engine/components/building.test.ts`             | 99       | Active |
+| `tests/engine/components/health.test.ts`               | 38       | Active |
+| `tests/engine/components/projectile.test.ts`           | 24       | Active |
+| `tests/engine/components/resource.test.ts`             | 38       | Active |
+| `tests/engine/components/selectable.test.ts`           | 16       | Active |
+| `tests/engine/components/transform.test.ts`            | 20       | Active |
+| `tests/engine/components/unit.test.ts`                 | 96       | Active |
+| `tests/engine/components/velocity.test.ts`             | 18       | Active |
+| `tests/engine/components/wall.test.ts`                 | 83       | Active |
+| `tests/engine/core/eventBus.test.ts`                   | 5        | Active |
+| `tests/engine/core/gameLoop.test.ts`                   | 2        | Active |
+| `tests/engine/core/performanceMonitor.test.ts`         | 19       | Active |
+| `tests/engine/core/spatialGrid.test.ts`                | 4        | Active |
+| `tests/engine/core/systemRegistry.test.ts`             | 23       | Active |
+| `tests/engine/ecs/entity.test.ts`                      | 16       | Active |
+| `tests/engine/ecs/entityId.test.ts`                    | 6        | Active |
+| `tests/engine/ecs/world.test.ts`                       | 25       | Active |
+| `tests/engine/network/connectionCode.test.ts`          | 11       | Active |
+| `tests/engine/network/desyncDetection.test.ts`         | 16       | Active |
+| `tests/engine/network/merkleTree.test.ts`              | 3        | Active |
+| `tests/engine/network/types.test.ts`                   | 9        | Active |
+| `tests/engine/pathfinding/grid.test.ts`                | 23       | Active |
+| `tests/utils/fixedPoint.test.ts`                       | 7        | Active |
+| `tests/utils/math.test.ts`                             | 7        | Active |
+| `tests/utils/vectorPool.test.ts`                       | 28       | Active |
+| `tests/data/combat.test.ts`                            | 51       | Active |
+| `tests/data/projectileTypes.test.ts`                   | 42       | Active |
+| `tests/data/formations.test.ts`                        | 34       | Active |
+| `tests/data/categories.test.ts`                        | 55       | Active |
+| `tests/data/resources.test.ts`                         | 45       | Active |
+| `tests/data/walls.test.ts`                             | 49       | Active |
+| `tests/data/aiConfig.test.ts`                          | 38       | Active |
+| `tests/data/movementConfig.test.ts`                    | 45       | Active |
+| `tests/data/techTree.test.ts`                          | 34       | Active |
+| `tests/data/pathfindingConfig.test.ts`                 | 52       | Active |
+| `tests/data/buildOrders.test.ts`                       | 55       | Active |
+| `tests/data/audioConfig.test.ts`                       | 18       | Active |
+| `tests/data/renderingConfig.test.ts`                   | 63       | Active |
+| `tests/data/collisionConfig.test.ts`                   | 54       | Active |
+| `tests/engine/definitions/definitionRegistry.test.ts`  | 52       | Active |
+| `tests/engine/definitions/definitionValidator.test.ts` | 70       | Active |
+| `tests/engine/systems/combatSystem.test.ts`            | 67       | Active |
+| `tests/engine/systems/resourceSystem.test.ts`          | 59       | Active |
+| `tests/engine/systems/productionSystem.test.ts`        | 51       | Active |
+| `tests/engine/systems/pathfindingSystem.test.ts`       | 17       | Active |
+| `tests/engine/systems/visionSystem.test.ts`            | 19       | Active |
+| `tests/engine/systems/projectileSystem.test.ts`        | 27       | Active |
+| `tests/engine/systems/abilitySystem.test.ts`           | 28       | Active |
+| `tests/engine/systems/buildingPlacementSystem.test.ts` | 27       | Active |
+| **Total**                                              | **1791** |        |
 
 ---
 
@@ -181,6 +181,7 @@ npm run test:coverage # With coverage report
 ### Priority 8: Pathfinding
 
 - [x] **Grid.ts** - Navigation grid (23 tests)
+- [x] **generateWalkableNavmeshGeometry.ts** - Recast elevated-ramp connectivity and ramp-metadata normalization regression coverage (4 tests)
 - [ ] **RecastNavigation.ts** - Recast/Detour navigation
 
 ### Priority 9: Definitions & Data
@@ -299,21 +300,21 @@ For multiplayer-critical code, tests must verify:
 
 ## Coverage Goals
 
-| Phase | Target | Timeline |
-|-------|--------|----------|
-| Current | 55% | Baseline |
-| Phase 1 | 70% | Core engine, ECS |
-| Phase 2 | 80% | Systems, components |
-| Phase 3 | 90% | Full coverage |
+| Phase   | Target | Timeline            |
+| ------- | ------ | ------------------- |
+| Current | 55%    | Baseline            |
+| Phase 1 | 70%    | Core engine, ECS    |
+| Phase 2 | 80%    | Systems, components |
+| Phase 3 | 90%    | Full coverage       |
 
 ### Critical Path Coverage Targets
 
-| Module | Current | Target |
-|--------|---------|--------|
-| engine/ecs | 83% | 95% |
-| engine/core | 64% | 85% |
-| engine/network | 44% | 80% |
-| utils | 54% | 90% |
+| Module         | Current | Target |
+| -------------- | ------- | ------ |
+| engine/ecs     | 83%     | 95%    |
+| engine/core    | 64%     | 85%    |
+| engine/network | 44%     | 80%    |
+| utils          | 54%     | 90%    |
 
 ---
 
@@ -344,6 +345,7 @@ npx vitest run --update
 ## CI Integration
 
 Tests run automatically on:
+
 - Pull request creation
 - Push to main branch
 - Manual workflow dispatch
@@ -359,6 +361,7 @@ Performance tests require special care to avoid flakiness. VOIDSTRIKE uses a sta
 ### Why Performance Tests Are Flaky
 
 Common causes of flaky performance tests:
+
 - **JIT compilation variance** - First runs are slower before V8 optimizes
 - **System load fluctuations** - CI runners have variable load
 - **GC pauses** - Garbage collection can spike execution time
@@ -371,13 +374,13 @@ Located in `tests/utils/BenchmarkRunner.ts` and `tests/utils/performanceTestHelp
 
 #### Key Principles
 
-| Principle | Bad Approach | Good Approach |
-|-----------|--------------|---------------|
-| **Measurements** | Single `performance.now()` | Multiple iterations with warmup |
-| **Assertions** | `expect(time).toBeLessThan(50)` | Percentile-based with adaptive thresholds |
-| **Comparison** | Fixed ratio `< 0.5` | Statistical significance test |
-| **Complexity** | Absolute time limits | Algorithmic O(n) verification |
-| **Timers** | Real `setTimeout` | Vitest fake timers |
+| Principle        | Bad Approach                    | Good Approach                             |
+| ---------------- | ------------------------------- | ----------------------------------------- |
+| **Measurements** | Single `performance.now()`      | Multiple iterations with warmup           |
+| **Assertions**   | `expect(time).toBeLessThan(50)` | Percentile-based with adaptive thresholds |
+| **Comparison**   | Fixed ratio `< 0.5`             | Statistical significance test             |
+| **Complexity**   | Absolute time limits            | Algorithmic O(n) verification             |
+| **Timers**       | Real `setTimeout`               | Vitest fake timers                        |
 
 #### Using BenchmarkRunner
 
@@ -396,8 +399,8 @@ describe('MySystem Performance', () => {
         mySystem.process(entities);
       },
       {
-        warmupIterations: 3,  // JIT warmup
-        sampleIterations: 15  // Statistical samples
+        warmupIterations: 3, // JIT warmup
+        sampleIterations: 15, // Statistical samples
       }
     );
 
@@ -425,9 +428,9 @@ it('scales sub-quadratically with input size', () => {
   // Verify O(n log n), not O(n²)
   assertComplexity(
     measureTime,
-    [100, 200, 400],     // Input sizes (double each)
-    'O(n log n)',        // Expected complexity
-    3.0                  // Tolerance factor
+    [100, 200, 400], // Input sizes (double each)
+    'O(n log n)', // Expected complexity
+    3.0 // Tolerance factor
   );
 });
 ```
@@ -510,12 +513,16 @@ class BenchmarkRunner {
   calibrate(): number;
 
   // Run benchmark with statistical collection
-  run(name: string, fn: () => void, options?: {
-    warmupIterations?: number;    // Default: 5
-    sampleIterations?: number;    // Default: 20
-    minTime?: number;             // Default: 100ms
-    removeOutliers?: boolean;     // Default: true
-  }): BenchmarkResult;
+  run(
+    name: string,
+    fn: () => void,
+    options?: {
+      warmupIterations?: number; // Default: 5
+      sampleIterations?: number; // Default: 20
+      minTime?: number; // Default: 100ms
+      removeOutliers?: boolean; // Default: true
+    }
+  ): BenchmarkResult;
 
   // Assert with environment-adaptive threshold
   assertWithinThreshold(
@@ -535,26 +542,28 @@ class BenchmarkRunner {
 
 ### Performance Budget Guidelines
 
-| Operation | Budget (Reference Hardware) |
-|-----------|----------------------------|
-| Single force calculation (100 units) | 8ms |
-| Single force calculation (500 units) | 25ms |
-| Full steering (500 units, 4 forces) | 100ms |
-| Pathfinding update (500 units) | 50ms |
-| AI decision tree (per unit) | 0.1ms |
-| Render state update | 16ms (60fps) |
+| Operation                            | Budget (Reference Hardware) |
+| ------------------------------------ | --------------------------- |
+| Single force calculation (100 units) | 8ms                         |
+| Single force calculation (500 units) | 25ms                        |
+| Full steering (500 units, 4 forces)  | 100ms                       |
+| Pathfinding update (500 units)       | 50ms                        |
+| AI decision tree (per unit)          | 0.1ms                       |
+| Render state update                  | 16ms (60fps)                |
 
 These are **base budgets** calibrated on M1 MacBook Pro. The `BenchmarkRunner` automatically scales these for slower environments.
 
 ### When to Use Performance Tests
 
 **DO use performance tests for:**
+
 - Algorithms with complexity guarantees (spatial queries, pathfinding)
 - Critical game loop systems (movement, combat, rendering)
 - Cache effectiveness validation
 - Memory allocation patterns
 
 **DON'T use performance tests for:**
+
 - Simple getter/setter operations
 - One-time initialization code
 - Code already covered by unit tests

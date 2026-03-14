@@ -5,6 +5,7 @@
 'use client';
 
 import { useRef, useState, useMemo } from 'react';
+import { InstallAppButton } from '@/components/pwa/InstallPrompt';
 import type { EditorConfig, EditorMapData } from '../config/EditorConfig';
 import { debugInitialization } from '@/utils/debugLogger';
 
@@ -69,7 +70,7 @@ export function EditorHeader({
     if (!mapList) return [];
     if (!mapSearch.trim()) return mapList;
     const searchLower = mapSearch.toLowerCase();
-    return mapList.filter(map => map.name.toLowerCase().includes(searchLower));
+    return mapList.filter((map) => map.name.toLowerCase().includes(searchLower));
   }, [mapList, mapSearch]);
 
   // Handle file import
@@ -111,10 +112,7 @@ export function EditorHeader({
           &larr; Back
         </button>
 
-        <div
-          className="h-5 w-px"
-          style={{ backgroundColor: 'var(--editor-border)' }}
-        />
+        <div className="h-5 w-px" style={{ backgroundColor: 'var(--editor-border)' }} />
 
         <div className="flex items-center gap-2">
           <h1 className="text-sm font-medium" style={{ color: 'var(--editor-text)' }}>
@@ -183,7 +181,12 @@ export function EditorHeader({
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </button>
 
@@ -218,7 +221,12 @@ export function EditorHeader({
                         viewBox="0 0 24 24"
                         style={{ color: 'var(--editor-text-muted)' }}
                       >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                        />
                       </svg>
                       <input
                         type="text"
@@ -250,8 +258,19 @@ export function EditorHeader({
                       borderBottom: '1px solid var(--editor-border)',
                     }}
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--editor-text-secondary)' }}>
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                      style={{ color: 'var(--editor-text-secondary)' }}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 4v16m8-8H4"
+                      />
                     </svg>
                     New Blank Map
                   </button>
@@ -285,13 +304,27 @@ export function EditorHeader({
                           }}
                           className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 transition-colors hover:opacity-80"
                           style={{
-                            backgroundColor: currentMapId === map.id ? 'var(--editor-selection)' : 'transparent',
-                            color: currentMapId === map.id ? 'var(--editor-text)' : 'var(--editor-text-secondary)',
+                            backgroundColor:
+                              currentMapId === map.id ? 'var(--editor-selection)' : 'transparent',
+                            color:
+                              currentMapId === map.id
+                                ? 'var(--editor-text)'
+                                : 'var(--editor-text-secondary)',
                           }}
                         >
-                          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--editor-text-muted)' }}>
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                              d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                          <svg
+                            className="w-4 h-4 flex-shrink-0"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                            style={{ color: 'var(--editor-text-muted)' }}
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
+                            />
                           </svg>
                           <span className="truncate">{map.name}</span>
                         </button>
@@ -342,10 +375,7 @@ export function EditorHeader({
         )}
 
         {/* Divider */}
-        <div
-          className="h-5 w-px mx-1"
-          style={{ backgroundColor: 'var(--editor-border)' }}
-        />
+        <div className="h-5 w-px mx-1" style={{ backgroundColor: 'var(--editor-border)' }} />
 
         {/* Mute/Unmute button */}
         <button
@@ -373,11 +403,17 @@ export function EditorHeader({
           ⛶
         </button>
 
-        {/* Divider */}
-        <div
-          className="h-5 w-px mx-1"
-          style={{ backgroundColor: 'var(--editor-border)' }}
+        <InstallAppButton
+          className="w-8 h-8 rounded-full flex items-center justify-center text-sm transition-colors hover:opacity-80"
+          style={{
+            backgroundColor: 'var(--editor-bg)',
+            color: 'var(--editor-text-secondary)',
+          }}
+          iconClassName="w-4 h-4"
         />
+
+        {/* Divider */}
+        <div className="h-5 w-px mx-1" style={{ backgroundColor: 'var(--editor-border)' }} />
 
         {/* Cancel button */}
         <button

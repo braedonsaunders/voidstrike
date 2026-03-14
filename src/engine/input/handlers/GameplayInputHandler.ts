@@ -28,6 +28,7 @@ import { Selectable } from '@/engine/components/Selectable';
 import { Building } from '@/engine/components/Building';
 import { isBattleSimulatorMode, isMultiplayerMode } from '@/store/gameSetupStore';
 import { getOverlayCoordinator } from '@/engine/overlay';
+import { recordPathTelemetry } from '@/engine/debug/pathTelemetry';
 
 // =============================================================================
 // CONSTANTS
@@ -283,6 +284,24 @@ export class GameplayInputHandler implements InputHandler {
     const localPlayer = getLocalPlayerId();
     if (!localPlayer) return false;
 
+    recordPathTelemetry({
+      source: 'ui',
+      kind: 'right_click',
+      entityIds: selectedUnits,
+      payload: {
+        queue,
+        screen: {
+          x: event.position.x,
+          y: event.position.y,
+        },
+        world: {
+          x: event.worldPosition.x,
+          y: event.worldPosition.z,
+        },
+        selectedCount: selectedUnits.length,
+      },
+    });
+
     // Find entity at click position
     const clickedEntity = this.findEntityAtScreenPosition(
       world,
@@ -407,16 +426,27 @@ export class GameplayInputHandler implements InputHandler {
 
     // Move units
     if (unitIds.length > 0 && game) {
+      const targetPosition = { x: event.worldPosition.x, y: event.worldPosition.z };
       game.issueCommand({
         tick: game.getCurrentTick(),
         playerId: localPlayer,
         type: 'MOVE',
         entityIds: unitIds,
-        targetPosition: { x: event.worldPosition.x, y: event.worldPosition.z },
+        targetPosition,
         queue,
       });
+      recordPathTelemetry({
+        source: 'ui',
+        kind: 'move_command_issued',
+        entityIds: unitIds,
+        payload: {
+          queue,
+          targetPosition,
+          clickedEntityId: clickedEntity?.id ?? null,
+        },
+      });
       eventBus.emit('command:moveGround', {
-        targetPosition: { x: event.worldPosition.x, y: event.worldPosition.z },
+        targetPosition,
         playerId: localPlayer,
       });
     } else if (unitIds.length > 0 && !game) {

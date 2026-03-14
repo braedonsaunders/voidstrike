@@ -1,0 +1,189 @@
+{
+  "meta": {
+    "id": "contested_frontier",
+    "name": "Contested Frontier",
+    "author": "AI Generator",
+    "description": "A large 6-player jungle map for 3v3 team battles. Teams spawn on opposite sides with a contested jungle frontier running down the center. Dense vegetation, elevation changes, and strategic chokepoints create intense team warfare. Rivers of mud and clearings break up the dense jungle canopy.",
+    "players": 6
+  },
+  "canvas": {
+    "width": 360,
+    "height": 320,
+    "biome": "jungle"
+  },
+  "paint": [
+    { "cmd": "fill", "elevation": 60 },
+
+    { "cmd": "plateau", "x": 55, "y": 50, "radius": 26, "elevation": 220 },
+    { "cmd": "plateau", "x": 55, "y": 160, "radius": 26, "elevation": 220 },
+    { "cmd": "plateau", "x": 55, "y": 270, "radius": 26, "elevation": 220 },
+
+    { "cmd": "plateau", "x": 305, "y": 50, "radius": 26, "elevation": 220 },
+    { "cmd": "plateau", "x": 305, "y": 160, "radius": 26, "elevation": 220 },
+    { "cmd": "plateau", "x": 305, "y": 270, "radius": 26, "elevation": 220 },
+
+    { "cmd": "plateau", "x": 90, "y": 55, "radius": 20, "elevation": 140 },
+    { "cmd": "plateau", "x": 90, "y": 160, "radius": 20, "elevation": 140 },
+    { "cmd": "plateau", "x": 90, "y": 265, "radius": 20, "elevation": 140 },
+
+    { "cmd": "plateau", "x": 270, "y": 55, "radius": 20, "elevation": 140 },
+    { "cmd": "plateau", "x": 270, "y": 160, "radius": 20, "elevation": 140 },
+    { "cmd": "plateau", "x": 270, "y": 265, "radius": 20, "elevation": 140 },
+
+    { "cmd": "ramp", "from": [72, 47], "to": [80, 51], "width": 10 },
+    { "cmd": "ramp", "from": [72, 160], "to": [80, 160], "width": 10 },
+    { "cmd": "ramp", "from": [72, 273], "to": [80, 269], "width": 10 },
+
+    { "cmd": "ramp", "from": [288, 47], "to": [280, 51], "width": 10 },
+    { "cmd": "ramp", "from": [288, 160], "to": [280, 160], "width": 10 },
+    { "cmd": "ramp", "from": [288, 273], "to": [280, 269], "width": 10 },
+
+    { "cmd": "ramp", "from": [104, 60], "to": [114, 68], "width": 12 },
+    { "cmd": "ramp", "from": [104, 160], "to": [114, 160], "width": 12 },
+    { "cmd": "ramp", "from": [104, 258], "to": [114, 250], "width": 12 },
+
+    { "cmd": "ramp", "from": [256, 60], "to": [246, 68], "width": 12 },
+    { "cmd": "ramp", "from": [256, 160], "to": [246, 160], "width": 12 },
+    { "cmd": "ramp", "from": [256, 258], "to": [246, 250], "width": 12 },
+
+    { "cmd": "plateau", "x": 68, "y": 105, "radius": 16, "elevation": 140 },
+    { "cmd": "ramp", "from": [78, 105], "to": [88, 105], "width": 10 },
+    { "cmd": "plateau", "x": 68, "y": 218, "radius": 16, "elevation": 140 },
+    { "cmd": "ramp", "from": [78, 218], "to": [88, 218], "width": 10 },
+
+    { "cmd": "plateau", "x": 292, "y": 105, "radius": 16, "elevation": 140 },
+    { "cmd": "ramp", "from": [282, 105], "to": [272, 105], "width": 10 },
+    { "cmd": "plateau", "x": 292, "y": 218, "radius": 16, "elevation": 140 },
+    { "cmd": "ramp", "from": [282, 218], "to": [272, 218], "width": 10 },
+
+    { "cmd": "plateau", "x": 130, "y": 80, "radius": 14, "elevation": 140 },
+    { "cmd": "ramp", "from": [140, 80], "to": [148, 80], "width": 10 },
+    { "cmd": "plateau", "x": 130, "y": 240, "radius": 14, "elevation": 140 },
+    { "cmd": "ramp", "from": [140, 240], "to": [148, 240], "width": 10 },
+
+    { "cmd": "plateau", "x": 230, "y": 80, "radius": 14, "elevation": 140 },
+    { "cmd": "ramp", "from": [220, 80], "to": [212, 80], "width": 10 },
+    { "cmd": "plateau", "x": 230, "y": 240, "radius": 14, "elevation": 140 },
+    { "cmd": "ramp", "from": [220, 240], "to": [212, 240], "width": 10 },
+
+    { "cmd": "plateau", "x": 180, "y": 100, "radius": 16, "elevation": 140 },
+    { "cmd": "ramp", "from": [168, 94], "to": [158, 88], "width": 10 },
+    { "cmd": "ramp", "from": [192, 106], "to": [202, 112], "width": 10 },
+
+    { "cmd": "plateau", "x": 180, "y": 220, "radius": 16, "elevation": 140 },
+    { "cmd": "ramp", "from": [168, 226], "to": [158, 232], "width": 10 },
+    { "cmd": "ramp", "from": [192, 214], "to": [202, 208], "width": 10 },
+
+    { "cmd": "plateau", "x": 180, "y": 160, "radius": 20, "elevation": 140 },
+    { "cmd": "ramp", "from": [165, 153], "to": [155, 146], "width": 14 },
+    { "cmd": "ramp", "from": [195, 167], "to": [205, 174], "width": 14 },
+    { "cmd": "ramp", "from": [180, 144], "to": [180, 134], "width": 12 },
+    { "cmd": "ramp", "from": [180, 176], "to": [180, 186], "width": 12 },
+
+    { "cmd": "plateau", "x": 180, "y": 50, "radius": 12, "elevation": 140 },
+    { "cmd": "ramp", "from": [172, 56], "to": [164, 62], "width": 10 },
+    { "cmd": "ramp", "from": [188, 56], "to": [196, 62], "width": 10 },
+
+    { "cmd": "plateau", "x": 180, "y": 270, "radius": 12, "elevation": 140 },
+    { "cmd": "ramp", "from": [172, 264], "to": [164, 258], "width": 10 },
+    { "cmd": "ramp", "from": [188, 264], "to": [196, 258], "width": 10 },
+
+    { "cmd": "road", "from": [55, 78], "to": [55, 132], "width": 8 },
+    { "cmd": "road", "from": [55, 188], "to": [55, 242], "width": 8 },
+    { "cmd": "road", "from": [305, 78], "to": [305, 132], "width": 8 },
+    { "cmd": "road", "from": [305, 188], "to": [305, 242], "width": 8 },
+
+    { "cmd": "forest", "x": 148, "y": 60, "radius": 16, "density": "dense" },
+    { "cmd": "forest", "x": 212, "y": 60, "radius": 16, "density": "dense" },
+    { "cmd": "forest", "x": 148, "y": 260, "radius": 16, "density": "dense" },
+    { "cmd": "forest", "x": 212, "y": 260, "radius": 16, "density": "dense" },
+
+    { "cmd": "forest", "x": 150, "y": 130, "radius": 18, "density": "dense" },
+    { "cmd": "forest", "x": 210, "y": 130, "radius": 18, "density": "dense" },
+    { "cmd": "forest", "x": 150, "y": 190, "radius": 18, "density": "dense" },
+    { "cmd": "forest", "x": 210, "y": 190, "radius": 18, "density": "dense" },
+
+    { "cmd": "forest", "x": 165, "y": 160, "radius": 10, "density": "medium" },
+    { "cmd": "forest", "x": 195, "y": 160, "radius": 10, "density": "medium" },
+
+    { "cmd": "forest", "x": 120, "y": 105, "radius": 10, "density": "medium" },
+    { "cmd": "forest", "x": 240, "y": 105, "radius": 10, "density": "medium" },
+    { "cmd": "forest", "x": 120, "y": 218, "radius": 10, "density": "medium" },
+    { "cmd": "forest", "x": 240, "y": 218, "radius": 10, "density": "medium" },
+
+    { "cmd": "forest", "x": 110, "y": 160, "radius": 8, "density": "sparse" },
+    { "cmd": "forest", "x": 250, "y": 160, "radius": 8, "density": "sparse" },
+
+    { "cmd": "mud", "x": 180, "y": 130, "radius": 10 },
+    { "cmd": "mud", "x": 180, "y": 190, "radius": 10 },
+    { "cmd": "mud", "x": 155, "y": 160, "radius": 8 },
+    { "cmd": "mud", "x": 205, "y": 160, "radius": 8 },
+
+    { "cmd": "border", "thickness": 14 }
+  ],
+  "bases": [
+    { "x": 55, "y": 50, "type": "main", "playerSlot": 1, "mineralDirection": "up_left" },
+    { "x": 55, "y": 160, "type": "main", "playerSlot": 2, "mineralDirection": "left" },
+    { "x": 55, "y": 270, "type": "main", "playerSlot": 3, "mineralDirection": "down_left" },
+    { "x": 305, "y": 50, "type": "main", "playerSlot": 4, "mineralDirection": "up_right" },
+    { "x": 305, "y": 160, "type": "main", "playerSlot": 5, "mineralDirection": "right" },
+    { "x": 305, "y": 270, "type": "main", "playerSlot": 6, "mineralDirection": "down_right" },
+
+    { "x": 90, "y": 55, "type": "natural", "mineralDirection": "right" },
+    { "x": 90, "y": 160, "type": "natural", "mineralDirection": "right" },
+    { "x": 90, "y": 265, "type": "natural", "mineralDirection": "right" },
+    { "x": 270, "y": 55, "type": "natural", "mineralDirection": "left" },
+    { "x": 270, "y": 160, "type": "natural", "mineralDirection": "left" },
+    { "x": 270, "y": 265, "type": "natural", "mineralDirection": "left" },
+
+    { "x": 68, "y": 105, "type": "third", "mineralDirection": "left" },
+    { "x": 68, "y": 218, "type": "third", "mineralDirection": "left" },
+    { "x": 292, "y": 105, "type": "third", "mineralDirection": "right" },
+    { "x": 292, "y": 218, "type": "third", "mineralDirection": "right" },
+    { "x": 130, "y": 80, "type": "third", "mineralDirection": "up" },
+    { "x": 130, "y": 240, "type": "third", "mineralDirection": "down" },
+    { "x": 230, "y": 80, "type": "third", "mineralDirection": "up" },
+    { "x": 230, "y": 240, "type": "third", "mineralDirection": "down" },
+
+    { "x": 180, "y": 100, "type": "gold", "mineralDirection": "down", "isGold": true },
+    { "x": 180, "y": 220, "type": "gold", "mineralDirection": "up", "isGold": true }
+  ],
+  "watchTowers": [
+    { "x": 180, "y": 160, "vision": 35 },
+    { "x": 180, "y": 100, "vision": 28 },
+    { "x": 180, "y": 220, "vision": 28 },
+    { "x": 135, "y": 160, "vision": 25 },
+    { "x": 225, "y": 160, "vision": 25 },
+    { "x": 180, "y": 50, "vision": 22 },
+    { "x": 180, "y": 270, "vision": 22 }
+  ],
+  "destructibles": [
+    { "x": 140, "y": 105, "health": 1500 },
+    { "x": 220, "y": 105, "health": 1500 },
+    { "x": 140, "y": 218, "health": 1500 },
+    { "x": 220, "y": 218, "health": 1500 },
+    { "x": 160, "y": 55, "health": 1000 },
+    { "x": 200, "y": 55, "health": 1000 },
+    { "x": 160, "y": 265, "health": 1000 },
+    { "x": 200, "y": 265, "health": 1000 }
+  ],
+  "decorationRules": {
+    "border": {
+      "style": "trees",
+      "density": 0.85,
+      "scale": [1.5, 3.5],
+      "innerOffset": 16,
+      "outerOffset": 5
+    },
+    "scatter": {
+      "rocks": 0.08,
+      "trees": 0.18,
+      "debris": 0.05
+    },
+    "baseRings": {
+      "rocks": 8,
+      "trees": 12
+    },
+    "seed": 5123
+  }
+}

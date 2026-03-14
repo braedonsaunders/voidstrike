@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=VOIDSTRIKE
+Comment=Build and launch VOIDSTRIKE in a terminal window
+Terminal=true
+Categories=Game;Development;
+StartupNotify=true
+Exec=sh -lc "SCRIPT_PATH=\"$1\"; PROJECT_DIR=\$(cd \"\$(dirname \"$SCRIPT_PATH\")/..\" && pwd); cd \"$PROJECT_DIR\" && exec node \"$PROJECT_DIR/launch/launch-voidstrike.js\"" sh %k

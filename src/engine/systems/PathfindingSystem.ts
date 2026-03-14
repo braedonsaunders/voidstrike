@@ -210,6 +210,7 @@ export class PathfindingSystem extends System {
   // Cached geometry for worker initialization
   private cachedNavMeshGeometry: { positions: Float32Array; indices: Uint32Array } | null = null;
   private cachedHeightMap: { data: Float32Array; width: number; height: number } | null = null;
+  private registeredDecorationCollisions: Array<{ x: number; z: number; radius: number }> = [];
 
   constructor(game: IGameInstance, mapWidth: number, mapHeight: number) {
     super(game);
@@ -279,6 +280,7 @@ export class PathfindingSystem extends System {
       case 'navMeshLoaded':
         if (message.success) {
           this.workerReady = true;
+          this.replayDynamicObstaclesToWorker();
           debugPathfinding.log('[PathfindingSystem] Worker navmesh loaded');
         } else {
           debugPathfinding.error('[PathfindingSystem] Worker navmesh load failed');
@@ -317,16 +319,39 @@ export class PathfindingSystem extends System {
     const gridWidth = Math.floor(this.mapWidth) + 1;
     const gridHeight = Math.floor(this.mapHeight) + 1;
     const heightMap = new Float32Array(gridWidth * gridHeight);
-    const heightFn =
-      this.terrainHeightFunction ?? ((x: number, z: number) => this.game.getTerrainHeightAt(x, z));
 
     for (let y = 0; y < gridHeight; y++) {
       for (let x = 0; x < gridWidth; x++) {
-        heightMap[y * gridWidth + x] = heightFn(x, y);
+        heightMap[y * gridWidth + x] = this.resolveTerrainHeight(x, y);
       }
     }
 
     return { data: heightMap, width: gridWidth, height: gridHeight };
+  }
+
+  private resolveTerrainHeight(x: number, z: number): number {
+    if (this.terrainHeightFunction) {
+      return this.terrainHeightFunction(x, z);
+    }
+
+    return this.game.getTerrainHeightAt(x, z);
+  }
+
+  private emitDebugTelemetry(
+    kind: string,
+    payload: Record<string, unknown>,
+    metadata: {
+      entityId?: number;
+      entityIds?: number[];
+    } = {}
+  ): void {
+    this.game.eventBus.emit('debug:pathTelemetry', {
+      source: 'system',
+      kind,
+      entityId: metadata.entityId,
+      entityIds: metadata.entityIds,
+      payload,
+    });
   }
 
   /**
@@ -347,6 +372,23 @@ export class PathfindingSystem extends System {
 
     const unit = entity.get<Unit>('Unit');
     if (!unit) return;
+
+    const finalPoint = path.length > 0 ? path[path.length - 1] : null;
+    this.emitDebugTelemetry(
+      'path_result',
+      {
+        requestId,
+        found,
+        pathLength: path.length,
+        start: { x: request.startX, y: request.startY },
+        destination: { x: request.endX, y: request.endY },
+        finalPoint,
+        finalDistanceToDestination: finalPoint
+          ? distance(finalPoint.x, finalPoint.y, request.endX, request.endY)
+          : null,
+      },
+      { entityId: request.entityId }
+    );
 
     if (found && path.length > 0) {
       unit.setPath(path);
@@ -410,6 +452,37 @@ export class PathfindingSystem extends System {
     }
   }
 
+  private replayDynamicObstaclesToWorker(): void {
+    if (!this.pathWorker || !this.workerReady) return;
+
+    const buildings = this.world.getEntitiesWith('Building', 'Transform');
+    for (const entity of buildings) {
+      const building = entity.get<Building>('Building');
+      const transform = entity.get<Transform>('Transform');
+      if (!building || !transform) continue;
+      if (building.state === 'destroyed' || building.isFlying) continue;
+
+      this.sendObstacleToWorker(
+        'add',
+        entity.id,
+        transform.x,
+        transform.y,
+        building.width,
+        building.height
+      );
+    }
+
+    for (let i = 0; i < this.registeredDecorationCollisions.length; i++) {
+      const collision = this.registeredDecorationCollisions[i];
+      if (collision.radius < 0.5) continue;
+
+      const width = collision.radius * 2;
+      const height = collision.radius * 2;
+      const decorationEntityId = -10000 - i;
+      this.sendObstacleToWorker('add', decorationEntityId, collision.x, collision.z, width, height);
+    }
+  }
+
   /**
    * Set the terrain height function used by the crowd simulation.
    * This should be called with the same height function used to generate
@@ -452,6 +525,7 @@ export class PathfindingSystem extends System {
     this.pendingWorkerRequests.clear();
     this.cachedNavMeshGeometry = null;
     this.cachedHeightMap = null;
+    this.registeredDecorationCollisions = [];
 
     debugPathfinding.log(`[PathfindingSystem] Reinitialized for ${mapWidth}x${mapHeight}`);
   }
@@ -469,6 +543,7 @@ export class PathfindingSystem extends System {
     this.pendingWorkerRequests.clear();
     this.cachedNavMeshGeometry = null;
     this.cachedHeightMap = null;
+    this.registeredDecorationCollisions = [];
   }
 
   /**
@@ -686,6 +761,18 @@ export class PathfindingSystem extends System {
         const unit = entity.get<Unit>('Unit');
         if (!transform || !unit) return;
 
+        this.emitDebugTelemetry(
+          'path_request',
+          {
+            start: { x: transform.x, y: transform.y },
+            destination: { x: data.targetX, y: data.targetY },
+            movementDomain: unit.movementDomain,
+            unitState: unit.state,
+            priority: data.priority ?? 1,
+          },
+          { entityId: data.entityId }
+        );
+
         // Air units use direct paths (no terrain collision)
         if (unit.movementDomain === 'air') {
           const margin = 1;
@@ -883,14 +970,6 @@ export class PathfindingSystem extends System {
       const requestId = this.workerRequestId++;
       this.pendingWorkerRequests.set(requestId, request);
 
-      // Get terrain heights for start/end positions
-      const startHeight = this.terrainHeightFunction
-        ? this.terrainHeightFunction(request.startX, request.startY)
-        : 0;
-      const endHeight = this.terrainHeightFunction
-        ? this.terrainHeightFunction(request.endX, request.endY)
-        : 0;
-
       this.pathWorker.postMessage({
         type: 'findPath',
         requestId,
@@ -899,8 +978,8 @@ export class PathfindingSystem extends System {
         endX: request.endX,
         endY: request.endY,
         agentRadius: unit.collisionRadius,
-        startHeight,
-        endHeight,
+        startHeight: this.resolveTerrainHeight(request.startX, request.startY),
+        endHeight: this.resolveTerrainHeight(request.endX, request.endY),
       });
       return;
     }
@@ -914,6 +993,20 @@ export class PathfindingSystem extends System {
       request.endY,
       domain,
       unit.collisionRadius
+    );
+
+    this.emitDebugTelemetry(
+      'path_result',
+      {
+        requestId: null,
+        found: result.found,
+        pathLength: result.path.length,
+        start: { x: request.startX, y: request.startY },
+        destination: { x: request.endX, y: request.endY },
+        finalPoint: result.path.length > 0 ? result.path[result.path.length - 1] : null,
+        movementDomain: domain,
+      },
+      { entityId: request.entityId }
     );
 
     if (result.found && result.path.length > 0) {
@@ -1164,6 +1257,8 @@ export class PathfindingSystem extends System {
   public registerDecorationCollisions(
     collisions: Array<{ x: number; z: number; radius: number }>
   ): void {
+    this.registeredDecorationCollisions = [...collisions];
+
     if (!this.navMeshReady) {
       debugPathfinding.log(
         `[PathfindingSystem] NavMesh not ready, deferring ${collisions.length} decoration obstacles`

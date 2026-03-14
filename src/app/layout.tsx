@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ServiceWorkerRegistrar } from '@/components/pwa/ServiceWorkerRegistrar';
-import { InstallPrompt } from '@/components/pwa/InstallPrompt';
 
 export const metadata: Metadata = {
   title: 'VOIDSTRIKE - Browser-Based RTS',
@@ -21,11 +20,7 @@ export const viewport: Viewport = {
   colorScheme: 'dark',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
       <head>
@@ -40,7 +35,6 @@ export default function RootLayout({
       <body className="font-sans bg-black text-white antialiased">
         <ServiceWorkerRegistrar />
         {children}
-        <InstallPrompt />
       </body>
     </html>
   );

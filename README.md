@@ -125,7 +125,7 @@ const currInstanceMatrix = mat4(
   attribute('currInstanceMatrix3')
 );
 const prevInstanceMatrix = mat4(
-  attribute('prevInstanceMatrix0'),
+  attribute('prevInstanceMatrix0')
   // ...
 );
 // Velocity = project(current) - project(previous)
@@ -191,17 +191,17 @@ VisionCompute (GPU) → StorageTexture (R=explored, G=visible, A=smoothed)
 
 These modules have minimal coupling and could be extracted as standalone packages:
 
-| Module | Size | Dependencies | Purpose |
-|--------|------|--------------|---------|
-| **Archetype ECS** | ~350 lines | None | Fast queries with composition-based cache invalidation |
-| **Fixed-Point Math** | ~300 lines | None | Q16.16 deterministic arithmetic for netcode |
-| **EventBus** | ~110 lines | None | Typed pub/sub with O(1) unsubscribe via swap-and-pop |
-| **Game Loop** | ~180 lines | None | Worker-based timing, survives background tabs |
-| **Behavior Trees** | ~300 lines | None | Async-compatible BT implementation for game AI |
-| **Nostr Matchmaking** | ~450 lines | nostr-tools | Decentralized lobby system over Nostr protocol |
-| **Connection Codes** | ~450 lines | pako | Encode WebRTC SDP as shareable codes |
-| **Instanced Velocity** | ~280 lines | Three.js | Per-instance motion vectors for TAA |
-| **Merkle Sync** | ~200 lines | None | O(log n) state divergence detection |
+| Module                 | Size       | Dependencies | Purpose                                                |
+| ---------------------- | ---------- | ------------ | ------------------------------------------------------ |
+| **Archetype ECS**      | ~350 lines | None         | Fast queries with composition-based cache invalidation |
+| **Fixed-Point Math**   | ~300 lines | None         | Q16.16 deterministic arithmetic for netcode            |
+| **EventBus**           | ~110 lines | None         | Typed pub/sub with O(1) unsubscribe via swap-and-pop   |
+| **Game Loop**          | ~180 lines | None         | Worker-based timing, survives background tabs          |
+| **Behavior Trees**     | ~300 lines | None         | Async-compatible BT implementation for game AI         |
+| **Nostr Matchmaking**  | ~450 lines | nostr-tools  | Decentralized lobby system over Nostr protocol         |
+| **Connection Codes**   | ~450 lines | pako         | Encode WebRTC SDP as shareable codes                   |
+| **Instanced Velocity** | ~280 lines | Three.js     | Per-instance motion vectors for TAA                    |
+| **Merkle Sync**        | ~200 lines | None         | O(log n) state divergence detection                    |
 
 ---
 
@@ -209,11 +209,11 @@ These modules have minimal coupling and could be extracted as standalone package
 
 ### Factions
 
-| Faction | Theme | Playstyle |
-|---------|-------|-----------|
-| **Dominion** | Military industrial complex | Defensive, siege-oriented |
-| **Synthesis** | Transcendent AI collective | Shield-based, psionic abilities |
-| **Swarm** | Adaptive biological horror | Cheap units, overwhelming numbers |
+| Faction       | Theme                       | Playstyle                         |
+| ------------- | --------------------------- | --------------------------------- |
+| **Dominion**  | Military industrial complex | Defensive, siege-oriented         |
+| **Synthesis** | Transcendent AI collective  | Shield-based, psionic abilities   |
+| **Swarm**     | Adaptive biological horror  | Cheap units, overwhelming numbers |
 
 **Dominion** builds bunkers, sieges tanks, and turtles until ready to push with superior firepower.
 
@@ -231,16 +231,16 @@ These modules have minimal coupling and could be extracted as standalone package
 
 ### Controls
 
-| Input | Action |
-|-------|--------|
-| Left click | Select |
-| Right click | Move / Attack / Interact |
-| Shift + click | Queue commands |
-| Ctrl + 1-9 | Create control group |
-| 1-9 | Select control group |
-| A + click | Attack-move |
-| H | Hold position |
-| P | Patrol |
+| Input         | Action                   |
+| ------------- | ------------------------ |
+| Left click    | Select                   |
+| Right click   | Move / Attack / Interact |
+| Shift + click | Queue commands           |
+| Ctrl + 1-9    | Create control group     |
+| 1-9           | Select control group     |
+| A + click     | Attack-move              |
+| H             | Hold position            |
+| P             | Patrol                   |
 
 ---
 
@@ -255,31 +255,37 @@ npm run dev
 
 Open http://localhost:3000. Chrome 113+ recommended for WebGPU; other modern browsers fall back to WebGL2.
 
+For a production-style single-click launch that rebuilds first, keeps logs visible in a terminal window, and auto-increments from port `3000` when needed, use:
+
+- macOS: `launch/launch-voidstrike.command`
+- Windows: `launch/launch-voidstrike.bat`
+- Linux: `launch/launch-voidstrike.desktop`
+
 ---
 
 ## Technology Stack
 
-| Layer | Technology |
-|-------|------------|
-| Framework | Next.js 16, React 19 |
-| Language | TypeScript 5 (strict mode, no implicit any) |
-| Graphics | Three.js r182 (WebGPU primary, WebGL2 fallback) |
-| Shaders | TSL (Three.js Shading Language) |
+| Layer       | Technology                                                   |
+| ----------- | ------------------------------------------------------------ |
+| Framework   | Next.js 16, React 19                                         |
+| Language    | TypeScript 5 (strict mode, no implicit any)                  |
+| Graphics    | Three.js r182 (WebGPU primary, WebGL2 fallback)              |
+| Shaders     | TSL (Three.js Shading Language)                              |
 | Pathfinding | recast-navigation (WASM, same library as Unity/Godot/Unreal) |
-| State | Zustand |
-| Networking | WebRTC + Nostr |
-| Styling | Tailwind CSS |
+| State       | Zustand                                                      |
+| Networking  | WebRTC + Nostr                                               |
+| Styling     | Tailwind CSS                                                 |
 
 ---
 
 ## Performance Targets
 
-| Metric | Target | Measured |
-|--------|--------|----------|
-| Frame rate | 60 FPS | 60 FPS @ 200 units |
-| Tick rate | 20 Hz | 20 Hz fixed timestep |
-| Memory | < 500 MB | ~300 MB |
-| Cold start | < 5s | ~3s |
+| Metric     | Target   | Measured             |
+| ---------- | -------- | -------------------- |
+| Frame rate | 60 FPS   | 60 FPS @ 200 units   |
+| Tick rate  | 20 Hz    | 20 Hz fixed timestep |
+| Memory     | < 500 MB | ~300 MB              |
+| Cold start | < 5s     | ~3s                  |
 
 Key optimizations: instanced rendering, spatial hashing for O(1) range queries, archetype query caching, object pooling, vector pooling to minimize GC pressure.
 
@@ -315,12 +321,12 @@ The engine (`src/engine/`) is game-agnostic. The content (`src/data/`) defines V
 
 ## Documentation
 
-| Document | Contents |
-|----------|----------|
-| `docs/architecture/OVERVIEW.md` | System architecture, data flow, ECS patterns |
-| `docs/architecture/rendering.md` | Graphics pipeline, shader architecture, post-processing |
+| Document                          | Contents                                                |
+| --------------------------------- | ------------------------------------------------------- |
+| `docs/architecture/OVERVIEW.md`   | System architecture, data flow, ECS patterns            |
+| `docs/architecture/rendering.md`  | Graphics pipeline, shader architecture, post-processing |
 | `docs/architecture/networking.md` | P2P protocol, determinism requirements, desync handling |
-| `docs/design/GAME_DESIGN.md` | Game mechanics, faction design, balance considerations |
+| `docs/design/GAME_DESIGN.md`      | Game mechanics, faction design, balance considerations  |
 
 ---
 
@@ -350,6 +356,6 @@ MIT License. See [LICENSE](LICENSE) for details.
 
 <div align="center">
 
-*Demonstrating that browser games don't require architectural compromise.*
+_Demonstrating that browser games don't require architectural compromise._
 
 </div>

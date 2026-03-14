@@ -160,13 +160,16 @@ export class RecastNavigation {
 
     // Check for SharedArrayBuffer availability (required for threaded WASM)
     const hasSharedArrayBuffer = typeof SharedArrayBuffer !== 'undefined';
-    debugInitialization.log('[RecastNavigation] SharedArrayBuffer available:', hasSharedArrayBuffer);
+    debugInitialization.log(
+      '[RecastNavigation] SharedArrayBuffer available:',
+      hasSharedArrayBuffer
+    );
 
     if (!hasSharedArrayBuffer) {
       debugInitialization.warn(
         '[RecastNavigation] SharedArrayBuffer is not available. ' +
-        'This may be due to missing security headers (COOP/COEP). ' +
-        'Navmesh initialization may fail on Safari and other browsers.'
+          'This may be due to missing security headers (COOP/COEP). ' +
+          'Navmesh initialization may fail on Safari and other browsers.'
       );
     }
 
@@ -188,8 +191,8 @@ export class RecastNavigation {
         debugInitialization.error('[RecastNavigation] WASM initialization failed:', error);
         debugInitialization.error(
           '[RecastNavigation] If this is Safari, ensure the server sends these headers:\n' +
-          '  Cross-Origin-Opener-Policy: same-origin\n' +
-          '  Cross-Origin-Embedder-Policy: require-corp'
+            '  Cross-Origin-Opener-Policy: same-origin\n' +
+            '  Cross-Origin-Embedder-Policy: require-corp'
         );
         // Clear the promise so initialization can be retried
         RecastNavigation.initPromise = null;
@@ -224,6 +227,23 @@ export class RecastNavigation {
       return this.terrainHeightProvider(x, z);
     }
     return 0;
+  }
+
+  private getObstacleHeight(x: number, z: number): number {
+    const height = this.getTerrainHeight(x, z);
+    return Number.isFinite(height) ? height : 0;
+  }
+
+  private applyTileCacheUpdates(): void {
+    if (!this.tileCache || !this.navMesh) return;
+
+    const maxUpdates = 8;
+    for (let i = 0; i < maxUpdates; i++) {
+      const { upToDate } = this.tileCache.update(this.navMesh);
+      if (upToDate) {
+        break;
+      }
+    }
   }
 
   private getQueryHalfExtents(searchRadius: number): { x: number; y: number; z: number } {
@@ -361,7 +381,9 @@ export class RecastNavigation {
   ): Promise<boolean> {
     const startTime = performance.now();
 
-    debugInitialization.log(`[RecastNavigation] generateFromGeometry called: ${positions.length / 3} vertices, ${indices.length / 3} triangles, map ${mapWidth}x${mapHeight}`);
+    debugInitialization.log(
+      `[RecastNavigation] generateFromGeometry called: ${positions.length / 3} vertices, ${indices.length / 3} triangles, map ${mapWidth}x${mapHeight}`
+    );
 
     try {
       debugInitialization.log('[RecastNavigation] Waiting for WASM initialization...');
@@ -372,9 +394,12 @@ export class RecastNavigation {
       this.mapHeight = mapHeight;
 
       // Calculate geometry bounds for debugging
-      let minX = Infinity, maxX = -Infinity;
-      let minY = Infinity, maxY = -Infinity;
-      let minZ = Infinity, maxZ = -Infinity;
+      let minX = Infinity,
+        maxX = -Infinity;
+      let minY = Infinity,
+        maxY = -Infinity;
+      let minZ = Infinity,
+        maxZ = -Infinity;
       for (let i = 0; i < positions.length; i += 3) {
         const x = positions[i];
         const y = positions[i + 1];
@@ -387,9 +412,15 @@ export class RecastNavigation {
         if (z > maxZ) maxZ = z;
       }
 
-      debugInitialization.log(`[RecastNavigation] Generating navmesh: ${indices.length / 3} triangles, ${positions.length / 3} vertices`);
-      debugInitialization.log(`[RecastNavigation] Geometry bounds: X=[${minX.toFixed(1)}, ${maxX.toFixed(1)}], Y(height)=[${minY.toFixed(2)}, ${maxY.toFixed(2)}], Z=[${minZ.toFixed(1)}, ${maxZ.toFixed(1)}]`);
-      debugInitialization.log(`[RecastNavigation] Config: walkableClimb=${NAVMESH_CONFIG.walkableClimb}, walkableSlopeAngle=${NAVMESH_CONFIG.walkableSlopeAngle}`);
+      debugInitialization.log(
+        `[RecastNavigation] Generating navmesh: ${indices.length / 3} triangles, ${positions.length / 3} vertices`
+      );
+      debugInitialization.log(
+        `[RecastNavigation] Geometry bounds: X=[${minX.toFixed(1)}, ${maxX.toFixed(1)}], Y(height)=[${minY.toFixed(2)}, ${maxY.toFixed(2)}], Z=[${minZ.toFixed(1)}, ${maxZ.toFixed(1)}]`
+      );
+      debugInitialization.log(
+        `[RecastNavigation] Config: walkableClimb=${NAVMESH_CONFIG.walkableClimb}, walkableSlopeAngle=${NAVMESH_CONFIG.walkableSlopeAngle}`
+      );
 
       debugInitialization.log('[RecastNavigation] Generating navmesh from geometry...', {
         positionsLength: positions.length,
@@ -437,14 +468,21 @@ export class RecastNavigation {
         this.initialized = true;
 
         const elapsed = performance.now() - startTime;
-        debugInitialization.log(`[RecastNavigation] TileCache NavMesh generated in ${elapsed.toFixed(1)}ms`);
+        debugInitialization.log(
+          `[RecastNavigation] TileCache NavMesh generated in ${elapsed.toFixed(1)}ms`
+        );
         return true;
       }
 
       // Tile cache failed - try solo navmesh as fallback
       // Solo navmesh doesn't support dynamic obstacles but is more robust
-      debugInitialization.warn('[RecastNavigation] TileCache failed, trying solo navmesh fallback...');
-      debugInitialization.warn('[RecastNavigation] TileCache error:', (result as { error?: string }).error);
+      debugInitialization.warn(
+        '[RecastNavigation] TileCache failed, trying solo navmesh fallback...'
+      );
+      debugInitialization.warn(
+        '[RecastNavigation] TileCache error:',
+        (result as { error?: string }).error
+      );
 
       const soloResult = generateSoloNavMesh(positions, indices, SOLO_NAVMESH_CONFIG);
 
@@ -455,7 +493,9 @@ export class RecastNavigation {
       });
 
       if (!soloResult.success || !soloResult.navMesh) {
-        debugInitialization.error('[RecastNavigation] Both TileCache and Solo NavMesh generation failed');
+        debugInitialization.error(
+          '[RecastNavigation] Both TileCache and Solo NavMesh generation failed'
+        );
         debugInitialization.error('[RecastNavigation] Solo result:', soloResult);
         return false;
       }
@@ -474,8 +514,12 @@ export class RecastNavigation {
       this.initialized = true;
 
       const elapsed = performance.now() - startTime;
-      debugInitialization.log(`[RecastNavigation] Solo NavMesh generated (fallback) in ${elapsed.toFixed(1)}ms`);
-      debugInitialization.warn('[RecastNavigation] Note: Dynamic obstacles disabled due to solo navmesh fallback');
+      debugInitialization.log(
+        `[RecastNavigation] Solo NavMesh generated (fallback) in ${elapsed.toFixed(1)}ms`
+      );
+      debugInitialization.warn(
+        '[RecastNavigation] Note: Dynamic obstacles disabled due to solo navmesh fallback'
+      );
 
       return true;
     } catch (error) {
@@ -510,7 +554,9 @@ export class RecastNavigation {
     try {
       await RecastNavigation.initWasm();
 
-      debugInitialization.log(`[RecastNavigation] Generating water navmesh: ${indices.length / 3} triangles, ${positions.length / 3} vertices`);
+      debugInitialization.log(
+        `[RecastNavigation] Generating water navmesh: ${indices.length / 3} triangles, ${positions.length / 3} vertices`
+      );
 
       // Use solo navmesh for water - simpler and more robust
       // Water doesn't need dynamic obstacles (buildings don't go in water)
@@ -533,7 +579,9 @@ export class RecastNavigation {
       this.waterInitialized = true;
 
       const elapsed = performance.now() - startTime;
-      debugInitialization.log(`[RecastNavigation] Water navmesh generated in ${elapsed.toFixed(1)}ms`);
+      debugInitialization.log(
+        `[RecastNavigation] Water navmesh generated in ${elapsed.toFixed(1)}ms`
+      );
 
       return true;
     } catch (error) {
@@ -588,14 +636,16 @@ export class RecastNavigation {
         if (dist > 20) {
           debugPathfinding.warn(
             `[RecastNavigation] findClosestPoint failed for long path (${dist.toFixed(1)} units): ` +
-            `start=(${startX.toFixed(1)}, ${startY.toFixed(1)}) success=${startOnMesh.success}, ` +
-            `end=(${endX.toFixed(1)}, ${endY.toFixed(1)}) success=${endOnMesh.success}`
+              `start=(${startX.toFixed(1)}, ${startY.toFixed(1)}) success=${startOnMesh.success}, ` +
+              `end=(${endX.toFixed(1)}, ${endY.toFixed(1)}) success=${endOnMesh.success}`
           );
         }
         return { path: [], found: false };
       }
 
-      const result = this.navMeshQuery.computePath(startOnMesh.point, endOnMesh.point, { halfExtents });
+      const result = this.navMeshQuery.computePath(startOnMesh.point, endOnMesh.point, {
+        halfExtents,
+      });
 
       if (!result.success || !result.path || result.path.length === 0) {
         // Log detailed failure info - this indicates disconnected navmesh regions
@@ -604,9 +654,9 @@ export class RecastNavigation {
         const heightDiff = Math.abs(startH - endH);
         debugPathfinding.warn(
           `[RecastNavigation] computePath failed - possible disconnected regions: ` +
-          `start=(${startOnMesh.point.x.toFixed(1)}, h=${startH.toFixed(2)}, ${startOnMesh.point.z.toFixed(1)}), ` +
-          `end=(${endOnMesh.point.x.toFixed(1)}, h=${endH.toFixed(2)}, ${endOnMesh.point.z.toFixed(1)}), ` +
-          `heightDiff=${heightDiff.toFixed(2)}`
+            `start=(${startOnMesh.point.x.toFixed(1)}, h=${startH.toFixed(2)}, ${startOnMesh.point.z.toFixed(1)}), ` +
+            `end=(${endOnMesh.point.x.toFixed(1)}, h=${endH.toFixed(2)}, ${endOnMesh.point.z.toFixed(1)}), ` +
+            `heightDiff=${heightDiff.toFixed(2)}`
         );
         return { path: [], found: false };
       }
@@ -664,7 +714,9 @@ export class RecastNavigation {
         return { path: [], found: false };
       }
 
-      const result = this.waterNavMeshQuery.computePath(startOnMesh.point, endOnMesh.point, { halfExtents });
+      const result = this.waterNavMeshQuery.computePath(startOnMesh.point, endOnMesh.point, {
+        halfExtents,
+      });
 
       if (!result.success || !result.path || result.path.length === 0) {
         return { path: [], found: false };
@@ -893,7 +945,10 @@ export class RecastNavigation {
     try {
       const waterHeight = 0.15;
       const halfExtents = this.getQueryHalfExtents(5);
-      const result = this.waterNavMeshQuery.findClosestPoint({ x, y: waterHeight, z: y }, { halfExtents });
+      const result = this.waterNavMeshQuery.findClosestPoint(
+        { x, y: waterHeight, z: y },
+        { halfExtents }
+      );
       if (result.success && result.point) {
         return { x: result.point.x, y: result.point.z };
       }
@@ -937,8 +992,8 @@ export class RecastNavigation {
       ) {
         debugPathfinding.log(
           `[Navmesh] isWalkable FAIL (dist): pos=(${x.toFixed(1)}, ${y.toFixed(1)}), ` +
-          `queryY=${queryY.toFixed(2)}, closest=(${result.point.x.toFixed(1)}, ${result.point.y.toFixed(2)}, ${result.point.z.toFixed(1)}), ` +
-          `dist=${dist.toFixed(2)}, heightDiff=${heightDiff.toFixed(2)}`
+            `queryY=${queryY.toFixed(2)}, closest=(${result.point.x.toFixed(1)}, ${result.point.y.toFixed(2)}, ${result.point.z.toFixed(1)}), ` +
+            `dist=${dist.toFixed(2)}, heightDiff=${heightDiff.toFixed(2)}`
         );
         this.walkabilityLogCount++;
         return false;
@@ -959,7 +1014,10 @@ export class RecastNavigation {
     try {
       const waterHeight = 0.15;
       const halfExtents = this.getQueryHalfExtents(2);
-      const result = this.waterNavMeshQuery.findClosestPoint({ x, y: waterHeight, z: y }, { halfExtents });
+      const result = this.waterNavMeshQuery.findClosestPoint(
+        { x, y: waterHeight, z: y },
+        { halfExtents }
+      );
       if (!result.success || !result.point) {
         return false;
       }
@@ -975,11 +1033,7 @@ export class RecastNavigation {
   /**
    * Check walkability using the correct navmesh for a movement domain.
    */
-  public isWalkableForDomain(
-    x: number,
-    y: number,
-    domain: MovementDomain
-  ): boolean {
+  public isWalkableForDomain(x: number, y: number, domain: MovementDomain): boolean {
     switch (domain) {
       case 'water':
         return this.isWaterWalkable(x, y);
@@ -1047,7 +1101,9 @@ export class RecastNavigation {
           );
           this.agentFailLogCount++;
           if (this.agentFailLogCount === this.MAX_AGENT_FAIL_LOGS) {
-            debugPathfinding.warn('[RecastNavigation] Suppressing further agent failure warnings...');
+            debugPathfinding.warn(
+              '[RecastNavigation] Suppressing further agent failure warnings...'
+            );
           }
         }
         return -1;
@@ -1122,9 +1178,10 @@ export class RecastNavigation {
         // Use the appropriate navmesh based on domain
         // For ground units, first try projection near agent's current height layer
         // to avoid snapping to wrong elevation on multi-level terrain
-        let projected = domain === 'water'
-          ? this.projectToWaterNavMesh(targetX, targetY)
-          : this.projectToNavMeshNearHeight(targetX, targetY, agentPos.y);
+        let projected =
+          domain === 'water'
+            ? this.projectToWaterNavMesh(targetX, targetY)
+            : this.projectToNavMeshNearHeight(targetX, targetY, agentPos.y);
 
         // If height-constrained projection failed, try without height constraint
         // This allows cross-height movement via ramps
@@ -1138,7 +1195,7 @@ export class RecastNavigation {
           if (heightDiff > 0.5) {
             debugPathfinding.log(
               `[RecastNavigation] Cross-height target: agent at h=${agentPos.y.toFixed(2)}, ` +
-              `target at h=${projected.y.toFixed(2)}, diff=${heightDiff.toFixed(2)}`
+                `target at h=${projected.y.toFixed(2)}, diff=${heightDiff.toFixed(2)}`
             );
           }
           // Use the projected navmesh position (already has correct x, y, z)
@@ -1183,10 +1240,7 @@ export class RecastNavigation {
       // Use tight vertical search centered on hint height
       const halfExtents = { x: 2, y: heightTolerance, z: 2 };
 
-      const result = this.navMeshQuery.findClosestPoint(
-        { x, y: hintHeight, z },
-        { halfExtents }
-      );
+      const result = this.navMeshQuery.findClosestPoint({ x, y: hintHeight, z }, { halfExtents });
 
       if (result.success && result.point) {
         // Verify the result is actually close to the hint height
@@ -1229,7 +1283,12 @@ export class RecastNavigation {
    *   On multi-level navmeshes, this ensures the agent stays on the correct layer
    *   (e.g., ramp surface) instead of snapping to a different layer (e.g., ground).
    */
-  public updateAgentPosition(entityId: number, x: number, y: number, currentHeight?: number): boolean {
+  public updateAgentPosition(
+    entityId: number,
+    x: number,
+    y: number,
+    currentHeight?: number
+  ): boolean {
     if (!this.crowd) return false;
 
     const agentIndex = this.agentMap.get(entityId);
@@ -1244,14 +1303,12 @@ export class RecastNavigation {
 
         // Search with tighter vertical tolerance when we have current height
         // to avoid snapping to wrong layer
-        const halfExtents = currentHeight !== undefined
-          ? { x: 2, y: 2, z: 2 }   // Tight search near current height
-          : { x: 2, y: 10, z: 2 }; // Wide search when height unknown
+        const halfExtents =
+          currentHeight !== undefined
+            ? { x: 2, y: 2, z: 2 } // Tight search near current height
+            : { x: 2, y: 10, z: 2 }; // Wide search when height unknown
 
-        const result = this.navMeshQuery?.findClosestPoint(
-          { x, y: queryY, z: y },
-          { halfExtents }
-        );
+        const result = this.navMeshQuery?.findClosestPoint({ x, y: queryY, z: y }, { halfExtents });
 
         if (result?.success && result.point) {
           agent.teleport({ x: result.point.x, y: result.point.y, z: result.point.z });
@@ -1271,10 +1328,7 @@ export class RecastNavigation {
   /**
    * Update agent parameters (speed, radius)
    */
-  public updateAgentParams(
-    entityId: number,
-    params: { maxSpeed?: number; radius?: number }
-  ): void {
+  public updateAgentParams(entityId: number, params: { maxSpeed?: number; radius?: number }): void {
     if (!this.crowd) return;
 
     const agentIndex = this.agentMap.get(entityId);
@@ -1328,17 +1382,15 @@ export class RecastNavigation {
         // Debug: Log zero velocity for agents with targets (indicates path corridor failure)
         const velMag = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
         if (velMag < 0.001 && target) {
-          const distToTarget = Math.sqrt(
-            (pos.x - target.x) ** 2 + (pos.z - target.z) ** 2
-          );
+          const distToTarget = Math.sqrt((pos.x - target.x) ** 2 + (pos.z - target.z) ** 2);
           // Only log if far from target and haven't logged this agent yet
           if (distToTarget > 2 && !this.zeroVelocityLoggedAgents.has(entityId)) {
             const heightDiff = Math.abs(pos.y - target.y);
             debugPathfinding.warn(
               `[RecastNavigation] Agent ${entityId} zero velocity: ` +
-              `pos=(${pos.x.toFixed(1)}, h=${pos.y.toFixed(2)}, ${pos.z.toFixed(1)}), ` +
-              `target=(${target.x.toFixed(1)}, h=${target.y.toFixed(2)}, ${target.z.toFixed(1)}), ` +
-              `dist=${distToTarget.toFixed(1)}, heightDiff=${heightDiff.toFixed(2)}`
+                `pos=(${pos.x.toFixed(1)}, h=${pos.y.toFixed(2)}, ${pos.z.toFixed(1)}), ` +
+                `target=(${target.x.toFixed(1)}, h=${target.y.toFixed(2)}, ${target.z.toFixed(1)}), ` +
+                `dist=${distToTarget.toFixed(1)}, heightDiff=${heightDiff.toFixed(2)}`
             );
             this.zeroVelocityLoggedAgents.add(entityId);
           }
@@ -1350,7 +1402,7 @@ export class RecastNavigation {
         return {
           x: pos.x,
           y: pos.z,
-          height: pos.y,  // Include 3D height for multi-level navmesh
+          height: pos.y, // Include 3D height for multi-level navmesh
           vx: vel.x,
           vy: vel.z,
         };
@@ -1437,7 +1489,9 @@ export class RecastNavigation {
       );
 
       if (!result.success || !result.point) {
-        debugPathfinding.warn(`[RecastNavigation] Cannot add water agent ${entityId}: position not on water navmesh`);
+        debugPathfinding.warn(
+          `[RecastNavigation] Cannot add water agent ${entityId}: position not on water navmesh`
+        );
         return -1;
       }
 
@@ -1515,12 +1569,7 @@ export class RecastNavigation {
    * Debug method to test if a path exists between two points.
    * Use this to diagnose ramp/multi-level navmesh connectivity issues.
    */
-  public debugTestPath(
-    startX: number,
-    startY: number,
-    endX: number,
-    endY: number
-  ): void {
+  public debugTestPath(startX: number, startY: number, endX: number, endY: number): void {
     if (!this.navMeshQuery) {
       debugPathfinding.log('[DEBUG] NavMeshQuery not initialized');
       return;
@@ -1529,8 +1578,10 @@ export class RecastNavigation {
     const startHeight = this.getTerrainHeight(startX, startY);
     const endHeight = this.getTerrainHeight(endX, endY);
 
-    debugPathfinding.log(`[DEBUG] Testing path from (${startX.toFixed(1)}, ${startY.toFixed(1)}, h=${startHeight.toFixed(2)}) ` +
-      `to (${endX.toFixed(1)}, ${endY.toFixed(1)}, h=${endHeight.toFixed(2)})`);
+    debugPathfinding.log(
+      `[DEBUG] Testing path from (${startX.toFixed(1)}, ${startY.toFixed(1)}, h=${startHeight.toFixed(2)}) ` +
+        `to (${endX.toFixed(1)}, ${endY.toFixed(1)}, h=${endHeight.toFixed(2)})`
+    );
 
     // Find closest points on navmesh
     const halfExtents = { x: 2, y: 10, z: 2 };
@@ -1543,10 +1594,18 @@ export class RecastNavigation {
       { halfExtents }
     );
 
-    debugPathfinding.log(`[DEBUG] Start closest point: success=${startResult.success}, ` +
-      (startResult.point ? `point=(${startResult.point.x.toFixed(1)}, h=${startResult.point.y.toFixed(2)}, ${startResult.point.z.toFixed(1)})` : 'null'));
-    debugPathfinding.log(`[DEBUG] End closest point: success=${endResult.success}, ` +
-      (endResult.point ? `point=(${endResult.point.x.toFixed(1)}, h=${endResult.point.y.toFixed(2)}, ${endResult.point.z.toFixed(1)})` : 'null'));
+    debugPathfinding.log(
+      `[DEBUG] Start closest point: success=${startResult.success}, ` +
+        (startResult.point
+          ? `point=(${startResult.point.x.toFixed(1)}, h=${startResult.point.y.toFixed(2)}, ${startResult.point.z.toFixed(1)})`
+          : 'null')
+    );
+    debugPathfinding.log(
+      `[DEBUG] End closest point: success=${endResult.success}, ` +
+        (endResult.point
+          ? `point=(${endResult.point.x.toFixed(1)}, h=${endResult.point.y.toFixed(2)}, ${endResult.point.z.toFixed(1)})`
+          : 'null')
+    );
 
     if (!startResult.success || !startResult.point || !endResult.success || !endResult.point) {
       debugPathfinding.log('[DEBUG] Cannot find start/end on navmesh');
@@ -1554,16 +1613,22 @@ export class RecastNavigation {
     }
 
     // Try to compute path
-    const pathResult = this.navMeshQuery.computePath(startResult.point, endResult.point, { halfExtents });
+    const pathResult = this.navMeshQuery.computePath(startResult.point, endResult.point, {
+      halfExtents,
+    });
 
-    debugPathfinding.log(`[DEBUG] Path computation: success=${pathResult.success}, ` +
-      `pathLength=${pathResult.path?.length ?? 0}`);
+    debugPathfinding.log(
+      `[DEBUG] Path computation: success=${pathResult.success}, ` +
+        `pathLength=${pathResult.path?.length ?? 0}`
+    );
 
     if (pathResult.success && pathResult.path && pathResult.path.length > 0) {
       debugPathfinding.log('[DEBUG] Path waypoints:');
       for (let i = 0; i < Math.min(pathResult.path.length, 10); i++) {
         const p = pathResult.path[i];
-        debugPathfinding.log(`  [${i}] (${p.x.toFixed(1)}, h=${p.y.toFixed(2)}, ${p.z.toFixed(1)})`);
+        debugPathfinding.log(
+          `  [${i}] (${p.x.toFixed(1)}, h=${p.y.toFixed(2)}, ${p.z.toFixed(1)})`
+        );
       }
       if (pathResult.path.length > 10) {
         debugPathfinding.log(`  ... and ${pathResult.path.length - 10} more waypoints`);
@@ -1595,8 +1660,8 @@ export class RecastNavigation {
       // This can happen if solo navmesh was generated instead of tilecache navmesh
       debugPathfinding.warn(
         `[RecastNavigation] Cannot add obstacle for building ${buildingEntityId}: ` +
-        `TileCache=${!!this.tileCache}, NavMesh=${!!this.navMesh}. ` +
-        `Building will NOT block unit pathfinding!`
+          `TileCache=${!!this.tileCache}, NavMesh=${!!this.navMesh}. ` +
+          `Building will NOT block unit pathfinding!`
       );
       return;
     }
@@ -1611,22 +1676,22 @@ export class RecastNavigation {
       // Small buffer for precision tolerance (walkableRadius handles clearance)
       const baseRadius = Math.max(width, height) / 2;
       const expandedRadius = baseRadius + 0.1;
+      const obstacleY = this.getObstacleHeight(centerX, centerY);
 
       const result = this.tileCache.addCylinderObstacle(
-        { x: centerX, y: 0, z: centerY },
+        { x: centerX, y: obstacleY, z: centerY },
         expandedRadius,
         2.0 // height
       );
 
       if (result.success && result.obstacle) {
         this.obstacleRefs.set(buildingEntityId, result.obstacle);
-        // Update tiles affected by obstacle
-        this.tileCache.update(this.navMesh);
+        this.applyTileCacheUpdates();
 
         debugPathfinding.log(
           `[RecastNavigation] Added cylinder obstacle for building ${buildingEntityId} ` +
-          `at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}) ` +
-          `radius ${baseRadius.toFixed(1)} expanded to ${expandedRadius.toFixed(1)}`
+            `at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}) layer=${obstacleY.toFixed(2)} ` +
+            `radius ${baseRadius.toFixed(1)} expanded to ${expandedRadius.toFixed(1)}`
         );
       }
     } catch (error) {
@@ -1653,8 +1718,8 @@ export class RecastNavigation {
       // which will log its own warning
       debugPathfinding.warn(
         `[RecastNavigation] Cannot add box obstacle for building ${buildingEntityId}: ` +
-        `TileCache=${!!this.tileCache}, NavMesh=${!!this.navMesh}. ` +
-        `Building will NOT block unit pathfinding!`
+          `TileCache=${!!this.tileCache}, NavMesh=${!!this.navMesh}. ` +
+          `Building will NOT block unit pathfinding!`
       );
       return;
     }
@@ -1671,25 +1736,26 @@ export class RecastNavigation {
       // effectively double the clearance and make gaps between buildings too narrow).
       const expansionMargin = 0.1;
       const halfExtents = {
-        x: (width / 2) + expansionMargin,
+        x: width / 2 + expansionMargin,
         y: 2.0,
-        z: (height / 2) + expansionMargin
+        z: height / 2 + expansionMargin,
       };
+      const obstacleY = this.getObstacleHeight(centerX, centerY);
 
       const result = this.tileCache.addBoxObstacle(
-        { x: centerX, y: 0, z: centerY },
+        { x: centerX, y: obstacleY, z: centerY },
         halfExtents,
         0 // rotation angle
       );
 
       if (result.success && result.obstacle) {
         this.obstacleRefs.set(buildingEntityId, result.obstacle);
-        this.tileCache.update(this.navMesh);
+        this.applyTileCacheUpdates();
 
         debugPathfinding.log(
           `[RecastNavigation] Added box obstacle for building ${buildingEntityId} ` +
-          `at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}) ` +
-          `size ${width}x${height} expanded to ${(width + expansionMargin * 2).toFixed(1)}x${(height + expansionMargin * 2).toFixed(1)}`
+            `at (${centerX.toFixed(1)}, ${centerY.toFixed(1)}) layer=${obstacleY.toFixed(2)} ` +
+            `size ${width}x${height} expanded to ${(width + expansionMargin * 2).toFixed(1)}x${(height + expansionMargin * 2).toFixed(1)}`
         );
       }
     } catch {
@@ -1710,7 +1776,7 @@ export class RecastNavigation {
     try {
       this.tileCache.removeObstacle(obstacle);
       this.obstacleRefs.delete(buildingEntityId);
-      this.tileCache.update(this.navMesh);
+      this.applyTileCacheUpdates();
 
       debugPathfinding.log(`[RecastNavigation] Removed obstacle for building ${buildingEntityId}`);
     } catch (error) {
@@ -1725,7 +1791,7 @@ export class RecastNavigation {
     if (!this.tileCache || !this.navMesh) return;
 
     try {
-      this.tileCache.update(this.navMesh);
+      this.applyTileCacheUpdates();
     } catch {
       // Ignore
     }

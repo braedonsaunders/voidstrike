@@ -12,6 +12,7 @@ import type { ResourceType } from '../components/Resource';
 import type { GameState, TerrainCell, GameConfig } from '../core/Game';
 import type { GameCommand } from '../core/GameCommand';
 import type { DebugSettings } from '@/store/uiStore';
+import type { PathTelemetryEvent } from '@/engine/debug/pathTelemetry';
 
 // ============================================================================
 // RENDER STATE - Data transferred from worker to main thread for rendering
@@ -499,7 +500,8 @@ export type WorkerToMainMessage =
   | { type: 'error'; message: string; stack?: string }
   | { type: 'multiplayerCommand'; command: GameCommand }
   | { type: 'desync'; tick: number; localChecksum: string; remoteChecksum: string }
-  | { type: 'performanceMetrics'; metrics: WorkerPerformanceMetrics };
+  | { type: 'performanceMetrics'; metrics: WorkerPerformanceMetrics }
+  | { type: 'pathTelemetry'; event: PathTelemetryEvent };
 
 // ============================================================================
 // GAME COMMAND - Re-export from shared module for consistency

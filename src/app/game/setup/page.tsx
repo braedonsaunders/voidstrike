@@ -5,15 +5,11 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ALL_MAPS } from '@/data/maps';
 import { useGameSetupStore, type PlayerSlot } from '@/store/gameSetupStore';
+import { InstallAppButton } from '@/components/pwa/InstallPrompt';
 import { LobbyBrowser } from '@/components/lobby/LobbyBrowser';
 
 // Extracted components
-import {
-  MapPreview,
-  PlayerSlotRow,
-  SettingSelect,
-  JoinLobbyModal,
-} from '@/components/game-setup';
+import { MapPreview, PlayerSlotRow, SettingSelect, JoinLobbyModal } from '@/components/game-setup';
 
 // Extracted hooks
 import { useGameSetupMusic } from '@/hooks/useGameSetupMusic';
@@ -33,12 +29,7 @@ export default function GameSetupPage() {
   const [mapSearch, setMapSearch] = useState('');
 
   // Music and fullscreen
-  const {
-    musicEnabled,
-    isFullscreen,
-    handleMusicToggle,
-    toggleFullscreen,
-  } = useGameSetupMusic();
+  const { musicEnabled, isFullscreen, handleMusicToggle, toggleFullscreen } = useGameSetupMusic();
 
   // Lobby sync (multiplayer)
   const {
@@ -95,10 +86,11 @@ export default function GameSetupPage() {
 
   // Map filtering
   const allMaps = Object.values(ALL_MAPS);
-  const lobbyMaps = allMaps.filter(map => !map.isSpecialMode);
-  const maps = lobbyMaps.filter(map =>
-    map.name.toLowerCase().includes(mapSearch.toLowerCase()) ||
-    map.biome?.toLowerCase().includes(mapSearch.toLowerCase())
+  const lobbyMaps = allMaps.filter((map) => !map.isSpecialMode);
+  const maps = lobbyMaps.filter(
+    (map) =>
+      map.name.toLowerCase().includes(mapSearch.toLowerCase()) ||
+      map.biome?.toLowerCase().includes(mapSearch.toLowerCase())
   );
   const selectedMap = ALL_MAPS[selectedMapId] || lobbyMaps[0];
   const displayMap = ALL_MAPS[displayMapId] || lobbyMaps[0];
@@ -111,7 +103,9 @@ export default function GameSetupPage() {
   );
 
   // Count active players
-  const activePlayerCount = playerSlots.filter((s: PlayerSlot) => s.type === 'human' || s.type === 'ai').length;
+  const activePlayerCount = playerSlots.filter(
+    (s: PlayerSlot) => s.type === 'human' || s.type === 'ai'
+  ).length;
 
   // Player slot limits
   const maxPlayersForMap = selectedMap.maxPlayers;
@@ -154,7 +148,7 @@ export default function GameSetupPage() {
   const firstSlotName = playerSlots[0]?.name;
   useEffect(() => {
     if (firstSlotId && !isGuestMode && playerName !== firstSlotName) {
-      setPlayerSlotName(firstSlotId, playerName); // eslint-disable-line react-hooks/set-state-in-effect -- syncing store state with local input
+      setPlayerSlotName(firstSlotId, playerName);
     }
   }, [playerName, firstSlotId, firstSlotName, isGuestMode, setPlayerSlotName]);
 
@@ -170,7 +164,10 @@ export default function GameSetupPage() {
           {/* Header */}
           <div className="flex items-center justify-between mb-3 flex-shrink-0">
             <div>
-              <Link href="/" className="text-void-400 hover:text-void-300 text-sm mb-0.5 inline-block">
+              <Link
+                href="/"
+                className="text-void-400 hover:text-void-300 text-sm mb-0.5 inline-block"
+              >
                 &larr; Back to Menu
               </Link>
               <h1 className="font-display text-xl text-white">
@@ -227,6 +224,12 @@ export default function GameSetupPage() {
               >
                 <span className="text-sm">{isFullscreen ? '⛶' : '⛶'}</span>
               </button>
+              <InstallAppButton
+                className="w-9 h-9 rounded-full flex items-center justify-center
+                         bg-white/5 hover:bg-white/10 border border-white/10
+                         transition-all duration-200 hover:scale-105 hover:border-void-500/50"
+                iconClassName="w-4 h-4"
+              />
             </div>
           </div>
 
@@ -242,9 +245,10 @@ export default function GameSetupPage() {
                     onClick={addPlayerSlot}
                     disabled={!canAddPlayer}
                     className={`text-xs px-2 py-1 rounded border transition-colors
-                      ${canAddPlayer
-                        ? 'text-void-400 hover:text-void-300 border-void-700 hover:border-void-500'
-                        : 'text-void-600 border-void-800 cursor-not-allowed opacity-50'
+                      ${
+                        canAddPlayer
+                          ? 'text-void-400 hover:text-void-300 border-void-700 hover:border-void-500'
+                          : 'text-void-600 border-void-800 cursor-not-allowed opacity-50'
                       }`}
                   >
                     + Add Player
@@ -265,7 +269,7 @@ export default function GameSetupPage() {
                     onTeamChange={(team) => setPlayerSlotTeam(slot.id, team)}
                     onRemove={() => {
                       if (slot.isGuest) {
-                        const guest = guests.find(g => g.slotId === slot.id);
+                        const guest = guests.find((g) => g.slotId === slot.id);
                         if (guest) kickGuest(guest.pubkey);
                       } else {
                         removePlayerSlot(slot.id);
@@ -298,17 +302,19 @@ export default function GameSetupPage() {
                         className="flex items-center gap-1.5 px-2 py-1 bg-void-700 hover:bg-void-600 rounded transition group relative"
                         title="Click to copy"
                       >
-                        <span className="font-mono text-base text-white tracking-wider">{lobbyCode}</span>
+                        <span className="font-mono text-base text-white tracking-wider">
+                          {lobbyCode}
+                        </span>
                         {codeCopied ? (
                           <span className="text-green-400 text-[10px] animate-pulse">Copied!</span>
                         ) : (
-                          <span className="text-void-400 group-hover:text-void-300 text-[10px]">📋</span>
+                          <span className="text-void-400 group-hover:text-void-300 text-[10px]">
+                            📋
+                          </span>
                         )}
                       </button>
                     )}
-                    {lobbyStatus === 'error' && (
-                      <span className="text-red-400 text-xs">Error</span>
-                    )}
+                    {lobbyStatus === 'error' && <span className="text-red-400 text-xs">Error</span>}
                   </div>
 
                   <div className="mb-2">
@@ -348,9 +354,7 @@ export default function GameSetupPage() {
                   </p>
 
                   {hasOpenSlot && (
-                    <p className="text-green-400/70 text-[10px] mt-0.5">
-                      Waiting for players...
-                    </p>
+                    <p className="text-green-400/70 text-[10px] mt-0.5">Waiting for players...</p>
                   )}
                   {hasGuests && (
                     <p className="text-green-400 text-[10px] mt-0.5">
@@ -364,7 +368,9 @@ export default function GameSetupPage() {
               {isGuestMode && (
                 <div className="flex flex-col gap-3">
                   <div className="bg-green-900/30 rounded-lg border border-green-700/50 p-3 flex-shrink-0">
-                    <h2 className="font-display text-base text-green-300 mb-0.5">Connected to Lobby</h2>
+                    <h2 className="font-display text-base text-green-300 mb-0.5">
+                      Connected to Lobby
+                    </h2>
                     <p className="text-green-400/70 text-[10px]">
                       Waiting for host to start the game...
                     </p>
@@ -376,9 +382,13 @@ export default function GameSetupPage() {
                     <div className="p-2 bg-void-900/50 rounded-lg border border-void-800/50">
                       <div className="flex items-center justify-between mb-0.5">
                         <h3 className="font-display text-xs text-white">{displayMap.name}</h3>
-                        <span className="text-void-400 text-[10px]">{displayMap.width}x{displayMap.height} • {displayMap.maxPlayers}P</span>
+                        <span className="text-void-400 text-[10px]">
+                          {displayMap.width}x{displayMap.height} • {displayMap.maxPlayers}P
+                        </span>
                       </div>
-                      <p className="text-void-400 text-[10px] line-clamp-1">{displayMap.description}</p>
+                      <p className="text-void-400 text-[10px] line-clamp-1">
+                        {displayMap.description}
+                      </p>
                     </div>
                   </div>
 
@@ -406,7 +416,9 @@ export default function GameSetupPage() {
               {/* Map Selection (host only) */}
               {!isGuestMode && (
                 <div className="flex-1 flex flex-col min-h-0">
-                  <h2 className="font-display text-base text-white mb-1 flex-shrink-0">Select Map</h2>
+                  <h2 className="font-display text-base text-white mb-1 flex-shrink-0">
+                    Select Map
+                  </h2>
                   <input
                     type="text"
                     value={mapSearch}
@@ -432,7 +444,9 @@ export default function GameSetupPage() {
                   <div className="mt-1 p-1.5 bg-void-900/50 rounded-lg border border-void-800/50 flex-shrink-0">
                     <div className="flex items-center justify-between">
                       <h3 className="font-display text-xs text-white">{selectedMap.name}</h3>
-                      <span className="text-void-400 text-[10px]">{selectedMap.width}x{selectedMap.height} • {selectedMap.maxPlayers}P</span>
+                      <span className="text-void-400 text-[10px]">
+                        {selectedMap.width}x{selectedMap.height} • {selectedMap.maxPlayers}P
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -473,7 +487,8 @@ export default function GameSetupPage() {
                         className={`w-10 h-5 rounded-full transition-all duration-200 relative
                           ${fogOfWar ? 'bg-void-500' : 'bg-void-800'}`}
                       >
-                        <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all duration-200
+                        <div
+                          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all duration-200
                           ${fogOfWar ? 'left-5' : 'left-0.5'}`}
                         />
                       </button>
@@ -487,7 +502,10 @@ export default function GameSetupPage() {
                 <div className="flex-shrink-0">
                   <button
                     onClick={handleStartGame}
-                    disabled={activePlayerCount < 2 || (guestSlotCount > 0 && connectedGuestCount < guestSlotCount)}
+                    disabled={
+                      activePlayerCount < 2 ||
+                      (guestSlotCount > 0 && connectedGuestCount < guestSlotCount)
+                    }
                     className="w-full game-button-primary text-base px-6 py-2 font-display disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Start Game
@@ -498,15 +516,15 @@ export default function GameSetupPage() {
                       At least 2 players required
                     </p>
                   )}
-                  {activePlayerCount >= 2 && guestSlotCount > 0 && connectedGuestCount < guestSlotCount && (
-                    <p className="text-center text-yellow-400 text-[10px] mt-1">
-                      Waiting for {guestSlotCount - connectedGuestCount} guest(s) to connect...
-                    </p>
-                  )}
+                  {activePlayerCount >= 2 &&
+                    guestSlotCount > 0 &&
+                    connectedGuestCount < guestSlotCount && (
+                      <p className="text-center text-yellow-400 text-[10px] mt-1">
+                        Waiting for {guestSlotCount - connectedGuestCount} guest(s) to connect...
+                      </p>
+                    )}
                   {startGameError && (
-                    <p className="text-center text-red-400 text-[10px] mt-1">
-                      {startGameError}
-                    </p>
+                    <p className="text-center text-red-400 text-[10px] mt-1">{startGameError}</p>
                   )}
                 </div>
               )}

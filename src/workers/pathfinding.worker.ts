@@ -161,6 +161,7 @@ let heightMapHeight = 0;
 let waterNavMesh: NavMesh | null = null;
 let waterNavMeshQuery: NavMeshQuery | null = null;
 const WATER_SURFACE_HEIGHT = 0.15;
+const MAX_TILE_CACHE_UPDATES = 8;
 
 function getQueryHalfExtents(searchRadius: number): { x: number; y: number; z: number } {
   const heightTolerance = heightMap ? WALKABLE_HEIGHT_TOLERANCE * 1.5 : 20;
@@ -271,7 +272,10 @@ function loadNavMeshFromGeometry(
     }
 
     // TileCache failed - try solo navmesh fallback
-    debugPathfinding.warn('[PathfindingWorker] TileCache generation failed:', (result as { error?: string }).error);
+    debugPathfinding.warn(
+      '[PathfindingWorker] TileCache generation failed:',
+      (result as { error?: string }).error
+    );
     debugPathfinding.log('[PathfindingWorker] Trying solo navmesh fallback...');
 
     // Solo navmesh fallback (no dynamic obstacles but more robust)
@@ -290,7 +294,10 @@ function loadNavMeshFromGeometry(
       return true;
     }
 
-    debugPathfinding.error('[PathfindingWorker] Solo navmesh also failed:', (soloResult as { error?: string }).error);
+    debugPathfinding.error(
+      '[PathfindingWorker] Solo navmesh also failed:',
+      (soloResult as { error?: string }).error
+    );
     return false;
   } catch (error) {
     debugPathfinding.error('[PathfindingWorker] Error generating navmesh:', error);
@@ -323,10 +330,23 @@ function getHeightAt(x: number, y: number): number {
   const h01 = heightMap[y1 * heightMapWidth + x0];
   const h11 = heightMap[y1 * heightMapWidth + x1];
 
-  return h00 * (1 - fx) * (1 - fy) +
-         h10 * fx * (1 - fy) +
-         h01 * (1 - fx) * fy +
-         h11 * fx * fy;
+  return h00 * (1 - fx) * (1 - fy) + h10 * fx * (1 - fy) + h01 * (1 - fx) * fy + h11 * fx * fy;
+}
+
+function getObstacleHeight(x: number, y: number): number {
+  const height = getHeightAt(x, y);
+  return Number.isFinite(height) ? height : 0;
+}
+
+function applyTileCacheUpdates(): void {
+  if (!tileCache || !navMesh) return;
+
+  for (let i = 0; i < MAX_TILE_CACHE_UPDATES; i++) {
+    const { upToDate } = tileCache.update(navMesh);
+    if (upToDate) {
+      break;
+    }
+  }
 }
 
 /**
@@ -504,16 +524,17 @@ function addObstacle(
     // Cylinder approximates rectangular building using max dimension
     const baseRadius = Math.max(width, height) / 2;
     const expandedRadius = baseRadius + 0.1;
+    const obstacleY = getObstacleHeight(centerX, centerY);
 
     const result = tileCache.addCylinderObstacle(
-      { x: centerX, y: 0, z: centerY },
+      { x: centerX, y: obstacleY, z: centerY },
       expandedRadius,
       2.0
     );
 
     if (result.success && result.obstacle) {
       obstacleRefs.set(entityId, result.obstacle);
-      tileCache.update(navMesh);
+      applyTileCacheUpdates();
       return true;
     }
   } catch {
@@ -535,7 +556,7 @@ function removeObstacle(entityId: number): boolean {
   try {
     tileCache.removeObstacle(obstacle);
     obstacleRefs.delete(entityId);
-    tileCache.update(navMesh);
+    applyTileCacheUpdates();
     return true;
   } catch {
     return false;
@@ -612,7 +633,9 @@ function findWaterPath(
       return { path: [], found: false };
     }
 
-    const pathResult = waterNavMeshQuery.computePath(startResult.point, endResult.point, { halfExtents });
+    const pathResult = waterNavMeshQuery.computePath(startResult.point, endResult.point, {
+      halfExtents,
+    });
 
     if (!pathResult.success || !pathResult.path || pathResult.path.length === 0) {
       return { path: [], found: false };

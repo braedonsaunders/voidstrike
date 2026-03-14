@@ -21,5 +21,8 @@
  */
 
 export * from './unit/types';
-export { Unit } from './unit';
-export type { UnitData, UnitInterface } from './unit';
+
+// Use the explicit index path to avoid case-insensitive filesystem resolution
+// confusing this facade (`Unit.ts`) with the `unit/` directory on macOS.
+export { Unit } from './unit/index';
+export type { UnitData, UnitInterface } from './unit/index';

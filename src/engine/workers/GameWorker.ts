@@ -84,6 +84,22 @@ import { setWorkerDebugSettings } from '@/utils/debugLogger';
 // Re-export types for backwards compatibility
 export type { GameState, TerrainCell };
 
+interface TrackedPathTelemetry {
+  traceId: string;
+  targetX: number | null;
+  targetY: number | null;
+  expiresTick: number;
+  lastSnapshotTick: number;
+  lastProgressTick: number;
+  lastDistanceToTarget: number | null;
+  stallLogged: boolean;
+}
+
+const PATH_TELEMETRY_TRACK_TICKS = 200;
+const PATH_TELEMETRY_SNAPSHOT_INTERVAL_TICKS = 4;
+const PATH_TELEMETRY_STALL_TICKS = 12;
+const PATH_TELEMETRY_STALL_DISTANCE = 2;
+
 // ============================================================================
 // WORKER GAME CLASS
 // ============================================================================
@@ -132,6 +148,8 @@ export class WorkerGame extends GameCore {
   // Idempotency flag to prevent duplicate entity spawning
   private entitiesAlreadySpawned = false;
   private controlGroups: Map<number, number[]> = new Map();
+  private trackedPathTelemetry: Map<number, TrackedPathTelemetry> = new Map();
+  private telemetrySequence = 0;
 
   /**
    * Worker-specific GameStatePort implementation.
@@ -534,6 +552,215 @@ export class WorkerGame extends GameCore {
         reason: data.reason,
       } satisfies WorkerToMainMessage);
     });
+
+    this.eventBus.on(
+      'debug:pathTelemetry',
+      (data: {
+        source?: 'system' | 'worker';
+        kind: string;
+        entityId?: number;
+        entityIds?: number[];
+        payload: Record<string, unknown>;
+      }) => {
+        const source = data.source ?? 'system';
+        if (source === 'system') {
+          const hasTrackedEntity =
+            (data.entityId !== undefined && this.trackedPathTelemetry.has(data.entityId)) ||
+            (Array.isArray(data.entityIds) &&
+              data.entityIds.some((entityId) => this.trackedPathTelemetry.has(entityId)));
+
+          if (!hasTrackedEntity) {
+            return;
+          }
+        }
+
+        this.emitPathTelemetry(data.kind, data.payload, {
+          source,
+          entityId: data.entityId,
+          entityIds: data.entityIds,
+        });
+      }
+    );
+  }
+
+  private emitPathTelemetry(
+    kind: string,
+    payload: Record<string, unknown>,
+    metadata: {
+      source?: 'worker' | 'system';
+      entityId?: number;
+      entityIds?: number[];
+    } = {}
+  ): void {
+    postMessage({
+      type: 'pathTelemetry',
+      event: {
+        source: metadata.source ?? 'worker',
+        kind,
+        timestamp: new Date().toISOString(),
+        tick: this.currentTick,
+        gameTime: this.gameTime,
+        entityId: metadata.entityId,
+        entityIds: metadata.entityIds,
+        payload,
+      },
+    } satisfies WorkerToMainMessage);
+  }
+
+  private trackPathCommand(command: GameCommand): void {
+    if (
+      (command.type !== 'MOVE' && command.type !== 'ATTACK_MOVE' && command.type !== 'PATROL') ||
+      !command.targetPosition
+    ) {
+      return;
+    }
+
+    for (const entityId of command.entityIds) {
+      const entity = this.world.getEntity(entityId);
+      const transform = entity?.get<Transform>('Transform');
+      const unit = entity?.get<Unit>('Unit');
+      if (!transform || !unit) continue;
+
+      const traceId = `${this.currentTick}-${++this.telemetrySequence}-${entityId}`;
+      const distanceToTarget = Math.hypot(
+        command.targetPosition.x - transform.x,
+        command.targetPosition.y - transform.y
+      );
+
+      this.trackedPathTelemetry.set(entityId, {
+        traceId,
+        targetX: command.targetPosition.x,
+        targetY: command.targetPosition.y,
+        expiresTick: this.currentTick + PATH_TELEMETRY_TRACK_TICKS,
+        lastSnapshotTick: -PATH_TELEMETRY_SNAPSHOT_INTERVAL_TICKS,
+        lastProgressTick: this.currentTick,
+        lastDistanceToTarget: distanceToTarget,
+        stallLogged: false,
+      });
+
+      this.emitPathTelemetry(
+        'command_received',
+        {
+          traceId,
+          commandType: command.type,
+          start: { x: transform.x, y: transform.y, z: transform.z },
+          destination: command.targetPosition,
+          state: unit.state,
+          movementDomain: unit.movementDomain,
+        },
+        { entityId }
+      );
+    }
+  }
+
+  private updateTrackedPathTelemetry(): void {
+    if (this.trackedPathTelemetry.size === 0) return;
+
+    const recast = this.pathfindingSystem.getRecast();
+
+    for (const [entityId, tracked] of this.trackedPathTelemetry) {
+      const entity = this.world.getEntity(entityId);
+      const transform = entity?.get<Transform>('Transform');
+      const unit = entity?.get<Unit>('Unit');
+      const velocity = entity?.get<Velocity>('Velocity');
+
+      if (!entity || !transform || !unit || entity.isDestroyed()) {
+        this.emitPathTelemetry(
+          'trace_ended',
+          { traceId: tracked.traceId, reason: 'entity_missing' },
+          { entityId }
+        );
+        this.trackedPathTelemetry.delete(entityId);
+        continue;
+      }
+
+      const targetX = unit.targetX ?? tracked.targetX;
+      const targetY = unit.targetY ?? tracked.targetY;
+      const distanceToTarget =
+        targetX !== null && targetY !== null
+          ? Math.hypot(targetX - transform.x, targetY - transform.y)
+          : null;
+      const speed = Math.hypot(velocity?.x ?? 0, velocity?.y ?? 0);
+      const crowd = recast.getAgentState(entityId);
+
+      if (
+        distanceToTarget !== null &&
+        (tracked.lastDistanceToTarget === null ||
+          distanceToTarget < tracked.lastDistanceToTarget - 0.2)
+      ) {
+        tracked.lastDistanceToTarget = distanceToTarget;
+        tracked.lastProgressTick = this.currentTick;
+        tracked.stallLogged = false;
+      }
+
+      if (this.currentTick - tracked.lastSnapshotTick >= PATH_TELEMETRY_SNAPSHOT_INTERVAL_TICKS) {
+        tracked.lastSnapshotTick = this.currentTick;
+        this.emitPathTelemetry(
+          'unit_snapshot',
+          {
+            traceId: tracked.traceId,
+            position: { x: transform.x, y: transform.y, z: transform.z },
+            velocity: { x: velocity?.x ?? 0, y: velocity?.y ?? 0, speed },
+            unit: {
+              state: unit.state,
+              targetX: unit.targetX,
+              targetY: unit.targetY,
+              currentSpeed: unit.currentSpeed,
+              pathLength: unit.path.length,
+              pathIndex: unit.pathIndex,
+            },
+            crowd,
+            distanceToTarget,
+          },
+          { entityId }
+        );
+      }
+
+      if (
+        distanceToTarget !== null &&
+        distanceToTarget > PATH_TELEMETRY_STALL_DISTANCE &&
+        speed < 0.05 &&
+        this.currentTick - tracked.lastProgressTick >= PATH_TELEMETRY_STALL_TICKS &&
+        !tracked.stallLogged
+      ) {
+        tracked.stallLogged = true;
+        this.emitPathTelemetry(
+          'movement_stalled',
+          {
+            traceId: tracked.traceId,
+            distanceToTarget,
+            position: { x: transform.x, y: transform.y, z: transform.z },
+            target: { x: targetX, y: targetY },
+            unit: {
+              state: unit.state,
+              currentSpeed: unit.currentSpeed,
+              pathLength: unit.path.length,
+              pathIndex: unit.pathIndex,
+            },
+            crowd,
+          },
+          { entityId }
+        );
+      }
+
+      const shouldExpire =
+        this.currentTick >= tracked.expiresTick &&
+        (distanceToTarget === null || distanceToTarget < 0.8 || unit.state === 'idle');
+
+      if (shouldExpire) {
+        this.emitPathTelemetry(
+          'trace_ended',
+          {
+            traceId: tracked.traceId,
+            reason:
+              distanceToTarget !== null && distanceToTarget < 0.8 ? 'arrived_or_close' : 'expired',
+            distanceToTarget,
+          },
+          { entityId }
+        );
+        this.trackedPathTelemetry.delete(entityId);
+      }
+    }
   }
 
   // ============================================================================
@@ -613,6 +840,8 @@ export class WorkerGame extends GameCore {
     // Update all systems
     this.world.update(deltaTime);
 
+    this.updateTrackedPathTelemetry();
+
     // Record tick duration for performance metrics
     if (this.performanceCollectionEnabled) {
       this.lastTickDuration = performance.now() - tickStart;
@@ -627,6 +856,8 @@ export class WorkerGame extends GameCore {
   // ============================================================================
 
   public issueCommand(command: GameCommand): void {
+    this.trackPathCommand(command);
+
     if (this.config.isMultiplayer) {
       // Lockstep: schedule for future tick
       const executionTick = this.currentTick + this.COMMAND_DELAY_TICKS;

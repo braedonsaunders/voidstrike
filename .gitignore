@@ -9,6 +9,8 @@
 
 # Next.js
 /.next/
+/.next.old/
+/.next.codex-backup-*/
 /out/
 
 # Production
@@ -17,6 +19,7 @@
 # Misc
 .DS_Store
 *.pem
+/output/
 
 # Debug
 npm-debug.log*

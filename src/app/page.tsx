@@ -5,6 +5,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { MusicPlayer } from '@/audio/MusicPlayer';
+import { InstallAppButton } from '@/components/pwa/InstallPrompt';
 import { useUIStore } from '@/store/uiStore';
 import { useGameSetupStore } from '@/store/gameSetupStore';
 
@@ -17,7 +18,12 @@ const HomeBackground = dynamic(() => import('@/components/home/HomeBackground'),
 });
 
 // Glowing orb component for ambient atmosphere
-function GlowingOrb({ color, size, position, delay }: {
+function GlowingOrb({
+  color,
+  size,
+  position,
+  delay,
+}: {
   color: string;
   size: number;
   position: { x: string; y: string };
@@ -122,7 +128,11 @@ export default function Home() {
       userInteracted = true;
 
       // If music hasn't started yet and is enabled, start it now
-      if (musicEnabledStore && !MusicPlayer.isCurrentlyPlaying() && MusicPlayer.getCurrentCategory() !== 'menu') {
+      if (
+        musicEnabledStore &&
+        !MusicPlayer.isCurrentlyPlaying() &&
+        MusicPlayer.getCurrentCategory() !== 'menu'
+      ) {
         MusicPlayer.play('menu');
       }
 
@@ -212,18 +222,22 @@ export default function Home() {
       {/* Main Content Container */}
       <div className="relative z-10 min-h-screen flex flex-col">
         {/* Top Navigation */}
-        <nav className={`
+        <nav
+          className={`
           fixed top-0 left-0 right-0 z-50
           px-6 py-4
           transition-all duration-1000
           ${isLoaded ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}
-        `}>
+        `}
+        >
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             {/* Logo */}
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-void-500 to-void-700
+              <div
+                className="w-10 h-10 rounded-lg bg-gradient-to-br from-void-500 to-void-700
                             flex items-center justify-center shadow-lg shadow-void-500/30
-                            border border-void-400/30">
+                            border border-void-400/30"
+              >
                 <span className="text-white font-bold text-xl">V</span>
               </div>
             </div>
@@ -248,15 +262,18 @@ export default function Home() {
               >
                 <span className="text-base">{isFullscreen ? '⛶' : '⛶'}</span>
               </button>
+              <InstallAppButton
+                className="w-10 h-10 rounded-full flex items-center justify-center
+                         bg-white/5 hover:bg-white/10 border border-white/10
+                         transition-all duration-200 hover:scale-105 hover:border-void-500/50"
+                iconClassName="w-4 h-4"
+              />
             </div>
           </div>
         </nav>
 
         {/* Hero Section - Full Height */}
-        <div
-          ref={heroRef}
-          className="flex-1 flex flex-col items-center justify-center px-6"
-        >
+        <div ref={heroRef} className="flex-1 flex flex-col items-center justify-center px-6">
           {/* Animated Title */}
           <div
             className={`
@@ -280,18 +297,24 @@ export default function Home() {
             {/* Main Title with Layered Glow */}
             <h1 className="font-display text-[11vw] md:text-[10vw] lg:text-[9vw] xl:text-[8rem] font-bold tracking-wider mb-8 relative leading-none">
               {/* Deep shadow layer */}
-              <span className="absolute inset-0 bg-gradient-to-r from-void-600 via-void-400 to-void-600
-                             bg-clip-text text-transparent blur-xl opacity-30 scale-105">
+              <span
+                className="absolute inset-0 bg-gradient-to-r from-void-600 via-void-400 to-void-600
+                             bg-clip-text text-transparent blur-xl opacity-30 scale-105"
+              >
                 VOIDSTRIKE
               </span>
               {/* Mid glow layer */}
-              <span className="absolute inset-0 bg-gradient-to-r from-void-500 via-white to-void-500
-                             bg-clip-text text-transparent blur-sm opacity-60">
+              <span
+                className="absolute inset-0 bg-gradient-to-r from-void-500 via-white to-void-500
+                             bg-clip-text text-transparent blur-sm opacity-60"
+              >
                 VOIDSTRIKE
               </span>
               {/* Main text */}
-              <span className="relative bg-gradient-to-r from-void-400 via-white to-void-400
-                             bg-clip-text text-transparent animate-shimmer bg-[length:200%_100%]">
+              <span
+                className="relative bg-gradient-to-r from-void-400 via-white to-void-400
+                             bg-clip-text text-transparent animate-shimmer bg-[length:200%_100%]"
+              >
                 VOIDSTRIKE
               </span>
             </h1>
@@ -306,11 +329,13 @@ export default function Home() {
           </div>
 
           {/* Decorative Divider */}
-          <div className={`
+          <div
+            className={`
             flex items-center justify-center gap-4 mb-12
             transition-all duration-1000 delay-500
             ${isLoaded ? 'opacity-100' : 'opacity-0'}
-          `}>
+          `}
+          >
             <div className="w-24 h-px bg-gradient-to-r from-transparent via-void-600/50 to-transparent" />
             <div className="w-2 h-2 rotate-45 border border-void-500/50" />
             <div className="w-24 h-px bg-gradient-to-r from-transparent via-void-600/50 to-transparent" />
@@ -325,27 +350,30 @@ export default function Home() {
             `}
           >
             {/* Primary Button - Play Now */}
-            <Link
-              href="/game/setup"
-              className="group relative"
-            >
+            <Link href="/game/setup" className="group relative">
               {/* Animated border glow */}
-              <div className="absolute -inset-1 bg-gradient-to-r from-void-600 via-void-400 to-void-600
+              <div
+                className="absolute -inset-1 bg-gradient-to-r from-void-600 via-void-400 to-void-600
                             rounded-xl opacity-70 blur-md group-hover:opacity-100 group-hover:blur-lg
-                            transition-all duration-300 animate-pulse-slow" />
+                            transition-all duration-300 animate-pulse-slow"
+              />
 
               {/* Button */}
-              <div className="relative px-16 py-5 rounded-xl
+              <div
+                className="relative px-16 py-5 rounded-xl
                            bg-gradient-to-b from-void-600 to-void-800
                            border border-void-400/50
                            group-hover:from-void-500 group-hover:to-void-700
                            transition-all duration-300 group-hover:scale-105
-                           shadow-xl shadow-void-900/50">
+                           shadow-xl shadow-void-900/50"
+              >
                 {/* Shine effect */}
                 <div className="absolute inset-0 rounded-xl overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0
+                  <div
+                    className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0
                                 translate-x-[-100%] group-hover:translate-x-[100%]
-                                transition-transform duration-700" />
+                                transition-transform duration-700"
+                  />
                 </div>
 
                 <span className="relative font-display text-xl tracking-widest text-white">
@@ -393,16 +421,14 @@ export default function Home() {
         >
           <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-center gap-8 text-white/30 text-xs tracking-wider">
             <span className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-void-500/50" />
-              3 Unique Factions
+              <span className="w-1.5 h-1.5 rounded-full bg-void-500/50" />3 Unique Factions
             </span>
             <span className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-void-500/50" />
               70+ Units & Buildings
             </span>
             <span className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-void-500/50" />
-              5 AI Difficulty Levels
+              <span className="w-1.5 h-1.5 rounded-full bg-void-500/50" />5 AI Difficulty Levels
             </span>
             <span className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-void-500/50" />
@@ -435,29 +461,38 @@ export default function Home() {
               </span>
 
               {/* Toggle Track */}
-              <div className={`
+              <div
+                className={`
                 relative w-[52px] h-7 rounded-full transition-all duration-300
-                ${preferWebGPU
-                  ? 'bg-gradient-to-r from-void-600/50 to-void-500/50 border-void-500/40 shadow-[0_0_12px_rgba(132,61,255,0.15)]'
-                  : 'bg-white/[0.06] border-white/10'}
+                ${
+                  preferWebGPU
+                    ? 'bg-gradient-to-r from-void-600/50 to-void-500/50 border-void-500/40 shadow-[0_0_12px_rgba(132,61,255,0.15)]'
+                    : 'bg-white/[0.06] border-white/10'
+                }
                 border
-              `}>
+              `}
+              >
                 {/* Glow pulse on toggle */}
-                <div className={`
+                <div
+                  className={`
                   absolute inset-0 rounded-full transition-opacity duration-500
                   ${preferWebGPU ? 'opacity-100' : 'opacity-0'}
                   bg-gradient-to-r from-void-500/20 to-void-400/20
                   animate-pulse
-                `} style={{ animationDuration: '2s' }} />
+                `}
+                  style={{ animationDuration: '2s' }}
+                />
 
                 {/* Toggle Knob */}
                 <div
                   className={`
                     absolute top-1 w-5 h-5 rounded-full
                     transition-all duration-500
-                    ${preferWebGPU
-                      ? 'left-[27px] bg-gradient-to-br from-void-400 to-void-600 shadow-[0_0_8px_rgba(132,61,255,0.5)]'
-                      : 'left-1 bg-gradient-to-br from-white/50 to-white/30'}
+                    ${
+                      preferWebGPU
+                        ? 'left-[27px] bg-gradient-to-br from-void-400 to-void-600 shadow-[0_0_8px_rgba(132,61,255,0.5)]'
+                        : 'left-1 bg-gradient-to-br from-white/50 to-white/30'
+                    }
                   `}
                   style={{
                     transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
@@ -466,42 +501,52 @@ export default function Home() {
                   {/* Shine effect on knob */}
                   <div className="absolute inset-0.5 rounded-full bg-gradient-to-b from-white/30 to-transparent" />
                   {/* Inner dot */}
-                  <div className={`
+                  <div
+                    className={`
                     absolute inset-0 flex items-center justify-center
                     transition-opacity duration-300
                     ${preferWebGPU ? 'opacity-100' : 'opacity-50'}
-                  `}>
-                    <div className={`
+                  `}
+                  >
+                    <div
+                      className={`
                       w-1.5 h-1.5 rounded-full
                       ${preferWebGPU ? 'bg-white/40' : 'bg-white/20'}
-                    `} />
+                    `}
+                    />
                   </div>
                 </div>
 
                 {/* Labels inside track - positioned to avoid knob */}
-                <span className={`
+                <span
+                  className={`
                   absolute left-[7px] top-1/2 -translate-y-1/2
                   text-[9px] font-semibold tracking-wide leading-none
                   transition-all duration-300
                   ${preferWebGPU ? 'opacity-50 text-void-300' : 'opacity-0 translate-x-1'}
-                `}>
+                `}
+                >
                   GL
                 </span>
-                <span className={`
+                <span
+                  className={`
                   absolute right-[5px] top-1/2 -translate-y-1/2
                   text-[9px] font-semibold tracking-wide leading-none
                   transition-all duration-300
                   ${preferWebGPU ? 'opacity-0 -translate-x-1' : 'opacity-40 text-white'}
-                `}>
+                `}
+                >
                   GPU
                 </span>
               </div>
 
               {/* Status indicator */}
-              <span className={`
+              <span
+                className={`
                 text-[10px] tracking-wider transition-all duration-300
                 ${preferWebGPU ? 'text-void-400/70' : 'text-white/30'}
-              `}>
+              `}
+              >
                 {preferWebGPU ? 'WebGPU' : 'WebGL'}
               </span>
             </button>

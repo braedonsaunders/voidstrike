@@ -1,4 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { EventBus } from '@/engine/core/EventBus';
+import type { IGameInstance } from '@/engine/core/IGameInstance';
+import type { World } from '@/engine/ecs/World';
+import { PathfindingSystem } from '@/engine/systems/PathfindingSystem';
 
 /**
  * PathfindingSystem Tests
@@ -11,6 +15,208 @@ import { describe, it, expect, beforeEach } from 'vitest';
  */
 
 describe('PathfindingSystem', () => {
+  describe('worker obstacle replay', () => {
+    const originalWorker = globalThis.Worker;
+
+    afterEach(() => {
+      globalThis.Worker = originalWorker;
+    });
+
+    it('replays existing building and decoration obstacles when the worker becomes ready late', () => {
+      globalThis.Worker = undefined as unknown as typeof Worker;
+
+      const buildingEntity = {
+        id: 101,
+        get(component: string) {
+          if (component === 'Building') {
+            return {
+              state: 'complete',
+              isFlying: false,
+              width: 5,
+              height: 5,
+            };
+          }
+          if (component === 'Transform') {
+            return { x: 50, y: 60 };
+          }
+          return undefined;
+        },
+      };
+
+      const world = {
+        getEntitiesWith: vi.fn().mockReturnValue([buildingEntity]),
+      };
+
+      const game = {
+        world,
+        eventBus: new EventBus(),
+        config: {
+          mapWidth: 100,
+          mapHeight: 100,
+          tickRate: 20,
+          isMultiplayer: false,
+          playerId: 'player1',
+          aiEnabled: false,
+          aiDifficulty: 'medium',
+          fogOfWar: true,
+        },
+        getCurrentTick: () => 0,
+        getGameTime: () => 0,
+        isInMultiplayerMode: () => false,
+        getPlayerTeam: () => 0,
+        getTerrainAt: () => null,
+        getTerrainHeightAt: () => 0,
+        getTerrainGrid: () => null,
+        getDecorationCollisions: () => [],
+        isPositionClearOfDecorations: () => true,
+        isValidTerrainForBuilding: () => true,
+        isValidBuildingPlacement: () => true,
+        issueAICommand: () => {},
+        processCommand: () => {},
+      } as unknown as IGameInstance;
+
+      const system = new PathfindingSystem(game, 100, 100);
+      system.init(world as unknown as World);
+      system.registerDecorationCollisions([
+        { x: 10, z: 12, radius: 1 },
+        { x: 5, z: 6, radius: 0.25 },
+      ]);
+
+      const postMessage = vi.fn();
+      const testSystem = system as unknown as {
+        pathWorker: { postMessage: typeof postMessage } | null;
+        handleWorkerMessage: (event: { data: { type: 'navMeshLoaded'; success: boolean } }) => void;
+      };
+      testSystem.pathWorker = { postMessage };
+
+      testSystem.handleWorkerMessage({
+        data: { type: 'navMeshLoaded', success: true },
+      });
+
+      expect(postMessage).toHaveBeenCalledTimes(2);
+      expect(postMessage).toHaveBeenNthCalledWith(1, {
+        type: 'addObstacle',
+        entityId: 101,
+        centerX: 50,
+        centerY: 60,
+        width: 5,
+        height: 5,
+      });
+      expect(postMessage).toHaveBeenNthCalledWith(2, {
+        type: 'addObstacle',
+        entityId: -10000,
+        centerX: 10,
+        centerY: 12,
+        width: 2,
+        height: 2,
+      });
+    });
+  });
+
+  describe('worker path request heights', () => {
+    const originalWorker = globalThis.Worker;
+
+    afterEach(() => {
+      globalThis.Worker = originalWorker;
+    });
+
+    it('uses game terrain heights for elevated worker path requests without a custom height provider', () => {
+      globalThis.Worker = undefined as unknown as typeof Worker;
+
+      const unit = {
+        state: 'moving',
+        movementDomain: 'ground',
+        collisionRadius: 0.75,
+      };
+
+      const entity = {
+        id: 7,
+        get(component: string) {
+          if (component === 'Unit') {
+            return unit;
+          }
+          return undefined;
+        },
+      };
+
+      const world = {
+        getEntity: vi.fn().mockReturnValue(entity),
+      };
+
+      const game = {
+        world,
+        eventBus: new EventBus(),
+        config: {
+          mapWidth: 100,
+          mapHeight: 100,
+          tickRate: 20,
+          isMultiplayer: false,
+          playerId: 'player1',
+          aiEnabled: false,
+          aiDifficulty: 'medium',
+          fogOfWar: true,
+        },
+        getCurrentTick: () => 0,
+        getGameTime: () => 0,
+        isInMultiplayerMode: () => false,
+        getPlayerTeam: () => 0,
+        getTerrainAt: () => null,
+        getTerrainHeightAt: (x: number, y: number) => x * 0.25 + y * 0.5,
+        getTerrainGrid: () => null,
+        getDecorationCollisions: () => [],
+        isPositionClearOfDecorations: () => true,
+        isValidTerrainForBuilding: () => true,
+        isValidBuildingPlacement: () => true,
+        issueAICommand: () => {},
+        processCommand: () => {},
+      } as unknown as IGameInstance;
+
+      const system = new PathfindingSystem(game, 100, 100);
+      system.init(world as unknown as World);
+
+      const postMessage = vi.fn();
+      const testSystem = system as unknown as {
+        pathWorker: { postMessage: typeof postMessage } | null;
+        workerReady: boolean;
+        processPathRequest: (request: {
+          entityId: number;
+          startX: number;
+          startY: number;
+          endX: number;
+          endY: number;
+          priority: number;
+          movementDomain: 'ground';
+        }) => void;
+      };
+
+      testSystem.pathWorker = { postMessage };
+      testSystem.workerReady = true;
+
+      testSystem.processPathRequest({
+        entityId: 7,
+        startX: 12,
+        startY: 20,
+        endX: 40,
+        endY: 28,
+        priority: 1,
+        movementDomain: 'ground',
+      });
+
+      expect(postMessage).toHaveBeenCalledTimes(1);
+      expect(postMessage).toHaveBeenCalledWith({
+        type: 'findPath',
+        requestId: 0,
+        startX: 12,
+        startY: 20,
+        endX: 40,
+        endY: 28,
+        agentRadius: 0.75,
+        startHeight: 13,
+        endHeight: 24,
+      });
+    });
+  });
+
   describe('priority queue', () => {
     interface PathRequest {
       entityId: number;
@@ -51,10 +257,16 @@ describe('PathfindingSystem', () => {
           const rightChild = 2 * index + 2;
           let largest = index;
 
-          if (leftChild < this.heap.length && this.heap[leftChild].priority > this.heap[largest].priority) {
+          if (
+            leftChild < this.heap.length &&
+            this.heap[leftChild].priority > this.heap[largest].priority
+          ) {
             largest = leftChild;
           }
-          if (rightChild < this.heap.length && this.heap[rightChild].priority > this.heap[largest].priority) {
+          if (
+            rightChild < this.heap.length &&
+            this.heap[rightChild].priority > this.heap[largest].priority
+          ) {
             largest = rightChild;
           }
 
@@ -131,12 +343,24 @@ describe('PathfindingSystem', () => {
       return `${entityId}_${Math.floor(destX)}_${Math.floor(destY)}`;
     }
 
-    function recordFailedPath(cache: FailedPathCache, entityId: number, destX: number, destY: number, currentTick: number): void {
+    function recordFailedPath(
+      cache: FailedPathCache,
+      entityId: number,
+      destX: number,
+      destY: number,
+      currentTick: number
+    ): void {
       const key = createCacheKey(entityId, destX, destY);
       cache.failedPaths.set(key, currentTick);
     }
 
-    function isPathRecentlyFailed(cache: FailedPathCache, entityId: number, destX: number, destY: number, currentTick: number): boolean {
+    function isPathRecentlyFailed(
+      cache: FailedPathCache,
+      entityId: number,
+      destX: number,
+      destY: number,
+      currentTick: number
+    ): boolean {
       const key = createCacheKey(entityId, destX, destY);
       const failedTick = cache.failedPaths.get(key);
       if (failedTick === undefined) return false;
@@ -206,7 +430,12 @@ describe('PathfindingSystem', () => {
   });
 
   describe('map bounds clamping', () => {
-    function clampToMapBounds(x: number, y: number, mapWidth: number, mapHeight: number): { x: number; y: number } {
+    function clampToMapBounds(
+      x: number,
+      y: number,
+      mapWidth: number,
+      mapHeight: number
+    ): { x: number; y: number } {
       return {
         x: Math.max(1, Math.min(x, mapWidth - 1)),
         y: Math.max(1, Math.min(y, mapHeight - 1)),

@@ -906,6 +906,8 @@ When tab is visible, Phaser uses its normal RAF-based loop. When hidden, the wor
 
 Debug categories are toggled in the Options menu and forwarded to the game worker via `WorkerBridge` (`setDebugSettings`). Worker-side systems use `debugLogger` with worker-local settings so AI/pathfinding logs respect the same category filters as the main thread.
 
+For live pathfinding investigations on a local build, the browser can also stream structured movement telemetry into `output/live-pathfinding.jsonl` through `POST /api/debug/pathfinding`. `GameplayInputHandler` logs the clicked screen/world target, `PathfindingSystem` logs path requests/results, and `WorkerGame` emits short-lived per-unit snapshots plus stall events back through `WorkerBridge`, so local reproductions can be inspected after the fact without relying on browser DevTools history.
+
 ### Performance Workers
 
 Vision and AI workers offload computation from the main thread:
@@ -2866,38 +2868,45 @@ Naval units are excluded from land attack operations to prevent them being sent 
 The AI controls air units independently from ground forces through a multi-layered system:
 
 **Army Separation** (`AITacticsManager`)
+
 - During attacks, the army is split into `groundUnits` and `airCombatUnits`
 - Ground units form the main army with concave formations
 - Air units receive independent flanking commands perpendicular to the main attack vector
 - If no ground units exist, air becomes the main force (no wasted air units)
 
 **Air Formations** (`FormationControl`)
+
 - Air units are positioned past the enemy center at a perpendicular offset
 - Wide spacing (2x ground) reduces splash damage vulnerability
 - Independent priority level (4) prevents air from interfering with ground formations
 
 **Air Harassment** (`AITacticsManager.executeAirHarassment()`)
+
 - Up to 3 air units sent to enemy worker lines
 - Air bypasses terrain and ground defenses (direct paths)
 - 10-second cooldown between harassment waves
 
 **Support Air** (`AITacticsManager.commandSupportAir()`)
+
 - Lifter and Overseer units follow the army centroid
 - Positioned behind the army toward the AI's own base
 - Provides healing and detection support during combat
 
 **Air Micro** (`AIMicroSystem`)
+
 - Health-based disengage: air units flee below 30% health
 - Hit-and-run repositioning: perpendicular movement every 15 ticks while attacking
 - Proactive Valkyrie transformation: lower threshold (1.5x) for mode switching
 
 **Anti-Air Response**
+
 - Emergency counter-air production on ALL difficulties (not just hard+)
 - Preemptive anti-air when enemy air tech detected (medium+)
 - Air superiority Valkyrie production (priority 75) when enemy has air units
 - `enemyAirUnits` tracking feeds into production decisions
 
 **Air Scouting** (`AIScoutingManager`)
+
 - Flying units preferred as scouts (bypass terrain, fastest paths)
 - Falls back to ground scouts, then idle workers
 
@@ -3100,7 +3109,7 @@ Units have a `movementDomain` that determines which navmesh they use:
 | `amphibious` | Can use both land and water     | Tries water first, falls back to ground |
 | `air`        | Flying units                    | No navmesh (direct paths)               |
 
-**Worker note:** The pathfinding Web Worker is optimized for the ground navmesh and receives a cached terrain heightmap for elevation-aware queries. Water/amphibious pathing stays on the main thread so naval units never query the land navmesh by accident.
+**Worker note:** The pathfinding Web Worker is optimized for the ground navmesh and receives a cached terrain heightmap for elevation-aware queries. Worker `findPath` requests resolve their start/end heights from the same terrain source used by navmesh generation, falling back to `GameCore.getTerrainHeightAt()` when no custom navmesh-height callback was injected, so elevated worker queries stay on the correct platform layer. When the worker finishes loading or reloads navmesh geometry, `PathfindingSystem` now replays the current building and decoration obstacles so worker-side queries stay in sync with the authoritative TileCache state. Dynamic TileCache obstacles sample the terrain/navmesh height at their footprint before insertion, which keeps elevated HQs and other platform buildings blocking correctly instead of only affecting the ground layer at `y=0`. Water/amphibious pathing stays on the main thread so naval units never query the land navmesh by accident.
 
 ### Water Navmesh
 
@@ -3240,6 +3249,16 @@ Features:
 - **NavMesh initialization** from terrain walkable geometry
 - **Building obstacle management** via TileCache
 - **Path request handling** for unit movement
+- **Shared elevated navmesh geometry** that derives Recast input from the same terrain data
+  used by runtime maps and editor validation
+
+### Elevated Ramp Geometry
+
+Elevated maps now stay fully on Recast pathing. The shared
+`generateWalkableNavmeshGeometry()` builder normalizes both bundled ramp metadata and
+editor-inferred ramps from the surrounding walkable terrain before resolving ramp-cell
+heightfields for Recast. That keeps multi-elevation routes connected even when the stored ramp
+cells are flat or the source metadata points the ramp in the wrong direction.
 
 ### MovementSystem Integration
 

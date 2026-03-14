@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "id": "void_assault",
+    "name": "Void Assault",
+    "author": "AI Generator",
+    "description": "A competitive 1v1 map with diagonal spawns (bottom-left vs top-right) across a shattered void landscape. Dramatic void chasms create natural barriers while multiple ramp paths offer strategic choices. The void theme creates an alien, otherworldly atmosphere.",
+    "players": 2
+  },
+  "canvas": {
+    "width": 220,
+    "height": 220,
+    "biome": "void"
+  },
+  "paint": [
+    { "cmd": "fill", "elevation": 60 },
+
+    { "cmd": "plateau", "x": 45, "y": 175, "radius": 24, "elevation": 220 },
+    { "cmd": "plateau", "x": 68, "y": 152, "radius": 18, "elevation": 140 },
+    { "cmd": "ramp", "from": [55, 168], "to": [61, 161], "width": 10 },
+    { "cmd": "ramp", "from": [78, 144], "to": [86, 137], "width": 12 },
+    { "cmd": "plateau", "x": 95, "y": 175, "radius": 16, "elevation": 140 },
+    { "cmd": "ramp", "from": [95, 163], "to": [95, 155], "width": 10 },
+
+    { "cmd": "plateau", "x": 175, "y": 45, "radius": 24, "elevation": 220 },
+    { "cmd": "plateau", "x": 152, "y": 68, "radius": 18, "elevation": 140 },
+    { "cmd": "ramp", "from": [165, 52], "to": [159, 59], "width": 10 },
+    { "cmd": "ramp", "from": [142, 76], "to": [134, 83], "width": 12 },
+    { "cmd": "plateau", "x": 125, "y": 45, "radius": 16, "elevation": 140 },
+    { "cmd": "ramp", "from": [125, 57], "to": [125, 65], "width": 10 },
+
+    { "cmd": "plateau", "x": 110, "y": 110, "radius": 18, "elevation": 140 },
+    { "cmd": "ramp", "from": [99, 104], "to": [91, 98], "width": 10 },
+    { "cmd": "ramp", "from": [121, 116], "to": [129, 122], "width": 10 },
+
+    { "cmd": "void", "x": 80, "y": 55, "radius": 16 },
+    { "cmd": "void", "x": 140, "y": 165, "radius": 16 },
+    { "cmd": "void", "x": 170, "y": 115, "radius": 13 },
+    { "cmd": "void", "x": 50, "y": 105, "radius": 13 },
+    { "cmd": "void", "x": 30, "y": 50, "radius": 8 },
+    { "cmd": "void", "x": 190, "y": 170, "radius": 8 },
+
+    { "cmd": "forest", "x": 130, "y": 145, "radius": 10, "density": "medium" },
+    { "cmd": "forest", "x": 90, "y": 75, "radius": 10, "density": "medium" },
+    { "cmd": "forest", "x": 35, "y": 130, "radius": 8, "density": "light" },
+    { "cmd": "forest", "x": 185, "y": 90, "radius": 8, "density": "light" },
+
+    { "cmd": "road", "from": [75, 150], "to": [145, 70], "width": 6 },
+
+    { "cmd": "border", "thickness": 12 }
+  ],
+  "bases": [
+    { "x": 45, "y": 175, "type": "main", "playerSlot": 1, "mineralDirection": "down_left" },
+    { "x": 175, "y": 45, "type": "main", "playerSlot": 2, "mineralDirection": "up_right" },
+    { "x": 68, "y": 152, "type": "natural", "mineralDirection": "left" },
+    { "x": 152, "y": 68, "type": "natural", "mineralDirection": "right" },
+    { "x": 95, "y": 175, "type": "third", "mineralDirection": "down" },
+    { "x": 125, "y": 45, "type": "third", "mineralDirection": "up" },
+    { "x": 110, "y": 110, "type": "gold", "mineralDirection": "down", "isGold": true }
+  ],
+  "watchTowers": [
+    { "x": 110, "y": 110, "vision": 35 },
+    { "x": 70, "y": 100, "vision": 25 },
+    { "x": 150, "y": 120, "vision": 25 }
+  ],
+  "destructibles": [
+    { "x": 80, "y": 138, "health": 1500 },
+    { "x": 140, "y": 82, "health": 1500 },
+    { "x": 60, "y": 60, "health": 1000 },
+    { "x": 160, "y": 160, "health": 1000 }
+  ],
+  "decorationRules": {
+    "border": {
+      "style": "alien",
+      "density": 0.75,
+      "scale": [1.5, 3.0],
+      "innerOffset": 15,
+      "outerOffset": 5
+    },
+    "scatter": {
+      "rocks": 0.1,
+      "crystals": 0.15,
+      "alienTrees": 0.05,
+      "debris": 0.1
+    },
+    "baseRings": {
+      "rocks": 12,
+      "crystals": 6
+    },
+    "seed": 3077
+  }
+}

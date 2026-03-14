@@ -1,5 +1,12 @@
 import * as THREE from 'three';
-import { MapData, MapCell, TerrainType, Elevation, TerrainFeature, TERRAIN_FEATURE_CONFIG } from '@/data/maps';
+import {
+  MapData,
+  MapCell,
+  TerrainType,
+  Elevation,
+  TerrainFeature,
+  TERRAIN_FEATURE_CONFIG,
+} from '@/data/maps';
 import { BiomeConfig, BIOMES, blendBiomeColors } from './Biomes';
 import { TSLTerrainMaterial } from './tsl/TerrainMaterial';
 import AssetManager from '@/assets/AssetManager';
@@ -12,9 +19,8 @@ import {
   elevationToHeight,
   ELEVATION_TO_HEIGHT_FACTOR,
   RAMP_BOUNDARY_ELEVATION_THRESHOLD,
-  RAMP_SMOOTHING_MAX_DIAGONAL as _RAMP_SMOOTHING_MAX_DIAGONAL,
-  RAMP_SMOOTHING_PASSES as _RAMP_SMOOTHING_PASSES,
 } from '@/data/pathfinding.config';
+import { generateWalkableNavmeshGeometry } from '@/data/maps/navmesh/generateWalkableNavmeshGeometry';
 
 // Import from central rendering config
 import { TERRAIN } from '@/data/rendering.config';
@@ -44,15 +50,15 @@ function _quantizeElevation(elevation: Elevation): number {
  * Feature color tints for rendering
  */
 const FEATURE_COLOR_TINTS: Record<TerrainFeature, THREE.Color> = {
-  none: new THREE.Color(1, 1, 1),           // No tint
-  water_shallow: new THREE.Color(0.6, 0.8, 1.0),    // Blue tint
-  water_deep: new THREE.Color(0.2, 0.4, 0.7),       // Deep blue
-  forest_light: new THREE.Color(0.7, 0.9, 0.6),     // Light green
-  forest_dense: new THREE.Color(0.4, 0.6, 0.3),     // Dark green
-  mud: new THREE.Color(0.6, 0.5, 0.3),              // Brown
-  road: new THREE.Color(0.85, 0.8, 0.7),            // Tan/beige
-  void: new THREE.Color(0.15, 0.1, 0.25),           // Dark purple
-  cliff: new THREE.Color(0.5, 0.45, 0.4),           // Gray-brown
+  none: new THREE.Color(1, 1, 1), // No tint
+  water_shallow: new THREE.Color(0.6, 0.8, 1.0), // Blue tint
+  water_deep: new THREE.Color(0.2, 0.4, 0.7), // Deep blue
+  forest_light: new THREE.Color(0.7, 0.9, 0.6), // Light green
+  forest_dense: new THREE.Color(0.4, 0.6, 0.3), // Dark green
+  mud: new THREE.Color(0.6, 0.5, 0.3), // Brown
+  road: new THREE.Color(0.85, 0.8, 0.7), // Tan/beige
+  void: new THREE.Color(0.15, 0.1, 0.25), // Dark purple
+  cliff: new THREE.Color(0.5, 0.45, 0.4), // Gray-brown
 };
 
 export interface TerrainConfig {
@@ -68,9 +74,18 @@ export interface TerrainConfig {
 // Permutation table for Perlin noise (pre-computed for performance)
 const PERM = new Uint8Array(512);
 const GRAD3 = [
-  [1, 1, 0], [-1, 1, 0], [1, -1, 0], [-1, -1, 0],
-  [1, 0, 1], [-1, 0, 1], [1, 0, -1], [-1, 0, -1],
-  [0, 1, 1], [0, -1, 1], [0, 1, -1], [0, -1, -1]
+  [1, 1, 0],
+  [-1, 1, 0],
+  [1, -1, 0],
+  [-1, -1, 0],
+  [1, 0, 1],
+  [-1, 0, 1],
+  [1, 0, -1],
+  [-1, 0, -1],
+  [0, 1, 1],
+  [0, -1, 1],
+  [0, 1, -1],
+  [0, -1, -1],
 ];
 
 // Initialize permutation table with seed
@@ -126,7 +141,13 @@ function perlinNoise(x: number, y: number): number {
 }
 
 // Fractal Brownian Motion (fBM) - multi-octave Perlin noise
-function fbmNoise(x: number, y: number, octaves: number, lacunarity: number = 2.0, persistence: number = 0.5): number {
+function fbmNoise(
+  x: number,
+  y: number,
+  octaves: number,
+  lacunarity: number = 2.0,
+  persistence: number = 0.5
+): number {
   let total = 0;
   let amplitude = 1;
   let frequency = 1;
@@ -143,7 +164,13 @@ function fbmNoise(x: number, y: number, octaves: number, lacunarity: number = 2.
 }
 
 // Ridged multi-fractal noise (good for ridges and mountain ranges)
-function _ridgedNoise(x: number, y: number, octaves: number, lacunarity: number = 2.0, persistence: number = 0.5): number {
+function _ridgedNoise(
+  x: number,
+  y: number,
+  octaves: number,
+  lacunarity: number = 2.0,
+  persistence: number = 0.5
+): number {
   let total = 0;
   let amplitude = 1;
   let frequency = 1;
@@ -245,7 +272,10 @@ export class Terrain {
     this.biome = BIOMES[this.mapData.biome || 'grassland'];
 
     // Create TSL terrain material (WebGPU + WebGL compatible)
-    debugTerrain.log('[Terrain] Using TSL terrain material for biome:', this.mapData.biome || 'grassland');
+    debugTerrain.log(
+      '[Terrain] Using TSL terrain material for biome:',
+      this.mapData.biome || 'grassland'
+    );
     this.tslMaterial = new TSLTerrainMaterial({
       biome: this.mapData.biome || 'grassland',
       mapWidth: this.mapData.width,
@@ -303,7 +333,9 @@ export class Terrain {
       heightMap: heightMapMB,
     });
 
-    debugTerrain.log(`[Terrain] Memory usage: ${totalMB.toFixed(2)}MB (geometry: ${geometryMB.toFixed(2)}MB, heightMap: ${heightMapMB.toFixed(2)}MB)`);
+    debugTerrain.log(
+      `[Terrain] Memory usage: ${totalMB.toFixed(2)}MB (geometry: ${geometryMB.toFixed(2)}MB, heightMap: ${heightMapMB.toFixed(2)}MB)`
+    );
   }
 
   /**
@@ -400,7 +432,12 @@ export class Terrain {
               const ny = y + dy;
               if (nx >= 0 && nx <= width && ny >= 0 && ny <= height) {
                 const neighborType = terrainTypeMap[ny * this.gridWidth + nx];
-                if (neighborType === 'ground' || neighborType === 'ramp' || neighborType === 'unbuildable' || neighborType === 'platform') {
+                if (
+                  neighborType === 'ground' ||
+                  neighborType === 'ramp' ||
+                  neighborType === 'unbuildable' ||
+                  neighborType === 'platform'
+                ) {
                   isEdge = true;
                 }
               }
@@ -437,8 +474,15 @@ export class Terrain {
         const endY = Math.min(startY + TERRAIN_CHUNK_SIZE, height);
 
         const geometry = this.createChunkGeometry(
-          startX, startY, endX, endY,
-          vertexGrid, slopeMap, terrain, width, height
+          startX,
+          startY,
+          endX,
+          endY,
+          vertexGrid,
+          slopeMap,
+          terrain,
+          width,
+          height
         );
 
         const chunkMesh = new THREE.Mesh(geometry, this.material);
@@ -461,11 +505,15 @@ export class Terrain {
    * Create geometry for a single terrain chunk.
    */
   private createChunkGeometry(
-    startX: number, startY: number, endX: number, endY: number,
+    startX: number,
+    startY: number,
+    endX: number,
+    endY: number,
     vertexGrid: THREE.Vector3[][],
     slopeMap: Float32Array,
     terrain: MapCell[][],
-    mapWidth: number, mapHeight: number
+    mapWidth: number,
+    mapHeight: number
   ): THREE.BufferGeometry {
     const vertices: number[] = [];
     const colors: number[] = [];
@@ -481,9 +529,14 @@ export class Terrain {
         const cell = terrain[y][x];
 
         // Get biome-based color
-        const terrainColorType = cell.terrain === 'unwalkable' ? 'cliff' :
-                                  cell.terrain === 'ramp' ? 'ramp' :
-                                  cell.terrain === 'platform' ? 'ground' : 'ground';
+        const terrainColorType =
+          cell.terrain === 'unwalkable'
+            ? 'cliff'
+            : cell.terrain === 'ramp'
+              ? 'ramp'
+              : cell.terrain === 'platform'
+                ? 'ground'
+                : 'ground';
         const baseColor = blendBiomeColors(this.biome, x, y, terrainColorType);
 
         const feature = cell.feature || 'none';
@@ -591,7 +644,8 @@ export class Terrain {
                 const neighbor = terrain[ny][nx];
                 if (neighbor.terrain === 'platform') {
                   const elevDiff = Math.abs(neighbor.elevation - cell.elevation);
-                  if (elevDiff < 30) { // Similar elevation
+                  if (elevDiff < 30) {
+                    // Similar elevation
                     adjacentToPlatform = true;
                   }
                 }
@@ -641,10 +695,10 @@ export class Terrain {
     let vertexIndex = 0;
 
     // Guardrail dimensions
-    const RAIL_HEIGHT = 0.4;        // Height of guardrail
-    const POST_WIDTH = 0.08;        // Width of posts
-    const RAIL_THICKNESS = 0.05;    // Thickness of horizontal rails
-    const _POST_SPACING = 1.0;       // One post per cell edge
+    const RAIL_HEIGHT = 0.4; // Height of guardrail
+    const POST_WIDTH = 0.08; // Width of posts
+    const RAIL_THICKNESS = 0.05; // Thickness of horizontal rails
+    const _POST_SPACING = 1.0; // One post per cell edge
 
     // Helper to check if a cell is a platform (not ramp)
     const isPlatform = (x: number, y: number): boolean => {
@@ -666,8 +720,12 @@ export class Terrain {
 
     // Helper to add a box (post or rail segment)
     const addBox = (
-      cx: number, cy: number, cz: number,  // Center position
-      sx: number, sy: number, sz: number,  // Half-sizes
+      cx: number,
+      cy: number,
+      cz: number, // Center position
+      sx: number,
+      sy: number,
+      sz: number // Half-sizes
     ) => {
       // 8 vertices of a box
       const v = [
@@ -683,12 +741,12 @@ export class Terrain {
 
       // 6 faces with normals (each face has 4 verts, 2 triangles)
       const faces = [
-        { verts: [0, 1, 2, 3], normal: [0, 0, -1] },  // Back
-        { verts: [5, 4, 7, 6], normal: [0, 0, 1] },   // Front
-        { verts: [4, 0, 3, 7], normal: [-1, 0, 0] },  // Left
-        { verts: [1, 5, 6, 2], normal: [1, 0, 0] },   // Right
-        { verts: [3, 2, 6, 7], normal: [0, 1, 0] },   // Top
-        { verts: [4, 5, 1, 0], normal: [0, -1, 0] },  // Bottom
+        { verts: [0, 1, 2, 3], normal: [0, 0, -1] }, // Back
+        { verts: [5, 4, 7, 6], normal: [0, 0, 1] }, // Front
+        { verts: [4, 0, 3, 7], normal: [-1, 0, 0] }, // Left
+        { verts: [1, 5, 6, 2], normal: [1, 0, 0] }, // Right
+        { verts: [3, 2, 6, 7], normal: [0, 1, 0] }, // Top
+        { verts: [4, 5, 1, 0], normal: [0, -1, 0] }, // Bottom
       ];
 
       for (const face of faces) {
@@ -719,9 +777,9 @@ export class Terrain {
 
         // Check each edge direction (N, S, E, W)
         const edges = [
-          { dx: 0, dy: -1, startX: x, startY: y, endX: x + 1, endY: y },      // North edge
+          { dx: 0, dy: -1, startX: x, startY: y, endX: x + 1, endY: y }, // North edge
           { dx: 0, dy: 1, startX: x, startY: y + 1, endX: x + 1, endY: y + 1 }, // South edge
-          { dx: -1, dy: 0, startX: x, startY: y, endX: x, endY: y + 1 },      // West edge
+          { dx: -1, dy: 0, startX: x, startY: y, endX: x, endY: y + 1 }, // West edge
           { dx: 1, dy: 0, startX: x + 1, startY: y, endX: x + 1, endY: y + 1 }, // East edge
         ];
 
@@ -739,7 +797,7 @@ export class Terrain {
           if (isRamp(neighborX, neighborY)) continue;
 
           // Calculate edge center position (in local terrain coordinates)
-          const edgeCenterX = (edge.startX + edge.endX) / 2 * cellSize;
+          const edgeCenterX = ((edge.startX + edge.endX) / 2) * cellSize;
           const edgeCenterY = -((edge.startY + edge.endY) / 2) * cellSize; // Negative Y for terrain rotation
 
           // Determine edge orientation (horizontal or vertical in local space)
@@ -748,8 +806,12 @@ export class Terrain {
           // Add post at edge center
           const postCenterZ = baseZ + RAIL_HEIGHT / 2;
           addBox(
-            edgeCenterX, edgeCenterY, postCenterZ,
-            POST_WIDTH / 2, POST_WIDTH / 2, RAIL_HEIGHT / 2
+            edgeCenterX,
+            edgeCenterY,
+            postCenterZ,
+            POST_WIDTH / 2,
+            POST_WIDTH / 2,
+            RAIL_HEIGHT / 2
           );
 
           // Add horizontal rail
@@ -757,14 +819,22 @@ export class Terrain {
           if (isHorizontalEdge) {
             // Rail runs along X
             addBox(
-              edgeCenterX, edgeCenterY, railZ,
-              cellSize / 2, RAIL_THICKNESS / 2, RAIL_THICKNESS / 2
+              edgeCenterX,
+              edgeCenterY,
+              railZ,
+              cellSize / 2,
+              RAIL_THICKNESS / 2,
+              RAIL_THICKNESS / 2
             );
           } else {
             // Rail runs along Y
             addBox(
-              edgeCenterX, edgeCenterY, railZ,
-              RAIL_THICKNESS / 2, cellSize / 2, RAIL_THICKNESS / 2
+              edgeCenterX,
+              edgeCenterY,
+              railZ,
+              RAIL_THICKNESS / 2,
+              cellSize / 2,
+              RAIL_THICKNESS / 2
             );
           }
 
@@ -793,7 +863,7 @@ export class Terrain {
 
     // RTS-style yellow/orange hazard color for guardrails
     const guardrailMaterial = new THREE.MeshStandardMaterial({
-      color: 0xD4A017,  // Golden/orange hazard color
+      color: 0xd4a017, // Golden/orange hazard color
       roughness: 0.6,
       metalness: 0.4,
     });
@@ -860,9 +930,14 @@ export class Terrain {
   ): number {
     // Check all 8 neighbors for elevation changes to create cliff edges
     const neighbors = [
-      { dx: -1, dy: -1 }, { dx: 0, dy: -1 }, { dx: 1, dy: -1 },
-      { dx: -1, dy: 0 },                      { dx: 1, dy: 0 },
-      { dx: -1, dy: 1 },  { dx: 0, dy: 1 },  { dx: 1, dy: 1 },
+      { dx: -1, dy: -1 },
+      { dx: 0, dy: -1 },
+      { dx: 1, dy: -1 },
+      { dx: -1, dy: 0 },
+      { dx: 1, dy: 0 },
+      { dx: -1, dy: 1 },
+      { dx: 0, dy: 1 },
+      { dx: 1, dy: 1 },
     ];
 
     let maxElevationDiff = 0;
@@ -896,19 +971,19 @@ export class Terrain {
     const y0 = clamp(y - 1, 0, height - 1);
     const y1 = clamp(y, 0, height - 1);
 
-    const cell00 = terrain[y0][x0];  // Top-left
-    const cell10 = terrain[y0][x1];  // Top-right
-    const cell01 = terrain[y1][x0];  // Bottom-left
-    const cell11 = terrain[y1][x1];  // Bottom-right (primary cell)
+    const cell00 = terrain[y0][x0]; // Top-left
+    const cell10 = terrain[y0][x1]; // Top-right
+    const cell01 = terrain[y1][x0]; // Bottom-left
+    const cell11 = terrain[y1][x1]; // Bottom-right (primary cell)
 
     const cells = [cell00, cell10, cell01, cell11];
 
     // Check if any of the 4 cells is a ramp
-    const rampCells = cells.filter(c => c.terrain === 'ramp');
+    const rampCells = cells.filter((c) => c.terrain === 'ramp');
     const hasRamp = rampCells.length > 0;
 
     // Check if any of the 4 cells is a platform
-    const platformCells = cells.filter(c => c.terrain === 'platform');
+    const platformCells = cells.filter((c) => c.terrain === 'platform');
     const hasPlatform = platformCells.length > 0;
 
     let avgElevation: number;
@@ -926,8 +1001,8 @@ export class Terrain {
       //
       // Uses RAMP_BOUNDARY_ELEVATION_THRESHOLD from pathfinding.config.ts
 
-      const rampElevations = rampCells.map(c => c.elevation);
-      const nonRampElevations = cells.filter(c => c.terrain !== 'ramp').map(c => c.elevation);
+      const rampElevations = rampCells.map((c) => c.elevation);
+      const nonRampElevations = cells.filter((c) => c.terrain !== 'ramp').map((c) => c.elevation);
 
       const avgRampElev = rampElevations.reduce((a, b) => a + b, 0) / rampElevations.length;
 
@@ -937,7 +1012,8 @@ export class Terrain {
       } else {
         // Ramp-to-terrain boundary - use the ramp cell closest to the non-ramp terrain
         // This ensures the height step at the boundary stays within walkableClimb
-        const avgNonRampElev = nonRampElevations.reduce((a, b) => a + b, 0) / nonRampElevations.length;
+        const avgNonRampElev =
+          nonRampElevations.reduce((a, b) => a + b, 0) / nonRampElevations.length;
         const maxRampElev = Math.max(...rampElevations);
         const minRampElev = Math.min(...rampElevations);
 
@@ -947,7 +1023,7 @@ export class Terrain {
           // Use MAX to match the platform elevation and prevent gaps
           const elevationDiff = avgNonRampElev - maxRampElev;
           if (elevationDiff <= RAMP_BOUNDARY_ELEVATION_THRESHOLD) {
-            avgElevation = Math.max(...cells.map(c => c.elevation));
+            avgElevation = Math.max(...cells.map((c) => c.elevation));
           } else {
             // Large gap - use max ramp elevation, step will be handled by navmesh
             avgElevation = maxRampElev;
@@ -957,7 +1033,7 @@ export class Terrain {
           // Use MIN ramp elevation to meet the lower terrain
           const elevationDiff = minRampElev - avgNonRampElev;
           if (elevationDiff <= RAMP_BOUNDARY_ELEVATION_THRESHOLD) {
-            avgElevation = Math.min(...cells.map(c => c.elevation));
+            avgElevation = Math.min(...cells.map((c) => c.elevation));
           } else {
             // Large gap - use min ramp elevation
             avgElevation = minRampElev;
@@ -969,12 +1045,13 @@ export class Terrain {
       avgElevation = platformCells.reduce((sum, c) => sum + c.elevation, 0) / platformCells.length;
     } else {
       // No ramps or platforms - use simple average elevation for smooth ground
-      avgElevation = (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
+      avgElevation =
+        (cell00.elevation + cell10.elevation + cell01.elevation + cell11.elevation) / 4;
     }
 
     // For terrain type: prioritize ramp > platform > cell11.terrain
     // This prevents noise from being added to ramp/platform-adjacent vertices
-    const terrainType = hasRamp ? 'ramp' : (hasPlatform ? 'platform' : cell11.terrain);
+    const terrainType = hasRamp ? 'ramp' : hasPlatform ? 'platform' : cell11.terrain;
 
     return {
       terrain: terrainType as typeof cell11.terrain,
@@ -1006,10 +1083,7 @@ export class Terrain {
     const h01 = this.heightMap[y1 * this.gridWidth + x0];
     const h11 = this.heightMap[y1 * this.gridWidth + x1];
 
-    return h00 * (1 - fx) * (1 - fy) +
-           h10 * fx * (1 - fy) +
-           h01 * (1 - fx) * fy +
-           h11 * fx * fy;
+    return h00 * (1 - fx) * (1 - fy) + h10 * fx * (1 - fy) + h01 * (1 - fx) * fy + h11 * fx * fy;
   }
 
   public getNavmeshHeightAt(worldX: number, worldY: number): number {
@@ -1037,10 +1111,7 @@ export class Terrain {
     const h01 = this.navMeshHeightMap[y1 * this.gridWidth + x0];
     const h11 = this.navMeshHeightMap[y1 * this.gridWidth + x1];
 
-    return h00 * (1 - fx) * (1 - fy) +
-           h10 * fx * (1 - fy) +
-           h01 * (1 - fx) * fy +
-           h11 * fx * fy;
+    return h00 * (1 - fx) * (1 - fy) + h10 * fx * (1 - fy) + h01 * (1 - fx) * fy + h11 * fx * fy;
   }
 
   public getTerrainAt(worldX: number, worldY: number): MapCell | null {
@@ -1206,7 +1277,11 @@ export class Terrain {
       for (const { cx, cy } of cellCoords) {
         if (cx >= 0 && cx < width && cy >= 0 && cy < height) {
           const cellTerrain = terrain[cy][cx].terrain;
-          if (cellTerrain === 'ground' || cellTerrain === 'unbuildable' || cellTerrain === 'platform') {
+          if (
+            cellTerrain === 'ground' ||
+            cellTerrain === 'unbuildable' ||
+            cellTerrain === 'platform'
+          ) {
             hasGround = true;
           }
           if (cellTerrain === 'unwalkable') {
@@ -1320,85 +1395,28 @@ export class Terrain {
    */
   /**
    * Generate walkable geometry for navmesh generation.
-   *
-   * MINIMAL IMPLEMENTATION: Uses raw cell elevations directly (matching editor display).
-   * Lets Recast handle walkability via walkableClimb and walkableSlopeAngle.
-   *
-   * Key principles:
-   * 1. Vertex heights from raw cell elevations (like EditorTerrain)
-   * 2. Shared vertices for Recast polygon connectivity
-   * 3. Cliff walls block unwalkable boundaries
-   * 4. NO zone calculations, NO smoothing passes - trust Recast
    */
   public generateWalkableGeometry(): { positions: Float32Array; indices: Uint32Array } {
-    const terrain = this.mapData.terrain;
-    const width = this.mapData.width;
-    const height = this.mapData.height;
+    const geometry = generateWalkableNavmeshGeometry({
+      terrain: this.mapData.terrain,
+      width: this.mapData.width,
+      height: this.mapData.height,
+      ramps: this.mapData.ramps,
+      baseHeightMap: this.heightMap,
+      baseGridWidth: this.gridWidth,
+      baseGridHeight: this.gridHeight,
+    });
 
-    const vertices: number[] = [];
-    const indices: number[] = [];
-    let vertexIndex = 0;
-
-    // Helper: Check if a cell is walkable for pathfinding
-    const isCellWalkable = (cx: number, cy: number): boolean => {
-      if (cx < 0 || cx >= width || cy < 0 || cy >= height) return false;
-      const cell = terrain[cy][cx];
-      if (cell.terrain === 'unwalkable') return false;
-      const feature = cell.feature || 'none';
-      const featureConfig = TERRAIN_FEATURE_CONFIG[feature];
-      return featureConfig.walkable;
-    };
-
-    // Store vertex heights - will be computed per-cell below
-    const vertexHeights = new Float32Array((width + 1) * (height + 1));
-    this.navMeshHeightMap = vertexHeights;
-
-    // SIMPLEST APPROACH: Each cell is a flat quad at its own elevation.
-    // No vertex sharing between cells with different elevations.
-    // Recast handles the step-ups via walkableClimb.
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (!isCellWalkable(x, y)) continue;
-
-        const cell = terrain[y][x];
-        const h = cell.elevation * ELEVATION_TO_HEIGHT_FACTOR;
-
-        // Store in height map for overlay
-        vertexHeights[y * (width + 1) + x] = h;
-        vertexHeights[y * (width + 1) + (x + 1)] = h;
-        vertexHeights[(y + 1) * (width + 1) + x] = h;
-        vertexHeights[(y + 1) * (width + 1) + (x + 1)] = h;
-
-        // World coordinates for cell corners
-        const x0 = x;
-        const x1 = x + 1;
-        const z0 = y;
-        const z1 = y + 1;
-
-        // Add 4 vertices for this cell (flat quad at cell elevation)
-        const baseIdx = vertexIndex;
-        vertices.push(x0, h, z0);  // NW corner
-        vertices.push(x1, h, z0);  // NE corner
-        vertices.push(x0, h, z1);  // SW corner
-        vertices.push(x1, h, z1);  // SE corner
-        vertexIndex += 4;
-
-        // Two triangles per cell (CCW winding)
-        indices.push(baseIdx, baseIdx + 2, baseIdx + 1);      // NW, SW, NE
-        indices.push(baseIdx + 1, baseIdx + 2, baseIdx + 3);  // NE, SW, SE
-      }
-    }
-
-    const floorTriangles = indices.length / 3;
+    this.navMeshHeightMap = geometry.navMeshHeightMap;
 
     debugTerrain.log(
-      `[Terrain] Generated walkable geometry: ${vertices.length / 3} vertices, ` +
-      `${floorTriangles} floor triangles`
+      `[Terrain] Generated walkable geometry: ${geometry.positions.length / 3} vertices, ` +
+        `${geometry.indices.length / 3} triangles`
     );
 
     return {
-      positions: new Float32Array(vertices),
-      indices: new Uint32Array(indices),
+      positions: geometry.positions,
+      indices: geometry.indices,
     };
   }
 
@@ -1662,10 +1680,7 @@ export class TerrainGrid {
       vertices.push(this.width, y, 0.1);
     }
 
-    geometry.setAttribute(
-      'position',
-      new THREE.Float32BufferAttribute(vertices, 3)
-    );
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
 
     const material = new THREE.LineBasicMaterial({
       color: 0x00ff00,
@@ -1701,7 +1716,10 @@ interface TrackedEmissiveDecoration {
 }
 
 // Import DecorationLightManager type (will be passed in)
-import { DecorationLightManager, DecorationLightConfig as _DecorationLightConfig } from './DecorationLightManager';
+import {
+  DecorationLightManager,
+  DecorationLightConfig as _DecorationLightConfig,
+} from './DecorationLightManager';
 
 // Decorative elements (watch towers, destructible rocks, trees, etc.)
 export class MapDecorations {
@@ -1719,7 +1737,12 @@ export class MapDecorations {
   // Animation time accumulator
   private animationTime: number = 0;
 
-  constructor(mapData: MapData, terrain: Terrain, scene?: THREE.Scene, lightManager?: DecorationLightManager) {
+  constructor(
+    mapData: MapData,
+    terrain: Terrain,
+    scene?: THREE.Scene,
+    lightManager?: DecorationLightManager
+  ) {
     this.group = new THREE.Group();
     this.terrain = terrain;
     this.scene = scene || null;
@@ -1808,13 +1831,17 @@ export class MapDecorations {
             // Smart emissive handling: preserve model's baked-in glow
             if (hints.emissive || hints.emissiveIntensity !== undefined) {
               const existingEmissive = material.emissive;
-              const hasExistingEmissive = existingEmissive &&
-                (existingEmissive.r > 0.01 || existingEmissive.g > 0.01 || existingEmissive.b > 0.01);
+              const hasExistingEmissive =
+                existingEmissive &&
+                (existingEmissive.r > 0.01 ||
+                  existingEmissive.g > 0.01 ||
+                  existingEmissive.b > 0.01);
 
               if (hasExistingEmissive) {
                 // Model has baked-in emissive - just boost intensity, preserve color
                 const boostFactor = hints.emissiveIntensity ?? 1.0;
-                material.emissiveIntensity = Math.max(material.emissiveIntensity, 0.1) * boostFactor;
+                material.emissiveIntensity =
+                  Math.max(material.emissiveIntensity, 0.1) * boostFactor;
               } else if (hints.emissive) {
                 // Model has no emissive - apply hint color subtly
                 material.emissive = new THREE.Color(hints.emissive);
@@ -2015,7 +2042,11 @@ export class MapDecorations {
     }
 
     if (mesh) {
-      mesh.position.set(decoration.x, terrainHeight + (decoration.type.includes('rock') ? 0.3 : 0), decoration.y);
+      mesh.position.set(
+        decoration.x,
+        terrainHeight + (decoration.type.includes('rock') ? 0.3 : 0),
+        decoration.y
+      );
       if (decoration.rotation !== undefined) {
         mesh.rotation.y = decoration.rotation;
       }
@@ -2120,11 +2151,7 @@ export class MapDecorations {
           const smallGeometry = new THREE.DodecahedronGeometry(0.8);
           const smallRock = new THREE.Mesh(smallGeometry, mainMaterial);
           const angle = (i / 3) * Math.PI * 2 + Math.random() * 0.5;
-          smallRock.position.set(
-            Math.cos(angle) * 2,
-            0.5,
-            Math.sin(angle) * 2
-          );
+          smallRock.position.set(Math.cos(angle) * 2, 0.5, Math.sin(angle) * 2);
           smallRock.rotation.set(
             Math.random() * Math.PI,
             Math.random() * Math.PI,
