@@ -2,7 +2,7 @@
 
 # VOIDSTRIKE
 
-**Browser-native RTS. 100,000+ lines of TypeScript.**
+**Browser-native RTS.**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-r182-black?logo=three.js)](https://threejs.org/)
