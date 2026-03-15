@@ -97,11 +97,10 @@ export class ProductionSystem extends System {
           if (cancelled.supplyAllocated) {
             // Note: AI supply is recalculated from entities, no manual adjustment needed
           }
-        } else if (playerId === this.game.config.playerId) {
-          // Refund to local human player
-          this.game.statePort.addResources(mineralRefund, plasmaRefund);
+        } else if (playerId) {
+          this.game.statePort.addResources(mineralRefund, plasmaRefund, playerId);
           if (cancelled.supplyAllocated) {
-            this.game.statePort.addSupply(-cancelled.supplyCost);
+            this.game.statePort.addSupply(-cancelled.supplyCost, playerId);
           }
         }
       }
@@ -182,18 +181,18 @@ export class ProductionSystem extends System {
 
     // Determine if building owner is AI
     const ownerPlayerId = bestBuilding.selectable?.playerId;
+    if (!ownerPlayerId) return;
     const isOwnerAI = ownerPlayerId ? this.isAIPlayer(ownerPlayerId) : false;
 
     // FIX: AI players have already deducted resources via EnhancedAISystem
     // Only check/deduct from game store for human players (local player)
     if (!isOwnerAI) {
-      // Human player - check resources from game store
-      if (this.game.statePort.getMinerals() < unitDef.mineralCost) {
+      if (this.game.statePort.getMinerals(ownerPlayerId) < unitDef.mineralCost) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (this.game.statePort.getPlasma() < unitDef.plasmaCost) {
+      if (this.game.statePort.getPlasma(ownerPlayerId) < unitDef.plasmaCost) {
         this.game.eventBus.emit('alert:notEnoughPlasma', {});
         this.game.eventBus.emit('warning:lowPlasma', {});
         return;
@@ -218,8 +217,8 @@ export class ProductionSystem extends System {
       } else {
         // Human: check if they can afford two
         const canAffordTwo =
-          this.game.statePort.getMinerals() >= unitDef.mineralCost * 2 &&
-          this.game.statePort.getPlasma() >= unitDef.plasmaCost * 2;
+          this.game.statePort.getMinerals(ownerPlayerId) >= unitDef.mineralCost * 2 &&
+          this.game.statePort.getPlasma(ownerPlayerId) >= unitDef.plasmaCost * 2;
         produceCount = canAffordTwo ? 2 : 1;
       }
     }
@@ -228,7 +227,8 @@ export class ProductionSystem extends System {
     if (!isOwnerAI) {
       this.game.statePort.addResources(
         -unitDef.mineralCost * produceCount,
-        -unitDef.plasmaCost * produceCount
+        -unitDef.plasmaCost * produceCount,
+        ownerPlayerId
       );
     }
     // AI resources were already deducted in EnhancedAISystem
@@ -254,34 +254,28 @@ export class ProductionSystem extends System {
     entityIds: number[];
     buildingType: string;
     targetPosition: { x: number; y: number };
+    playerId?: string;
   }): void {
     // Building placement is handled by the UI/placement system
     // This just signals the intent
     this.game.eventBus.emit('building:place', {
-      workerIds: command.entityIds,
+      workerId: command.entityIds[0],
       buildingType: command.buildingType,
       position: command.targetPosition,
+      playerId: command.playerId,
     });
   }
 
-  private handleUpgradeBuildingCommand(command: { entityIds: number[]; upgradeTo: string }): void {
+  private handleUpgradeBuildingCommand(command: {
+    entityIds: number[];
+    upgradeTo: string;
+    playerId?: string;
+  }): void {
     const { entityIds, upgradeTo } = command;
     const upgradeDef = BUILDING_DEFINITIONS[upgradeTo];
 
     if (!upgradeDef) {
       debugProduction.warn(`Unknown building type: ${upgradeTo}`);
-      return;
-    }
-
-    // Check resources
-    if (this.game.statePort.getMinerals() < upgradeDef.mineralCost) {
-      this.game.eventBus.emit('alert:notEnoughMinerals', {});
-      this.game.eventBus.emit('warning:lowMinerals', {});
-      return;
-    }
-    if (this.game.statePort.getPlasma() < upgradeDef.plasmaCost) {
-      this.game.eventBus.emit('alert:notEnoughPlasma', {});
-      this.game.eventBus.emit('warning:lowPlasma', {});
       return;
     }
 
@@ -291,7 +285,10 @@ export class ProductionSystem extends System {
       if (!entity) continue;
 
       const building = entity.get<Building>('Building');
+      const selectable = entity.get<Selectable>('Selectable');
       if (!building || !building.isComplete()) continue;
+      const ownerPlayerId = command.playerId ?? selectable?.playerId;
+      if (!ownerPlayerId) continue;
 
       // Check if this building can upgrade to the target
       if (!building.canUpgradeTo || !building.canUpgradeTo.includes(upgradeTo)) continue;
@@ -302,8 +299,31 @@ export class ProductionSystem extends System {
       );
       if (isUpgrading) continue;
 
-      // Deduct resources
-      this.game.statePort.addResources(-upgradeDef.mineralCost, -upgradeDef.plasmaCost);
+      const aiPlayer = this.getAISystem()?.getAIPlayer(ownerPlayerId);
+      if (aiPlayer) {
+        if (aiPlayer.minerals < upgradeDef.mineralCost || aiPlayer.plasma < upgradeDef.plasmaCost) {
+          continue;
+        }
+        aiPlayer.minerals -= upgradeDef.mineralCost;
+        aiPlayer.plasma -= upgradeDef.plasmaCost;
+      } else {
+        if (this.game.statePort.getMinerals(ownerPlayerId) < upgradeDef.mineralCost) {
+          this.game.eventBus.emit('alert:notEnoughMinerals', {});
+          this.game.eventBus.emit('warning:lowMinerals', {});
+          return;
+        }
+        if (this.game.statePort.getPlasma(ownerPlayerId) < upgradeDef.plasmaCost) {
+          this.game.eventBus.emit('alert:notEnoughPlasma', {});
+          this.game.eventBus.emit('warning:lowPlasma', {});
+          return;
+        }
+
+        this.game.statePort.addResources(
+          -upgradeDef.mineralCost,
+          -upgradeDef.plasmaCost,
+          ownerPlayerId
+        );
+      }
 
       // Add to production queue as 'upgrade' type with building ID
       building.addToProductionQueue('upgrade', upgradeTo, upgradeDef.buildTime);
@@ -359,14 +379,14 @@ export class ProductionSystem extends System {
             // AI supply is managed by EnhancedAISystem - just mark as allocated
             currentItem.supplyAllocated = true;
           } else {
-            // Human player - use game store for supply tracking
-            // Try to allocate supply if there's room
+            if (!ownerPlayerId) {
+              continue;
+            }
             if (
-              this.game.statePort.getSupply() + currentItem.supplyCost <=
-              this.game.statePort.getMaxSupply()
+              this.game.statePort.getSupply(ownerPlayerId) + currentItem.supplyCost <=
+              this.game.statePort.getMaxSupply(ownerPlayerId)
             ) {
-              // We have room - allocate supply
-              this.game.statePort.addSupply(currentItem.supplyCost);
+              this.game.statePort.addSupply(currentItem.supplyCost, ownerPlayerId);
               currentItem.supplyAllocated = true;
             } else {
               // No room - skip this building (supply blocked)

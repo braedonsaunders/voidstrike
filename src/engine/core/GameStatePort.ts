@@ -9,20 +9,25 @@ export interface GameStatePort {
   // === READS ===
   getSelectedUnits(): number[];
   getControlGroup(groupNumber: number): number[];
-  getMinerals(): number;
-  getPlasma(): number;
-  getSupply(): number;
-  getMaxSupply(): number;
+  getMinerals(playerId?: string): number;
+  getPlasma(playerId?: string): number;
+  getSupply(playerId?: string): number;
+  getMaxSupply(playerId?: string): number;
 
   // === RESEARCH ===
   hasResearch(playerId: string, upgradeId: string): boolean;
-  addResearch(playerId: string, upgradeId: string, effects: UpgradeEffect[], completedAt: number): void;
+  addResearch(
+    playerId: string,
+    upgradeId: string,
+    effects: UpgradeEffect[],
+    completedAt: number
+  ): void;
 
   // === WRITES ===
   selectUnits(entityIds: number[]): void;
   setControlGroup(groupNumber: number, entityIds: number[]): void;
-  addResources(minerals: number, plasma: number): void;
-  setResources(minerals: number, plasma: number): void;
-  addSupply(delta: number): void;
-  addMaxSupply(delta: number): void;
+  addResources(minerals: number, plasma: number, playerId?: string): void;
+  setResources(minerals: number, plasma: number, playerId?: string): void;
+  addSupply(delta: number, playerId?: string): void;
+  addMaxSupply(delta: number, playerId?: string): void;
 }

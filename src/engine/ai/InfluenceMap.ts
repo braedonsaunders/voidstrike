@@ -14,10 +14,7 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
-import {
-  deterministicDistance as distance,
-  deterministicMagnitude,
-} from '@/utils/DeterministicMath';
+import { deterministicMagnitude } from '@/utils/DeterministicMath';
 import { debugAI } from '@/utils/debugLogger';
 
 /**
@@ -133,6 +130,12 @@ interface PlayerInfluence {
   totalInfluence: number;
 }
 
+interface PropagationOffset {
+  dx: number;
+  dy: number;
+  decay: number;
+}
+
 /**
  * Performance metrics for influence map updates
  */
@@ -202,6 +205,7 @@ export class InfluenceMap {
 
   // Pre-computed decay lookup for performance
   private readonly decayLookup: Float32Array;
+  private readonly propagationOffsets: PropagationOffset[];
 
   // Performance metrics
   private updateTimesBuffer: Float32Array;
@@ -227,6 +231,15 @@ export class InfluenceMap {
     for (let d = 0; d <= maxDist; d++) {
       this.decayLookup[d] = Math.pow(this.config.decayRate, d);
     }
+    this.propagationOffsets = [];
+    for (let dy = -maxDist; dy <= maxDist; dy++) {
+      for (let dx = -maxDist; dx <= maxDist; dx++) {
+        const dist = Math.floor(deterministicMagnitude(dx, dy));
+        if (dist <= maxDist) {
+          this.propagationOffsets.push({ dx, dy, decay: this.decayLookup[dist] });
+        }
+      }
+    }
 
     // Initialize performance metrics buffers
     this.updateTimesBuffer = new Float32Array(METRICS_BUFFER_SIZE);
@@ -249,7 +262,7 @@ export class InfluenceMap {
     // Group entities by player
     const playerEntities: Map<
       string,
-      Array<{ x: number; y: number; influence: number; isAir: boolean }>
+      Array<{ x: number; y: number; influence: number }>
     > = new Map();
     let unitCount = 0;
 
@@ -268,7 +281,6 @@ export class InfluenceMap {
 
       // Calculate influence value
       let influence = 0;
-      let isAir = false;
 
       const unit = entity.get<Unit>('Unit');
       const building = entity.get<Building>('Building');
@@ -277,10 +289,9 @@ export class InfluenceMap {
         // Unit influence based on DPS and supply
         const dps = unit.attackDamage * unit.attackSpeed;
         influence = dps * 0.5 + this.config.supplyInfluence;
-        isAir = unit.isFlying;
 
         // Reduce ground influence of air units
-        if (isAir) {
+        if (unit.isFlying) {
           influence *= this.config.airUnitModifier;
         }
       } else if (building) {
@@ -297,7 +308,6 @@ export class InfluenceMap {
         x: transform.x,
         y: transform.y,
         influence,
-        isAir,
       });
     }
 
@@ -326,7 +336,7 @@ export class InfluenceMap {
    */
   private updatePlayerInfluence(
     playerId: string,
-    sources: Array<{ x: number; y: number; influence: number; isAir: boolean }>,
+    sources: Array<{ x: number; y: number; influence: number }>,
     currentTick: number
   ): void {
     // Get or create player influence data
@@ -364,23 +374,16 @@ export class InfluenceMap {
   ): void {
     const centerCol = Math.floor(sourceX / this.cellSize);
     const centerRow = Math.floor(sourceY / this.cellSize);
-    const maxRadius = this.config.maxRadius;
+    for (const offset of this.propagationOffsets) {
+      const col = centerCol + offset.dx;
+      const row = centerRow + offset.dy;
 
-    const minCol = Math.max(0, centerCol - maxRadius);
-    const maxCol = Math.min(this.cols - 1, centerCol + maxRadius);
-    const minRow = Math.max(0, centerRow - maxRadius);
-    const maxRow = Math.min(this.rows - 1, centerRow + maxRadius);
-
-    for (let row = minRow; row <= maxRow; row++) {
-      for (let col = minCol; col <= maxCol; col++) {
-        const dist = Math.floor(distance(centerCol, centerRow, col, row));
-
-        if (dist <= maxRadius) {
-          const decay = this.decayLookup[dist];
-          const index = row * this.cols + col;
-          grid[index] += baseInfluence * decay;
-        }
+      if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) {
+        continue;
       }
+
+      const index = row * this.cols + col;
+      grid[index] += baseInfluence * offset.decay;
     }
   }
 
@@ -696,7 +699,7 @@ export class InfluenceMap {
 
         if (col < 0 || col >= this.cols || row < 0 || row >= this.rows) continue;
 
-        const dist = distance(0, 0, dc, dr);
+        const dist = Math.hypot(dc, dr);
         if (dist < 5 || dist > radiusCells) continue; // Not too close, not too far
 
         const index = row * this.cols + col;

@@ -29,6 +29,7 @@ import { Building } from '@/engine/components/Building';
 import { isBattleSimulatorMode, isMultiplayerMode } from '@/store/gameSetupStore';
 import { getOverlayCoordinator } from '@/engine/overlay';
 import { recordPathTelemetry } from '@/engine/debug/pathTelemetry';
+import { findEntityAtScreenPosition } from './findEntityAtScreenPosition';
 
 // =============================================================================
 // CONSTANTS
@@ -303,7 +304,7 @@ export class GameplayInputHandler implements InputHandler {
     });
 
     // Find entity at click position
-    const clickedEntity = this.findEntityAtScreenPosition(
+    const clickedEntity = findEntityAtScreenPosition(
       world,
       event.position.x,
       event.position.y,
@@ -339,8 +340,11 @@ export class GameplayInputHandler implements InputHandler {
 
       // Attack enemy
       const isDead = health?.isDead?.() || (health as { current?: number })?.current === 0;
-      if (selectable && selectable.playerId !== localPlayer && health && !isDead) {
-        eventBus.emit('command:attack', {
+      if (selectable && selectable.playerId !== localPlayer && health && !isDead && game) {
+        game.issueCommand({
+          tick: game.getCurrentTick(),
+          playerId: localPlayer,
+          type: 'ATTACK',
           entityIds: selectedUnits,
           targetEntityId: clickedEntity.id,
           queue,
@@ -361,10 +365,13 @@ export class GameplayInputHandler implements InputHandler {
             return unit?.isWorker;
           });
 
-          if (workerIds.length > 0) {
-            eventBus.emit('command:resume_construction', {
-              workerId: workerIds[0],
-              buildingId: clickedEntity.id,
+          if (workerIds.length > 0 && game) {
+            game.issueCommand({
+              tick: game.getCurrentTick(),
+              playerId: localPlayer,
+              type: 'RESUME_CONSTRUCTION',
+              entityIds: [workerIds[0]],
+              targetEntityId: clickedEntity.id,
             });
             return true;
           }
@@ -394,10 +401,16 @@ export class GameplayInputHandler implements InputHandler {
     // Move flying buildings
     if (flyingBuildingIds.length > 0) {
       for (const buildingId of flyingBuildingIds) {
-        eventBus.emit('command:flyingBuildingMove', {
-          buildingId,
-          targetPosition: { x: event.worldPosition.x, y: event.worldPosition.z },
-        });
+        if (game) {
+          game.issueCommand({
+            tick: game.getCurrentTick(),
+            playerId: localPlayer,
+            type: 'FLYING_BUILDING_MOVE',
+            entityIds: [buildingId],
+            buildingId,
+            targetPosition: { x: event.worldPosition.x, y: event.worldPosition.z },
+          });
+        }
       }
     }
 
@@ -415,12 +428,18 @@ export class GameplayInputHandler implements InputHandler {
         }
       }
       for (const buildingId of groundedProductionBuildingIds) {
-        eventBus.emit('rally:set', {
-          buildingId,
-          x: event.worldPosition.x,
-          y: event.worldPosition.z,
-          targetId,
-        });
+        if (game) {
+          game.issueCommand({
+            tick: game.getCurrentTick(),
+            playerId: localPlayer,
+            type: 'RALLY',
+            entityIds: [buildingId],
+            buildingId,
+            targetPosition: { x: event.worldPosition.x, y: event.worldPosition.z },
+            targetEntityId: targetId,
+            queue,
+          });
+        }
       }
     }
 
@@ -687,141 +706,5 @@ export class GameplayInputHandler implements InputHandler {
     }
 
     return false;
-  }
-
-  // =============================================================================
-  // UTILITY METHODS
-  // =============================================================================
-
-  private findEntityAtScreenPosition(
-    world: InputHandlerDependencies['world'],
-    screenX: number,
-    screenY: number,
-    camera: InputHandlerDependencies['camera']
-  ): ReturnType<NonNullable<InputHandlerDependencies['world']>['getEntity']> | null {
-    if (!world || !camera) return null;
-
-    const resourceScreenRadius = 40;
-    const unitScreenRadius = 35;
-    const buildingScreenRadius = 50;
-
-    const worldPos = camera.screenToWorld(screenX, screenY);
-    if (!worldPos) return null;
-
-    const zoom = camera.getZoom?.() ?? 1;
-    const maxScreenRadius = Math.max(resourceScreenRadius, unitScreenRadius, buildingScreenRadius);
-    const worldSearchRadius = (maxScreenRadius / zoom) * 1.5 + 5;
-
-    type ClickCandidate = {
-      entity: NonNullable<ReturnType<typeof world.getEntity>>;
-      distance: number;
-    };
-    let closestEntity: ClickCandidate | null = null;
-
-    // Check units first (priority)
-    const units = world.getEntitiesWith('Unit', 'Transform');
-    for (const entity of units) {
-      const transform = entity.get<Transform>('Transform');
-      const health = entity.get<Health>('Health');
-      const selectable = entity.get<Selectable>('Selectable');
-      if (!transform || !health || !selectable) continue;
-      if (health.isDead?.() || (health as { current?: number }).current === 0) continue;
-
-      const worldDx = transform.x - worldPos.x;
-      const worldDz = transform.y - worldPos.z;
-      if (worldDx * worldDx + worldDz * worldDz > worldSearchRadius * worldSearchRadius) continue;
-
-      const getTerrainHeight = camera.getTerrainHeightFunction();
-      const terrainHeight = getTerrainHeight?.(transform.x, transform.y) ?? 0;
-      const visualHeight = selectable.visualHeight ?? 0;
-      const worldY = terrainHeight + visualHeight;
-
-      const screenPos = camera.worldToScreen(transform.x, transform.y, worldY);
-      if (!screenPos) continue;
-
-      const dx = screenPos.x - screenX;
-      const dy = screenPos.y - screenY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      const visualScale = selectable.visualScale ?? 1;
-      const effectiveRadius = unitScreenRadius * visualScale;
-
-      if (dist < effectiveRadius) {
-        if (!closestEntity || dist < closestEntity.distance) {
-          closestEntity = { entity, distance: dist };
-        }
-      }
-    }
-
-    // Return unit if found (units have priority)
-    if (closestEntity) {
-      const unit = closestEntity.entity?.get<Unit>('Unit');
-      if (unit) {
-        return closestEntity.entity;
-      }
-    }
-
-    // Check buildings
-    const buildings = world.getEntitiesWith('Building', 'Transform');
-    for (const entity of buildings) {
-      const transform = entity.get<Transform>('Transform');
-      const health = entity.get<Health>('Health');
-      const selectable = entity.get<Selectable>('Selectable');
-      const building = entity.get<Building>('Building');
-      if (!transform || !health || !selectable || !building) continue;
-      if (health.isDead?.() || (health as { current?: number }).current === 0) continue;
-
-      const worldDx = transform.x - worldPos.x;
-      const worldDz = transform.y - worldPos.z;
-      if (worldDx * worldDx + worldDz * worldDz > worldSearchRadius * worldSearchRadius) continue;
-
-      const getTerrainHeightFn = camera.getTerrainHeightFunction();
-      const terrainHeight = getTerrainHeightFn?.(transform.x, transform.y) ?? 0;
-      const visualHeight =
-        building.isFlying && building.state === 'flying' ? (selectable.visualHeight ?? 0) : 0;
-      const worldY = terrainHeight + visualHeight;
-
-      const screenPos = camera.worldToScreen(transform.x, transform.y, worldY);
-      if (!screenPos) continue;
-
-      const dx = screenPos.x - screenX;
-      const dy = screenPos.y - screenY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      const visualScale = selectable.visualScale ?? 1;
-      const effectiveRadius = buildingScreenRadius * visualScale;
-
-      if (dist < effectiveRadius) {
-        if (!closestEntity || dist < closestEntity.distance) {
-          closestEntity = { entity, distance: dist };
-        }
-      }
-    }
-
-    // Check resources
-    const resources = world.getEntitiesWith('Resource', 'Transform');
-    for (const entity of resources) {
-      const transform = entity.get<Transform>('Transform');
-      if (!transform) continue;
-
-      const worldDx = transform.x - worldPos.x;
-      const worldDz = transform.y - worldPos.z;
-      if (worldDx * worldDx + worldDz * worldDz > worldSearchRadius * worldSearchRadius) continue;
-
-      const screenPos = camera.worldToScreen(transform.x, transform.y);
-      if (!screenPos) continue;
-
-      const dx = screenPos.x - screenX;
-      const dy = screenPos.y - screenY;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-
-      if (dist < resourceScreenRadius) {
-        if (!closestEntity || dist < closestEntity.distance) {
-          closestEntity = { entity, distance: dist };
-        }
-      }
-    }
-
-    return closestEntity?.entity ?? null;
   }
 }

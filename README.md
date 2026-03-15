@@ -247,17 +247,17 @@ These modules have minimal coupling and could be extracted as standalone package
 ```bash
 git clone https://github.com/braedonsaunders/voidstrike.git
 cd voidstrike
-npm install
-npm run dev
 ```
 
-Open http://localhost:3000. Chrome 113+ recommended for WebGPU; other modern browsers fall back to WebGL2.
-
-For a production-style single-click launch that rebuilds first, keeps logs visible in a terminal window, and auto-increments from port `3000` when needed, use:
+Start the game with the launcher for your platform:
 
 - macOS: `launch/launch-voidstrike.command`
 - Windows: `launch/launch-voidstrike.bat`
 - Linux: `launch/launch-voidstrike.desktop`
+
+The launcher is the recommended way to run VOIDSTRIKE locally. It installs dependencies if needed, builds the game, starts the production server, opens the browser automatically, and moves to the next open port starting at `3000` when necessary.
+
+Chrome 113+ is recommended for WebGPU; other modern browsers fall back to WebGL2.
 
 ---
 
@@ -341,8 +341,9 @@ Areas where contributions would be valuable:
 npm run type-check  # TypeScript validation
 npm run lint        # ESLint
 npm run test        # Unit tests
-npm run dev         # Development server
 ```
+
+Use the platform launcher in [Quick Start](#quick-start) to run the game locally.
 
 ---
 

@@ -1,0 +1,59 @@
+- generic [active] [ref=e1]:
+    - alert [ref=e67]
+    - generic [ref=e202]:
+        - generic [ref=e420]: Placing supply_cache - Click to place, ESC to cancel
+        - generic:
+            - generic [ref=e232]:
+                - generic [ref=e233]:
+                    - generic [ref=e234]: 00:45
+                    - generic [ref=e238]: '155'
+                    - generic [ref=e241]: '0'
+                    - generic [ref=e242]:
+                        - img [ref=e243]
+                        - generic [ref=e246]: 6/11
+                - generic [ref=e247]:
+                    - button "! Idle (1)" [ref=e339] [cursor=pointer]:
+                        - generic [ref=e340]: '!'
+                        - generic [ref=e341]: Idle (1)
+                    - button "Options" [ref=e252] [cursor=pointer]
+            - generic:
+                - generic [ref=e344]:
+                    - generic [ref=e423] [cursor=pointer]: 🔧
+                    - generic [ref=e428] [cursor=pointer]: 🔧
+                - generic [ref=e370]:
+                    - button "➤ Move M" [ref=e432] [cursor=pointer]:
+                        - generic [ref=e433]: ➤
+                        - generic [ref=e434]: Move
+                        - generic [ref=e435]: M
+                    - button "■ Stop S" [ref=e437] [cursor=pointer]:
+                        - generic [ref=e438]: ■
+                        - generic [ref=e439]: Stop
+                        - generic [ref=e440]: S
+                    - button "⛊ Hold H" [ref=e442] [cursor=pointer]:
+                        - generic [ref=e443]: ⛊
+                        - generic [ref=e444]: Hold
+                        - generic [ref=e445]: H
+                    - button "⚔ Attack A" [ref=e447] [cursor=pointer]:
+                        - generic [ref=e448]: ⚔
+                        - generic [ref=e449]: Attack
+                        - generic [ref=e450]: A
+                    - button "↻ Patrol P" [ref=e452] [cursor=pointer]:
+                        - generic [ref=e453]: ↻
+                        - generic [ref=e454]: Patrol
+                        - generic [ref=e455]: P
+                    - button "⛏ Gather G" [ref=e457] [cursor=pointer]:
+                        - generic [ref=e458]: ⛏
+                        - generic [ref=e459]: Gather
+                        - generic [ref=e460]: G
+                    - button "🏗 Build Basic B" [ref=e462] [cursor=pointer]:
+                        - generic [ref=e463]: 🏗
+                        - generic [ref=e464]: Build Basic
+                        - generic [ref=e465]: B
+                    - button "🏭 Advanced V" [ref=e467] [cursor=pointer]:
+                        - generic [ref=e468]: 🏭
+                        - generic [ref=e469]: Advanced
+                        - generic [ref=e470]: V
+                    - button "🔨 Build Walls W" [ref=e472] [cursor=pointer]:
+                        - generic [ref=e473]: 🔨
+                        - generic [ref=e474]: Build Walls
+                        - generic [ref=e475]: W

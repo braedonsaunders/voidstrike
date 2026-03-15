@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { HUD } from '@/components/game/HUD';
 import { MultiplayerOverlay } from '@/components/game/MultiplayerOverlay';
 import { useGameSetupStore } from '@/store/gameSetupStore';
+import { registerGamePageUnmount } from './gamePageLifecycle';
 
 // Dynamic import for WebGPU game canvas (Three.js + Phaser overlay)
 // Uses WebGPU with automatic WebGL fallback
@@ -38,10 +39,9 @@ export default function GamePage() {
       return;
     }
 
-    // Clean up gameStarted flag when component unmounts (leaving game)
-    return () => {
+    return registerGamePageUnmount(() => {
       endGame();
-    };
+    });
   }, [gameStarted, router, endGame]);
 
   // Start with black screen, prevent any flash

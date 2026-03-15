@@ -160,6 +160,7 @@ export function useWebGPURenderer({
   // Event cleanup
   const eventUnsubscribersRef = useRef<(() => void)[]>([]);
   const isInitializedRef = useRef(false);
+  const initializePromiseRef = useRef<Promise<boolean> | null>(null);
 
   // Track if final game time update has been done
   const finalGameTimeUpdatedRef = useRef(false);
@@ -396,6 +397,7 @@ export function useWebGPURenderer({
         // Mark renderer as needing reinitialization
         // The caller (GameCanvas) should detect this and reinitialize the scene
         isInitializedRef.current = false;
+        initializePromiseRef.current = null;
         isRecoveringRef.current = false;
 
         // Notify user that reinit is needed
@@ -424,562 +426,529 @@ export function useWebGPURenderer({
   const initializeRenderer = useCallback(async (): Promise<boolean> => {
     if (!canvasRef.current || !containerRef.current) return false;
     if (isInitializedRef.current) return true;
+    if (initializePromiseRef.current) return initializePromiseRef.current;
 
-    const game = gameRef.current;
-    if (!game) return false;
+    const initPromise = (async (): Promise<boolean> => {
+      const game = gameRef.current;
+      const canvas = canvasRef.current;
+      if (!game || !canvas) return false;
 
-    // Helper to get world provider (uses worldProviderRef if available, falls back to game.world)
-    const getWorldProvider = (): IWorldProvider =>
-      worldProviderRef?.current ?? (game.world as unknown as IWorldProvider);
-    // Helper to get event bus (uses eventBusRef if available, falls back to game.eventBus)
-    const getEventBus = (): EventBus => eventBusRef?.current ?? game.eventBus;
+      const getWorldProvider = (): IWorldProvider =>
+        worldProviderRef?.current ?? (game.world as unknown as IWorldProvider);
+      const getEventBus = (): EventBus => eventBusRef?.current ?? game.eventBus;
 
-    try {
-      // Load saved graphics settings
-      useUIStore.getState().loadSavedGraphicsSettings();
-      const graphicsSettings = useUIStore.getState().graphicsSettings;
-      const preferWebGPU = useUIStore.getState().preferWebGPU;
+      try {
+        useUIStore.getState().loadSavedGraphicsSettings();
+        const graphicsSettings = useUIStore.getState().graphicsSettings;
+        const preferWebGPU = useUIStore.getState().preferWebGPU;
 
-      // Create WebGPU renderer with automatic fallback
-      const useHardwareAA = !graphicsSettings.postProcessingEnabled;
-      const renderContext = await createWebGPURenderer({
-        canvas: canvasRef.current,
-        antialias: useHardwareAA,
-        powerPreference: 'high-performance',
-        forceWebGL: !preferWebGPU,
-      });
+        const useHardwareAA = !graphicsSettings.postProcessingEnabled;
+        const renderContext = await createWebGPURenderer({
+          canvas,
+          antialias: useHardwareAA,
+          powerPreference: 'high-performance',
+          forceWebGL: !preferWebGPU,
+        });
 
-      renderContextRef.current = renderContext;
-      onWebGPUDetected(renderContext.isWebGPU);
+        renderContextRef.current = renderContext;
+        onWebGPUDetected(renderContext.isWebGPU);
 
-      // Register device lost handler for WebGPU recovery
-      const deviceLostCallback = (event: DeviceLostEvent) => handleDeviceLost(event);
-      deviceLostCallbackRef.current = deviceLostCallback;
-      renderContext.onDeviceLost(deviceLostCallback);
+        const deviceLostCallback = (event: DeviceLostEvent) => handleDeviceLost(event);
+        deviceLostCallbackRef.current = deviceLostCallback;
+        renderContext.onDeviceLost(deviceLostCallback);
 
-      // Update UI store with renderer info
-      useUIStore.getState().setRendererAPI(renderContext.isWebGPU ? 'WebGPU' : 'WebGL');
-      useUIStore.getState().setGpuInfo(renderContext.gpuInfo);
-      setMaxVertexBuffers(renderContext.deviceLimits.maxVertexBuffers);
+        useUIStore.getState().setRendererAPI(renderContext.isWebGPU ? 'WebGPU' : 'WebGL');
+        useUIStore.getState().setGpuInfo(renderContext.gpuInfo);
+        setMaxVertexBuffers(renderContext.deviceLimits.maxVertexBuffers);
 
-      // Initialize GPU timestamp profiler for accurate GPU timing
-      if (renderContext.supportsTimestampQuery && renderContext.gpuDevice) {
-        const profiler = GPUTimestampProfiler.getInstance();
-        const initialized = profiler.initialize(renderContext.gpuDevice);
-        if (initialized) {
-          gpuTimestampProfilerRef.current = profiler;
-          debugInitialization.log('[useWebGPURenderer] GPU timestamp profiler initialized');
+        if (renderContext.supportsTimestampQuery && renderContext.gpuDevice) {
+          const profiler = GPUTimestampProfiler.getInstance();
+          const initialized = profiler.initialize(renderContext.gpuDevice);
+          if (initialized) {
+            gpuTimestampProfilerRef.current = profiler;
+            debugInitialization.log('[useWebGPURenderer] GPU timestamp profiler initialized');
+          } else {
+            debugInitialization.log(
+              '[useWebGPURenderer] GPU timestamp profiler initialization failed'
+            );
+          }
         } else {
-          debugInitialization.log('[useWebGPURenderer] GPU timestamp profiler initialization failed');
+          debugInitialization.log(
+            `[useWebGPURenderer] GPU timestamp queries not available ` +
+              `(supported: ${renderContext.supportsTimestampQuery}, device: ${!!renderContext.gpuDevice})`
+          );
         }
-      } else {
+
         debugInitialization.log(
-          `[useWebGPURenderer] GPU timestamp queries not available ` +
-          `(supported: ${renderContext.supportsTimestampQuery}, device: ${!!renderContext.gpuDevice})`
+          `[useWebGPURenderer] Using ${renderContext.isWebGPU ? 'WebGPU' : 'WebGL'} backend`
         );
-      }
 
-      debugInitialization.log(
-        `[useWebGPURenderer] Using ${renderContext.isWebGPU ? 'WebGPU' : 'WebGL'} backend`
-      );
+        const renderer = renderContext.renderer;
+        const { width, height, pixelRatio } = calculateDisplayResolution();
 
-      const renderer = renderContext.renderer;
-      const { width, height, pixelRatio } = calculateDisplayResolution();
+        renderer.setPixelRatio(pixelRatio);
+        renderer.setSize(width, height, false);
+        renderer.toneMapping = THREE.NoToneMapping;
+        renderer.toneMappingExposure = 1.0;
 
-      renderer.setPixelRatio(pixelRatio);
-      renderer.setSize(width, height, false);
-      renderer.toneMapping = THREE.NoToneMapping;
-      renderer.toneMappingExposure = 1.0;
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.Fog(0x1a1a2e, 50, 150);
+        sceneRef.current = scene;
 
-      // Create scene
-      const scene = new THREE.Scene();
-      scene.fog = new THREE.Fog(0x1a1a2e, 50, 150);
-      sceneRef.current = scene;
+        const currentMap = mapRef.current;
+        const mapWidth = currentMap.width;
+        const mapHeight = currentMap.height;
+        const camera = new RTSCamera(width / height, mapWidth, mapHeight);
+        cameraRef.current = camera;
+        setCameraRef(camera);
+        camera.setScreenDimensions(width, height);
 
-      // Create camera
-      const currentMap = mapRef.current;
-      const mapWidth = currentMap.width;
-      const mapHeight = currentMap.height;
-      const camera = new RTSCamera(width / height, mapWidth, mapHeight);
-      cameraRef.current = camera;
-      setCameraRef(camera);
-      camera.setScreenDimensions(width, height);
+        const inputManager = InputManager.getInstanceSync();
+        if (inputManager) {
+          inputManager.updateDependencies({ camera });
+        }
 
-      // Update InputManager with camera so input handlers can convert screen to world coordinates
-      const inputManager = InputManager.getInstanceSync();
-      if (inputManager) {
-        inputManager.updateDependencies({ camera });
-      }
+        await loadWaterNormalsTexture();
 
-      // Preload water texture before creating environment
-      await loadWaterNormalsTexture();
+        const environment = new EnvironmentManager(scene, currentMap);
+        environmentRef.current = environment;
+        environment.setRenderer(renderer);
+        const terrain = environment.terrain;
 
-      // Create environment
-      const environment = new EnvironmentManager(scene, currentMap);
-      environmentRef.current = environment;
-      environment.setRenderer(renderer); // Enable planar reflections for ultra quality water
-      const terrain = environment.terrain;
+        camera.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
 
-      camera.setTerrainHeightFunction((x, z) => terrain.getHeightAt(x, z));
+        const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
+        const playerSpawn = currentMap.spawns?.find((s) => s.playerSlot === localPlayerSlot) ||
+          currentMap.spawns?.[0] || { x: mapWidth / 2, y: mapHeight / 2 };
+        camera.setPosition(playerSpawn.x, playerSpawn.y);
+        camera.setAngle(0);
 
-      // Position camera at player spawn
-      const localPlayerSlot = useGameSetupStore.getState().getLocalPlayerSlot();
-      const playerSpawn = currentMap.spawns?.find((s) => s.playerSlot === localPlayerSlot) ||
-        currentMap.spawns?.[0] || { x: mapWidth / 2, y: mapHeight / 2 };
-      camera.setPosition(playerSpawn.x, playerSpawn.y);
-      camera.setAngle(0);
+        useProjectionStore
+          .getState()
+          .setWorldToScreen((worldX: number, worldZ: number, worldY?: number) => {
+            return camera.worldToScreen(worldX, worldZ, worldY);
+          });
 
-      // Set up projection store
-      useProjectionStore
-        .getState()
-        .setWorldToScreen((worldX: number, worldZ: number, worldY?: number) => {
+        const grid = new TerrainGrid(mapWidth, mapHeight, 1);
+        scene.add(grid.mesh);
+
+        game.selectionSystem.setWorldToScreen((worldX: number, worldZ: number, worldY?: number) => {
           return camera.worldToScreen(worldX, worldZ, worldY);
         });
-
-      // Create terrain grid
-      const grid = new TerrainGrid(mapWidth, mapHeight, 1);
-      scene.add(grid.mesh);
-
-      // Wire up selection system
-      game.selectionSystem.setWorldToScreen((worldX: number, worldZ: number, worldY?: number) => {
-        return camera.worldToScreen(worldX, worldZ, worldY);
-      });
-      game.selectionSystem.setTerrainHeightFunction((x: number, z: number) => {
-        return terrain.getHeightAt(x, z);
-      });
-
-      // Set terrain data
-      game.setTerrainGrid(currentMap.terrain);
-      game.setDecorationCollisions(environment.getRockCollisions());
-
-      onProgress(65, 'Generating navigation mesh');
-
-      // Generate navmesh
-      debugInitialization.log('[useWebGPURenderer] Generating walkable geometry...');
-      const walkableGeometry = terrain.generateWalkableGeometry();
-
-      game.pathfindingSystem.setTerrainHeightFunction((x: number, z: number) => {
-        return terrain.getNavmeshHeightAt(x, z);
-      });
-
-      const navMeshSuccess = await game.initializeNavMesh(
-        walkableGeometry.positions,
-        walkableGeometry.indices
-      );
-      if (!navMeshSuccess) {
-        debugInitialization.error('[useWebGPURenderer] NavMesh initialization failed!');
-      }
-
-      // Send navmesh data to worker for pathfinding validation
-      if (workerBridgeRef.current) {
-        debugInitialization.log('[useWebGPURenderer] Sending navmesh data to worker...');
-        workerBridgeRef.current.setNavMesh(walkableGeometry.positions, walkableGeometry.indices);
-      }
-
-      // Generate water navmesh for naval units (if map has water)
-      debugInitialization.log('[useWebGPURenderer] Generating water geometry...');
-      const waterGeometry = terrain.generateWaterGeometry();
-      if (waterGeometry.positions.length > 0) {
-        const waterNavMeshSuccess = await game.initializeWaterNavMesh(
-          waterGeometry.positions,
-          waterGeometry.indices
-        );
-        if (waterNavMeshSuccess) {
-          debugInitialization.log('[useWebGPURenderer] Water navmesh initialized for naval units');
-        }
-        // Send water navmesh data to worker for naval pathfinding
-        if (workerBridgeRef.current) {
-          debugInitialization.log('[useWebGPURenderer] Sending water navmesh data to worker...');
-          workerBridgeRef.current.setWaterNavMesh(waterGeometry.positions, waterGeometry.indices);
-        }
-      }
-
-      const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
-      const localPlayerId = getLocalPlayerId();
-
-      // Register velocity setup failure callback
-      onVelocitySetupFailed(() => {
-        const currentSettings = useUIStore.getState().graphicsSettings;
-        if (currentSettings.antiAliasingMode === 'taa') {
-          debugPostProcessing.warn(
-            '[useWebGPURenderer] Auto-switching from TAA to FXAA due to vertex buffer limit'
-          );
-          useUIStore.getState().setAntiAliasingMode('fxaa');
-        }
-      });
-
-      // Create unit renderer
-      // In worker mode, worldProviderRef points to RenderStateWorldAdapter
-      // visionSystem is null in worker mode - visibility comes from RenderState
-      const worldProvider = getWorldProvider();
-      debugInitialization.log(
-        `[useWebGPURenderer] Creating UnitRenderer with worldProvider: ${worldProvider.constructor.name}`
-      );
-      unitRendererRef.current = new UnitRenderer(
-        scene,
-        worldProvider,
-        worldProviderRef?.current ? undefined : fogOfWarEnabled ? game.visionSystem : undefined,
-        terrain
-      );
-      if (localPlayerId) {
-        unitRendererRef.current.setPlayerId(localPlayerId);
-      }
-
-      // Enable GPU-driven rendering if available
-      if (renderContext.supportsCompute && renderContext.isWebGPU) {
-        unitRendererRef.current.enableGPUDrivenRendering();
-        unitRendererRef.current.setRenderer(renderer as import('three/webgpu').WebGPURenderer);
-        unitRendererRef.current.setCamera(camera.camera);
-        debugInitialization.log('[useWebGPURenderer] GPU-driven unit rendering ENABLED');
-      }
-
-      // Expose debug interface
-      if (typeof window !== 'undefined') {
-        (window as any).VOIDSTRIKE = {
-          gpu: {
-            stats: () => unitRendererRef.current?.getGPURenderingStats(),
-            forceCPU: (enable: boolean) => unitRendererRef.current?.forceCPUCulling(enable),
-            isGPUActive: () => unitRendererRef.current?.isGPUCullingActive(),
-          },
-        };
-      }
-
-      // Create building renderer
-      const buildingWorldProvider = getWorldProvider();
-      debugInitialization.log(
-        `[useWebGPURenderer] Creating BuildingRenderer with worldProvider: ${buildingWorldProvider.constructor.name}`
-      );
-      buildingRendererRef.current = new BuildingRenderer(
-        scene,
-        buildingWorldProvider,
-        worldProviderRef?.current ? undefined : fogOfWarEnabled ? game.visionSystem : undefined,
-        terrain
-      );
-      if (localPlayerId) {
-        buildingRendererRef.current.setPlayerId(localPlayerId);
-      }
-
-      // Create resource renderer
-      resourceRendererRef.current = new ResourceRenderer(scene, getWorldProvider(), terrain);
-
-      // Create fog of war
-      // In worker mode, vision data comes from RenderState.visionGrids
-      // In non-worker mode, vision data comes from VisionSystem directly
-      if (fogOfWarEnabled && !isSpectatorMode()) {
-        const fogOfWar = new TSLFogOfWar({ mapWidth, mapHeight });
-        // Only set vision system in non-worker mode
-        if (!worldProviderRef?.current) {
-          fogOfWar.setVisionSystem(game.visionSystem);
-        }
-        fogOfWar.setPlayerId(localPlayerId);
-        fogOfWarRef.current = fogOfWar;
-      }
-
-      // Create battle effects
-      battleEffectsRef.current = new BattleEffectsRenderer(scene, getEventBus(), (x, z) =>
-        terrain.getHeightAt(x, z)
-      );
-
-      // Create advanced particle system
-      advancedParticlesRef.current = new AdvancedParticleSystem(scene, 15000);
-      advancedParticlesRef.current.setTerrainHeightFunction((x: number, z: number) =>
-        terrain.getHeightAt(x, z)
-      );
-      battleEffectsRef.current.setParticleSystem(advancedParticlesRef.current);
-
-      // Connect projectile position callback
-      battleEffectsRef.current.setProjectilePositionCallback((entityId: number) => {
-        const world = getWorldProvider();
-        const entity = world.getEntity(entityId);
-        if (!entity || entity.isDestroyed()) return null;
-        const transform = entity.get<Transform>('Transform');
-        if (!transform) return null;
-        return { x: transform.x, y: transform.y, z: transform.z };
-      });
-
-      // Create vehicle effects
-      vehicleEffectsRef.current = new VehicleEffectsSystem(
-        game,
-        advancedParticlesRef.current,
-        AssetManager
-      );
-      vehicleEffectsRef.current.setTerrainHeightFunction((x: number, z: number) =>
-        terrain.getHeightAt(x, z)
-      );
-
-      // Create rally point renderer
-      rallyPointRendererRef.current = new RallyPointRenderer(
-        scene,
-        getEventBus(),
-        getWorldProvider(),
-        localPlayerId,
-        (x: number, y: number) => terrain.getHeightAt(x, y)
-      );
-
-      // Create placement preview
-      placementPreviewRef.current = new BuildingPlacementPreview(
-        currentMap,
-        (x: number, y: number) => terrain.getHeightAt(x, y)
-      );
-      placementPreviewRef.current.setPlasmaGeyserChecker((x: number, y: number) => {
-        const world = getWorldProvider();
-        const resources = world.getEntitiesWith('Resource', 'Transform');
-        const searchRadius = 1.5;
-        for (const entity of resources) {
-          const resource = entity.get<Resource>('Resource');
-          if (resource?.resourceType !== 'plasma') continue;
-          if (resource.hasRefinery?.()) continue;
-          const transform = entity.get<Transform>('Transform');
-          if (!transform) continue;
-          const dx = Math.abs(transform.x - x);
-          const dy = Math.abs(transform.y - y);
-          if (dx <= searchRadius && dy <= searchRadius) return true;
-        }
-        return false;
-      });
-      placementPreviewRef.current.setPlacementValidator(
-        (centerX: number, centerY: number, w: number, h: number) => {
-          return game.isValidBuildingPlacement(centerX, centerY, w, h, undefined, true);
-        }
-      );
-      scene.add(placementPreviewRef.current.group);
-
-      // Create wall placement preview
-      wallPlacementPreviewRef.current = new WallPlacementPreview(
-        currentMap,
-        (x: number, y: number) => terrain.getHeightAt(x, y)
-      );
-      wallPlacementPreviewRef.current.setPlacementValidator(
-        (x: number, y: number, w: number, h: number) => {
-          return game.isValidBuildingPlacement(x, y, w, h, undefined, true);
-        }
-      );
-      scene.add(wallPlacementPreviewRef.current.group);
-
-      // Create post-processing pipeline
-      if (graphicsSettings.postProcessingEnabled) {
-        renderPipelineRef.current = new RenderPipeline(renderer, scene, camera.camera, {
-          bloomEnabled: graphicsSettings.bloomEnabled,
-          bloomStrength: graphicsSettings.bloomStrength,
-          bloomRadius: graphicsSettings.bloomRadius,
-          bloomThreshold: graphicsSettings.bloomThreshold,
-          aoEnabled: graphicsSettings.ssaoEnabled,
-          aoRadius: graphicsSettings.ssaoRadius,
-          aoIntensity: graphicsSettings.ssaoIntensity,
-          ssrEnabled: graphicsSettings.ssrEnabled,
-          ssrOpacity: graphicsSettings.ssrOpacity,
-          ssrMaxRoughness: graphicsSettings.ssrMaxRoughness,
-          ssgiEnabled: graphicsSettings.ssgiEnabled,
-          ssgiRadius: graphicsSettings.ssgiRadius,
-          ssgiIntensity: graphicsSettings.ssgiIntensity,
-          ssgiThickness: 1,
-          antiAliasingMode: graphicsSettings.antiAliasingMode,
-          fxaaEnabled: graphicsSettings.fxaaEnabled,
-          taaEnabled: graphicsSettings.taaEnabled,
-          taaSharpeningEnabled: graphicsSettings.taaSharpeningEnabled,
-          taaSharpeningIntensity: graphicsSettings.taaSharpeningIntensity,
-          upscalingMode: graphicsSettings.upscalingMode,
-          renderScale: graphicsSettings.renderScale,
-          easuSharpness: graphicsSettings.easuSharpness,
-          vignetteEnabled: graphicsSettings.vignetteEnabled,
-          vignetteIntensity: graphicsSettings.vignetteIntensity,
-          exposure: graphicsSettings.toneMappingExposure,
-          saturation: graphicsSettings.saturation,
-          contrast: graphicsSettings.contrast,
-          volumetricFogEnabled: graphicsSettings.volumetricFogEnabled,
-          volumetricFogQuality: graphicsSettings.volumetricFogQuality,
-          volumetricFogDensity: graphicsSettings.volumetricFogDensity,
-          volumetricFogScattering: graphicsSettings.volumetricFogScattering,
-          fogOfWarEnabled: fogOfWarEnabled && !isSpectatorMode(),
-          fogOfWarQuality: graphicsSettings.fogOfWarQuality,
-          fogOfWarEdgeBlur: graphicsSettings.fogOfWarEdgeBlur,
-          fogOfWarDesaturation: graphicsSettings.fogOfWarDesaturation,
-          fogOfWarExploredDarkness: graphicsSettings.fogOfWarExploredDarkness,
-          fogOfWarUnexploredDarkness: graphicsSettings.fogOfWarUnexploredDarkness,
-          fogOfWarCloudSpeed: graphicsSettings.fogOfWarCloudSpeed,
-          fogOfWarRimIntensity: graphicsSettings.fogOfWarRimIntensity,
-          fogOfWarHeightInfluence: graphicsSettings.fogOfWarHeightInfluence,
+        game.selectionSystem.setTerrainHeightFunction((x: number, z: number) => {
+          return terrain.getHeightAt(x, z);
         });
 
-        renderPipelineRef.current.setSize(width * pixelRatio, height * pixelRatio);
+        game.setTerrainGrid(currentMap.terrain);
+        game.setDecorationCollisions(environment.getRockCollisions());
+
+        onProgress(65, 'Generating navigation mesh');
+
+        debugInitialization.log('[useWebGPURenderer] Generating walkable geometry...');
+        const walkableGeometry = terrain.generateWalkableGeometry();
+
+        game.pathfindingSystem.setTerrainHeightFunction((x: number, z: number) => {
+          return terrain.getNavmeshHeightAt(x, z);
+        });
+
+        const navMeshSuccess = await game.initializeNavMesh(
+          walkableGeometry.positions,
+          walkableGeometry.indices
+        );
+        if (!navMeshSuccess) {
+          debugInitialization.error('[useWebGPURenderer] NavMesh initialization failed!');
+        }
+
+        if (workerBridgeRef.current) {
+          debugInitialization.log('[useWebGPURenderer] Sending navmesh data to worker...');
+          workerBridgeRef.current.setNavMesh(walkableGeometry.positions, walkableGeometry.indices);
+        }
+
+        debugInitialization.log('[useWebGPURenderer] Generating water geometry...');
+        const waterGeometry = terrain.generateWaterGeometry();
+        if (waterGeometry.positions.length > 0) {
+          const waterNavMeshSuccess = await game.initializeWaterNavMesh(
+            waterGeometry.positions,
+            waterGeometry.indices
+          );
+          if (waterNavMeshSuccess) {
+            debugInitialization.log(
+              '[useWebGPURenderer] Water navmesh initialized for naval units'
+            );
+          }
+          if (workerBridgeRef.current) {
+            debugInitialization.log('[useWebGPURenderer] Sending water navmesh data to worker...');
+            workerBridgeRef.current.setWaterNavMesh(waterGeometry.positions, waterGeometry.indices);
+          }
+        }
+
+        const fogOfWarEnabled = useGameSetupStore.getState().fogOfWar;
+        const localPlayerId = getLocalPlayerId();
+
+        onVelocitySetupFailed(() => {
+          const currentSettings = useUIStore.getState().graphicsSettings;
+          if (currentSettings.antiAliasingMode === 'taa') {
+            debugPostProcessing.warn(
+              '[useWebGPURenderer] Auto-switching from TAA to FXAA due to vertex buffer limit'
+            );
+            useUIStore.getState().setAntiAliasingMode('fxaa');
+          }
+        });
+
+        const worldProvider = getWorldProvider();
+        debugInitialization.log(
+          `[useWebGPURenderer] Creating UnitRenderer with worldProvider: ${worldProvider.constructor.name}`
+        );
+        unitRendererRef.current = new UnitRenderer(
+          scene,
+          worldProvider,
+          worldProviderRef?.current ? undefined : fogOfWarEnabled ? game.visionSystem : undefined,
+          terrain
+        );
+        if (localPlayerId) {
+          unitRendererRef.current.setPlayerId(localPlayerId);
+        }
+
+        if (renderContext.supportsCompute && renderContext.isWebGPU) {
+          unitRendererRef.current.enableGPUDrivenRendering();
+          unitRendererRef.current.setRenderer(renderer as import('three/webgpu').WebGPURenderer);
+          unitRendererRef.current.setCamera(camera.camera);
+          debugInitialization.log('[useWebGPURenderer] GPU-driven unit rendering ENABLED');
+        }
+
+        if (typeof window !== 'undefined') {
+          const debugWindow = window as Window & {
+            VOIDSTRIKE?: {
+              gpu: {
+                stats: () => ReturnType<UnitRenderer['getGPURenderingStats']> | undefined;
+                forceCPU: (enable: boolean) => void | undefined;
+                isGPUActive: () => boolean | undefined;
+              };
+            };
+          };
+          debugWindow.VOIDSTRIKE = {
+            gpu: {
+              stats: () => unitRendererRef.current?.getGPURenderingStats(),
+              forceCPU: (enable: boolean) => unitRendererRef.current?.forceCPUCulling(enable),
+              isGPUActive: () => unitRendererRef.current?.isGPUCullingActive(),
+            },
+          };
+        }
+
+        const buildingWorldProvider = getWorldProvider();
+        debugInitialization.log(
+          `[useWebGPURenderer] Creating BuildingRenderer with worldProvider: ${buildingWorldProvider.constructor.name}`
+        );
+        buildingRendererRef.current = new BuildingRenderer(
+          scene,
+          buildingWorldProvider,
+          worldProviderRef?.current ? undefined : fogOfWarEnabled ? game.visionSystem : undefined,
+          terrain
+        );
+        if (localPlayerId) {
+          buildingRendererRef.current.setPlayerId(localPlayerId);
+        }
+
+        resourceRendererRef.current = new ResourceRenderer(scene, getWorldProvider(), terrain);
 
         if (fogOfWarEnabled && !isSpectatorMode()) {
-          renderPipelineRef.current.setFogOfWarMapDimensions(mapWidth, mapHeight);
+          const fogOfWar = new TSLFogOfWar({ mapWidth, mapHeight });
+          if (!worldProviderRef?.current) {
+            fogOfWar.setVisionSystem(game.visionSystem);
+          }
+          fogOfWar.setPlayerId(localPlayerId);
+          fogOfWarRef.current = fogOfWar;
         }
 
-        if (graphicsSettings.taaEnabled || graphicsSettings.ssgiEnabled) {
-          initCameraMatrices(camera.camera);
+        battleEffectsRef.current = new BattleEffectsRenderer(scene, getEventBus(), (x, z) =>
+          terrain.getHeightAt(x, z)
+        );
+
+        advancedParticlesRef.current = new AdvancedParticleSystem(scene, 15000);
+        advancedParticlesRef.current.setTerrainHeightFunction((x: number, z: number) =>
+          terrain.getHeightAt(x, z)
+        );
+        battleEffectsRef.current.setParticleSystem(advancedParticlesRef.current);
+
+        battleEffectsRef.current.setProjectilePositionCallback((entityId: number) => {
+          const world = getWorldProvider();
+          const entity = world.getEntity(entityId);
+          if (!entity || entity.isDestroyed()) return null;
+          const transform = entity.get<Transform>('Transform');
+          if (!transform) return null;
+          return { x: transform.x, y: transform.y, z: transform.z };
+        });
+
+        vehicleEffectsRef.current = new VehicleEffectsSystem(
+          game,
+          advancedParticlesRef.current,
+          AssetManager
+        );
+        vehicleEffectsRef.current.setTerrainHeightFunction((x: number, z: number) =>
+          terrain.getHeightAt(x, z)
+        );
+
+        rallyPointRendererRef.current = new RallyPointRenderer(
+          scene,
+          getEventBus(),
+          getWorldProvider(),
+          localPlayerId,
+          (x: number, y: number) => terrain.getHeightAt(x, y)
+        );
+
+        placementPreviewRef.current = new BuildingPlacementPreview(
+          currentMap,
+          (x: number, y: number) => terrain.getHeightAt(x, y)
+        );
+        placementPreviewRef.current.setPlasmaGeyserChecker((x: number, y: number) => {
+          const world = getWorldProvider();
+          const resources = world.getEntitiesWith('Resource', 'Transform');
+          const searchRadius = 1.5;
+          for (const entity of resources) {
+            const resource = entity.get<Resource>('Resource');
+            if (resource?.resourceType !== 'plasma') continue;
+            if (resource.hasRefinery?.()) continue;
+            const transform = entity.get<Transform>('Transform');
+            if (!transform) continue;
+            const dx = Math.abs(transform.x - x);
+            const dy = Math.abs(transform.y - y);
+            if (dx <= searchRadius && dy <= searchRadius) return true;
+          }
+          return false;
+        });
+        placementPreviewRef.current.setPlacementValidator(
+          (centerX: number, centerY: number, w: number, h: number) => {
+            return game.isValidBuildingPlacement(centerX, centerY, w, h, undefined, true);
+          }
+        );
+        scene.add(placementPreviewRef.current.group);
+
+        wallPlacementPreviewRef.current = new WallPlacementPreview(
+          currentMap,
+          (x: number, y: number) => terrain.getHeightAt(x, y)
+        );
+        wallPlacementPreviewRef.current.setPlacementValidator(
+          (x: number, y: number, w: number, h: number) => {
+            return game.isValidBuildingPlacement(x, y, w, h, undefined, true);
+          }
+        );
+        scene.add(wallPlacementPreviewRef.current.group);
+
+        if (graphicsSettings.postProcessingEnabled) {
+          renderPipelineRef.current = new RenderPipeline(renderer, scene, camera.camera, {
+            bloomEnabled: graphicsSettings.bloomEnabled,
+            bloomStrength: graphicsSettings.bloomStrength,
+            bloomRadius: graphicsSettings.bloomRadius,
+            bloomThreshold: graphicsSettings.bloomThreshold,
+            aoEnabled: graphicsSettings.ssaoEnabled,
+            aoRadius: graphicsSettings.ssaoRadius,
+            aoIntensity: graphicsSettings.ssaoIntensity,
+            ssrEnabled: graphicsSettings.ssrEnabled,
+            ssrOpacity: graphicsSettings.ssrOpacity,
+            ssrMaxRoughness: graphicsSettings.ssrMaxRoughness,
+            ssgiEnabled: graphicsSettings.ssgiEnabled,
+            ssgiRadius: graphicsSettings.ssgiRadius,
+            ssgiIntensity: graphicsSettings.ssgiIntensity,
+            ssgiThickness: 1,
+            antiAliasingMode: graphicsSettings.antiAliasingMode,
+            fxaaEnabled: graphicsSettings.fxaaEnabled,
+            taaEnabled: graphicsSettings.taaEnabled,
+            taaSharpeningEnabled: graphicsSettings.taaSharpeningEnabled,
+            taaSharpeningIntensity: graphicsSettings.taaSharpeningIntensity,
+            upscalingMode: graphicsSettings.upscalingMode,
+            renderScale: graphicsSettings.renderScale,
+            easuSharpness: graphicsSettings.easuSharpness,
+            vignetteEnabled: graphicsSettings.vignetteEnabled,
+            vignetteIntensity: graphicsSettings.vignetteIntensity,
+            exposure: graphicsSettings.toneMappingExposure,
+            saturation: graphicsSettings.saturation,
+            contrast: graphicsSettings.contrast,
+            volumetricFogEnabled: graphicsSettings.volumetricFogEnabled,
+            volumetricFogQuality: graphicsSettings.volumetricFogQuality,
+            volumetricFogDensity: graphicsSettings.volumetricFogDensity,
+            volumetricFogScattering: graphicsSettings.volumetricFogScattering,
+            fogOfWarEnabled: fogOfWarEnabled && !isSpectatorMode(),
+            fogOfWarQuality: graphicsSettings.fogOfWarQuality,
+            fogOfWarEdgeBlur: graphicsSettings.fogOfWarEdgeBlur,
+            fogOfWarDesaturation: graphicsSettings.fogOfWarDesaturation,
+            fogOfWarExploredDarkness: graphicsSettings.fogOfWarExploredDarkness,
+            fogOfWarUnexploredDarkness: graphicsSettings.fogOfWarUnexploredDarkness,
+            fogOfWarCloudSpeed: graphicsSettings.fogOfWarCloudSpeed,
+            fogOfWarRimIntensity: graphicsSettings.fogOfWarRimIntensity,
+            fogOfWarHeightInfluence: graphicsSettings.fogOfWarHeightInfluence,
+          });
+
+          renderPipelineRef.current.setSize(width * pixelRatio, height * pixelRatio);
+
+          if (fogOfWarEnabled && !isSpectatorMode()) {
+            renderPipelineRef.current.setFogOfWarMapDimensions(mapWidth, mapHeight);
+          }
+
+          if (graphicsSettings.taaEnabled || graphicsSettings.ssgiEnabled) {
+            initCameraMatrices(camera.camera);
+          }
         }
-      }
 
-      // Configure shadows - always call setShadowsEnabled to ensure correct state
-      // The renderer.shadowMap.enabled is always true (set in WebGPURenderer) to keep
-      // shadow depth texture initialized, but EnvironmentManager controls actual updates
-      environmentRef.current?.setShadowsEnabled(graphicsSettings.shadowsEnabled);
-      environmentRef.current?.setShadowQuality(graphicsSettings.shadowQuality);
-      environmentRef.current?.setShadowDistance(graphicsSettings.shadowDistance);
+        environmentRef.current?.setShadowsEnabled(graphicsSettings.shadowsEnabled);
+        environmentRef.current?.setShadowQuality(graphicsSettings.shadowQuality);
+        environmentRef.current?.setShadowDistance(graphicsSettings.shadowDistance);
 
-      // Configure environment settings
-      environmentRef.current?.setFogEnabled(graphicsSettings.fogEnabled);
-      environmentRef.current?.setFogDensity(graphicsSettings.fogDensity);
-      environmentRef.current?.setParticlesEnabled(graphicsSettings.particlesEnabled);
-      environmentRef.current?.setParticleDensity(graphicsSettings.particleDensity);
-      environmentRef.current?.setEnvironmentMapEnabled(graphicsSettings.environmentMapEnabled);
-      environmentRef.current?.setShadowFill(graphicsSettings.shadowFill);
-      environmentRef.current?.setEmissiveDecorationsEnabled(
-        graphicsSettings.emissiveDecorationsEnabled
-      );
-      environmentRef.current?.setEmissiveIntensityMultiplier(
-        graphicsSettings.emissiveIntensityMultiplier
-      );
+        environmentRef.current?.setFogEnabled(graphicsSettings.fogEnabled);
+        environmentRef.current?.setFogDensity(graphicsSettings.fogDensity);
+        environmentRef.current?.setParticlesEnabled(graphicsSettings.particlesEnabled);
+        environmentRef.current?.setParticleDensity(graphicsSettings.particleDensity);
+        environmentRef.current?.setEnvironmentMapEnabled(graphicsSettings.environmentMapEnabled);
+        environmentRef.current?.setShadowFill(graphicsSettings.shadowFill);
+        environmentRef.current?.setEmissiveDecorationsEnabled(
+          graphicsSettings.emissiveDecorationsEnabled
+        );
+        environmentRef.current?.setEmissiveIntensityMultiplier(
+          graphicsSettings.emissiveIntensityMultiplier
+        );
 
-      // Configure water settings
-      environmentRef.current?.setWaterEnabled(graphicsSettings.waterEnabled);
-      environmentRef.current?.setWaterQuality(graphicsSettings.waterQuality);
-      environmentRef.current?.setWaterReflectionsEnabled(graphicsSettings.waterReflectionsEnabled);
+        environmentRef.current?.setWaterEnabled(graphicsSettings.waterEnabled);
+        environmentRef.current?.setWaterQuality(graphicsSettings.waterQuality);
+        environmentRef.current?.setWaterReflectionsEnabled(
+          graphicsSettings.waterReflectionsEnabled
+        );
 
-      // Create light pool
-      if (graphicsSettings.dynamicLightsEnabled) {
-        lightPoolRef.current = new LightPool(scene, graphicsSettings.maxDynamicLights);
-      }
+        if (graphicsSettings.dynamicLightsEnabled) {
+          lightPoolRef.current = new LightPool(scene, graphicsSettings.maxDynamicLights);
+        }
 
-      // Create overlay manager
-      overlayManagerRef.current = new TSLGameOverlayManager(scene, currentMap, (x, y) =>
-        terrain.getHeightAt(x, y)
-      );
-      overlayManagerRef.current.setWorld(getWorldProvider());
+        overlayManagerRef.current = new TSLGameOverlayManager(scene, currentMap, (x, y) =>
+          terrain.getHeightAt(x, y)
+        );
+        overlayManagerRef.current.setWorld(getWorldProvider());
 
-      // Create command queue renderer
-      commandQueueRendererRef.current = new CommandQueueRenderer(
-        scene,
-        getEventBus(),
-        getWorldProvider(),
-        localPlayerId,
-        (x, y) => terrain.getHeightAt(x, y)
-      );
+        commandQueueRendererRef.current = new CommandQueueRenderer(
+          scene,
+          getEventBus(),
+          getWorldProvider(),
+          localPlayerId,
+          (x, y) => terrain.getHeightAt(x, y)
+        );
 
-      // Subscribe to combat events
-      const eventBus = getEventBus();
-      eventUnsubscribersRef.current.push(
-        eventBus.on(
-          'combat:attack',
-          (data: {
-            attackerId?: string;
-            attackerPos?: { x: number; y: number };
-            targetPos?: { x: number; y: number };
-            targetUnitType?: string;
-            damageType?: string;
-            attackerIsFlying?: boolean;
-            targetIsFlying?: boolean;
-          }) => {
-            if (data.attackerPos && data.targetPos && advancedParticlesRef.current) {
-              const attackerTerrainHeight = terrain.getHeightAt(
-                data.attackerPos.x,
-                data.attackerPos.y
-              );
-              const targetTerrainHeight = terrain.getHeightAt(data.targetPos.x, data.targetPos.y);
+        const eventBus = getEventBus();
+        eventUnsubscribersRef.current.push(
+          eventBus.on(
+            'combat:attack',
+            (data: {
+              attackerId?: string;
+              attackerPos?: { x: number; y: number };
+              targetPos?: { x: number; y: number };
+              targetUnitType?: string;
+              damageType?: string;
+              attackerIsFlying?: boolean;
+              targetIsFlying?: boolean;
+            }) => {
+              if (data.attackerPos && data.targetPos && advancedParticlesRef.current) {
+                const attackerTerrainHeight = terrain.getHeightAt(
+                  data.attackerPos.x,
+                  data.attackerPos.y
+                );
+                const targetTerrainHeight = terrain.getHeightAt(data.targetPos.x, data.targetPos.y);
 
-              const attackerAirborneHeight = data.attackerId
-                ? AssetManager.getAirborneHeight(data.attackerId)
-                : DEFAULT_AIRBORNE_HEIGHT;
-              const targetAirborneHeight = data.targetUnitType
-                ? AssetManager.getAirborneHeight(data.targetUnitType)
-                : DEFAULT_AIRBORNE_HEIGHT;
-              const attackerFlyingOffset = data.attackerIsFlying ? attackerAirborneHeight : 0;
-              const targetFlyingOffset = data.targetIsFlying ? targetAirborneHeight : 0;
+                const attackerAirborneHeight = data.attackerId
+                  ? AssetManager.getAirborneHeight(data.attackerId)
+                  : DEFAULT_AIRBORNE_HEIGHT;
+                const targetAirborneHeight = data.targetUnitType
+                  ? AssetManager.getAirborneHeight(data.targetUnitType)
+                  : DEFAULT_AIRBORNE_HEIGHT;
+                const attackerFlyingOffset = data.attackerIsFlying ? attackerAirborneHeight : 0;
+                const targetFlyingOffset = data.targetIsFlying ? targetAirborneHeight : 0;
 
-              const startHeight = attackerTerrainHeight + 0.5 + attackerFlyingOffset;
-              const endHeight = targetTerrainHeight + 0.5 + targetFlyingOffset;
+                const startHeight = attackerTerrainHeight + 0.5 + attackerFlyingOffset;
+                const endHeight = targetTerrainHeight + 0.5 + targetFlyingOffset;
 
-              _combatStartPos.set(data.attackerPos.x, startHeight, data.attackerPos.y);
-              _combatEndPos.set(data.targetPos.x, endHeight, data.targetPos.y);
-              _combatDirection.copy(_combatEndPos).sub(_combatStartPos).normalize();
+                _combatStartPos.set(data.attackerPos.x, startHeight, data.attackerPos.y);
+                _combatEndPos.set(data.targetPos.x, endHeight, data.targetPos.y);
+                _combatDirection.copy(_combatEndPos).sub(_combatStartPos).normalize();
 
-              advancedParticlesRef.current.emitMuzzleFlash(_combatStartPos, _combatDirection);
-              advancedParticlesRef.current.emitImpact(_combatEndPos, _combatDirection.negate());
+                advancedParticlesRef.current.emitMuzzleFlash(_combatStartPos, _combatDirection);
+                advancedParticlesRef.current.emitImpact(_combatEndPos, _combatDirection.negate());
+              }
             }
-          }
-        )
-      );
+          )
+        );
 
-      eventUnsubscribersRef.current.push(
-        eventBus.on(
-          'unit:died',
-          (data: {
-            position?: { x: number; y: number };
-            isFlying?: boolean;
-            unitType?: string;
-          }) => {
-            if (data.position && advancedParticlesRef.current) {
-              const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
-              const airborneHeight = data.unitType
-                ? AssetManager.getAirborneHeight(data.unitType)
-                : DEFAULT_AIRBORNE_HEIGHT;
-              const flyingOffset = data.isFlying ? airborneHeight : 0;
-              const effectHeight = terrainHeight + 0.5 + flyingOffset;
+        eventUnsubscribersRef.current.push(
+          eventBus.on(
+            'unit:died',
+            (data: {
+              position?: { x: number; y: number };
+              isFlying?: boolean;
+              unitType?: string;
+            }) => {
+              if (data.position && advancedParticlesRef.current) {
+                const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
+                const airborneHeight = data.unitType
+                  ? AssetManager.getAirborneHeight(data.unitType)
+                  : DEFAULT_AIRBORNE_HEIGHT;
+                const flyingOffset = data.isFlying ? airborneHeight : 0;
+                const effectHeight = terrainHeight + 0.5 + flyingOffset;
 
-              _deathPos.set(data.position.x, effectHeight, data.position.y);
-              advancedParticlesRef.current.emitExplosion(_deathPos, 1.2);
+                _deathPos.set(data.position.x, effectHeight, data.position.y);
+                advancedParticlesRef.current.emitExplosion(_deathPos, 1.2);
+              }
             }
-          }
-        )
-      );
+          )
+        );
 
-      eventUnsubscribersRef.current.push(
-        eventBus.on(
-          'building:destroyed',
-          (data: {
-            entityId: number;
-            playerId: string;
-            buildingType: string;
-            position: { x: number; y: number };
-          }) => {
-            if (advancedParticlesRef.current) {
-              const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
-              const isLarge = ['headquarters', 'infantry_bay', 'forge', 'hangar'].includes(
-                data.buildingType
-              );
-              _deathPos.set(data.position.x, terrainHeight + 1, data.position.y);
-              advancedParticlesRef.current.emitExplosion(_deathPos, isLarge ? 2.5 : 1.5);
+        eventUnsubscribersRef.current.push(
+          eventBus.on(
+            'building:destroyed',
+            (data: {
+              entityId: number;
+              playerId: string;
+              buildingType: string;
+              position: { x: number; y: number };
+            }) => {
+              if (advancedParticlesRef.current) {
+                const terrainHeight = terrain.getHeightAt(data.position.x, data.position.y);
+                const isLarge = ['headquarters', 'infantry_bay', 'forge', 'hangar'].includes(
+                  data.buildingType
+                );
+                _deathPos.set(data.position.x, terrainHeight + 1, data.position.y);
+                advancedParticlesRef.current.emitExplosion(_deathPos, isLarge ? 2.5 : 1.5);
+              }
             }
-          }
-        )
-      );
+          )
+        );
 
-      // Create watch tower renderer
-      // In worker mode, visionSystem is not available on main thread
-      if (
-        currentMap.watchTowers &&
-        currentMap.watchTowers.length > 0 &&
-        !worldProviderRef?.current
-      ) {
-        game.visionSystem.setWatchTowers(currentMap.watchTowers);
-        watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
+        if (
+          currentMap.watchTowers &&
+          currentMap.watchTowers.length > 0 &&
+          !worldProviderRef?.current
+        ) {
+          game.visionSystem.setWatchTowers(currentMap.watchTowers);
+          watchTowerRendererRef.current = new WatchTowerRenderer(scene, game.visionSystem);
+        }
+
+        if (!worldProviderRef?.current) {
+          game.visionSystem.setHeightProvider((x: number, y: number) => terrain.getHeightAt(x, y));
+        }
+
+        isInitializedRef.current = true;
+        startAnimationLoop();
+        return true;
+      } catch (error) {
+        debugInitialization.error('[useWebGPURenderer] Initialization failed:', error);
+        return false;
+      } finally {
+        initializePromiseRef.current = null;
       }
+    })();
 
-      // Connect terrain height provider to vision system for LOS blocking (Phase 2)
-      // This enables height-based line-of-sight calculations (high ground advantage)
-      if (!worldProviderRef?.current) {
-        game.visionSystem.setHeightProvider((x: number, y: number) => terrain.getHeightAt(x, y));
-      }
-
-      isInitializedRef.current = true;
-
-      // Start animation loop
-      startAnimationLoop();
-
-      return true;
-    } catch (error) {
-      debugInitialization.error('[useWebGPURenderer] Initialization failed:', error);
-      return false;
-    }
+    initializePromiseRef.current = initPromise;
+    return initPromise;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startAnimationLoop uses ref-backed state and workerBridgeRef is stable
   }, [
     canvasRef,
     containerRef,
     gameRef,
     worldProviderRef,
     eventBusRef,
-    map,
     onProgress,
     onWebGPUDetected,
     calculateDisplayResolution,
@@ -1271,8 +1240,10 @@ export function useWebGPURenderer({
 
         const fps = frameElapsed > 0 ? 1000 / frameElapsed : 60;
         // Convert accumulated per-second totals to per-frame values
-        const trianglesPerFrame = fps > 0 ? Math.round(trianglesThisSecond / fps) : trianglesThisSecond;
-        const drawCallsPerFrame = fps > 0 ? Math.round(drawCallsThisSecond / fps) : drawCallsThisSecond;
+        const trianglesPerFrame =
+          fps > 0 ? Math.round(trianglesThisSecond / fps) : trianglesThisSecond;
+        const drawCallsPerFrame =
+          fps > 0 ? Math.round(drawCallsThisSecond / fps) : drawCallsThisSecond;
         PerformanceMonitor.updateRenderMetrics(drawCallsPerFrame, trianglesPerFrame, fps);
 
         // Update GPU timing from timestamp profiler
@@ -1365,6 +1336,7 @@ export function useWebGPURenderer({
       gpuTimestampProfilerRef.current = null;
 
       isInitializedRef.current = false;
+      initializePromiseRef.current = null;
     };
   }, []);
 

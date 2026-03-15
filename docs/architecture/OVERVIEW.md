@@ -1091,6 +1091,8 @@ Public relays used: `relay.damus.io`, `nos.lol`, `relay.nostr.band`, etc.
 
 All clients run identical deterministic simulation:
 
+- Economy state is player-scoped. Resource, supply, and max-supply reads/writes must use the acting `playerId`, not the local UI player.
+
 ```typescript
 // Only player inputs are transmitted, not game state
 interface GameInput {
@@ -1186,8 +1188,12 @@ The game uses Three.js WebGPU Renderer with automatic WebGL fallback, powered by
 
 Key Components:
 
+- `src/app/game/setup/page.tsx` - Pregame lobby UI; the `Start Game` control now stays disabled until the client hydrates so the first click cannot be dropped before the page becomes interactive
+- `src/app/game/page.tsx` - App Router entry for gameplay; gates `/game` on `gameStarted` and defers teardown through `gamePageLifecycle.ts` so React Strict Mode remount probes do not immediately clear the active session during the first lobby start in development
+- `public/sw.js` / `src/components/pwa/ServiceWorkerRegistrar.tsx` - PWA shell caching; navigation HTML now uses a network-first strategy with cache fallback so regular browser sessions do not stay pinned to stale lobby bundles after a deploy
 - `WebGPUGameCanvas.tsx` - Main game canvas (WebGPU with WebGL fallback)
-- `OverlayScene.ts` - Phaser 4 scene for 2D effects overlay
+- `OverlayScene.ts` - Phaser 4 scene for 2D effects overlay and transient `ui:error` alerts emitted by command-card and gameplay validation
+- `useWorkerBridge.ts` / `WorkerBridge.ts` / `GameWorker.ts` - Main-thread setup values such as starting resources are forwarded into worker-side authoritative spawn state rather than being re-defaulted inside the worker
 
 ### TSL Rendering Systems
 

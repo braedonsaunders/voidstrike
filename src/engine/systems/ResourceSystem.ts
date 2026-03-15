@@ -650,10 +650,7 @@ export class ResourceSystem extends System {
           // Credit AI player - this is the ONLY way AI gets resources (simulation-based)
           aiSystem!.creditResources(workerOwner, minerals, plasma);
         } else {
-          // Credit local human player via game store
-          if (workerOwner === this.game.config.playerId) {
-            this.game.statePort.addResources(minerals, plasma);
-          }
+          this.game.statePort.addResources(minerals, plasma, workerOwner);
         }
       }
 

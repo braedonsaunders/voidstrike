@@ -58,23 +58,6 @@ export class WallSystem extends System {
 
     // Turret mounting
     this.game.eventBus.on('command:mount_turret', this.handleMountTurret.bind(this));
-
-    // Multiplayer-synced wall build command
-    this.game.eventBus.on('wall:build', this.handleWallBuildCommand.bind(this));
-  }
-
-  private handleWallBuildCommand(command: {
-    segments: Array<{ x: number; y: number }>;
-    playerId?: string;
-  }): void {
-    // Forward each segment to the wall placement system via existing mechanism
-    for (const segment of command.segments) {
-      this.game.eventBus.emit('wall:place_request', {
-        x: segment.x,
-        y: segment.y,
-        playerId: command.playerId,
-      });
-    }
   }
 
   public update(deltaTime: number): void {
@@ -368,7 +351,6 @@ export class WallSystem extends System {
     const aiSystem = this.getAISystem();
     const aiPlayer = aiSystem?.getAIPlayer(playerId);
     const isPlayerAI = aiPlayer !== undefined;
-    const isPlayerLocal = !isPlayerAI && playerId === this.game.config.playerId;
 
     // Check if research is complete
     if (!this.game.statePort.hasResearch(playerId, `wall_${upgradeType}`)) {
@@ -402,13 +384,13 @@ export class WallSystem extends System {
         ) {
           continue;
         }
-      } else if (isPlayerLocal) {
-        if (this.game.statePort.getMinerals() < upgradeDef.applyCost.minerals) {
+      } else {
+        if (this.game.statePort.getMinerals(playerId) < upgradeDef.applyCost.minerals) {
           this.game.eventBus.emit('alert:notEnoughMinerals', {});
           this.game.eventBus.emit('warning:lowMinerals', {});
           continue;
         }
-        if (this.game.statePort.getPlasma() < upgradeDef.applyCost.plasma) {
+        if (this.game.statePort.getPlasma(playerId) < upgradeDef.applyCost.plasma) {
           this.game.eventBus.emit('alert:notEnoughPlasma', {});
           this.game.eventBus.emit('warning:lowPlasma', {});
           continue;
@@ -419,10 +401,11 @@ export class WallSystem extends System {
       if (isPlayerAI && aiPlayer) {
         aiPlayer.minerals -= upgradeDef.applyCost.minerals;
         aiPlayer.plasma -= upgradeDef.applyCost.plasma;
-      } else if (isPlayerLocal) {
+      } else {
         this.game.statePort.addResources(
           -upgradeDef.applyCost.minerals,
-          -upgradeDef.applyCost.plasma
+          -upgradeDef.applyCost.plasma,
+          playerId
         );
       }
 

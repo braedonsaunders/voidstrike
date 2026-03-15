@@ -1,0 +1,44 @@
+- generic [active] [ref=e1]:
+    - main [ref=e2]:
+        - generic [ref=e3]:
+            - navigation [ref=e4]:
+                - generic [ref=e5]:
+                    - generic [ref=e8]: V
+                    - generic [ref=e9]:
+                        - button "🔊" [ref=e10] [cursor=pointer]:
+                            - generic [ref=e11]: 🔊
+                        - button "⛶" [ref=e12] [cursor=pointer]:
+                            - generic [ref=e13]: ⛶
+            - generic [ref=e14]:
+                - generic [ref=e15]:
+                    - generic [ref=e18]: Browser-Based Real-Time Strategy
+                    - heading "VOIDSTRIKE VOIDSTRIKE VOIDSTRIKE" [level=1] [ref=e20]:
+                        - generic [ref=e21]: VOIDSTRIKE
+                        - generic [ref=e22]: VOIDSTRIKE
+                        - text: VOIDSTRIKE
+                    - paragraph [ref=e23]: Command your forces. Dominate the void.
+                    - paragraph [ref=e24]: Zero downloads required
+                - link "PLAY NOW" [ref=e30] [cursor=pointer]:
+                    - /url: /game/setup
+                    - generic [ref=e32]: PLAY NOW
+                - generic [ref=e35]:
+                    - button "Battle Simulator" [ref=e36] [cursor=pointer]
+                    - generic [ref=e37]: '|'
+                    - button "Map Editor" [ref=e38] [cursor=pointer]
+            - generic [ref=e39]:
+                - generic [ref=e40]:
+                    - generic [ref=e41]: 3 Unique Factions
+                    - generic [ref=e43]: 70+ Units & Buildings
+                    - generic [ref=e45]: 5 AI Difficulty Levels
+                    - generic [ref=e47]: Multiplayer Ready
+                - generic [ref=e49]:
+                    - generic [ref=e50]: NEXT.JS
+                    - generic [ref=e52]: THREE.JS
+                    - generic [ref=e54]: TYPESCRIPT
+                - button "Renderer GL GPU WebGPU" [ref=e56] [cursor=pointer]:
+                    - generic [ref=e57]: Renderer
+                    - generic [ref=e58]:
+                        - generic [ref=e64]: GL
+                        - generic [ref=e65]: GPU
+                    - generic [ref=e66]: WebGPU
+    - alert [ref=e67]

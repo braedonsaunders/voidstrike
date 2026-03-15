@@ -18,6 +18,7 @@ import type { IWorldProvider } from '@/engine/ecs/IWorldProvider';
 import type { EventBus } from '@/engine/core/EventBus';
 import { RTSCamera } from '@/rendering/Camera';
 import { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
+import { WallPlacementPreview } from '@/rendering/WallPlacementPreview';
 import { TSLGameOverlayManager } from '@/rendering/tsl';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import {
@@ -25,6 +26,7 @@ import {
   GameplayInputHandler,
   CommandInputHandler,
   BuildingInputHandler,
+  WallInputHandler,
   type SelectionState,
 } from '@/engine/input';
 
@@ -43,6 +45,7 @@ export interface UseGameInputProps {
   /** Signal that game is initialized - triggers InputManager dependency update */
   isGameInitialized?: boolean;
   placementPreviewRef: MutableRefObject<BuildingPlacementPreview | null>;
+  wallPlacementPreviewRef: MutableRefObject<WallPlacementPreview | null>;
   overlayManagerRef: MutableRefObject<TSLGameOverlayManager | null>;
   lastControlGroupTap: MutableRefObject<{ group: number; time: number } | null>;
 }
@@ -70,13 +73,19 @@ export function useGameInput({
   eventBusRef,
   isGameInitialized,
   placementPreviewRef,
+  wallPlacementPreviewRef,
 }: UseGameInputProps): UseGameInputReturn {
   // Track if we've initialized
   const initializedRef = useRef(false);
   const handlersRef = useRef<{
     gameplay: GameplayInputHandler;
     command: CommandInputHandler;
+    ability: CommandInputHandler;
+    rally: CommandInputHandler;
+    repair: CommandInputHandler;
     building: BuildingInputHandler;
+    landing: BuildingInputHandler;
+    wall: WallInputHandler;
   } | null>(null);
 
   // =============================================================================
@@ -91,24 +100,34 @@ export function useGameInput({
 
     // Create handlers
     const gameplayHandler = new GameplayInputHandler();
-    const commandHandler = new CommandInputHandler();
-    const buildingHandler = new BuildingInputHandler();
+    const commandHandler = new CommandInputHandler('command');
+    const abilityHandler = new CommandInputHandler('ability');
+    const rallyHandler = new CommandInputHandler('rally');
+    const repairHandler = new CommandInputHandler('repair');
+    const buildingHandler = new BuildingInputHandler('building');
+    const landingHandler = new BuildingInputHandler('landing');
+    const wallHandler = new WallInputHandler();
 
     handlersRef.current = {
       gameplay: gameplayHandler,
       command: commandHandler,
+      ability: abilityHandler,
+      rally: rallyHandler,
+      repair: repairHandler,
       building: buildingHandler,
+      landing: landingHandler,
+      wall: wallHandler,
     };
 
     // Register handlers for each context
     inputManager.registerHandler('gameplay', gameplayHandler);
     inputManager.registerHandler('command', commandHandler);
+    inputManager.registerHandler('ability', abilityHandler);
+    inputManager.registerHandler('rally', rallyHandler);
+    inputManager.registerHandler('repair', repairHandler);
     inputManager.registerHandler('building', buildingHandler);
-    // Reuse command handler for other targeting modes
-    inputManager.registerHandler('ability', commandHandler);
-    inputManager.registerHandler('rally', commandHandler);
-    inputManager.registerHandler('repair', commandHandler);
-    inputManager.registerHandler('landing', buildingHandler);
+    inputManager.registerHandler('landing', landingHandler);
+    inputManager.registerHandler('wall', wallHandler);
 
     // Initialize with container
     // Use game.eventBus for selection events - these are internal to main thread
@@ -182,10 +201,59 @@ export function useGameInput({
 
   // Update building handler with placement preview
   useEffect(() => {
-    if (handlersRef.current?.building) {
-      handlersRef.current.building.setPlacementPreview(placementPreviewRef.current);
-    }
-  }, [placementPreviewRef]);
+    if (!initializedRef.current) return;
+
+    let frameId: number | null = null;
+
+    const syncPlacementPreview = () => {
+      const preview = placementPreviewRef.current;
+
+      if (handlersRef.current?.building) {
+        handlersRef.current.building.setPlacementPreview(preview);
+      }
+      if (handlersRef.current?.landing) {
+        handlersRef.current.landing.setPlacementPreview(preview);
+      }
+
+      if (!preview) {
+        frameId = window.requestAnimationFrame(syncPlacementPreview);
+      }
+    };
+
+    syncPlacementPreview();
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [placementPreviewRef, isGameInitialized]);
+
+  useEffect(() => {
+    if (!initializedRef.current) return;
+
+    let frameId: number | null = null;
+
+    const syncWallPlacementPreview = () => {
+      const preview = wallPlacementPreviewRef.current;
+
+      if (handlersRef.current?.wall) {
+        handlersRef.current.wall.setPlacementPreview(preview);
+      }
+
+      if (!preview) {
+        frameId = window.requestAnimationFrame(syncWallPlacementPreview);
+      }
+    };
+
+    syncWallPlacementPreview();
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+    };
+  }, [wallPlacementPreviewRef, isGameInitialized]);
 
   // =============================================================================
   // SELECTION STATE SYNC

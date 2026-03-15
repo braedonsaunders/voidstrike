@@ -263,7 +263,12 @@ export const useGameStore = create<GameState>((set, get) => ({
   setBuildingMode: (type) =>
     set((state) => ({
       isBuilding: type !== null,
+      isWallPlacementMode: false,
       buildingType: type,
+      isRepairMode: false,
+      isLandingMode: false,
+      landingBuildingId: null,
+      abilityTargetMode: null,
       isSettingRallyPoint: false,
       commandTargetMode: null,
       // Clear queue when exiting building mode

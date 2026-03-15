@@ -7,6 +7,7 @@ import { ALL_MAPS } from '@/data/maps';
 import { useGameSetupStore, type PlayerSlot } from '@/store/gameSetupStore';
 import { InstallAppButton } from '@/components/pwa/InstallPrompt';
 import { LobbyBrowser } from '@/components/lobby/LobbyBrowser';
+import { getStartGameButtonState } from './getStartGameButtonState';
 
 // Extracted components
 import { MapPreview, PlayerSlotRow, SettingSelect, JoinLobbyModal } from '@/components/game-setup';
@@ -20,6 +21,7 @@ export default function GameSetupPage() {
   const router = useRouter();
 
   // UI state
+  const [isHydrated, setIsHydrated] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [showLobbyBrowser, setShowLobbyBrowser] = useState(false);
   const [joinCode, setJoinCode] = useState('');
@@ -111,6 +113,12 @@ export default function GameSetupPage() {
   const maxPlayersForMap = selectedMap.maxPlayers;
   const canAddPlayer = playerSlots.length < maxPlayersForMap && playerSlots.length < 8;
   const canRemovePlayer = playerSlots.length > 2;
+  const startGameButtonState = getStartGameButtonState({
+    activePlayerCount,
+    connectedGuestCount,
+    guestSlotCount,
+    isHydrated,
+  });
 
   // Handle map selection - trim excess players if new map has fewer slots
   const handleMapSelect = (mapId: string) => {
@@ -137,6 +145,10 @@ export default function GameSetupPage() {
   };
 
   // Close join modal when connected
+  useEffect(() => {
+    setIsHydrated(true); // eslint-disable-line react-hooks/set-state-in-effect -- hydration gate keeps initial lobby clicks from being dropped before client interactivity
+  }, []);
+
   useEffect(() => {
     if (lobbyStatus === 'connected' && showJoinModal) {
       setShowJoinModal(false); // eslint-disable-line react-hooks/set-state-in-effect -- closing modal in response to connection status change
@@ -502,27 +514,25 @@ export default function GameSetupPage() {
                 <div className="flex-shrink-0">
                   <button
                     onClick={handleStartGame}
-                    disabled={
-                      activePlayerCount < 2 ||
-                      (guestSlotCount > 0 && connectedGuestCount < guestSlotCount)
-                    }
+                    disabled={startGameButtonState.disabled}
                     className="w-full game-button-primary text-base px-6 py-2 font-display disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Start Game
                   </button>
 
-                  {activePlayerCount < 2 && (
+                  {startGameButtonState.reason === 'hydrating' && (
+                    <p className="text-center text-void-400 text-[10px] mt-1">Preparing lobby...</p>
+                  )}
+                  {startGameButtonState.reason === 'not-enough-players' && (
                     <p className="text-center text-red-400 text-[10px] mt-1">
                       At least 2 players required
                     </p>
                   )}
-                  {activePlayerCount >= 2 &&
-                    guestSlotCount > 0 &&
-                    connectedGuestCount < guestSlotCount && (
-                      <p className="text-center text-yellow-400 text-[10px] mt-1">
-                        Waiting for {guestSlotCount - connectedGuestCount} guest(s) to connect...
-                      </p>
-                    )}
+                  {startGameButtonState.reason === 'waiting-for-guests' && (
+                    <p className="text-center text-yellow-400 text-[10px] mt-1">
+                      Waiting for {guestSlotCount - connectedGuestCount} guest(s) to connect...
+                    </p>
+                  )}
                   {startGameError && (
                     <p className="text-center text-red-400 text-[10px] mt-1">{startGameError}</p>
                   )}

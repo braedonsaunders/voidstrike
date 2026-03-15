@@ -24,6 +24,7 @@ import {
   useGameSetupStore,
   getLocalPlayerId,
   isBattleSimulatorMode,
+  STARTING_RESOURCES_VALUES,
   type GameSetupState,
 } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
@@ -70,6 +71,8 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
   const eventBusRef = useRef<EventBus | null>(null);
   const eventUnsubscribersRef = useRef<(() => void)[]>([]);
   const firstRenderStateLoggedRef = useRef(false);
+  const isInitializedRef = useRef(false);
+  const initializePromiseRef = useRef<Promise<boolean> | null>(null);
 
   // State
   const [isInitialized, setIsInitialized] = useState(false);
@@ -77,9 +80,7 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
 
   // Store map in a ref so we always get the latest value
   const mapRef = useRef<MapData>(map);
-  useEffect(() => {
-    mapRef.current = map;
-  }, [map]);
+  mapRef.current = map;
 
   // Handle render state updates from worker
   const handleRenderState = useCallback((state: RenderState) => {
@@ -139,137 +140,126 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
 
   // Initialize worker bridge
   const initializeWorkerBridge = useCallback(async (): Promise<boolean> => {
-    if (isInitialized) return true;
+    if (isInitializedRef.current) return true;
+    if (initializePromiseRef.current) return initializePromiseRef.current;
 
-    try {
-      const currentMap = mapRef.current;
-      const mapWidth = currentMap.width;
-      const mapHeight = currentMap.height;
-      const localPlayerId = getLocalPlayerId();
-      const isMultiplayer = isMultiplayerMode();
+    const initPromise = (async (): Promise<boolean> => {
+      try {
+        const currentMap = mapRef.current;
+        const mapWidth = currentMap.width;
+        const mapHeight = currentMap.height;
+        const localPlayerId = getLocalPlayerId();
+        const isMultiplayer = isMultiplayerMode();
 
-      debugInitialization.log('[useWorkerBridge] Initializing game (worker mode)');
+        debugInitialization.log('[useWorkerBridge] Initializing game (worker mode)');
 
-      // Ensure definitions are loaded before creating Game instance
-      if (!definitionsReady()) {
-        debugInitialization.log('[useWorkerBridge] Waiting for definitions to load...');
-        await initializeDefinitions();
-        debugInitialization.log('[useWorkerBridge] Definitions loaded');
-      }
+        if (!definitionsReady()) {
+          debugInitialization.log('[useWorkerBridge] Waiting for definitions to load...');
+          await initializeDefinitions();
+          debugInitialization.log('[useWorkerBridge] Definitions loaded');
+        }
 
-      // Create worker bridge for game logic communication
-      const fogOfWar = useGameSetupStore.getState().fogOfWar;
-      const bridge = WorkerBridge.getInstance({
-        config: {
+        const fogOfWar = useGameSetupStore.getState().fogOfWar;
+        const bridge = WorkerBridge.getInstance({
+          config: {
+            mapWidth,
+            mapHeight,
+            tickRate: 20,
+            isMultiplayer,
+            playerId: localPlayerId ?? 'spectator',
+            aiEnabled: !isMultiplayer,
+            aiDifficulty: 'medium',
+            fogOfWar,
+          },
+          playerId: localPlayerId ?? 'spectator',
+          onRenderState: handleRenderState,
+          onGameEvent: handleGameEvent,
+          onGameOver: handleGameOver,
+          onError: handleWorkerError,
+        });
+        workerBridgeRef.current = bridge;
+
+        worldProviderRef.current = RenderStateWorldAdapter.getInstance();
+        eventBusRef.current = bridge.eventBus;
+
+        const eventHandler = new MainThreadEventHandler(bridge, localPlayerId);
+        eventHandlerRef.current = eventHandler;
+
+        const unsubscribeLocalPlayer = useGameSetupStore.subscribe(
+          (state: GameSetupState, prevState: GameSetupState) => {
+            if (state.localPlayerId !== prevState.localPlayerId) {
+              eventHandler.setLocalPlayerId(state.localPlayerId);
+            }
+          }
+        );
+        eventUnsubscribersRef.current.push(unsubscribeLocalPlayer);
+
+        await bridge.initialize();
+
+        bridge.setDebugSettings(useUIStore.getState().debugSettings);
+        bridge.setTerrainGrid(currentMap.terrain);
+
+        eventUnsubscribersRef.current.push(
+          bridge.eventBus.on('multiplayer:playerQuit', () => {
+            debugNetworking.log('[Game] Remote player quit the game');
+            useUIStore
+              .getState()
+              .addNotification('warning', 'Remote player has left the game', 10000);
+          })
+        );
+
+        const game = Game.getInstance({
           mapWidth,
           mapHeight,
           tickRate: 20,
           isMultiplayer,
           playerId: localPlayerId ?? 'spectator',
-          aiEnabled: !isMultiplayer,
-          aiDifficulty: 'medium',
-          fogOfWar,
-        },
-        playerId: localPlayerId ?? 'spectator',
-        onRenderState: handleRenderState,
-        onGameEvent: handleGameEvent,
-        onGameOver: handleGameOver,
-        onError: handleWorkerError,
-      });
-      workerBridgeRef.current = bridge;
+          aiEnabled: false,
+        });
+        gameRef.current = game;
 
-      // Set up refs for hook consumption
-      worldProviderRef.current = RenderStateWorldAdapter.getInstance();
-      eventBusRef.current = bridge.eventBus;
+        game.setTerrainGrid(currentMap.terrain);
 
-      // Create main thread event handler for audio/effects
-      // Pass localPlayerId directly - null means spectator mode (no local-only audio)
-      const eventHandler = new MainThreadEventHandler(bridge, localPlayerId);
-      eventHandlerRef.current = eventHandler;
-
-      // Subscribe to localPlayerId changes to handle spectator mode transitions
-      const unsubscribeLocalPlayer = useGameSetupStore.subscribe(
-        (state: GameSetupState, prevState: GameSetupState) => {
-          if (state.localPlayerId !== prevState.localPlayerId) {
-            eventHandler.setLocalPlayerId(state.localPlayerId);
-          }
+        const selectionSystem = game.selectionSystem;
+        selectionSystem.setWorldProvider(worldProviderRef.current!);
+        selectionSystem.setSelectionSyncCallback((entityIds, playerId) => {
+          bridge.setSelection(entityIds, playerId);
+        });
+        if (localPlayerId) {
+          selectionSystem.setPlayerId(localPlayerId);
         }
-      );
-      eventUnsubscribersRef.current.push(unsubscribeLocalPlayer);
 
-      // Initialize the worker
-      await bridge.initialize();
+        game.setCommandCallback((command) => {
+          bridge.issueCommand(command);
+        });
 
-      // Sync debug settings to worker for category filtering
-      bridge.setDebugSettings(useUIStore.getState().debugSettings);
-
-      // Set terrain data on worker
-      bridge.setTerrainGrid(currentMap.terrain);
-
-      // Multiplayer: Remote player quit
-      eventUnsubscribersRef.current.push(
-        bridge.eventBus.on('multiplayer:playerQuit', () => {
-          debugNetworking.log('[Game] Remote player quit the game');
-          useUIStore
-            .getState()
-            .addNotification('warning', 'Remote player has left the game', 10000);
-        })
-      );
-
-      // Create minimal Game instance for selection system and placement validation
-      // Game loop is NOT started - worker handles game logic
-      const game = Game.getInstance({
-        mapWidth,
-        mapHeight,
-        tickRate: 20,
-        isMultiplayer,
-        playerId: localPlayerId ?? 'spectator',
-        aiEnabled: false, // AI runs in worker
-      });
-      gameRef.current = game;
-
-      // Set terrain data on game instance
-      game.setTerrainGrid(currentMap.terrain);
-
-      // Configure SelectionSystem:
-      // - Use RenderStateWorldAdapter for entity queries (has actual entity data from worker)
-      // - Sync selection changes to worker via WorkerBridge.setSelection
-      const selectionSystem = game.selectionSystem;
-      selectionSystem.setWorldProvider(worldProviderRef.current!);
-      selectionSystem.setSelectionSyncCallback((entityIds, playerId) => {
-        bridge.setSelection(entityIds, playerId);
-      });
-      if (localPlayerId) {
-        selectionSystem.setPlayerId(localPlayerId);
+        isInitializedRef.current = true;
+        setIsInitialized(true);
+        return true;
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        console.error('[useWorkerBridge] Initialization failed:', error);
+        debugInitialization.error('[useWorkerBridge] Initialization failed:', error);
+        useUIStore
+          .getState()
+          .addNotification('error', `Game initialization failed: ${errorMessage}`, 30000);
+        return false;
+      } finally {
+        initializePromiseRef.current = null;
       }
+    })();
 
-      // Forward commands to worker via WorkerBridge
-      game.setCommandCallback((command) => {
-        bridge.issueCommand(command);
-      });
-
-      setIsInitialized(true);
-      return true;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error('[useWorkerBridge] Initialization failed:', error);
-      debugInitialization.error('[useWorkerBridge] Initialization failed:', error);
-
-      // Show user-visible notification for initialization failures (e.g., validation errors)
-      useUIStore.getState().addNotification(
-        'error',
-        `Game initialization failed: ${errorMessage}`,
-        30000 // Show for 30 seconds so user can read the full error
-      );
-      return false;
-    }
-  }, [isInitialized, handleRenderState, handleGameEvent, handleGameOver, handleWorkerError]);
+    initializePromiseRef.current = initPromise;
+    return initPromise;
+  }, [handleRenderState, handleGameEvent, handleGameOver, handleWorkerError]);
 
   // Spawn initial entities
   const spawnEntities = useCallback(async () => {
     if (!workerBridgeRef.current) return;
 
     if (!isBattleSimulatorMode()) {
+      const startingResourcesKey = useGameSetupStore.getState().startingResources;
+      const startingResources = STARTING_RESOURCES_VALUES[startingResourcesKey];
       const playerSlots = useGameSetupStore.getState().playerSlots.map((slot) => ({
         id: slot.id,
         type: slot.type === 'open' || slot.type === 'closed' ? ('empty' as const) : slot.type,
@@ -277,7 +267,7 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
         aiDifficulty: slot.aiDifficulty,
         team: slot.team,
       }));
-      workerBridgeRef.current.spawnInitialEntities(mapRef.current, playerSlots);
+      workerBridgeRef.current.spawnInitialEntities(mapRef.current, startingResources, playerSlots);
 
       // Wait for first render state with entities before completing loading
       await workerBridgeRef.current.waitForFirstRenderState();
@@ -307,6 +297,10 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
       RenderStateWorldAdapter.resetInstance();
       worldProviderRef.current = null;
       eventBusRef.current = null;
+      isInitializedRef.current = false;
+      initializePromiseRef.current = null;
+      setIsInitialized(false);
+      setIsGameFinished(false);
 
       if (gameRef.current) {
         Game.resetInstance();

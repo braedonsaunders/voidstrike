@@ -1,29 +1,56 @@
 /**
- * CommandInputHandler - Handles command targeting modes
+ * CommandInputHandler - Handles targeted command modes.
  *
- * Processes input for command contexts (attack-move, patrol, move)
- * where the player is selecting a target position.
+ * Each instance is bound to a specific targeting context so mode cleanup
+ * only resets the state it owns.
  */
 
 import type {
   InputHandler,
-  InputState,
   InputHandlerDependencies,
+  InputState,
   KeyboardInputEvent,
   MouseInputEvent,
 } from '../types';
 import { MouseButton } from '../types';
 import { InputManager } from '../InputManager';
+import { Resource } from '@/engine/components/Resource';
+import { findEntityAtScreenPosition } from './findEntityAtScreenPosition';
 import { useGameStore } from '@/store/gameStore';
 
+type CommandHandlerMode = 'command' | 'ability' | 'rally' | 'repair';
+type AbilityTargetType = 'none' | 'point' | 'unit' | 'ally' | 'self';
+
 export class CommandInputHandler implements InputHandler {
-  onActivate(): void {
-    // Command mode activated
-  }
+  constructor(private readonly mode: CommandHandlerMode) {}
+
+  onActivate(): void {}
 
   onDeactivate(): void {
-    // Clear command mode when leaving
-    useGameStore.getState().setCommandTargetMode(null);
+    const store = useGameStore.getState();
+
+    switch (this.mode) {
+      case 'command':
+        if (store.commandTargetMode) {
+          store.setCommandTargetMode(null);
+        }
+        break;
+      case 'ability':
+        if (store.abilityTargetMode) {
+          store.setAbilityTargetMode(null);
+        }
+        break;
+      case 'rally':
+        if (store.isSettingRallyPoint) {
+          store.setRallyPointMode(false);
+        }
+        break;
+      case 'repair':
+        if (store.isRepairMode) {
+          store.setRepairMode(false);
+        }
+        break;
+    }
   }
 
   onKeyDown(
@@ -32,35 +59,34 @@ export class CommandInputHandler implements InputHandler {
     _deps: InputHandlerDependencies
   ): boolean {
     if (event.key === 'escape') {
-      useGameStore.getState().setCommandTargetMode(null);
+      this.clearMode();
       InputManager.getInstance().setContext('gameplay');
       return true;
     }
     return false;
   }
 
-  onMouseDown(
-    event: MouseInputEvent,
-    state: InputState,
-    deps: InputHandlerDependencies
-  ): boolean {
-    const { game, eventBus, getLocalPlayerId } = deps;
-    const commandMode = useGameStore.getState().commandTargetMode;
+  onMouseDown(event: MouseInputEvent, state: InputState, deps: InputHandlerDependencies): boolean {
+    const { game, eventBus, world, camera, getLocalPlayerId } = deps;
+    const store = useGameStore.getState();
+    const localPlayer = getLocalPlayerId();
+    const selectedUnits = store.selectedUnits;
 
-    // Right-click cancels command mode
-    if (event.button === MouseButton.Right) {
-      useGameStore.getState().setCommandTargetMode(null);
-      InputManager.getInstance().setContext('gameplay');
-      return true;
-    }
+    if (this.mode === 'command') {
+      const commandMode = store.commandTargetMode;
 
-    // Left-click executes command
-    if (event.button === MouseButton.Left && event.worldPosition && game) {
-      const selectedUnits = useGameStore.getState().selectedUnits;
-      const localPlayer = getLocalPlayerId();
+      if (event.button === MouseButton.Right) {
+        this.clearMode();
+        InputManager.getInstance().setContext('gameplay');
+        return true;
+      }
+
+      if (event.button !== MouseButton.Left || !event.worldPosition || !game) {
+        return false;
+      }
 
       if (selectedUnits.length === 0 || !localPlayer) {
-        useGameStore.getState().setCommandTargetMode(null);
+        this.clearMode();
         InputManager.getInstance().setContext('gameplay');
         return true;
       }
@@ -69,8 +95,6 @@ export class CommandInputHandler implements InputHandler {
 
       switch (commandMode) {
         case 'attack':
-          // Use ATTACK_MOVE when clicking ground (no target entity)
-          // This ensures MovementOrchestrator handles pathfinding
           game.issueCommand({
             tick: game.getCurrentTick(),
             playerId: localPlayer,
@@ -112,9 +136,143 @@ export class CommandInputHandler implements InputHandler {
           break;
       }
 
-      // Stay in command mode if shift is held
       if (!state.modifiers.shift) {
-        useGameStore.getState().setCommandTargetMode(null);
+        this.clearMode();
+        InputManager.getInstance().setContext('gameplay');
+      }
+
+      return true;
+    }
+
+    if (selectedUnits.length === 0 || !localPlayer || !game) {
+      this.clearMode();
+      InputManager.getInstance().setContext('gameplay');
+      return true;
+    }
+
+    if (this.mode === 'ability') {
+      if (event.button === MouseButton.Right) {
+        this.clearMode();
+        InputManager.getInstance().setContext('gameplay');
+        return true;
+      }
+
+      if (event.button !== MouseButton.Left || !event.worldPosition) {
+        return false;
+      }
+
+      const abilityId = store.abilityTargetMode;
+      const targetType = this.getAbilityTargetType(world, selectedUnits[0], abilityId);
+      if (!abilityId || !targetType) {
+        this.clearMode();
+        InputManager.getInstance().setContext('gameplay');
+        return true;
+      }
+
+      if (targetType === 'point') {
+        game.issueCommand({
+          tick: game.getCurrentTick(),
+          playerId: localPlayer,
+          type: 'ABILITY',
+          entityIds: selectedUnits,
+          abilityId,
+          targetPosition: { x: event.worldPosition.x, y: event.worldPosition.z },
+          queue: state.modifiers.shift,
+        });
+      } else {
+        const clickedEntity = findEntityAtScreenPosition(
+          world,
+          event.position.x,
+          event.position.y,
+          camera
+        );
+        if (!clickedEntity) {
+          return true;
+        }
+
+        game.issueCommand({
+          tick: game.getCurrentTick(),
+          playerId: localPlayer,
+          type: 'ABILITY',
+          entityIds: selectedUnits,
+          abilityId,
+          targetEntityId: clickedEntity.id,
+          queue: state.modifiers.shift,
+        });
+      }
+
+      if (!state.modifiers.shift) {
+        this.clearMode();
+        InputManager.getInstance().setContext('gameplay');
+      }
+
+      return true;
+    }
+
+    if (!event.worldPosition) {
+      return false;
+    }
+
+    if (
+      this.mode === 'repair' &&
+      (event.button === MouseButton.Left || event.button === MouseButton.Right)
+    ) {
+      const clickedEntity = findEntityAtScreenPosition(
+        world,
+        event.position.x,
+        event.position.y,
+        camera
+      );
+      if (!clickedEntity) {
+        return true;
+      }
+
+      for (const repairerId of selectedUnits) {
+        game.issueCommand({
+          tick: game.getCurrentTick(),
+          playerId: localPlayer,
+          type: 'REPAIR',
+          entityIds: [repairerId],
+          targetEntityId: clickedEntity.id,
+          queue: state.modifiers.shift,
+        });
+      }
+
+      if (!state.modifiers.shift) {
+        this.clearMode();
+        InputManager.getInstance().setContext('gameplay');
+      }
+
+      return true;
+    }
+
+    if (
+      this.mode === 'rally' &&
+      (event.button === MouseButton.Left || event.button === MouseButton.Right)
+    ) {
+      const clickedEntity = findEntityAtScreenPosition(
+        world,
+        event.position.x,
+        event.position.y,
+        camera
+      );
+      const resource = clickedEntity?.get<Resource>('Resource');
+
+      for (const buildingId of selectedUnits) {
+        game.issueCommand({
+          tick: game.getCurrentTick(),
+          playerId: localPlayer,
+          type: 'RALLY',
+          entityIds: [buildingId],
+          buildingId,
+          targetPosition: { x: event.worldPosition.x, y: event.worldPosition.z },
+          targetEntityId: resource ? clickedEntity!.id : undefined,
+          queue: state.modifiers.shift,
+        });
+      }
+
+      if (!state.modifiers.shift) {
+        this.clearMode();
         InputManager.getInstance().setContext('gameplay');
       }
 
@@ -125,7 +283,43 @@ export class CommandInputHandler implements InputHandler {
   }
 
   onBlur(): void {
-    useGameStore.getState().setCommandTargetMode(null);
+    this.clearMode();
     InputManager.getInstance().setContext('gameplay');
+  }
+
+  private clearMode(): void {
+    switch (this.mode) {
+      case 'command':
+        useGameStore.getState().setCommandTargetMode(null);
+        break;
+      case 'ability':
+        useGameStore.getState().setAbilityTargetMode(null);
+        break;
+      case 'rally':
+        useGameStore.getState().setRallyPointMode(false);
+        break;
+      case 'repair':
+        useGameStore.getState().setRepairMode(false);
+        break;
+    }
+  }
+
+  private getAbilityTargetType(
+    world: InputHandlerDependencies['world'],
+    entityId: number,
+    abilityId: string | null
+  ): AbilityTargetType | null {
+    if (!world || !abilityId) return null;
+
+    const entity = world.getEntity(entityId);
+    const abilityComponent = entity?.get<{
+      getAbility?: (id: string) =>
+        | {
+            definition: { targetType: AbilityTargetType };
+          }
+        | undefined;
+    }>('Ability');
+
+    return abilityComponent?.getAbility?.(abilityId)?.definition.targetType ?? null;
   }
 }

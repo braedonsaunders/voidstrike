@@ -24,6 +24,7 @@ export type GameCommandType =
   | 'STOP'
   | 'HOLD'
   | 'RESEARCH'
+  | 'UPGRADE_BUILDING'
   | 'TRANSFORM'
   | 'CLOAK'
   | 'LOAD'
@@ -38,17 +39,20 @@ export type GameCommandType =
   | 'LAND'
   | 'RALLY'
   | 'GATHER'
+  | 'RESUME_CONSTRUCTION'
+  | 'FLYING_BUILDING_MOVE'
+  | 'GATE_TOGGLE'
+  | 'GATE_LOCK'
+  | 'GATE_AUTO'
+  | 'WALL_UPGRADE'
+  | 'BUILD_ADDON'
   | 'CANCEL_PRODUCTION'
-  | 'CANCEL_RESEARCH'
-  | 'CANCEL_BUILDING'
   | 'QUEUE_REORDER'
   | 'SUPPLY_DEPOT_LOWER'
-  | 'SUPPLY_DEPOT_RAISE'
   | 'SET_AUTOCAST'
   | 'BUILD_WALL'
   | 'ADDON_LIFT'
   | 'ADDON_LAND'
-  | 'SUBMERGE'
   | 'HEARTBEAT'; // Lockstep sync - no-op command to acknowledge tick
 
 /**
@@ -81,6 +85,10 @@ export interface GameCommand {
   abilityId?: string;
   /** Upgrade ID for RESEARCH commands */
   upgradeId?: string;
+  /** Wall upgrade type for WALL_UPGRADE commands */
+  upgradeType?: string;
+  /** Target building type for UPGRADE_BUILDING commands */
+  upgradeTo?: string;
   /** Target mode for TRANSFORM commands */
   targetMode?: string;
 
@@ -91,6 +99,8 @@ export interface GameCommand {
   bunkerId?: number;
   /** Building entity ID for LIFTOFF/LAND/RALLY commands */
   buildingId?: number;
+  /** Addon building type for BUILD_ADDON commands */
+  addonType?: string;
 
   // Production queue specific
   /** Queue index for CANCEL_PRODUCTION/QUEUE_REORDER commands */
@@ -128,6 +138,7 @@ const COMMAND_EVENTS: Record<GameCommandType, string> = {
   STOP: 'command:stop',
   HOLD: 'command:hold',
   RESEARCH: 'command:research',
+  UPGRADE_BUILDING: 'command:upgrade_building',
   PATROL: 'command:patrol',
   TRANSFORM: 'command:transform',
   CLOAK: 'command:cloak',
@@ -142,17 +153,20 @@ const COMMAND_EVENTS: Record<GameCommandType, string> = {
   LAND: 'command:land',
   RALLY: 'command:rally',
   GATHER: 'command:gather',
+  RESUME_CONSTRUCTION: 'command:resume_construction',
+  FLYING_BUILDING_MOVE: 'command:flyingBuildingMove',
+  GATE_TOGGLE: 'command:gate_toggle',
+  GATE_LOCK: 'command:gate_lock',
+  GATE_AUTO: 'command:gate_auto',
+  WALL_UPGRADE: 'command:wall_upgrade',
+  BUILD_ADDON: 'building:build_addon',
   CANCEL_PRODUCTION: 'production:cancel',
-  CANCEL_RESEARCH: 'research:cancel',
-  CANCEL_BUILDING: 'building:cancel',
   QUEUE_REORDER: 'production:reorder',
   SUPPLY_DEPOT_LOWER: 'command:lowerSupplyDepot',
-  SUPPLY_DEPOT_RAISE: 'command:raiseSupplyDepot',
   SET_AUTOCAST: 'ability:setAutocast',
-  BUILD_WALL: 'wall:build',
+  BUILD_WALL: 'wall:place_line',
   ADDON_LIFT: 'addon:lift',
   ADDON_LAND: 'addon:land',
-  SUBMERGE: 'command:submerge',
   HEARTBEAT: 'command:heartbeat', // No-op for lockstep sync
 };
 
@@ -205,6 +219,14 @@ export function dispatchCommand(eventBus: EventBus, command: GameCommand): void 
 
     case 'RESEARCH':
       eventBus.emit(COMMAND_EVENTS.RESEARCH, command);
+      break;
+
+    case 'UPGRADE_BUILDING':
+      eventBus.emit(COMMAND_EVENTS.UPGRADE_BUILDING, {
+        entityIds: command.entityIds,
+        upgradeTo: command.upgradeTo,
+        playerId: command.playerId,
+      });
       break;
 
     case 'PATROL':
@@ -306,24 +328,63 @@ export function dispatchCommand(eventBus: EventBus, command: GameCommand): void 
       });
       break;
 
+    case 'RESUME_CONSTRUCTION':
+      eventBus.emit(COMMAND_EVENTS.RESUME_CONSTRUCTION, {
+        workerId: command.entityIds[0],
+        buildingId: command.targetEntityId,
+        playerId: command.playerId,
+      });
+      break;
+
+    case 'FLYING_BUILDING_MOVE':
+      eventBus.emit(COMMAND_EVENTS.FLYING_BUILDING_MOVE, {
+        buildingId: command.buildingId ?? command.entityIds[0],
+        targetPosition: command.targetPosition,
+        playerId: command.playerId,
+      });
+      break;
+
+    case 'GATE_TOGGLE':
+      eventBus.emit(COMMAND_EVENTS.GATE_TOGGLE, {
+        entityIds: command.entityIds,
+        playerId: command.playerId,
+      });
+      break;
+
+    case 'GATE_LOCK':
+      eventBus.emit(COMMAND_EVENTS.GATE_LOCK, {
+        entityIds: command.entityIds,
+        playerId: command.playerId,
+      });
+      break;
+
+    case 'GATE_AUTO':
+      eventBus.emit(COMMAND_EVENTS.GATE_AUTO, {
+        entityIds: command.entityIds,
+        playerId: command.playerId,
+      });
+      break;
+
+    case 'WALL_UPGRADE':
+      eventBus.emit(COMMAND_EVENTS.WALL_UPGRADE, {
+        entityIds: command.entityIds,
+        upgradeType: command.upgradeType,
+        playerId: command.playerId,
+      });
+      break;
+
+    case 'BUILD_ADDON':
+      eventBus.emit(COMMAND_EVENTS.BUILD_ADDON, {
+        buildingId: command.buildingId ?? command.entityIds[0],
+        addonType: command.addonType,
+        playerId: command.playerId,
+      });
+      break;
+
     case 'CANCEL_PRODUCTION':
       eventBus.emit(COMMAND_EVENTS.CANCEL_PRODUCTION, {
         entityId: command.entityIds[0],
         queueIndex: command.queueIndex ?? 0,
-        playerId: command.playerId,
-      });
-      break;
-
-    case 'CANCEL_RESEARCH':
-      eventBus.emit(COMMAND_EVENTS.CANCEL_RESEARCH, {
-        entityId: command.entityIds[0],
-        playerId: command.playerId,
-      });
-      break;
-
-    case 'CANCEL_BUILDING':
-      eventBus.emit(COMMAND_EVENTS.CANCEL_BUILDING, {
-        entityId: command.entityIds[0],
         playerId: command.playerId,
       });
       break;
@@ -345,14 +406,6 @@ export function dispatchCommand(eventBus: EventBus, command: GameCommand): void 
       });
       break;
 
-    case 'SUPPLY_DEPOT_RAISE':
-      eventBus.emit(COMMAND_EVENTS.SUPPLY_DEPOT_RAISE, {
-        buildingId: command.entityIds[0],
-        lower: false,
-        playerId: command.playerId,
-      });
-      break;
-
     case 'SET_AUTOCAST':
       eventBus.emit(COMMAND_EVENTS.SET_AUTOCAST, {
         entityId: command.entityIds[0],
@@ -364,7 +417,12 @@ export function dispatchCommand(eventBus: EventBus, command: GameCommand): void 
 
     case 'BUILD_WALL':
       eventBus.emit(COMMAND_EVENTS.BUILD_WALL, {
-        segments: command.wallSegments ?? [],
+        positions: (command.wallSegments ?? []).map((segment) => ({
+          x: segment.x,
+          y: segment.y,
+          valid: true,
+        })),
+        buildingType: command.buildingType ?? 'wall_segment',
         playerId: command.playerId,
       });
       break;
@@ -380,13 +438,6 @@ export function dispatchCommand(eventBus: EventBus, command: GameCommand): void 
       eventBus.emit(COMMAND_EVENTS.ADDON_LAND, {
         buildingId: command.buildingId ?? command.entityIds[0],
         targetPosition: command.targetPosition,
-        playerId: command.playerId,
-      });
-      break;
-
-    case 'SUBMERGE':
-      eventBus.emit(COMMAND_EVENTS.SUBMERGE, {
-        entityIds: command.entityIds,
         playerId: command.playerId,
       });
       break;

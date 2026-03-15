@@ -7,3 +7,4 @@
 export { GameplayInputHandler } from './GameplayInputHandler';
 export { CommandInputHandler } from './CommandInputHandler';
 export { BuildingInputHandler } from './BuildingInputHandler';
+export { WallInputHandler } from './WallInputHandler';

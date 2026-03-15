@@ -490,6 +490,10 @@ export class WorkerBridge {
    */
   public spawnInitialEntities(
     mapData: MapData,
+    startingResources?: {
+      minerals: number;
+      plasma: number;
+    },
     playerSlots?: Array<{
       id: string;
       type: 'human' | 'ai' | 'empty';
@@ -524,6 +528,7 @@ export class WorkerBridge {
       width: mapData.width,
       height: mapData.height,
       name: mapData.name,
+      startingResources,
       spawns: mapData.spawns,
       resources,
       watchTowers: mapData.watchTowers,

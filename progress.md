@@ -108,3 +108,74 @@ Original prompt: cant get this app to start locally
   - no new browser errors appeared; console output stayed at the existing `favicon.ico` 404, `audio/alert/not_enough_plasma.mp3` 404, and `[GPUTimestampProfiler] Already initialized` warning
 - Fresh headless Playwright launches in this environment fail before gameplay with `THREE.WebGLRenderer: Error creating WebGL context.` and the generic Next.js client error screen. That reproduces even without touching game state and is environment/WebGL related, not evidence of a regression from the deterministic-math refactor.
 - While validating command flow, confirmed an existing UX/code mismatch in `src/engine/input/handlers/CommandInputHandler.ts`: command-target mode executes `move` on left-click and cancels on right-click, while the UI tooltip still says `Move to location (right-click)`.
+
+- Investigated the report that build-menu clicks do nothing and no scaffold/blueprint appears.
+- Headed Playwright repro on the live dev server showed the actual behavior split:
+  - wall commands still enter placement mode immediately (`Placing wall_segment...`)
+  - unaffordable structure commands stay in the submenu with no visible explanation because the command card only emitted audio alerts on disabled clicks
+- Added `getDisabledCommandFeedback()` in the command-card layer so disabled clicks now emit the same audio cue plus a visible `ui:error` reason such as `Not enough minerals`, `Not enough plasma`, `Supply blocked`, or `Requires <building>`.
+- Added regression coverage in `tests/components/game/getDisabledCommandFeedback.test.ts` for resource, supply, and requirements feedback selection.
+- TODO: If players are still confused about building starts, consider adding a more explicit resource-state hint in the setup/HUD because normal starts currently begin at `50` minerals while most structures cost more.
+
+- Follow-up repro showed the real first-click placement bug still existed even with enough resources:
+  - after `setresources 500 0`, clicking `Build Basic -> Supply Cache` entered build mode
+  - but the preview still initialized at the preview object's default `(0,0)` until a `mousemove` arrived in building context
+  - the first placement click therefore used stale preview coordinates, so a quick button-click -> map-click flow could cancel without placing anything
+- Fixed `src/engine/input/handlers/BuildingInputHandler.ts` so:
+  - `onActivate()` seeds the preview from the current pointer via `InputManager.containerToWorld()`
+  - the left-click placement path re-samples `event.worldPosition` before reading `getSnappedPosition()` / `isPlacementValid()`
+- Added `tests/engine/input/handlers/buildingInputHandler.test.ts` covering both activation seeding and first-click placement using the actual click world position.
+- Follow-up browser repro showed one more race: the HUD switched `isBuilding` immediately, but `WebGPUGameCanvas` only changed `InputManager` context in a later React effect, so a fast menu-click -> terrain-click sequence still hit `GameplayInputHandler`.
+- Fixed `src/components/game/CommandCard/hooks/useUnitCommands.ts` so build and wall command actions switch `InputManager` context synchronously when they arm placement mode.
+- Live DOM instrumentation then showed terrain clicks were reaching the canvas/container, so the remaining blocker was inside the build handler path.
+- Root cause: `useGameInput()` only pushed `placementPreviewRef.current` / `wallPlacementPreviewRef.current` into the handlers during a one-shot effect keyed on the ref objects, but those refs are populated later by `useWebGPURenderer`. The handlers could therefore keep a permanent `null` preview reference.
+- Fixed `src/components/game/hooks/useGameInput.ts` to retry preview-ref wiring with `requestAnimationFrame` until the renderer-created preview instances exist, then hand them to the building/landing/wall handlers.
+- After that fix, the blueprint started following the cursor and invalid terrain clicks now cancel cleanly instead of doing nothing.
+- Found a second authoritative-state bug that explains the user's `100 minerals` report: `WorkerGame.spawnInitialEntities()` was hardcoding every spawned player back to `50` minerals / `0` plasma, so the worker could still reject structure builds even when the setup UI or temporary HUD state showed more.
+- Fixed `useWorkerBridge` / `WorkerBridge` / `GameWorker` to forward numeric starting-resource values into the worker spawn message and apply them to worker-side player resources at base spawn.
+- Added `tests/engine/workers/gameWorker.test.ts` coverage to lock worker spawn resources to the provided starting-resource payload.
+- The new worker regression test initially failed because `spawnInitialEntities()` now reaches `sendRenderState()` and Vitest does not define worker `postMessage`; fixed the test harness by stubbing `postMessage` in `tests/engine/workers/gameWorker.test.ts`.
+- Verified `npm test -- tests/engine/workers/gameWorker.test.ts tests/engine/input/handlers/buildingInputHandler.test.ts tests/components/game/getDisabledCommandFeedback.test.ts` passes.
+- Verified `npm run build` passes after the worker starting-resource fix.
+- Live browser repro on `http://127.0.0.1:3101/game/setup` now succeeds end to end:
+  - selected `High` starting resources from the setup UI
+  - started the game, used the `Idle` button to select a worker, opened `Build Basic`, chose `Supply Cache`
+  - clicked valid terrain and confirmed the placement banner cleared, the scaffold appeared, minerals dropped from `500` to `400`, and idle workers dropped from `6` to `5`
+  - artifacts: `output/live-build-verify-2/05-supply-cache-mode.png`, `06-before-place-click.png`, `07-after-place-click.png`, plus `result.json`
+- The required `develop-web-game` wrapper script still hangs in this environment before producing artifacts, so the successful gameplay verification used a direct Playwright script against the same live page instead.
+
+- Investigated the lobby start regression where the first `Start Game` click flashed `/game` and dumped the player back to `/game/setup`.
+- Reproduced the exact route bounce in `next dev`: `/game/setup -> /game -> /game/setup` on the first click, which matched a React Strict Mode mount/unmount/remount probe rather than a form submit.
+- Root cause: `src/app/game/page.tsx` called `endGame()` directly from the gameplay page effect cleanup. In development, Strict Mode immediately invokes that cleanup during its remount probe, which cleared `gameStarted` before the route could settle.
+- Applied fix:
+  - added `src/app/game/gamePageLifecycle.ts` so gameplay teardown is deferred by one microtask and only runs if the page stays unmounted
+  - updated `src/app/game/page.tsx` to use that helper instead of unconditionally clearing the session on every effect cleanup
+  - added `tests/app/game/gamePageLifecycle.test.ts` to lock the immediate-remount case and the real-unmount teardown case
+- Updated `docs/architecture/OVERVIEW.md` to document that `/game` teardown is Strict-Mode-safe.
+- Verified `npm test -- tests/app/game/gamePageLifecycle.test.ts` passes.
+- Verified `npm run build` passes.
+- Verified browser automation against both `http://127.0.0.1:3101/game/setup` (`next dev`) and `http://127.0.0.1:3102/game/setup` (`next start`) now keeps the first click on `/game` and advances into the loading screen instead of bouncing back.
+- Ran the required Playwright client after the fix and captured `output/web-game-start-fix/shot-0.png`.
+
+- Re-verified the same lobby-start report against the current workspace on 2026-03-15.
+- Confirmed the existing Strict-Mode-safe `/game` teardown fix is still present in `src/app/game/page.tsx` and `src/app/game/gamePageLifecycle.ts`; no additional code change was needed.
+- Browser checks:
+  - manual Playwright probe on `http://127.0.0.1:3101/game/setup` (`next dev`) transitions to `/game` on the first `Start Game` click
+  - manual Playwright probe on `http://127.0.0.1:3001/game/setup` (launch path) also transitions to `/game` on the first click
+- required `develop-web-game` client run against `http://127.0.0.1:3001/game/setup` captured `output/web-game-lobby-start-verify/shot-0.png`, which shows the in-game loading screen after a single click
+- Verified `npm test -- tests/app/game/gamePageLifecycle.test.ts` still passes.
+- Verified `npm run build` still passes.
+
+- Continued the lobby-start investigation after the manual retest still reported “click start twice.”
+- Found a second real root cause beyond the earlier `/game` teardown bounce:
+  - the visible `Start Game` button could render before the setup page finished hydrating, so an early click was silently dropped because the client handler was not attached yet
+  - regular browser sessions could also stay on a stale cached `/game/setup` shell because `public/sw.js` served navigation HTML with stale-while-revalidate
+- Applied fixes:
+  - added `src/app/game/setup/getStartGameButtonState.ts` and updated `src/app/game/setup/page.tsx` so `Start Game` stays disabled with a `Preparing lobby...` hint until hydration completes
+  - changed `public/sw.js` navigation requests to network-first with cache fallback and bumped the service-worker cache namespace to `v2`, while keeping hashed static shell assets on stale-while-revalidate
+  - added regressions in `tests/app/game/setup/getStartGameButtonState.test.ts` and `tests/app/serviceWorkerRouting.test.ts`
+- Verified:
+  - `npm test -- tests/app/game/gamePageLifecycle.test.ts tests/app/game/setup/getStartGameButtonState.test.ts tests/app/serviceWorkerRouting.test.ts`
+  - `npm run build`
+  - required `develop-web-game` client against `http://127.0.0.1:3200/game/setup` now captures `output/web-game-lobby-start-hydration-fix/shot-0.png`, which shows the loading screen after a single automated click in the same workflow that previously stayed on setup
+  - fresh browser cache inspection on `http://127.0.0.1:3200/game/setup` now reports `voidstrike-assets-v2`, `voidstrike-shell-v2`, and `voidstrike-data-v2`

@@ -455,6 +455,10 @@ export interface SpawnMapData {
   width: number;
   height: number;
   name: string;
+  startingResources?: {
+    minerals: number;
+    plasma: number;
+  };
   spawns?: Array<{
     playerSlot: number;
     x: number;

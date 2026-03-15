@@ -11,6 +11,7 @@ import {
   PRODUCTION_MODULE_UNITS,
 } from '@/data/buildings/dominion';
 import { findBuildingTarget } from '../combat/TargetAcquisition';
+import { EnhancedAISystem } from './EnhancedAISystem';
 import { validateEntityAlive } from '@/utils/EntityValidator';
 import { deterministicDistance as distance, deterministicSqrt } from '@/utils/DeterministicMath';
 
@@ -33,6 +34,12 @@ interface LowerSupplyDepotCommand {
   lower?: boolean;
 }
 
+interface RallyCommand {
+  buildingId: number;
+  targetPosition?: { x: number; y: number };
+  targetEntityId?: number;
+}
+
 interface DemolishCommand {
   entityIds: number[];
 }
@@ -40,6 +47,7 @@ interface DemolishCommand {
 export class BuildingMechanicsSystem extends System {
   public readonly name = 'BuildingMechanicsSystem';
   // Priority is set by SystemRegistry based on dependencies (runs after BuildingPlacementSystem)
+  private aiSystem: EnhancedAISystem | null = null;
 
   constructor(game: IGameInstance) {
     super(game);
@@ -58,10 +66,18 @@ export class BuildingMechanicsSystem extends System {
       'command:flyingBuildingMove',
       this.handleFlyingBuildingMoveCommand.bind(this)
     );
+    this.game.eventBus.on('command:rally', this.handleRallyCommand.bind(this));
     this.game.eventBus.on('command:demolish', this.handleDemolishCommand.bind(this));
     // Multiplayer-synced addon commands
     this.game.eventBus.on('addon:lift', this.handleAddonLiftCommand.bind(this));
     this.game.eventBus.on('addon:land', this.handleAddonLandCommand.bind(this));
+  }
+
+  private getAISystem(): EnhancedAISystem | null {
+    if (!this.aiSystem) {
+      this.aiSystem = this.world.getSystem(EnhancedAISystem) || null;
+    }
+    return this.aiSystem;
   }
 
   private handleAddonLiftCommand(command: { buildingId: number; playerId?: string }): void {
@@ -217,6 +233,32 @@ export class BuildingMechanicsSystem extends System {
     building.setFlyingTarget(command.targetPosition.x, command.targetPosition.y);
   }
 
+  private handleRallyCommand(command: RallyCommand): void {
+    if (!command.targetPosition) return;
+
+    const entity = this.world.getEntity(command.buildingId);
+    if (
+      !validateEntityAlive(entity, command.buildingId, 'BuildingMechanicsSystem:handleRallyCommand')
+    )
+      return;
+
+    const building = entity.get<Building>('Building');
+    if (!building || building.canProduce.length === 0) return;
+
+    building.setRallyPoint(
+      command.targetPosition.x,
+      command.targetPosition.y,
+      command.targetEntityId ?? null
+    );
+
+    this.game.eventBus.emit('rally:set', {
+      buildingId: command.buildingId,
+      x: command.targetPosition.x,
+      y: command.targetPosition.y,
+      targetId: command.targetEntityId,
+    });
+  }
+
   private handleAttachToAddonCommand(data: { buildingId: number; addonId: number }): void {
     const buildingEntity = this.world.getEntity(data.buildingId);
     const addonEntity = this.world.getEntity(data.addonId);
@@ -310,14 +352,19 @@ export class BuildingMechanicsSystem extends System {
         refundPlasma = Math.floor(spentPlasma * 0.75);
       }
 
-      // Refund supply if building provides supply and is complete
-      if (building.isComplete() && building.supplyProvided > 0) {
-        this.game.statePort.addMaxSupply(-building.supplyProvided);
+      const aiPlayer = this.getAISystem()?.getAIPlayer(selectable.playerId);
+
+      if (building.isComplete() && building.supplyProvided > 0 && !aiPlayer) {
+        this.game.statePort.addMaxSupply(-building.supplyProvided, selectable.playerId);
       }
 
-      // Refund resources
       if (refundMinerals > 0 || refundPlasma > 0) {
-        this.game.statePort.addResources(refundMinerals, refundPlasma);
+        if (aiPlayer) {
+          aiPlayer.minerals += refundMinerals;
+          aiPlayer.plasma += refundPlasma;
+        } else {
+          this.game.statePort.addResources(refundMinerals, refundPlasma, selectable.playerId);
+        }
       }
 
       // Mark as destroyed

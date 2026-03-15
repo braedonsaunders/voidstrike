@@ -162,24 +162,25 @@ vi.mock('three', () => {
     parent: unknown = null;
     frustumCulled = true;
     material: Mat;
+    children: Obj3D[] = [];
     constructor(_geo?: Geo, mat?: Mat) {
       this.material = mat ?? new Mat();
     }
-    setRotationFromQuaternion() {}
-  }
-
-  class Scn {
-    children: Obj3D[] = [];
     add(obj: Obj3D) {
       obj.parent = this;
       this.children.push(obj);
     }
     remove(obj: Obj3D) {
       obj.parent = null;
-      const i = this.children.indexOf(obj);
-      if (i >= 0) this.children.splice(i, 1);
+      const index = this.children.indexOf(obj);
+      if (index >= 0) {
+        this.children.splice(index, 1);
+      }
     }
+    setRotationFromQuaternion() {}
   }
+
+  class Scn extends Obj3D {}
 
   class Tex {
     dispose() {}
@@ -238,6 +239,7 @@ vi.mock('three', () => {
     Mesh: Obj3D,
     Sprite: Obj3D,
     Points: Obj3D,
+    Object3D: Obj3D,
     InstancedMesh: class extends Obj3D {
       count = 0;
       instanceMatrix = { needsUpdate: false };
@@ -291,6 +293,7 @@ vi.mock('@/utils/debugLogger', () => ({
 }));
 
 // Import after mocks
+import * as THREE from 'three';
 import { BattleEffectsRenderer } from '@/rendering/effects/BattleEffectsRenderer';
 import { EventBus } from '@/engine/core/EventBus';
 
@@ -300,8 +303,6 @@ describe('BattleEffectsRenderer', () => {
 
   beforeEach(() => {
     eventBus = new EventBus();
-    // Scene mock is provided by the 'three' mock above
-    const THREE = require('three');
     const scene = new THREE.Scene();
     renderer = new BattleEffectsRenderer(scene, eventBus, () => 0);
   });

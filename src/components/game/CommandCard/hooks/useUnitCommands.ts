@@ -1,6 +1,8 @@
 import { useGameStore } from '@/store/gameStore';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { getWorkerBridge, getRenderStateAdapter } from '@/engine/workers';
+import type { GameCommand } from '@/engine/core/GameCommand';
+import { InputManager } from '@/engine/input/InputManager';
 import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { WALL_DEFINITIONS } from '@/data/buildings/walls';
 import { CommandButtonData, MenuMode } from '../types';
@@ -48,6 +50,16 @@ export function useUnitCommands({
   if (!unit) return [];
 
   const buttons: CommandButtonData[] = [];
+  const issueCommand = (command: Omit<GameCommand, 'tick' | 'playerId'>): void => {
+    const localPlayer = getLocalPlayerId();
+    if (!localPlayer) return;
+
+    bridge.issueCommand({
+      ...command,
+      tick: bridge.currentTick,
+      playerId: localPlayer,
+    });
+  };
 
   if (menuMode === 'main') {
     // Basic unit commands
@@ -55,8 +67,10 @@ export function useUnitCommands({
       id: 'move',
       label: 'Move',
       shortcut: 'M',
-      action: () => {},
-      tooltip: 'Move to location (right-click)',
+      action: () => {
+        useGameStore.getState().setCommandTargetMode('move');
+      },
+      tooltip: 'Click a destination for a move order',
     });
 
     buttons.push({
@@ -64,15 +78,10 @@ export function useUnitCommands({
       label: 'Stop',
       shortcut: 'S',
       action: () => {
-        const localPlayer = getLocalPlayerId();
-        if (localPlayer) {
-          bridge.issueCommand({
-            tick: bridge.currentTick,
-            playerId: localPlayer,
-            type: 'STOP',
-            entityIds: selectedUnits,
-          });
-        }
+        issueCommand({
+          type: 'STOP',
+          entityIds: selectedUnits,
+        });
       },
       tooltip: 'Stop current action',
     });
@@ -82,15 +91,10 @@ export function useUnitCommands({
       label: 'Hold',
       shortcut: 'H',
       action: () => {
-        const localPlayer = getLocalPlayerId();
-        if (localPlayer) {
-          bridge.issueCommand({
-            tick: bridge.currentTick,
-            playerId: localPlayer,
-            type: 'HOLD',
-            entityIds: selectedUnits,
-          });
-        }
+        issueCommand({
+          type: 'HOLD',
+          entityIds: selectedUnits,
+        });
       },
       tooltip: 'Hold position - do not move to attack',
     });
@@ -99,16 +103,20 @@ export function useUnitCommands({
       id: 'attack',
       label: 'Attack',
       shortcut: 'A',
-      action: () => {},
-      tooltip: 'Attack-move to location',
+      action: () => {
+        useGameStore.getState().setCommandTargetMode('attack');
+      },
+      tooltip: 'Click a destination for an attack-move order',
     });
 
     buttons.push({
       id: 'patrol',
       label: 'Patrol',
       shortcut: 'P',
-      action: () => {},
-      tooltip: 'Patrol between points',
+      action: () => {
+        useGameStore.getState().setCommandTargetMode('patrol');
+      },
+      tooltip: 'Click a patrol destination',
     });
 
     // Transform commands for units that can transform (e.g., Valkyrie)
@@ -134,16 +142,11 @@ export function useUnitCommands({
           label: mode.name.replace(' Mode', ''),
           shortcut,
           action: () => {
-            const localPlayer = getLocalPlayerId();
-            if (localPlayer && bridge) {
-              bridge.issueCommand({
-                tick: bridge.currentTick,
-                playerId: localPlayer,
-                type: 'TRANSFORM',
-                entityIds: selectedUnits,
-                abilityId: mode.id,
-              });
-            }
+            issueCommand({
+              type: 'TRANSFORM',
+              entityIds: selectedUnits,
+              targetMode: mode.id,
+            });
           },
           isDisabled: isTransforming,
           tooltip: isTransforming
@@ -182,10 +185,15 @@ export function useUnitCommands({
           label: def.name,
           shortcut: def.hotkey,
           action: () => {
-            if (def.targetType === 'point' || def.targetType === 'unit') {
+            if (
+              def.targetType === 'point' ||
+              def.targetType === 'unit' ||
+              def.targetType === 'ally'
+            ) {
               useGameStore.getState().setAbilityTargetMode(def.id);
             } else {
-              bridge.eventBus.emit('command:ability', {
+              issueCommand({
+                type: 'ABILITY',
                 entityIds: selectedUnits,
                 abilityId: def.id,
               });
@@ -197,21 +205,14 @@ export function useUnitCommands({
             ((abilityState.currentCooldown ?? 0) > 0
               ? ` (CD: ${Math.ceil(abilityState.currentCooldown ?? 0)}s)`
               : ''),
-          cost: (energyCost ?? 0) > 0 ? { minerals: 0, plasma: 0, supply: energyCost ?? 0 } : undefined,
+          cost:
+            (energyCost ?? 0) > 0 ? { minerals: 0, plasma: 0, supply: energyCost ?? 0 } : undefined,
         });
       }
     }
 
     // Worker-specific commands
     if (unit.isWorker) {
-      buttons.push({
-        id: 'gather',
-        label: 'Gather',
-        shortcut: 'G',
-        action: () => {},
-        tooltip: 'Gather resources (right-click on minerals/gas)',
-      });
-
       if (unit.canRepair) {
         buttons.push({
           id: 'repair',
@@ -332,10 +333,13 @@ export function useUnitCommands({
         shortcut: def.name.charAt(0).toUpperCase(),
         action: () => {
           if (requirementsMet) {
+            const inputManager = InputManager.getInstanceSync();
             if (isWall) {
               useGameStore.getState().setWallPlacementMode(true, buildingId);
+              inputManager?.setContext('wall');
             } else {
               useGameStore.getState().setBuildingMode(buildingId);
+              inputManager?.setContext('building');
             }
           }
         },

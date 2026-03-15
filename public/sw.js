@@ -1,7 +1,7 @@
 // VOIDSTRIKE Service Worker
 // Runtime caching only — no precaching of game assets (260MB+ would be insane)
 
-const CACHE_VERSION = 1;
+const CACHE_VERSION = 2;
 const SHELL_CACHE = `voidstrike-shell-v${CACHE_VERSION}`;
 const ASSET_CACHE = `voidstrike-assets-v${CACHE_VERSION}`;
 const DATA_CACHE = `voidstrike-data-v${CACHE_VERSION}`;
@@ -52,20 +52,23 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/_next/webpack-hmr')) return;
   if (url.pathname.includes('__nextjs')) return;
 
-  // Route to appropriate caching strategy
-  if (isStaticGameAsset(url.pathname)) {
-    event.respondWith(cacheFirst(request, ASSET_CACHE));
-    return;
-  }
+  const strategy = getRequestStrategy(request, url.pathname);
 
-  if (isGameData(url.pathname)) {
-    event.respondWith(staleWhileRevalidate(request, DATA_CACHE));
-    return;
-  }
-
-  if (isAppShell(request, url.pathname)) {
-    event.respondWith(staleWhileRevalidate(request, SHELL_CACHE));
-    return;
+  switch (strategy) {
+    case 'asset-cache-first':
+      event.respondWith(cacheFirst(request, ASSET_CACHE));
+      return;
+    case 'data-stale-while-revalidate':
+      event.respondWith(staleWhileRevalidate(request, DATA_CACHE));
+      return;
+    case 'navigation-network-first':
+      event.respondWith(networkFirst(request, SHELL_CACHE));
+      return;
+    case 'shell-stale-while-revalidate':
+      event.respondWith(staleWhileRevalidate(request, SHELL_CACHE));
+      return;
+    default:
+      return;
   }
 });
 
@@ -95,13 +98,33 @@ function isGameData(pathname) {
 }
 
 function isAppShell(request, pathname) {
-  // Navigation requests (HTML pages)
-  if (request.mode === 'navigate') return true;
   // Next.js static assets (JS, CSS) — content-hashed, safe to cache
   if (pathname.startsWith('/_next/static/')) return true;
   // Fonts
   if (/\.(woff2?|ttf|otf|eot)$/.test(pathname)) return true;
   return false;
+}
+
+function getRequestStrategy(request, pathname) {
+  if (isStaticGameAsset(pathname)) {
+    return 'asset-cache-first';
+  }
+
+  if (isGameData(pathname)) {
+    return 'data-stale-while-revalidate';
+  }
+
+  // Always prefer the network for HTML navigations so active sessions
+  // pick up bugfixes instead of replaying a stale lobby shell.
+  if (request.mode === 'navigate') {
+    return 'navigation-network-first';
+  }
+
+  if (isAppShell(request, pathname)) {
+    return 'shell-stale-while-revalidate';
+  }
+
+  return null;
 }
 
 // ============================================
@@ -150,6 +173,25 @@ async function staleWhileRevalidate(request, cacheName) {
   if (response) return response;
 
   return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+}
+
+// Network-First: fetch the latest response, fall back to cache on network failure
+// Best for navigation HTML so deploys do not serve stale application shells.
+async function networkFirst(request, cacheName) {
+  const cache = await caches.open(cacheName);
+
+  try {
+    const response = await fetch(request);
+    if (response.ok) {
+      cache.put(request, response.clone());
+    }
+    return response;
+  } catch {
+    const cached = await cache.match(request);
+    if (cached) return cached;
+
+    return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+  }
 }
 
 // ============================================

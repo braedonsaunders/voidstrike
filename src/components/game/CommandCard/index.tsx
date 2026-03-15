@@ -57,7 +57,8 @@ function CommandCardInner() {
   }, []);
 
   // Determine if selection is a unit or building
-  const selectionType = useMemo(() => {
+  const selectionType = (() => {
+    void buildingStateVersion;
     if (selectedUnits.length === 0) return null;
     const worldAdapter = getRenderStateAdapter();
     const entity = worldAdapter.getEntity(selectedUnits[0]);
@@ -65,7 +66,7 @@ function CommandCardInner() {
     if (entity.get('Unit')) return 'unit';
     if (entity.get('Building')) return 'building';
     return null;
-  }, [selectedUnits, buildingStateVersion]);
+  })();
 
   // Get commands from appropriate hook
   const unitCommands = useUnitCommands({

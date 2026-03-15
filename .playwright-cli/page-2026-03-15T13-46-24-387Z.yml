@@ -1,0 +1,153 @@
+- generic [active] [ref=e1]:
+    - alert [ref=e67]
+    - main [ref=e68]:
+        - generic [ref=e72]:
+            - generic [ref=e73]:
+                - generic [ref=e74]:
+                    - link "← Back to Menu" [ref=e75] [cursor=pointer]:
+                        - /url: /
+                    - heading "Game Setup" [level=1] [ref=e76]
+                - generic [ref=e77]:
+                    - button "🔊" [ref=e78] [cursor=pointer]:
+                        - generic [ref=e79]: 🔊
+                    - button "⛶" [ref=e80] [cursor=pointer]:
+                        - generic [ref=e81]: ⛶
+            - generic [ref=e82]:
+                - generic [ref=e83]:
+                    - generic [ref=e84]:
+                        - heading "Players (2/2)" [level=2] [ref=e85]
+                        - button "+ Add Player" [disabled] [ref=e86]
+                    - generic [ref=e87]:
+                        - generic [ref=e88]:
+                            - generic [ref=e89]: '1'
+                            - combobox [ref=e90] [cursor=pointer]:
+                                - option "Human" [selected]
+                                - option "AI"
+                                - option "Open"
+                                - option "Closed"
+                            - combobox [ref=e91] [cursor=pointer]:
+                                - option "FFA" [selected]
+                                - option "Team 1"
+                                - option "Team 2"
+                                - option "Team 3"
+                                - option "Team 4"
+                            - combobox [ref=e92] [cursor=pointer]:
+                                - option "Dominion" [selected]
+                            - generic [ref=e93]:
+                                - button "Blue" [ref=e94] [cursor=pointer]
+                                - button "Red" [disabled] [ref=e95]
+                                - button "Green" [ref=e96] [cursor=pointer]
+                                - button "Yellow" [ref=e97] [cursor=pointer]
+                                - button "Purple" [ref=e98] [cursor=pointer]
+                                - button "Orange" [ref=e99] [cursor=pointer]
+                                - button "Cyan" [ref=e100] [cursor=pointer]
+                                - button "Pink" [ref=e101] [cursor=pointer]
+                        - generic [ref=e102]:
+                            - generic [ref=e103]: '2'
+                            - combobox [ref=e104] [cursor=pointer]:
+                                - option "Human"
+                                - option "AI" [selected]
+                                - option "Open"
+                                - option "Closed"
+                            - combobox [ref=e105] [cursor=pointer]:
+                                - option "FFA" [selected]
+                                - option "Team 1"
+                                - option "Team 2"
+                                - option "Team 3"
+                                - option "Team 4"
+                            - combobox [ref=e106] [cursor=pointer]:
+                                - option "Dominion" [selected]
+                            - combobox [ref=e107] [cursor=pointer]:
+                                - option "Easy"
+                                - option "Medium" [selected]
+                                - option "Hard"
+                                - option "Insane"
+                            - generic [ref=e108]:
+                                - button "Blue" [disabled] [ref=e109]
+                                - button "Red" [ref=e110] [cursor=pointer]
+                                - button "Green" [ref=e111] [cursor=pointer]
+                                - button "Yellow" [ref=e112] [cursor=pointer]
+                                - button "Purple" [ref=e113] [cursor=pointer]
+                                - button "Orange" [ref=e114] [cursor=pointer]
+                                - button "Cyan" [ref=e115] [cursor=pointer]
+                                - button "Pink" [ref=e116] [cursor=pointer]
+                - generic [ref=e117]:
+                    - generic [ref=e118]:
+                        - heading "Multiplayer" [level=2] [ref=e120]
+                        - generic [ref=e121]:
+                            - generic [ref=e122]: Your Name
+                            - textbox "Enter your name" [ref=e123]: Player
+                        - generic [ref=e125] [cursor=pointer]:
+                            - checkbox "Make lobby public" [ref=e126]
+                            - generic [ref=e127]: Make lobby public
+                        - paragraph [ref=e128]: Share code with friends. Set slot to "Open" to let them join.
+                    - generic [ref=e129]:
+                        - heading "Select Map" [level=2] [ref=e130]
+                        - textbox "Search maps..." [ref=e131]
+                        - generic [ref=e133]:
+                            - generic [ref=e134]:
+                                - button "360x320 jungle Contested Frontier" [ref=e135] [cursor=pointer]:
+                                    - generic [ref=e136]:
+                                        - generic [ref=e137]: 360x320
+                                        - generic [ref=e138]: jungle
+                                    - heading "Contested Frontier" [level=3] [ref=e140]
+                                - button "Edit" [ref=e141] [cursor=pointer]
+                            - generic [ref=e142]:
+                                - button "200x180 frozen Crystal Caverns" [ref=e143] [cursor=pointer]:
+                                    - generic [ref=e144]:
+                                        - generic [ref=e145]: 200x180
+                                        - generic [ref=e146]: frozen
+                                    - heading "Crystal Caverns" [level=3] [ref=e148]
+                                - button "Edit" [ref=e149] [cursor=pointer]
+                                - generic [ref=e150]: ✓
+                            - generic [ref=e151]:
+                                - button "280x280 desert Scorched Basin" [ref=e152] [cursor=pointer]:
+                                    - generic [ref=e153]:
+                                        - generic [ref=e154]: 280x280
+                                        - generic [ref=e155]: desert
+                                    - heading "Scorched Basin" [level=3] [ref=e157]
+                                - button "Edit" [ref=e158] [cursor=pointer]
+                            - generic [ref=e159]:
+                                - button "320x320 desert Test 6P Flat" [ref=e160] [cursor=pointer]:
+                                    - generic [ref=e161]:
+                                        - generic [ref=e162]: 320x320
+                                        - generic [ref=e163]: desert
+                                    - heading "Test 6P Flat" [level=3] [ref=e165]
+                                - button "Edit" [ref=e166] [cursor=pointer]
+                            - generic [ref=e167]:
+                                - button "400x400 volcanic Titan's Colosseum" [ref=e168] [cursor=pointer]:
+                                    - generic [ref=e169]:
+                                        - generic [ref=e170]: 400x400
+                                        - generic [ref=e171]: volcanic
+                                    - heading "Titan's Colosseum" [level=3] [ref=e173]
+                                - button "Edit" [ref=e174] [cursor=pointer]
+                            - generic [ref=e175]:
+                                - button "220x220 void Void Assault" [ref=e176] [cursor=pointer]:
+                                    - generic [ref=e177]:
+                                        - generic [ref=e178]: 220x220
+                                        - generic [ref=e179]: void
+                                    - heading "Void Assault" [level=3] [ref=e181]
+                                - button "Edit" [ref=e182] [cursor=pointer]
+                        - generic [ref=e184]:
+                            - heading "Crystal Caverns" [level=3] [ref=e185]
+                            - generic [ref=e186]: 200x180 • 2P
+                    - generic [ref=e187]:
+                        - heading "Game Settings" [level=2] [ref=e188]
+                        - generic [ref=e189]:
+                            - generic [ref=e190]:
+                                - generic [ref=e191]: Starting Resources
+                                - combobox [ref=e192] [cursor=pointer]:
+                                    - option "Normal" [selected]
+                                    - option "High"
+                                    - option "Insane"
+                            - generic [ref=e193]:
+                                - generic [ref=e194]: Game Speed
+                                - combobox [ref=e195] [cursor=pointer]:
+                                    - option "0.5x"
+                                    - option "1x" [selected]
+                                    - option "1.5x"
+                                    - option "2x"
+                            - generic [ref=e196]:
+                                - generic [ref=e197]: Fog of War
+                                - button [ref=e198] [cursor=pointer]
+                    - button "Start Game" [ref=e201] [cursor=pointer]

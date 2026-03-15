@@ -5,6 +5,7 @@ import { getWorkerBridge } from '@/engine/workers';
 import { CommandButton } from '@/components/ui/CommandButton';
 import { EmptySlot } from '@/components/ui/EmptySlot';
 import { getCommandIcon } from '@/utils/commandIcons';
+import { getDisabledCommandFeedback } from './getDisabledCommandFeedback';
 import { CommandButtonData } from './types';
 
 interface CommandGridProps {
@@ -32,17 +33,24 @@ function CommandGridInner({
   // Handle clicks on disabled buttons to play resource alerts
   const handleDisabledClick = useCallback(
     (cmd: CommandButtonData) => {
-      if (!cmd.isDisabled || !cmd.cost) return;
+      if (!cmd.isDisabled) return;
 
       const bridge = getWorkerBridge();
       if (!bridge) return;
 
-      if (cmd.cost.minerals > 0 && minerals < cmd.cost.minerals) {
-        bridge.eventBus.emit('alert:notEnoughMinerals', {});
-      } else if (cmd.cost.plasma > 0 && plasma < cmd.cost.plasma) {
-        bridge.eventBus.emit('alert:notEnoughPlasma', {});
-      } else if (cmd.cost.supply && cmd.cost.supply > 0 && supply + cmd.cost.supply > maxSupply) {
-        bridge.eventBus.emit('alert:supplyBlocked', {});
+      const feedback = getDisabledCommandFeedback(cmd, {
+        minerals,
+        plasma,
+        supply,
+        maxSupply,
+      });
+
+      if (feedback.audioEvent) {
+        bridge.eventBus.emit(feedback.audioEvent, {});
+      }
+
+      if (feedback.uiError) {
+        bridge.eventBus.emit('ui:error', { message: feedback.uiError });
       }
     },
     [minerals, plasma, supply, maxSupply]

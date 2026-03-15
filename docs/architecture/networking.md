@@ -58,6 +58,8 @@ A groundbreaking multiplayer architecture that requires **zero servers** to oper
 | **Multi-Peer Support**    | `multiplayerStore.ts`            | ✅ Full mesh topology for up to 8 players                  |
 | **Latency Measurement**   | `multiplayerStore.ts`            | ✅ Ping/pong with RTT, jitter, packet loss tracking        |
 
+Lockstep simulation now treats economy state as player-scoped engine data. Synchronized research, production, building placement, refunds, and supply updates must always execute against the owning `playerId`, with the local UI store reflecting only the local player's slice.
+
 ### ⚠️ What's INCOMPLETE
 
 | Component                | Gap                                                                                                                   |

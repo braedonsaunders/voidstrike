@@ -21,7 +21,11 @@ export class ResearchSystem extends System {
     this.game.eventBus.on('research:complete', this.handleResearchComplete.bind(this));
   }
 
-  private handleResearchCommand(command: { entityIds: number[]; upgradeId: string }): void {
+  private handleResearchCommand(command: {
+    entityIds: number[];
+    upgradeId: string;
+    playerId?: string;
+  }): void {
     const { entityIds, upgradeId } = command;
     const upgrade = RESEARCH_DEFINITIONS[upgradeId];
 
@@ -30,7 +34,10 @@ export class ResearchSystem extends System {
       return;
     }
 
-    const playerId = this.game.config.playerId;
+    const playerId = command.playerId ?? this.resolvePlayerId(entityIds);
+    if (!playerId) {
+      return;
+    }
 
     // Check if already researched
     if (this.game.statePort.hasResearch(playerId, upgradeId)) {
@@ -45,12 +52,12 @@ export class ResearchSystem extends System {
     }
 
     // Check resources
-    if (this.game.statePort.getMinerals() < upgrade.mineralCost) {
+    if (this.game.statePort.getMinerals(playerId) < upgrade.mineralCost) {
       this.game.eventBus.emit('alert:notEnoughMinerals', {});
       this.game.eventBus.emit('warning:lowMinerals', {});
       return;
     }
-    if (this.game.statePort.getPlasma() < upgrade.plasmaCost) {
+    if (this.game.statePort.getPlasma(playerId) < upgrade.plasmaCost) {
       this.game.eventBus.emit('alert:notEnoughPlasma', {});
       this.game.eventBus.emit('warning:lowPlasma', {});
       return;
@@ -78,7 +85,7 @@ export class ResearchSystem extends System {
       }
 
       // Deduct resources
-      this.game.statePort.addResources(-upgrade.mineralCost, -upgrade.plasmaCost);
+      this.game.statePort.addResources(-upgrade.mineralCost, -upgrade.plasmaCost, playerId);
 
       // Add to production queue
       building.addToProductionQueue('upgrade', upgradeId, upgrade.researchTime);
@@ -90,6 +97,20 @@ export class ResearchSystem extends System {
 
       return; // Only research from one building
     }
+  }
+
+  private resolvePlayerId(entityIds: number[]): string | null {
+    for (const entityId of entityIds) {
+      const entity = this.world.getEntity(entityId);
+      if (!validateEntityAlive(entity, entityId, 'ResearchSystem:resolvePlayerId')) continue;
+
+      const selectable = entity.get<Selectable>('Selectable');
+      if (selectable?.playerId) {
+        return selectable.playerId;
+      }
+    }
+
+    return null;
   }
 
   private handleResearchComplete(event: { buildingId: number; upgradeId: string }): void {

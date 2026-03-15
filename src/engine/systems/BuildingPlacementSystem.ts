@@ -119,20 +119,19 @@ export class BuildingPlacementSystem extends System {
     const aiSystem = this.getAISystem();
     const aiPlayer = aiSystem?.getAIPlayer(playerId);
     const isPlayerAI = aiPlayer !== undefined;
-    const isPlayerLocal = !isPlayerAI && playerId === this.game.config.playerId;
 
     // Check resources based on player type
     if (isPlayerAI && aiPlayer) {
       if (aiPlayer.minerals < totalCost.minerals || aiPlayer.plasma < totalCost.plasma) {
         return;
       }
-    } else if (isPlayerLocal) {
-      if (this.game.statePort.getMinerals() < totalCost.minerals) {
+    } else {
+      if (this.game.statePort.getMinerals(playerId) < totalCost.minerals) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (this.game.statePort.getPlasma() < totalCost.plasma) {
+      if (this.game.statePort.getPlasma(playerId) < totalCost.plasma) {
         this.game.eventBus.emit('alert:notEnoughPlasma', {});
         this.game.eventBus.emit('warning:lowPlasma', {});
         return;
@@ -164,8 +163,8 @@ export class BuildingPlacementSystem extends System {
     if (isPlayerAI && aiPlayer) {
       aiPlayer.minerals -= totalCost.minerals;
       aiPlayer.plasma -= totalCost.plasma;
-    } else if (isPlayerLocal) {
-      this.game.statePort.addResources(-totalCost.minerals, -totalCost.plasma);
+    } else {
+      this.game.statePort.addResources(-totalCost.minerals, -totalCost.plasma, playerId);
     }
 
     // Generate unique wall line ID for this placement
@@ -410,24 +409,21 @@ export class BuildingPlacementSystem extends System {
     const aiSystem = this.getAISystem();
     const aiPlayer = aiSystem?.getAIPlayer(playerId);
     const isPlayerAI = aiPlayer !== undefined;
-    // Only consider as local human player if NOT an AI player
-    const isPlayerLocal = !isPlayerAI && playerId === this.game.config.playerId;
 
-    // Check resources (local player via game store, AI via AI state)
-    if (isPlayerLocal) {
-      if (this.game.statePort.getMinerals() < definition.mineralCost) {
+    if (isPlayerAI && aiPlayer) {
+      if (aiPlayer.minerals < definition.mineralCost || aiPlayer.plasma < definition.plasmaCost) {
+        debugBuildingPlacement.log(`AI ${playerId} lacks resources for ${buildingType}`);
+        return;
+      }
+    } else {
+      if (this.game.statePort.getMinerals(playerId) < definition.mineralCost) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (this.game.statePort.getPlasma() < definition.plasmaCost) {
+      if (this.game.statePort.getPlasma(playerId) < definition.plasmaCost) {
         this.game.eventBus.emit('alert:notEnoughPlasma', {});
         this.game.eventBus.emit('warning:lowPlasma', {});
-        return;
-      }
-    } else if (isPlayerAI && aiPlayer) {
-      if (aiPlayer.minerals < definition.mineralCost || aiPlayer.plasma < definition.plasmaCost) {
-        debugBuildingPlacement.log(`AI ${playerId} lacks resources for ${buildingType}`);
         return;
       }
     }
@@ -491,12 +487,11 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Deduct resources (local player via store, AI via AI state)
-    if (isPlayerLocal) {
-      this.game.statePort.addResources(-definition.mineralCost, -definition.plasmaCost);
-    } else if (isPlayerAI && aiPlayer) {
+    if (isPlayerAI && aiPlayer) {
       aiPlayer.minerals -= definition.mineralCost;
       aiPlayer.plasma -= definition.plasmaCost;
+    } else {
+      this.game.statePort.addResources(-definition.mineralCost, -definition.plasmaCost, playerId);
     }
 
     // Create the building entity at the snapped center position
@@ -608,9 +603,7 @@ export class BuildingPlacementSystem extends System {
     workerId: number | undefined,
     playerId: string
   ): { entity: Entity } | null {
-    // statePort only exists on main thread Game, not WorkerGame
-    // In worker context (AI players), there are no selected units anyway
-    const selectedUnits = (this.game as any).statePort?.getSelectedUnits?.() ?? [];
+    const selectedUnits = this.game.statePort.getSelectedUnits();
 
     // If specific worker ID provided, use that ONLY if they're not already building
     if (workerId !== undefined) {
@@ -699,13 +692,13 @@ export class BuildingPlacementSystem extends System {
       building.state = 'complete';
       health.current = health.max;
 
-      // Add supply if applicable - only for local human player's buildings (AI supply is recalculated)
+      // AI supply is recalculated from entities; human players use the shared state port.
       const selectable = entity.get<Selectable>('Selectable');
       if (building.supplyProvided > 0 && selectable?.playerId) {
         const aiSystem = this.getAISystem();
         const isAI = aiSystem?.isAIPlayer(selectable.playerId) ?? false;
-        if (!isAI && selectable.playerId === this.game.config.playerId) {
-          this.game.statePort.addMaxSupply(building.supplyProvided);
+        if (!isAI) {
+          this.game.statePort.addMaxSupply(building.supplyProvided, selectable.playerId);
         }
       }
 
@@ -777,9 +770,7 @@ export class BuildingPlacementSystem extends System {
     const aiSystem = this.getAISystem();
     const aiPlayer = aiSystem?.getAIPlayer(playerId);
     const isPlayerAI = aiPlayer !== undefined;
-    const isPlayerLocal = !isPlayerAI && playerId === this.game.config.playerId;
 
-    // Check resources (local player via game store, AI via AI state)
     if (isPlayerAI && aiPlayer) {
       if (aiPlayer.minerals < addonDef.mineralCost || aiPlayer.plasma < addonDef.plasmaCost) {
         debugBuildingPlacement.log(
@@ -787,13 +778,13 @@ export class BuildingPlacementSystem extends System {
         );
         return;
       }
-    } else if (isPlayerLocal) {
-      if (this.game.statePort.getMinerals() < addonDef.mineralCost) {
+    } else {
+      if (this.game.statePort.getMinerals(playerId) < addonDef.mineralCost) {
         this.game.eventBus.emit('alert:notEnoughMinerals', {});
         this.game.eventBus.emit('warning:lowMinerals', {});
         return;
       }
-      if (this.game.statePort.getPlasma() < addonDef.plasmaCost) {
+      if (this.game.statePort.getPlasma(playerId) < addonDef.plasmaCost) {
         this.game.eventBus.emit('alert:notEnoughPlasma', {});
         this.game.eventBus.emit('warning:lowPlasma', {});
         return;
@@ -813,12 +804,11 @@ export class BuildingPlacementSystem extends System {
       return;
     }
 
-    // Deduct resources (local player via store, AI via AI state)
-    if (isPlayerLocal) {
-      this.game.statePort.addResources(-addonDef.mineralCost, -addonDef.plasmaCost);
-    } else if (isPlayerAI && aiPlayer) {
+    if (isPlayerAI && aiPlayer) {
       aiPlayer.minerals -= addonDef.mineralCost;
       aiPlayer.plasma -= addonDef.plasmaCost;
+    } else {
+      this.game.statePort.addResources(-addonDef.mineralCost, -addonDef.plasmaCost, playerId);
     }
 
     // Create the addon entity - starts in 'constructing' state (no worker needed)
@@ -1559,12 +1549,12 @@ export class BuildingPlacementSystem extends System {
           if (isAddon) {
             this.handleAddonCompletion(entity.id, building, selectable?.playerId);
           } else {
-            // Add supply if applicable - only for local human player's buildings (AI supply is recalculated)
+            // AI supply is recalculated from entities; human players use the shared state port.
             if (building.supplyProvided > 0 && selectable?.playerId) {
               const aiSystem = this.getAISystem();
               const isAI = aiSystem?.isAIPlayer(selectable.playerId) ?? false;
-              if (!isAI && selectable.playerId === this.game.config.playerId) {
-                this.game.statePort.addMaxSupply(building.supplyProvided);
+              if (!isAI) {
+                this.game.statePort.addMaxSupply(building.supplyProvided, selectable.playerId);
               }
             }
 
@@ -1896,9 +1886,12 @@ export class BuildingPlacementSystem extends System {
           debugBuildingPlacement.log(
             `BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.plasmaCost} plasma to AI ${selectable.playerId} for cancelled ${building.name}`
           );
-        } else if (selectable.playerId === this.game.config.playerId) {
-          // Refund to local human player
-          this.game.statePort.addResources(definition.mineralCost, definition.plasmaCost);
+        } else {
+          this.game.statePort.addResources(
+            definition.mineralCost,
+            definition.plasmaCost,
+            selectable.playerId
+          );
           debugBuildingPlacement.log(
             `BuildingPlacementSystem: Refunded ${definition.mineralCost} minerals, ${definition.plasmaCost} plasma for cancelled ${building.name}`
           );

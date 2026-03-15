@@ -1,0 +1,3 @@
+[     641ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:3100/favicon.ico:0
+[   15457ms] [WARNING] [GPUTimestampProfiler] Already initialized @ http://127.0.0.1:3100/_next/static/chunks/fac8ac4195ad9cde.js:257
+[   19800ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:3100/audio/alert/not_enough_plasma.mp3:0

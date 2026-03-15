@@ -1,6 +1,6 @@
 import { useGameStore } from '@/store/gameStore';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
-import { Game } from '@/engine/core/Game';
+import type { GameCommand } from '@/engine/core/GameCommand';
 import { getWorkerBridge, getRenderStateAdapter } from '@/engine/workers';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { BUILDING_DEFINITIONS, RESEARCH_MODULE_UNITS } from '@/data/buildings/dominion';
@@ -29,7 +29,6 @@ export function useBuildingCommands({
 }: UseBuildingCommandsParams): CommandButtonData[] {
   const bridge = getWorkerBridge();
   const worldAdapter = getRenderStateAdapter();
-  const game = Game.getInstance();
 
   if (!bridge || selectedUnits.length === 0) return [];
 
@@ -67,6 +66,16 @@ export function useBuildingCommands({
   const isComplete = building.isComplete?.() ?? building.state === 'complete';
   const isFlying =
     building.state === 'flying' || building.state === 'lifting' || building.state === 'landing';
+  const issueCommand = (command: Omit<GameCommand, 'tick' | 'playerId'>): void => {
+    const localPlayer = getLocalPlayerId();
+    if (!localPlayer) return;
+
+    bridge.issueCommand({
+      ...command,
+      tick: bridge.currentTick,
+      playerId: localPlayer,
+    });
+  };
 
   // Building under construction
   if (!isComplete && building.state !== 'destroyed' && !isFlying) {
@@ -75,15 +84,10 @@ export function useBuildingCommands({
       label: 'Cancel',
       shortcut: 'ESC',
       action: () => {
-        const localPlayer = getLocalPlayerId();
-        if (localPlayer && bridge) {
-          bridge.issueCommand({
-            tick: bridge.currentTick,
-            playerId: localPlayer,
-            type: 'DEMOLISH',
-            entityIds: selectedUnits,
-          });
-        }
+        issueCommand({
+          type: 'DEMOLISH',
+          entityIds: selectedUnits,
+        });
       },
       tooltip: 'Cancel construction (refunds 75% of resources spent)',
     });
@@ -111,7 +115,10 @@ export function useBuildingCommands({
         label: (wall.gateOpenProgress ?? 0) > 0.5 ? 'Close' : 'Open',
         shortcut: 'O',
         action: () => {
-          bridge.eventBus.emit('command:gate_toggle', { entityIds: selectedUnits });
+          issueCommand({
+            type: 'GATE_TOGGLE',
+            entityIds: selectedUnits,
+          });
         },
         tooltip: (wall.gateOpenProgress ?? 0) > 0.5 ? 'Close the gate' : 'Open the gate',
       });
@@ -121,9 +128,13 @@ export function useBuildingCommands({
         label: wall.gateState === 'locked' ? 'Unlock' : 'Lock',
         shortcut: 'L',
         action: () => {
-          bridge.eventBus.emit('command:gate_lock', { entityIds: selectedUnits });
+          issueCommand({
+            type: 'GATE_LOCK',
+            entityIds: selectedUnits,
+          });
         },
-        tooltip: wall.gateState === 'locked' ? 'Unlock the gate' : 'Lock the gate (prevents opening)',
+        tooltip:
+          wall.gateState === 'locked' ? 'Unlock the gate' : 'Lock the gate (prevents opening)',
       });
 
       if (wall.gateState !== 'auto') {
@@ -132,7 +143,10 @@ export function useBuildingCommands({
           label: 'Auto',
           shortcut: 'A',
           action: () => {
-            bridge.eventBus.emit('command:gate_auto', { entityIds: selectedUnits });
+            issueCommand({
+              type: 'GATE_AUTO',
+              entityIds: selectedUnits,
+            });
           },
           tooltip: 'Set gate to auto-open for friendly units',
         });
@@ -150,7 +164,8 @@ export function useBuildingCommands({
           label: 'Reinforce',
           shortcut: 'R',
           action: () => {
-            bridge.eventBus.emit('command:wall_upgrade', {
+            issueCommand({
+              type: 'WALL_UPGRADE',
               entityIds: selectedUnits,
               upgradeType: 'reinforced',
             });
@@ -166,7 +181,8 @@ export function useBuildingCommands({
           label: 'Shield',
           shortcut: 'S',
           action: () => {
-            bridge.eventBus.emit('command:wall_upgrade', {
+            issueCommand({
+              type: 'WALL_UPGRADE',
               entityIds: selectedUnits,
               upgradeType: 'shielded',
             });
@@ -182,7 +198,8 @@ export function useBuildingCommands({
           label: 'Weapon',
           shortcut: 'W',
           action: () => {
-            bridge.eventBus.emit('command:wall_upgrade', {
+            issueCommand({
+              type: 'WALL_UPGRADE',
               entityIds: selectedUnits,
               upgradeType: 'weapon',
             });
@@ -213,20 +230,22 @@ export function useBuildingCommands({
         label: unitDef.name,
         shortcut: unitDef.name.charAt(0).toUpperCase(),
         action: () => {
-          if (!hasSupply) {
-            bridge.eventBus.emit('alert:supplyBlocked', {});
-          }
-          bridge.eventBus.emit('command:train', {
+          issueCommand({
+            type: 'TRAIN',
             entityIds: selectedUnits,
             unitType: unitId,
           });
         },
-        isDisabled: !canAfford,
+        isDisabled: !canAfford || !hasSupply,
         tooltip:
           (unitDef.description || `Train ${unitDef.name}`) +
           ` [${attackTypeText}]` +
           (!hasSupply ? ' (Need more supply)' : ''),
-        cost: { minerals: unitDef.mineralCost, plasma: unitDef.plasmaCost, supply: unitDef.supplyCost },
+        cost: {
+          minerals: unitDef.mineralCost,
+          plasma: unitDef.plasmaCost,
+          supply: unitDef.supplyCost,
+        },
       });
     });
   }
@@ -255,18 +274,20 @@ export function useBuildingCommands({
         shortcut: unitDef.name.charAt(0).toUpperCase(),
         action: () => {
           if (hasTechLab) {
-            if (!hasSupply) {
-              bridge.eventBus.emit('alert:supplyBlocked', {});
-            }
-            bridge.eventBus.emit('command:train', {
+            issueCommand({
+              type: 'TRAIN',
               entityIds: selectedUnits,
               unitType: unitId,
             });
           }
         },
-        isDisabled: !canTrain,
+        isDisabled: !canTrain || !hasSupply,
         tooltip: tooltipText,
-        cost: { minerals: unitDef.mineralCost, plasma: unitDef.plasmaCost, supply: unitDef.supplyCost },
+        cost: {
+          minerals: unitDef.mineralCost,
+          plasma: unitDef.plasmaCost,
+          supply: unitDef.supplyCost,
+        },
       });
     });
 
@@ -281,15 +302,13 @@ export function useBuildingCommands({
           label: 'Tech Lab',
           shortcut: 'T',
           action: () => {
-            const currentBridge = getWorkerBridge();
-            const currentSelectedUnits = useGameStore.getState().selectedUnits;
-            if (currentBridge && currentSelectedUnits.length > 0) {
-              currentBridge.eventBus.emit('building:build_addon', {
-                buildingId: currentSelectedUnits[0],
-                addonType: 'research_module',
-                playerId: localPlayer,
-              });
-            }
+            if (!localPlayer) return;
+            issueCommand({
+              type: 'BUILD_ADDON',
+              entityIds: [selectedUnits[0]],
+              buildingId: selectedUnits[0],
+              addonType: 'research_module',
+            });
           },
           isDisabled: !canAffordModule,
           tooltip: moduleDef.description || 'Addon that unlocks advanced units and research.',
@@ -299,22 +318,21 @@ export function useBuildingCommands({
 
       const reactorDef = BUILDING_DEFINITIONS['production_module'];
       if (reactorDef) {
-        const canAffordReactor = minerals >= reactorDef.mineralCost && plasma >= reactorDef.plasmaCost;
+        const canAffordReactor =
+          minerals >= reactorDef.mineralCost && plasma >= reactorDef.plasmaCost;
         const localPlayer = getLocalPlayerId();
         buttons.push({
           id: 'build_production_module',
           label: 'Reactor',
           shortcut: 'C',
           action: () => {
-            const currentGame = Game.getInstance();
-            const currentSelectedUnits = useGameStore.getState().selectedUnits;
-            if (currentGame && currentSelectedUnits.length > 0) {
-              currentGame.eventBus.emit('building:build_addon', {
-                buildingId: currentSelectedUnits[0],
-                addonType: 'production_module',
-                playerId: localPlayer,
-              });
-            }
+            if (!localPlayer) return;
+            issueCommand({
+              type: 'BUILD_ADDON',
+              entityIds: [selectedUnits[0]],
+              buildingId: selectedUnits[0],
+              addonType: 'production_module',
+            });
           },
           isDisabled: !canAffordReactor,
           tooltip: reactorDef.description || 'Addon that enables double production of basic units.',
@@ -354,12 +372,14 @@ export function useBuildingCommands({
         label: upgrade.name,
         shortcut: upgrade.name.charAt(0).toUpperCase(),
         action: () => {
-          bridge.eventBus.emit('command:research', {
+          issueCommand({
+            type: 'RESEARCH',
             entityIds: selectedUnits,
             upgradeId,
           });
         },
-        isDisabled: minerals < upgrade.mineralCost || plasma < upgrade.plasmaCost || !reqMet || isResearching,
+        isDisabled:
+          minerals < upgrade.mineralCost || plasma < upgrade.plasmaCost || !reqMet || isResearching,
         tooltip: upgrade.description + (isResearching ? ' (In progress)' : ''),
         cost: { minerals: upgrade.mineralCost, plasma: upgrade.plasmaCost },
       });
@@ -384,7 +404,8 @@ export function useBuildingCommands({
           label: upgradeDef.name,
           shortcut,
           action: () => {
-            bridge.eventBus.emit('command:upgrade_building', {
+            issueCommand({
+              type: 'UPGRADE_BUILDING',
               entityIds: selectedUnits,
               upgradeTo: upgradeBuildingId,
             });
@@ -417,15 +438,10 @@ export function useBuildingCommands({
       label: 'Demolish',
       shortcut: 'DEL',
       action: () => {
-        const localPlayer = getLocalPlayerId();
-        if (localPlayer) {
-          bridge.issueCommand({
-            tick: bridge.currentTick,
-            playerId: localPlayer,
-            type: 'DEMOLISH',
-            entityIds: selectedUnits,
-          });
-        }
+        issueCommand({
+          type: 'DEMOLISH',
+          entityIds: selectedUnits,
+        });
       },
       tooltip: 'Demolish building (refunds 50% of resources)',
     });
@@ -440,16 +456,11 @@ export function useBuildingCommands({
       shortcut: 'L',
       action: () => {
         if (!hasQueue) {
-          const localPlayer = getLocalPlayerId();
-          if (localPlayer) {
-            game.issueCommand({
-              tick: game.getCurrentTick(),
-              playerId: localPlayer,
-              type: 'LIFTOFF',
-              entityIds: [selectedUnits[0]],
-              buildingId: selectedUnits[0],
-            });
-          }
+          issueCommand({
+            type: 'LIFTOFF',
+            entityIds: [selectedUnits[0]],
+            buildingId: selectedUnits[0],
+          });
         }
       },
       isDisabled: hasQueue,
@@ -499,10 +510,15 @@ export function useBuildingCommands({
         label: def.name,
         shortcut: def.hotkey,
         action: () => {
-          if (def.targetType === 'point' || def.targetType === 'unit') {
+          if (
+            def.targetType === 'point' ||
+            def.targetType === 'unit' ||
+            def.targetType === 'ally'
+          ) {
             useGameStore.getState().setAbilityTargetMode(def.id);
           } else {
-            bridge.eventBus.emit('command:ability', {
+            issueCommand({
+              type: 'ABILITY',
               entityIds: selectedUnits,
               abilityId: def.id,
             });
@@ -514,7 +530,8 @@ export function useBuildingCommands({
           ((abilityState.currentCooldown ?? 0) > 0
             ? ` (CD: ${Math.ceil(abilityState.currentCooldown ?? 0)}s)`
             : ''),
-        cost: (energyCost ?? 0) > 0 ? { minerals: 0, plasma: 0, supply: energyCost ?? 0 } : undefined,
+        cost:
+          (energyCost ?? 0) > 0 ? { minerals: 0, plasma: 0, supply: energyCost ?? 0 } : undefined,
       });
     }
   }

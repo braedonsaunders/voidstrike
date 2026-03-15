@@ -1917,7 +1917,9 @@ await setOverlayCache(mapHash, 'navmesh', textureData, width, height);
 | `src/rendering/tsl/GameOverlay.ts`  | TSL-based 3D strategic overlays       |
 | `src/rendering/OverlayManager.ts`   | Unified overlay manager (alternative) |
 | `src/phaser/scenes/OverlayScene.ts` | Phaser 2D tactical overlays           |
-| `src/workers/overlay.worker.ts`     | Overlay computation worker            |
-| `src/workers/pathfinding.worker.ts` | Batch pathfinding queries             |
-| `src/utils/overlayCache.ts`         | IndexedDB caching                     |
-| `src/store/uiStore.ts`              | Overlay state management              |
+
+Building and landing placement previews are seeded from the current pointer when the input context activates, so the first post-command click uses the actual cursor world position instead of a stale default preview origin.
+| `src/workers/overlay.worker.ts` | Overlay computation worker |
+| `src/workers/pathfinding.worker.ts` | Batch pathfinding queries |
+| `src/utils/overlayCache.ts` | IndexedDB caching |
+| `src/store/uiStore.ts` | Overlay state management |

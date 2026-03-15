@@ -44,4 +44,5 @@ export {
   GameplayInputHandler,
   CommandInputHandler,
   BuildingInputHandler,
+  WallInputHandler,
 } from './handlers';

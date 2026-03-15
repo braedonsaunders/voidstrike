@@ -227,16 +227,12 @@ describe('Command Synchronization', () => {
       'RALLY',
       'GATHER',
       'CANCEL_PRODUCTION',
-      'CANCEL_RESEARCH',
-      'CANCEL_BUILDING',
       'QUEUE_REORDER',
       'SUPPLY_DEPOT_LOWER',
-      'SUPPLY_DEPOT_RAISE',
       'SET_AUTOCAST',
       'BUILD_WALL',
       'ADDON_LIFT',
       'ADDON_LAND',
-      'SUBMERGE',
       'HEARTBEAT',
     ];
 

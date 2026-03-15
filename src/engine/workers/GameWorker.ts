@@ -158,10 +158,10 @@ export class WorkerGame extends GameCore {
   public statePort: GameStatePort = {
     getSelectedUnits: () => this.selectedEntityIds,
     getControlGroup: (groupNumber: number) => this.controlGroups.get(groupNumber) ?? [],
-    getMinerals: () => this.playerResources.get(this.config.playerId)?.minerals ?? 0,
-    getPlasma: () => this.playerResources.get(this.config.playerId)?.plasma ?? 0,
-    getSupply: () => this.playerResources.get(this.config.playerId)?.supply ?? 0,
-    getMaxSupply: () => this.playerResources.get(this.config.playerId)?.maxSupply ?? 0,
+    getMinerals: (playerId?: string) => this.getPlayerResourceState(playerId).minerals,
+    getPlasma: (playerId?: string) => this.getPlayerResourceState(playerId).plasma,
+    getSupply: (playerId?: string) => this.getPlayerResourceState(playerId).supply,
+    getMaxSupply: (playerId?: string) => this.getPlayerResourceState(playerId).maxSupply,
     hasResearch: (playerId: string, upgradeId: string) => {
       return this.playerResearch.get(playerId)?.has(upgradeId) ?? false;
     },
@@ -182,49 +182,59 @@ export class WorkerGame extends GameCore {
     setControlGroup: (groupNumber: number, entityIds: number[]) => {
       this.controlGroups.set(groupNumber, [...entityIds]);
     },
-    addResources: (minerals: number, plasma: number) => {
-      const current = this.playerResources.get(this.config.playerId) ?? {
-        minerals: 0,
-        plasma: 0,
-        supply: 0,
-        maxSupply: 0,
-      };
+    addResources: (minerals: number, plasma: number, playerId?: string) => {
+      const current = this.getPlayerResourceState(playerId);
       current.minerals = Math.max(0, current.minerals + minerals);
       current.plasma = Math.max(0, current.plasma + plasma);
-      this.playerResources.set(this.config.playerId, current);
+      this.playerResources.set(this.resolvePlayerId(playerId), current);
     },
-    setResources: (minerals: number, plasma: number) => {
-      const current = this.playerResources.get(this.config.playerId) ?? {
-        minerals: 0,
-        plasma: 0,
-        supply: 0,
-        maxSupply: 0,
-      };
+    setResources: (minerals: number, plasma: number, playerId?: string) => {
+      const current = this.getPlayerResourceState(playerId);
       current.minerals = Math.max(0, minerals);
       current.plasma = Math.max(0, plasma);
-      this.playerResources.set(this.config.playerId, current);
+      this.playerResources.set(this.resolvePlayerId(playerId), current);
     },
-    addSupply: (delta: number) => {
-      const current = this.playerResources.get(this.config.playerId) ?? {
-        minerals: 0,
-        plasma: 0,
-        supply: 0,
-        maxSupply: 0,
-      };
+    addSupply: (delta: number, playerId?: string) => {
+      const current = this.getPlayerResourceState(playerId);
       current.supply = Math.max(0, current.supply + delta);
-      this.playerResources.set(this.config.playerId, current);
+      if (current.supply > current.maxSupply) {
+        current.supply = current.maxSupply;
+      }
+      this.playerResources.set(this.resolvePlayerId(playerId), current);
     },
-    addMaxSupply: (delta: number) => {
-      const current = this.playerResources.get(this.config.playerId) ?? {
-        minerals: 0,
-        plasma: 0,
-        supply: 0,
-        maxSupply: 0,
-      };
+    addMaxSupply: (delta: number, playerId?: string) => {
+      const current = this.getPlayerResourceState(playerId);
       current.maxSupply = Math.max(0, current.maxSupply + delta);
-      this.playerResources.set(this.config.playerId, current);
+      if (current.supply > current.maxSupply) {
+        current.supply = current.maxSupply;
+      }
+      this.playerResources.set(this.resolvePlayerId(playerId), current);
     },
   };
+
+  private resolvePlayerId(playerId?: string): string {
+    return playerId ?? this.config.playerId;
+  }
+
+  private getPlayerResourceState(playerId?: string): {
+    minerals: number;
+    plasma: number;
+    supply: number;
+    maxSupply: number;
+  } {
+    const resolvedPlayerId = this.resolvePlayerId(playerId);
+    let resources = this.playerResources.get(resolvedPlayerId);
+    if (!resources) {
+      resources = {
+        minerals: 0,
+        plasma: 0,
+        supply: 0,
+        maxSupply: 0,
+      };
+      this.playerResources.set(resolvedPlayerId, resources);
+    }
+    return resources;
+  }
 
   // Debug tracking
   private hasLoggedFirstRenderState = false;
@@ -1342,6 +1352,10 @@ export class WorkerGame extends GameCore {
     // Get active player slots
     const activeSlots =
       mapData.playerSlots?.filter((slot) => slot.type === 'human' || slot.type === 'ai') ?? [];
+    const startingResources = mapData.startingResources ?? {
+      minerals: 50,
+      plasma: 0,
+    };
 
     const usedSpawnIndices = new Set<number>();
     const spawns = mapData.spawns ?? [];
@@ -1364,8 +1378,8 @@ export class WorkerGame extends GameCore {
       usedSpawnIndices.add(spawnIndex);
 
       this.playerResources.set(slot.id, {
-        minerals: 50,
-        plasma: 0,
+        minerals: startingResources.minerals,
+        plasma: startingResources.plasma,
         supply: 0,
         maxSupply: 11,
       });
@@ -1396,8 +1410,8 @@ export class WorkerGame extends GameCore {
     // Fallback
     if (activeSlots.length === 0 && spawns.length > 0) {
       this.playerResources.set(this.config.playerId, {
-        minerals: 50,
-        plasma: 0,
+        minerals: startingResources.minerals,
+        plasma: startingResources.plasma,
         supply: 0,
         maxSupply: 11,
       });

@@ -30,11 +30,12 @@
  * └────────────────────────────────────────┘
  */
 
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useMemo } from 'react';
 
 import { RenderStateWorldAdapter } from '@/engine/workers';
 import { useGameStore } from '@/store/gameStore';
 import { useGameSetupStore, getLocalPlayerId } from '@/store/gameSetupStore';
+import { InputManager, type InputContext } from '@/engine/input';
 import { SelectionBox } from './SelectionBox';
 import { LoadingScreen } from './LoadingScreen';
 import { GraphicsOptionsPanel } from './GraphicsOptionsPanel';
@@ -55,13 +56,22 @@ import {
   useLoadingState,
 } from './hooks';
 
-// Map reference
-let CURRENT_MAP: MapData = DEFAULT_MAP;
-
 export function WebGPUGameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const threeCanvasRef = useRef<HTMLCanvasElement>(null);
   const phaserContainerRef = useRef<HTMLDivElement>(null);
+  const initializationStartedRef = useRef(false);
+
+  const selectedMapId = useGameSetupStore((state) => state.selectedMapId);
+  const customMapData = useGameSetupStore((state) => state.customMapData);
+  const currentMap = useMemo<MapData>(() => {
+    if (customMapData) {
+      return customMapData;
+    }
+
+    const requestedMap = getMapById(selectedMapId);
+    return requestedMap ?? DEFAULT_MAP;
+  }, [customMapData, selectedMapId]);
 
   // Get store state
   const {
@@ -90,7 +100,7 @@ export function WebGPUGameCanvas() {
     spawnEntities,
     getGameTime,
   } = useWorkerBridge({
-    map: CURRENT_MAP,
+    map: currentMap,
   });
 
   // Loading state hook - manages loading screen, progress, fade-in
@@ -119,7 +129,7 @@ export function WebGPUGameCanvas() {
     eventBusRef,
     getGameTime,
     isGameFinished: checkGameFinished,
-    map: CURRENT_MAP,
+    map: currentMap,
     onProgress: setProgress,
     onWebGPUDetected: setWebGPUDetected,
   });
@@ -147,6 +157,7 @@ export function WebGPUGameCanvas() {
     eventBusRef,
     isGameInitialized: isWorkerInitialized,
     placementPreviewRef: refs.placementPreview,
+    wallPlacementPreviewRef: refs.wallPlacementPreview,
     overlayManagerRef: refs.overlayManager,
     lastControlGroupTap,
   });
@@ -160,29 +171,26 @@ export function WebGPUGameCanvas() {
     environmentRef: refs.environment,
     lightPoolRef: refs.lightPool,
     containerRef,
-    map: CURRENT_MAP,
+    map: currentMap,
   });
 
   // Initialize game
   useEffect(() => {
     if (!containerRef.current || !threeCanvasRef.current || !phaserContainerRef.current) return;
+    if (initializationStartedRef.current) return;
+
+    initializationStartedRef.current = true;
 
     const initializeGame = async () => {
       try {
-        // Check for custom map first
-        const customMap = useGameSetupStore.getState().customMapData;
-        if (customMap) {
-          CURRENT_MAP = customMap;
+        if (customMapData) {
           debugInitialization.log(
-            `[WebGPUGameCanvas] Loading custom/preview map: ${CURRENT_MAP.name}`
+            `[WebGPUGameCanvas] Loading custom/preview map: ${currentMap.name}`
           );
         } else {
-          const selectedMapId = useGameSetupStore.getState().selectedMapId;
-          const requestedMap = getMapById(selectedMapId);
-          if (requestedMap) {
-            CURRENT_MAP = requestedMap;
+          if (getMapById(selectedMapId)) {
             debugInitialization.log(
-              `[WebGPUGameCanvas] Loading map: ${CURRENT_MAP.name} (${CURRENT_MAP.width}x${CURRENT_MAP.height})`
+              `[WebGPUGameCanvas] Loading map: ${currentMap.name} (${currentMap.width}x${currentMap.height})`
             );
           } else {
             debugInitialization.warn(
@@ -192,9 +200,8 @@ export function WebGPUGameCanvas() {
               `[WebGPUGameCanvas] Available maps:`,
               Object.keys(ALL_MAPS).join(', ')
             );
-            CURRENT_MAP = DEFAULT_MAP;
             debugInitialization.log(
-              `[WebGPUGameCanvas] Fallback to map: ${CURRENT_MAP.name} (${CURRENT_MAP.width}x${CURRENT_MAP.height})`
+              `[WebGPUGameCanvas] Fallback to map: ${currentMap.name} (${currentMap.width}x${currentMap.height})`
             );
           }
         }
@@ -214,6 +221,7 @@ export function WebGPUGameCanvas() {
         const workerSuccess = await initializeWorkerBridge();
         if (!workerSuccess) {
           debugInitialization.error('[WebGPUGameCanvas] Worker initialization failed');
+          initializationStartedRef.current = false;
           setProgress(0, 'Error - worker initialization failed');
           return;
         }
@@ -225,6 +233,7 @@ export function WebGPUGameCanvas() {
         const success = await initializeRenderer();
         if (!success) {
           debugInitialization.error('[WebGPUGameCanvas] Renderer initialization failed');
+          initializationStartedRef.current = false;
           setProgress(0, 'Error - falling back to WebGL');
           return;
         }
@@ -247,7 +256,7 @@ export function WebGPUGameCanvas() {
         // Initialize audio system with camera and biome, then start music
         if (eventHandlerRef.current) {
           const camera = refs.camera.current?.camera ?? undefined;
-          const biome = CURRENT_MAP.biome;
+          const biome = currentMap.biome;
           await eventHandlerRef.current.initializeAudio(camera, biome);
           await eventHandlerRef.current.startGameplayMusic();
         }
@@ -270,6 +279,7 @@ export function WebGPUGameCanvas() {
         setProgress(100, 'Ready');
       } catch (error) {
         debugInitialization.error('[WebGPUGameCanvas] Initialization failed:', error);
+        initializationStartedRef.current = false;
         setProgress(0, 'Error - falling back to WebGL');
       }
     };
@@ -277,10 +287,14 @@ export function WebGPUGameCanvas() {
     initializeGame();
 
     return () => {
+      initializationStartedRef.current = false;
       // Reset overlay coordinator
       resetOverlayCoordinator();
     };
   }, [
+    currentMap,
+    customMapData,
+    selectedMapId,
     initializeRenderer,
     initializeWorkerBridge,
     spawnEntities,
@@ -293,6 +307,40 @@ export function WebGPUGameCanvas() {
     eventBusRef,
     eventHandlerRef,
     gameRef,
+  ]);
+
+  useEffect(() => {
+    const inputManager = InputManager.getInstanceSync();
+    if (!inputManager) return;
+
+    let targetContext: InputContext = 'gameplay';
+    if (isWallPlacementMode) {
+      targetContext = 'wall';
+    } else if (isLandingMode) {
+      targetContext = 'landing';
+    } else if (isBuilding) {
+      targetContext = 'building';
+    } else if (abilityTargetMode) {
+      targetContext = 'ability';
+    } else if (isRepairMode) {
+      targetContext = 'repair';
+    } else if (isSettingRallyPoint) {
+      targetContext = 'rally';
+    } else if (commandTargetMode) {
+      targetContext = 'command';
+    }
+
+    if (inputManager.getContext() !== targetContext) {
+      inputManager.setContext(targetContext);
+    }
+  }, [
+    abilityTargetMode,
+    commandTargetMode,
+    isBuilding,
+    isLandingMode,
+    isRepairMode,
+    isSettingRallyPoint,
+    isWallPlacementMode,
   ]);
 
   // Building placement preview

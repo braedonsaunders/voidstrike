@@ -1,0 +1,18 @@
+- generic [active] [ref=e1]:
+    - alert [ref=e67]
+    - generic [ref=e207]:
+        - generic [ref=e209]:
+            - generic [ref=e210]:
+                - heading "VOIDSTRIKE" [level=1] [ref=e211]
+                - generic [ref=e212]: Initializing Combat Systems
+            - paragraph [ref=e214]: '"In the void, only the prepared survive."'
+        - generic [ref=e215]:
+            - generic [ref=e216]:
+                - generic [ref=e217]: CORE
+                - generic [ref=e218]: RENDER
+                - generic [ref=e219]: WORLD
+                - generic [ref=e220]: UNITS
+                - generic [ref=e222]: SYNC
+            - generic [ref=e228]:
+                - generic [ref=e229]: Synchronizing game state...
+                - generic [ref=e230]: 75%

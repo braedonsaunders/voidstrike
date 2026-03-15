@@ -254,8 +254,8 @@ export class SpawnSystem extends System {
           const aiSystem = this.getAISystem();
           const isAI = aiSystem?.isAIPlayer(selectable.playerId) ?? false;
 
-          if (!isAI && selectable.playerId === this.game.config.playerId) {
-            this.game.statePort.addSupply(-definition.supplyCost);
+          if (!isAI) {
+            this.game.statePort.addSupply(-definition.supplyCost, selectable.playerId);
           }
         }
       }

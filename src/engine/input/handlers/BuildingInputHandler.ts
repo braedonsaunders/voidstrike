@@ -18,7 +18,22 @@ import { useGameStore } from '@/store/gameStore';
 import type { BuildingPlacementPreview } from '@/rendering/BuildingPlacementPreview';
 
 export class BuildingInputHandler implements InputHandler {
+  constructor(private readonly mode: 'building' | 'landing') {}
+
   private placementPreview: BuildingPlacementPreview | null = null;
+
+  private syncPreviewToCurrentPointer(): void {
+    if (!this.placementPreview) return;
+
+    const inputManager = InputManager.getInstanceSync();
+    if (!inputManager) return;
+
+    const mousePosition = inputManager.getMousePosition();
+    const worldPosition = inputManager.containerToWorld(mousePosition.x, mousePosition.y);
+    if (!worldPosition) return;
+
+    this.placementPreview.updatePosition(worldPosition.x, worldPosition.z);
+  }
 
   /**
    * Set the placement preview reference
@@ -28,12 +43,19 @@ export class BuildingInputHandler implements InputHandler {
   }
 
   onActivate(): void {
-    // Building mode activated
+    this.syncPreviewToCurrentPointer();
   }
 
   onDeactivate(): void {
-    // Clear building mode when leaving
-    useGameStore.getState().setBuildingMode(null);
+    const store = useGameStore.getState();
+
+    if (this.mode === 'building' && store.isBuilding) {
+      store.setBuildingMode(null);
+    }
+
+    if (this.mode === 'landing' && store.isLandingMode) {
+      store.setLandingMode(false);
+    }
   }
 
   onKeyDown(
@@ -42,54 +64,118 @@ export class BuildingInputHandler implements InputHandler {
     _deps: InputHandlerDependencies
   ): boolean {
     if (event.key === 'escape') {
-      useGameStore.getState().setBuildingMode(null);
+      if (this.mode === 'building') {
+        useGameStore.getState().setBuildingMode(null);
+      } else {
+        useGameStore.getState().setLandingMode(false);
+      }
       InputManager.getInstance().setContext('gameplay');
       return true;
     }
     return false;
   }
 
-  onMouseDown(
-    event: MouseInputEvent,
-    state: InputState,
-    deps: InputHandlerDependencies
-  ): boolean {
-    const { eventBus } = deps;
-    const { buildingType } = useGameStore.getState();
+  onMouseDown(event: MouseInputEvent, state: InputState, deps: InputHandlerDependencies): boolean {
+    const { game, getLocalPlayerId } = deps;
+    const store = useGameStore.getState();
+    const { buildingType, landingBuildingId } = store;
 
-    // Right-click cancels building mode
     if (event.button === MouseButton.Right) {
-      useGameStore.getState().setBuildingMode(null);
+      if (this.mode === 'landing' && event.worldPosition && game && landingBuildingId !== null) {
+        const localPlayer = getLocalPlayerId();
+        if (!localPlayer) return true;
+
+        game.issueCommand({
+          tick: game.getCurrentTick(),
+          playerId: localPlayer,
+          type: 'LAND',
+          entityIds: [landingBuildingId],
+          buildingId: landingBuildingId,
+          targetPosition: { x: event.worldPosition.x, y: event.worldPosition.z },
+          queue: state.modifiers.shift,
+        });
+
+        if (!state.modifiers.shift) {
+          store.setLandingMode(false);
+          InputManager.getInstance().setContext('gameplay');
+        }
+        return true;
+      }
+
+      if (this.mode === 'building') {
+        store.setBuildingMode(null);
+      } else {
+        store.setLandingMode(false);
+      }
       InputManager.getInstance().setContext('gameplay');
       return true;
     }
 
-    // Left-click places building
-    if (event.button === MouseButton.Left && this.placementPreview && buildingType) {
+    if (
+      this.mode === 'landing' &&
+      event.button === MouseButton.Left &&
+      event.worldPosition &&
+      game
+    ) {
+      const localPlayer = getLocalPlayerId();
+      if (!localPlayer || landingBuildingId === null) return true;
+
+      game.issueCommand({
+        tick: game.getCurrentTick(),
+        playerId: localPlayer,
+        type: 'LAND',
+        entityIds: [landingBuildingId],
+        buildingId: landingBuildingId,
+        targetPosition: { x: event.worldPosition.x, y: event.worldPosition.z },
+        queue: state.modifiers.shift,
+      });
+
+      if (!state.modifiers.shift) {
+        store.setLandingMode(false);
+        InputManager.getInstance().setContext('gameplay');
+      }
+
+      return true;
+    }
+
+    if (
+      this.mode === 'building' &&
+      event.button === MouseButton.Left &&
+      this.placementPreview &&
+      buildingType &&
+      game
+    ) {
+      if (event.worldPosition) {
+        this.placementPreview.updatePosition(event.worldPosition.x, event.worldPosition.z);
+      }
+
       const snappedPos = this.placementPreview.getSnappedPosition();
       const isValid = this.placementPreview.isPlacementValid();
+      const localPlayer = getLocalPlayerId();
 
-      if (isValid && eventBus) {
-        const selectedUnits = useGameStore.getState().selectedUnits;
-        eventBus.emit('building:place', {
+      if (isValid && localPlayer) {
+        game.issueCommand({
+          tick: game.getCurrentTick(),
+          playerId: localPlayer,
+          type: 'BUILD',
+          entityIds: store.selectedUnits,
           buildingType,
-          position: { x: snappedPos.x, y: snappedPos.y },
-          workerId: selectedUnits.length > 0 ? selectedUnits[0] : undefined,
+          targetPosition: { x: snappedPos.x, y: snappedPos.y },
+          queue: state.modifiers.shift,
         });
 
         if (state.modifiers.shift) {
-          // Queue another building of same type
-          useGameStore.getState().addToBuildingQueue({
+          store.addToBuildingQueue({
             buildingType,
             x: snappedPos.x,
             y: snappedPos.y,
           });
         } else {
-          useGameStore.getState().setBuildingMode(null);
+          store.setBuildingMode(null);
           InputManager.getInstance().setContext('gameplay');
         }
       } else if (!isValid && !state.modifiers.shift) {
-        useGameStore.getState().setBuildingMode(null);
+        store.setBuildingMode(null);
         InputManager.getInstance().setContext('gameplay');
       }
 
@@ -99,11 +185,7 @@ export class BuildingInputHandler implements InputHandler {
     return false;
   }
 
-  onMouseMove(
-    event: MouseInputEvent,
-    state: InputState,
-    deps: InputHandlerDependencies
-  ): boolean {
+  onMouseMove(event: MouseInputEvent, state: InputState, deps: InputHandlerDependencies): boolean {
     const { camera } = deps;
 
     // Update placement preview position
@@ -116,7 +198,11 @@ export class BuildingInputHandler implements InputHandler {
   }
 
   onBlur(): void {
-    useGameStore.getState().setBuildingMode(null);
+    if (this.mode === 'building') {
+      useGameStore.getState().setBuildingMode(null);
+    } else {
+      useGameStore.getState().setLandingMode(false);
+    }
     InputManager.getInstance().setContext('gameplay');
   }
 }
