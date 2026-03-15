@@ -51,7 +51,9 @@ voidstrike/
 │   │   │   ├── setup/
 │   │   │   │   ├── editor/ # 3D Map Editor
 │   │   │   │   │   └── ...
+│   │   │   │   ├── getStartGameButtonState.ts
 │   │   │   │   └── page.tsx
+│   │   │   ├── gamePageLifecycle.ts
 │   │   │   └── page.tsx
 │   │   ├── globals.css
 │   │   ├── layout.tsx
@@ -71,6 +73,7 @@ voidstrike/
 │   │   │   │   │   └── ...
 │   │   │   │   ├── CommandGrid.tsx
 │   │   │   │   ├── constants.ts
+│   │   │   │   ├── getDisabledCommandFeedback.ts
 │   │   │   │   ├── index.tsx
 │   │   │   │   └── types.ts
 │   │   │   ├── hooks/ # React hooks
@@ -126,7 +129,6 @@ voidstrike/
 │   │       ├── CostDisplay.tsx
 │   │       ├── EmptySlot.tsx
 │   │       ├── IconBadge.tsx
-│   │       ├── index.ts
 │   │       └── Tooltip.tsx
 │   ├── config/ # Configuration files
 │   │   └── consoleCommands.ts
@@ -189,7 +191,6 @@ voidstrike/
 │   │   │   └── dominion.ts
 │   │   ├── audio.config.ts
 │   │   ├── collisionConfig.ts
-│   │   ├── index.ts
 │   │   ├── movement.config.ts
 │   │   ├── music-manifest.json
 │   │   ├── pathfinding.config.ts
@@ -338,8 +339,10 @@ voidstrike/
 │   │   │   ├── handlers/
 │   │   │   │   ├── BuildingInputHandler.ts
 │   │   │   │   ├── CommandInputHandler.ts
+│   │   │   │   ├── findEntityAtScreenPosition.ts
 │   │   │   │   ├── GameplayInputHandler.ts
-│   │   │   │   └── index.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   └── WallInputHandler.ts
 │   │   │   ├── index.ts
 │   │   │   ├── InputManager.ts
 │   │   │   └── types.ts
@@ -363,8 +366,7 @@ voidstrike/
 │   │   │   │   ├── AICoordinator.ts
 │   │   │   │   ├── AIEconomyManager.ts
 │   │   │   │   ├── AIScoutingManager.ts
-│   │   │   │   ├── AITacticsManager.ts
-│   │   │   │   └── index.ts
+│   │   │   │   └── AITacticsManager.ts
 │   │   │   ├── movement/
 │   │   │   │   ├── FlockingBehavior.ts
 │   │   │   │   ├── FormationMovement.ts
@@ -586,10 +588,17 @@ voidstrike/
 │   │   └── boids_wasm.js
 │   └── sw.js
 └── tests/
+    ├── app/ # Next.js App Router
+    │   ├── game/
+    │   │   ├── setup/
+    │   │   │   └── getStartGameButtonState.test.ts
+    │   │   └── gamePageLifecycle.test.ts
+    │   └── serviceWorkerRouting.test.ts
     ├── components/ # React components
     │   └── game/
-    │       └── hooks/ # React hooks
-    │           └── syncWorkerPlayerResources.test.ts
+    │       ├── hooks/ # React hooks
+    │       │   └── syncWorkerPlayerResources.test.ts
+    │       └── getDisabledCommandFeedback.test.ts
     ├── data/ # Game data definitions
     │   ├── aiConfig.test.ts
     │   ├── audioConfig.test.ts
@@ -625,6 +634,7 @@ voidstrike/
     │   │   └── wall.test.ts
     │   ├── core/
     │   │   ├── eventBus.test.ts
+    │   │   ├── gameCommandDispatch.test.ts
     │   │   ├── gameLoop.test.ts
     │   │   ├── performanceMonitor.test.ts
     │   │   ├── spatialGrid.test.ts
@@ -636,6 +646,9 @@ voidstrike/
     │   │   ├── entity.test.ts
     │   │   ├── entityId.test.ts
     │   │   └── world.test.ts
+    │   ├── input/
+    │   │   └── handlers/
+    │   │       └── buildingInputHandler.test.ts
     │   ├── network/
     │   │   ├── adaptiveDelay.test.ts
     │   │   ├── commandSync.test.ts
@@ -664,6 +677,7 @@ voidstrike/
     │   │   ├── EnhancedAISystem.test.ts
     │   │   ├── GameStateSystem.test.ts
     │   │   ├── MovementSystem.test.ts
+    │   │   ├── multiplayerEconomyOwnership.test.ts
     │   │   ├── pathfindingSystem.test.ts
     │   │   ├── productionSystem.test.ts
     │   │   ├── projectileSystem.test.ts
