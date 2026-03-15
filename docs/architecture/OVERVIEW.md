@@ -506,8 +506,8 @@ voidstrike/
 │   ├── utils/ # Utility functions
 │   │   ├── commandIcons.ts
 │   │   ├── debugLogger.ts
-│   │   ├── EntityValidator.ts
 │   │   ├── DeterministicMath.ts
+│   │   ├── EntityValidator.ts
 │   │   ├── math.ts
 │   │   ├── overlayCache.ts
 │   │   ├── storage.ts
