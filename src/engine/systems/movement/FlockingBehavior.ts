@@ -19,7 +19,10 @@ import { Velocity } from '../../components/Velocity';
 import { PooledVector2 } from '@/utils/VectorPool';
 import { SpatialEntityData, SpatialUnitState, stateToEnum } from '../../core/SpatialGrid';
 import { collisionConfig } from '@/data/collisionConfig';
-import { deterministicMagnitude, deterministicNormalizeWithMagnitude } from '@/utils/FixedPoint';
+import {
+  deterministicMagnitude,
+  deterministicNormalizeWithMagnitude,
+} from '@/utils/DeterministicMath';
 import {
   COHESION_RADIUS,
   COHESION_STRENGTH,

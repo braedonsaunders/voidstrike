@@ -8,7 +8,7 @@
 
 import type { IGameInstance } from '../core/IGameInstance';
 import { ChecksumSystem, ChecksumData, DesyncReport } from '../systems/ChecksumSystem';
-import { QUANT_POSITION, QUANT_DAMAGE } from '@/utils/FixedPoint';
+import { QUANT_POSITION, QUANT_DAMAGE } from '@/utils/DeterministicMath';
 import { debugNetworking } from '@/utils/debugLogger';
 import { distance } from '@/utils/math';
 

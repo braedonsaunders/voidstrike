@@ -45,7 +45,7 @@ npm run test:coverage # With coverage report
 | types.ts              | 100%   | 100%   | 100%   | 100%   | Complete |
 | **utils**             |
 | math.ts               | 100%   | 100%   | 100%   | 100%   | Complete |
-| FixedPoint.ts         | 67.32% | 55.55% | 55%    | 70.65% | Partial  |
+| DeterministicMath.ts  | 67.32% | 55.55% | 55%    | 70.65% | Partial  |
 | debugLogger.ts        | 27.27% | 37.50% | 6.94%  | 27.27% | Minimal  |
 
 ---
@@ -78,9 +78,9 @@ npm run test:coverage # With coverage report
 | `tests/engine/network/merkleTree.test.ts`              | 3        | Active |
 | `tests/engine/network/types.test.ts`                   | 9        | Active |
 | `tests/engine/pathfinding/grid.test.ts`                | 23       | Active |
-| `tests/utils/fixedPoint.test.ts`                       | 7        | Active |
-| `tests/utils/math.test.ts`                             | 7        | Active |
-| `tests/utils/vectorPool.test.ts`                       | 28       | Active |
+| `tests/utils/deterministicMath.test.ts`                | 19       | Active |
+| `tests/utils/math.test.ts`                             | 4        | Active |
+| `tests/utils/vectorPool.test.ts`                       | 6        | Active |
 | `tests/data/combat.test.ts`                            | 51       | Active |
 | `tests/data/projectileTypes.test.ts`                   | 42       | Active |
 | `tests/data/formations.test.ts`                        | 34       | Active |
@@ -293,7 +293,7 @@ For multiplayer-critical code, tests must verify:
 
 1. **Deterministic outputs** - Same inputs produce same outputs
 2. **No Math.random()** - Use SeededRandom
-3. **Fixed-point arithmetic** - Use FixedPoint utilities
+3. **Deterministic math** - Use DeterministicMath utilities
 4. **Quantized values** - Use quantize() for positions/damage
 
 ---

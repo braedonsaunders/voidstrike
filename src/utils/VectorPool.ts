@@ -85,32 +85,7 @@ class Vector2Pool {
       this.release(vec);
     }
   }
-
 }
 
 // Singleton instance for global use
 export const VectorPool = new Vector2Pool();
-
-/**
- * Normalize a vector in place. Returns magnitude.
- */
-export function normalize(vec: PooledVector2): number {
-  const mag = Math.sqrt(vec.x * vec.x + vec.y * vec.y);
-  if (mag > 0.0001) {
-    vec.x /= mag;
-    vec.y /= mag;
-  }
-  return mag;
-}
-
-/**
- * Clamp vector magnitude. Modifies in place.
- */
-export function clampMagnitude(vec: PooledVector2, maxMag: number): void {
-  const magSq = vec.x * vec.x + vec.y * vec.y;
-  if (magSq > maxMag * maxMag) {
-    const scale = maxMag / Math.sqrt(magSq);
-    vec.x *= scale;
-    vec.y *= scale;
-  }
-}

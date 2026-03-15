@@ -25,7 +25,7 @@ import { Resource } from '../../components/Resource';
 import type { IGameInstance } from '../../core/IGameInstance';
 import { debugAI } from '@/utils/debugLogger';
 import type { AICoordinator, AIPlayer } from './AICoordinator';
-import { deterministicMagnitude } from '@/utils/FixedPoint';
+import { deterministicMagnitude } from '@/utils/DeterministicMath';
 
 export class AIEconomyManager {
   private game: IGameInstance;

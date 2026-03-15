@@ -1,4 +1,8 @@
 import { Component } from '../ecs/Component';
+import {
+  deterministicMagnitude3D,
+  deterministicNormalize3DWithMagnitude,
+} from '@/utils/DeterministicMath';
 
 export class Velocity extends Component {
   public readonly type = 'Velocity';
@@ -26,15 +30,15 @@ export class Velocity extends Component {
   }
 
   public getMagnitude(): number {
-    return Math.sqrt(this.x * this.x + this.y * this.y + this.z * this.z);
+    return deterministicMagnitude3D(this.x, this.y, this.z);
   }
 
   public normalize(): void {
-    const mag = this.getMagnitude();
-    if (mag > 0) {
-      this.x /= mag;
-      this.y /= mag;
-      this.z /= mag;
+    const { nx, ny, nz, magnitude } = deterministicNormalize3DWithMagnitude(this.x, this.y, this.z);
+    if (magnitude > 0) {
+      this.x = nx;
+      this.y = ny;
+      this.z = nz;
     }
   }
 

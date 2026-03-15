@@ -20,7 +20,7 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { InfluenceMap } from './InfluenceMap';
-import { distance } from '@/utils/math';
+import { deterministicDistance as distance } from '@/utils/DeterministicMath';
 
 /**
  * Retreat state for a unit
@@ -171,11 +171,21 @@ export class RetreatCoordination {
       if (!existingOrder) {
         // Check if unit should start retreating
         if (healthPercent < this.config.healthThreshold) {
-          orders.set(entity.id, this.createRetreatOrder(entity.id, rallyPoint, currentTick, healthPercent));
+          orders.set(
+            entity.id,
+            this.createRetreatOrder(entity.id, rallyPoint, currentTick, healthPercent)
+          );
         }
       } else {
         // Update existing retreat order
-        this.updateRetreatOrder(world, entity, existingOrder, rallyPoint, currentTick, healthPercent);
+        this.updateRetreatOrder(
+          world,
+          entity,
+          existingOrder,
+          rallyPoint,
+          currentTick,
+          healthPercent
+        );
       }
     }
 
@@ -235,7 +245,8 @@ export class RetreatCoordination {
       case 'regrouping':
         // Check re-engage conditions
         if (currentTick >= order.reengageAfterTick) {
-          const recovered = healthPercent >= order.startHealthPercent + this.config.healthRecoveryThreshold;
+          const recovered =
+            healthPercent >= order.startHealthPercent + this.config.healthRecoveryThreshold;
           if (recovered || healthPercent > 0.7) {
             order.state = 're-engaging';
           }
@@ -266,7 +277,9 @@ export class RetreatCoordination {
     rallyPoint: { x: number; y: number }
   ): void {
     const orders = this.retreatOrders.get(playerId)!;
-    const retreatingCount = Array.from(orders.values()).filter(o => o.state === 'retreating' || o.state === 'regrouping').length;
+    const retreatingCount = Array.from(orders.values()).filter(
+      (o) => o.state === 'retreating' || o.state === 'regrouping'
+    ).length;
     const retreatRatio = armyUnits.length > 0 ? retreatingCount / armyUnits.length : 0;
 
     // Trigger group retreat if too many units are retreating or health is very low
@@ -277,12 +290,10 @@ export class RetreatCoordination {
       for (const entity of armyUnits) {
         if (!orders.has(entity.id)) {
           const health = entity.get<Health>('Health')!;
-          orders.set(entity.id, this.createRetreatOrder(
+          orders.set(
             entity.id,
-            rallyPoint,
-            currentTick,
-            health.current / health.max
-          ));
+            this.createRetreatOrder(entity.id, rallyPoint, currentTick, health.current / health.max)
+          );
         }
       }
     } else if (retreatRatio < 0.1 && avgHealth > 0.6) {
@@ -352,7 +363,11 @@ export class RetreatCoordination {
       if (health.isDead()) continue;
 
       // Main base building types
-      if (['headquarters', 'orbital_station', 'command_center', 'nexus', 'hatchery'].includes(building.buildingId)) {
+      if (
+        ['headquarters', 'orbital_station', 'command_center', 'nexus', 'hatchery'].includes(
+          building.buildingId
+        )
+      ) {
         return { x: transform.x, y: transform.y };
       }
     }
@@ -468,9 +483,8 @@ export class RetreatCoordination {
     const avgHealth = totalMaxHealth > 0 ? totalHealth / totalMaxHealth : 1;
 
     // Can re-engage if most units are at rally and health is decent
-    const canReengage = (atRally + retreating) > 0 &&
-                       atRally >= (atRally + retreating) * 0.7 &&
-                       avgHealth > 0.6;
+    const canReengage =
+      atRally + retreating > 0 && atRally >= (atRally + retreating) * 0.7 && avgHealth > 0.6;
 
     return {
       isRetreating,
@@ -486,7 +500,12 @@ export class RetreatCoordination {
   /**
    * Force unit to start retreating
    */
-  public forceRetreat(playerId: string, entityId: number, rallyPoint: { x: number; y: number }, currentTick: number): void {
+  public forceRetreat(
+    playerId: string,
+    entityId: number,
+    rallyPoint: { x: number; y: number },
+    currentTick: number
+  ): void {
     if (!this.retreatOrders.has(playerId)) {
       this.retreatOrders.set(playerId, new Map());
     }

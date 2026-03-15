@@ -37,28 +37,26 @@ If Nostr becomes unavailable, players can fall back to manual connection code ex
 
 ---
 
-### Deterministic Lockstep with Fixed-Point Arithmetic
+### Deterministic Lockstep with Quantized Math
 
 Multiplayer RTS requires identical simulation across all clients. The challenge: IEEE 754 floating-point arithmetic isn't guaranteed to produce identical results across different CPUs, browsers, or optimization levels. The differences are small, but they accumulate.
 
-The solution is Q16.16 fixed-point arithmetic for all gameplay-critical calculations:
+The solution is explicit quantization plus integer square roots for gameplay-critical calculations:
 
 ```typescript
-// src/utils/FixedPoint.ts
-export const FP_SHIFT = 16;
-export const FP_SCALE = 1 << FP_SHIFT; // 65536
+// src/utils/DeterministicMath.ts
+export const QUANT_POSITION = 1000; // 0.001 unit precision
 
-export function fpMul(a: number, b: number): number {
-  // Use BigInt for 64-bit intermediate precision
-  const aBig = BigInt(a);
-  const bBig = BigInt(b);
-  return Number((aBig * bBig) >> BigInt(FP_SHIFT)) | 0;
+export function deterministicDistance(x1: number, y1: number, x2: number, y2: number): number {
+  const dx = quantize(x2, QUANT_POSITION) - quantize(x1, QUANT_POSITION);
+  const dy = quantize(y2, QUANT_POSITION) - quantize(y1, QUANT_POSITION);
+  return integerSqrt(dx * dx + dy * dy) / QUANT_POSITION;
 }
 ```
 
 When desyncs do occur, Merkle tree comparison identifies the divergent entities in O(log n) time rather than requiring a full state diff.
 
-**Implementation:** `src/utils/FixedPoint.ts`, `src/engine/network/MerkleTree.ts`
+**Implementation:** `src/utils/DeterministicMath.ts`, `src/engine/network/MerkleTree.ts`
 
 ---
 
@@ -191,17 +189,17 @@ VisionCompute (GPU) → StorageTexture (R=explored, G=visible, A=smoothed)
 
 These modules have minimal coupling and could be extracted as standalone packages:
 
-| Module                 | Size       | Dependencies | Purpose                                                |
-| ---------------------- | ---------- | ------------ | ------------------------------------------------------ |
-| **Archetype ECS**      | ~350 lines | None         | Fast queries with composition-based cache invalidation |
-| **Fixed-Point Math**   | ~300 lines | None         | Q16.16 deterministic arithmetic for netcode            |
-| **EventBus**           | ~110 lines | None         | Typed pub/sub with O(1) unsubscribe via swap-and-pop   |
-| **Game Loop**          | ~180 lines | None         | Worker-based timing, survives background tabs          |
-| **Behavior Trees**     | ~300 lines | None         | Async-compatible BT implementation for game AI         |
-| **Nostr Matchmaking**  | ~450 lines | nostr-tools  | Decentralized lobby system over Nostr protocol         |
-| **Connection Codes**   | ~450 lines | pako         | Encode WebRTC SDP as shareable codes                   |
-| **Instanced Velocity** | ~280 lines | Three.js     | Per-instance motion vectors for TAA                    |
-| **Merkle Sync**        | ~200 lines | None         | O(log n) state divergence detection                    |
+| Module                 | Size       | Dependencies | Purpose                                                 |
+| ---------------------- | ---------- | ------------ | ------------------------------------------------------- |
+| **Archetype ECS**      | ~350 lines | None         | Fast queries with composition-based cache invalidation  |
+| **Deterministic Math** | ~300 lines | None         | Quantized deterministic arithmetic for lockstep netcode |
+| **EventBus**           | ~110 lines | None         | Typed pub/sub with O(1) unsubscribe via swap-and-pop    |
+| **Game Loop**          | ~180 lines | None         | Worker-based timing, survives background tabs           |
+| **Behavior Trees**     | ~300 lines | None         | Async-compatible BT implementation for game AI          |
+| **Nostr Matchmaking**  | ~450 lines | nostr-tools  | Decentralized lobby system over Nostr protocol          |
+| **Connection Codes**   | ~450 lines | pako         | Encode WebRTC SDP as shareable codes                    |
+| **Instanced Velocity** | ~280 lines | Three.js     | Per-instance motion vectors for TAA                     |
+| **Merkle Sync**        | ~200 lines | None         | O(log n) state divergence detection                     |
 
 ---
 
@@ -334,7 +332,7 @@ The engine (`src/engine/`) is game-agnostic. The content (`src/data/`) defines V
 
 Areas where contributions would be valuable:
 
-- Test coverage for fixed-point math edge cases
+- Test coverage for deterministic math edge cases
 - Additional TSL shader effects
 - AI improvements (current implementation is functional but predictable at higher levels)
 - Accessibility features

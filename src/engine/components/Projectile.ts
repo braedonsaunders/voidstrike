@@ -21,11 +21,11 @@ export type ProjectileTrailType = 'bullet' | 'plasma' | 'missile' | 'shell' | 'l
 export interface ProjectileDefinition {
   id: string;
   behavior: ProjectileBehavior;
-  speed: number;                    // Units per second
-  turnRate: number;                 // Radians per tick for homing (Infinity = instant tracking)
-  arcHeight: number;                // Peak height for ballistic projectiles (0 for others)
+  speed: number; // Units per second
+  turnRate: number; // Radians per tick for homing (Infinity = instant tracking)
+  arcHeight: number; // Peak height for ballistic projectiles (0 for others)
   trailType: ProjectileTrailType;
-  scale: number;                    // Visual scale multiplier
+  scale: number; // Visual scale multiplier
 }
 
 /**
@@ -34,7 +34,7 @@ export interface ProjectileDefinition {
  * Projectiles are created by CombatSystem/AbilitySystem when units attack,
  * and processed by ProjectileSystem for movement and damage application on impact.
  *
- * DETERMINISM: All position and damage values use quantized fixed-point math.
+ * DETERMINISM: All position and damage values use quantized simulation math.
  * Entity creation is deterministic because it happens in simulation update,
  * not in response to events. Both clients create projectiles at the same tick
  * in the same order, ensuring identical entity IDs.
@@ -69,8 +69,8 @@ export class Projectile extends Component {
   public startZ: number;
 
   // Damage
-  public damage: number;          // Pre-calculated damage for primary target (with multiplier/armor)
-  public rawDamage: number;       // Raw base damage before multiplier/armor (for splash calculations)
+  public damage: number; // Pre-calculated damage for primary target (with multiplier/armor)
+  public rawDamage: number; // Raw base damage before multiplier/armor (for splash calculations)
   public damageType: DamageType;
   public splashRadius: number;
   public splashFalloff: number;

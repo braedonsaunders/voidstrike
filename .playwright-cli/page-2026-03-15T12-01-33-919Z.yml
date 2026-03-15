@@ -1,0 +1,31 @@
+- generic [active] [ref=e1]:
+    - alert [ref=e136]
+    - generic [ref=e137]:
+        - generic:
+            - generic [ref=e167]:
+                - generic [ref=e168]:
+                    - generic [ref=e169]: 05:27
+                    - generic [ref=e173]: '50'
+                    - generic [ref=e176]: '0'
+                    - generic [ref=e177]:
+                        - img [ref=e178]
+                        - generic [ref=e181]: 6/11
+                - generic [ref=e182]:
+                    - button "! Idle (6)" [ref=e183] [cursor=pointer]:
+                        - generic [ref=e184]: '!'
+                        - generic [ref=e185]: Idle (6)
+                    - button "Options" [ref=e187] [cursor=pointer]
+            - generic:
+                - generic [ref=e198]:
+                    - generic [ref=e199]:
+                        - generic [ref=e201]: 🏛️
+                        - generic [ref=e202]:
+                            - heading "Headquarters" [level=3] [ref=e274]
+                            - paragraph [ref=e275]: complete
+                    - generic [ref=e206]:
+                        - generic [ref=e207]: HP
+                        - generic [ref=e210]: 1500/1500
+                - button "🗑 Demolish DEL" [ref=e277] [cursor=pointer]:
+                    - generic [ref=e278]: 🗑
+                    - generic [ref=e279]: Demolish
+                    - generic [ref=e280]: DEL

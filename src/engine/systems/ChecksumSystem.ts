@@ -30,7 +30,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Resource } from '../components/Resource';
 import { Projectile } from '../components/Projectile';
-import { quantize, QUANT_POSITION, QUANT_DAMAGE, QUANT_COOLDOWN } from '@/utils/FixedPoint';
+import { quantize, QUANT_POSITION, QUANT_DAMAGE, QUANT_COOLDOWN } from '@/utils/DeterministicMath';
 import {
   MerkleNode,
   MerkleTreeData,

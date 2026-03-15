@@ -17,7 +17,7 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
-import { distance } from '@/utils/math';
+import { deterministicDistance as distance } from '@/utils/DeterministicMath';
 
 /**
  * Types of enemy strategy the AI can infer
@@ -192,7 +192,10 @@ export class ScoutingMemory {
       // Decay building confidence
       for (const building of intel.buildings.values()) {
         const ticksSinceSeen = currentTick - building.lastSeenTick;
-        building.confidence = Math.max(0, building.confidence - ticksSinceSeen * this.intelDecayRate);
+        building.confidence = Math.max(
+          0,
+          building.confidence - ticksSinceSeen * this.intelDecayRate
+        );
 
         if (building.confidence < this.confirmationThreshold) {
           building.confirmed = false;
@@ -202,7 +205,10 @@ export class ScoutingMemory {
       // Decay unit type confidence
       for (const unitType of intel.unitTypes.values()) {
         const ticksSinceSeen = currentTick - unitType.lastSeenTick;
-        unitType.confidence = Math.max(0, unitType.confidence - ticksSinceSeen * this.intelDecayRate);
+        unitType.confidence = Math.max(
+          0,
+          unitType.confidence - ticksSinceSeen * this.intelDecayRate
+        );
       }
 
       // Update intel freshness
@@ -214,11 +220,7 @@ export class ScoutingMemory {
   /**
    * Update intel from currently visible enemies
    */
-  private updateFromVision(
-    world: World,
-    currentTick: number,
-    visibleEnemyIds: Set<number>
-  ): void {
+  private updateFromVision(world: World, currentTick: number, visibleEnemyIds: Set<number>): void {
     // Track what we've seen this update
     const seenUnits: Map<string, Map<string, number>> = new Map(); // playerId -> unitId -> count
 
@@ -321,7 +323,14 @@ export class ScoutingMemory {
     currentTick: number
   ): void {
     // Main base building types
-    const baseTypes = ['headquarters', 'orbital_station', 'bastion', 'nexus', 'hatchery', 'command_center'];
+    const baseTypes = [
+      'headquarters',
+      'orbital_station',
+      'bastion',
+      'nexus',
+      'hatchery',
+      'command_center',
+    ];
 
     if (!baseTypes.includes(building.buildingId)) return;
 
@@ -434,7 +443,10 @@ export class ScoutingMemory {
     }
 
     // Adjust for observed workers
-    const workerTypes = intel.unitTypes.get('fabricator') || intel.unitTypes.get('probe') || intel.unitTypes.get('drone');
+    const workerTypes =
+      intel.unitTypes.get('fabricator') ||
+      intel.unitTypes.get('probe') ||
+      intel.unitTypes.get('drone');
     if (workerTypes && workerTypes.confidence > 0.5) {
       estimatedWorkers = workerTypes.lastCount;
     }
@@ -450,8 +462,9 @@ export class ScoutingMemory {
       if (!def || def.isWorker) continue;
 
       // Use weighted average of last count and max count based on confidence
-      const estimatedCount = unitType.lastCount * unitType.confidence +
-                            unitType.maxCount * (1 - unitType.confidence) * 0.5;
+      const estimatedCount =
+        unitType.lastCount * unitType.confidence +
+        unitType.maxCount * (1 - unitType.confidence) * 0.5;
 
       armySupply += def.supplyCost * estimatedCount;
       armyValue += (def.mineralCost + def.plasmaCost * 1.5) * estimatedCount;
@@ -471,15 +484,18 @@ export class ScoutingMemory {
       let confidence: ConfidenceLevel = 'low';
 
       // Gather evidence
-      const baseCount = intel.bases.filter(b => b.active).length;
+      const baseCount = intel.bases.filter((b) => b.active).length;
       const hasExpansion = baseCount > 1;
-      const hasEarlyGas = intel.buildings.size > 0 &&
-        Array.from(intel.buildings.values()).some(b => b.buildingId === 'extractor' && b.firstSeenTick < 1200);
+      const hasEarlyGas =
+        intel.buildings.size > 0 &&
+        Array.from(intel.buildings.values()).some(
+          (b) => b.buildingId === 'extractor' && b.firstSeenTick < 1200
+        );
       const hasTechBuildings = intel.tech.techBuildings.length > 0;
       const hasAirTech = intel.tech.techBuildings.includes('hangar');
       const lowWorkers = intel.estimatedWorkers < 12;
       const highWorkers = intel.estimatedWorkers > 20;
-      const hasAirUnits = intel.tech.confirmedUnits.some(u =>
+      const hasAirUnits = intel.tech.confirmedUnits.some((u) =>
         ['valkyrie', 'specter', 'lifter', 'phoenix', 'void_ray'].includes(u)
       );
 
@@ -598,7 +614,7 @@ export class ScoutingMemory {
   public getConfirmedBuildings(playerId: string): ScoutedBuilding[] {
     const intel = this.enemyIntel.get(playerId);
     if (!intel) return [];
-    return Array.from(intel.buildings.values()).filter(b => b.confirmed);
+    return Array.from(intel.buildings.values()).filter((b) => b.confirmed);
   }
 
   /**
@@ -611,7 +627,10 @@ export class ScoutingMemory {
     const composition = new Map<string, number>();
     for (const [unitId, info] of intel.unitTypes) {
       if (info.confidence > 0.3) {
-        composition.set(unitId, Math.round(info.lastCount * info.confidence + info.maxCount * (1 - info.confidence) * 0.3));
+        composition.set(
+          unitId,
+          Math.round(info.lastCount * info.confidence + info.maxCount * (1 - info.confidence) * 0.3)
+        );
       }
     }
     return composition;
@@ -641,7 +660,7 @@ export class ScoutingMemory {
   public getEnemyBases(playerId: string): EnemyBase[] {
     const intel = this.enemyIntel.get(playerId);
     if (!intel) return [];
-    return intel.bases.filter(b => b.active);
+    return intel.bases.filter((b) => b.active);
   }
 
   /**
@@ -649,7 +668,7 @@ export class ScoutingMemory {
    */
   public getEnemyMainBase(playerId: string): EnemyBase | null {
     const bases = this.getEnemyBases(playerId);
-    return bases.find(b => b.isMain) || bases[0] || null;
+    return bases.find((b) => b.isMain) || bases[0] || null;
   }
 
   /**
@@ -682,9 +701,13 @@ export class ScoutingMemory {
     const intel = this.enemyIntel.get(playerId);
     if (!intel) return false;
 
-    return intel.strategy.strategy === 'air_transition' ||
-           intel.tech.techBuildings.includes('hangar') ||
-           intel.tech.confirmedUnits.some(u => ['valkyrie', 'specter', 'phoenix', 'void_ray', 'mutalisk'].includes(u));
+    return (
+      intel.strategy.strategy === 'air_transition' ||
+      intel.tech.techBuildings.includes('hangar') ||
+      intel.tech.confirmedUnits.some((u) =>
+        ['valkyrie', 'specter', 'phoenix', 'void_ray', 'mutalisk'].includes(u)
+      )
+    );
   }
 
   /**

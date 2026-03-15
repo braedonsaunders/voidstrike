@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deterministicDamage, quantize, QUANT_DAMAGE } from '@/utils/FixedPoint';
+import { deterministicDamage, quantize, QUANT_DAMAGE } from '@/utils/DeterministicMath';
 import { getDamageMultiplier, COMBAT_CONFIG, DAMAGE_MULTIPLIERS } from '@/data/combat/combat';
 
 /**

@@ -9,7 +9,7 @@ import type { IGameInstance } from '../core/IGameInstance';
 import { World } from '../ecs/World';
 import { debugResources } from '@/utils/debugLogger';
 import { EnhancedAISystem } from './EnhancedAISystem';
-import { distance } from '@/utils/math';
+import { deterministicDistance as distance } from '@/utils/DeterministicMath';
 import { validateEntityAlive } from '@/utils/EntityValidator';
 
 // Mining time in seconds (base value - AI may get speed bonuses)

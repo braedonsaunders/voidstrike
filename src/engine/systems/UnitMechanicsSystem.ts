@@ -7,7 +7,8 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Ability } from '../components/Ability';
 import { Building } from '../components/Building';
-import { distance, clamp } from '@/utils/math';
+import { clamp } from '@/utils/math';
+import { deterministicDistance as distance } from '@/utils/DeterministicMath';
 import { validateEntityAlive } from '@/utils/EntityValidator';
 
 interface TransformCommand {

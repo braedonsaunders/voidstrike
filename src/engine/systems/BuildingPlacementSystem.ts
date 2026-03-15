@@ -13,7 +13,8 @@ import { BUILDING_DEFINITIONS } from '@/data/buildings/dominion';
 import { WALL_DEFINITIONS } from '@/data/buildings/walls';
 import { getLocalPlayerId } from '@/store/gameSetupStore';
 import { debugBuildingPlacement } from '@/utils/debugLogger';
-import { SeededRandom, distance, clamp } from '@/utils/math';
+import { SeededRandom, clamp } from '@/utils/math';
+import { deterministicDistance as distance } from '@/utils/DeterministicMath';
 
 /**
  * BuildingPlacementSystem handles placing new buildings when workers construct them.
@@ -1452,7 +1453,7 @@ export class BuildingPlacementSystem extends System {
         // Move towards wander target at slow speed
         const wanderDx = wander.targetX - transform.x;
         const wanderDy = wander.targetY - transform.y;
-        const wanderDist = Math.sqrt(wanderDx * wanderDx + wanderDy * wanderDy);
+        const wanderDist = distance(0, 0, wanderDx, wanderDy);
 
         if (wanderDist > 0.3) {
           // Move slowly inside building (1/3 normal speed)

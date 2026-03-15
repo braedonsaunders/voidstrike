@@ -23,7 +23,10 @@ import { TERRAIN_FEATURE_CONFIG, TerrainFeature } from '@/data/maps';
 import { RecastNavigation } from '../../pathfinding/RecastNavigation';
 import { debugPathfinding } from '@/utils/debugLogger';
 import { collisionConfig } from '@/data/collisionConfig';
-import { deterministicMagnitude, deterministicNormalizeWithMagnitude } from '@/utils/FixedPoint';
+import {
+  deterministicMagnitude,
+  deterministicNormalizeWithMagnitude,
+} from '@/utils/DeterministicMath';
 import { PATH_REQUEST_COOLDOWN_TICKS, USE_RECAST_CROWD } from '@/data/movement.config';
 
 // PERF: Cached building query results to avoid double spatial grid lookups

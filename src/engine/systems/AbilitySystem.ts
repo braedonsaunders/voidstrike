@@ -6,7 +6,7 @@ import { Health } from '../components/Health';
 import { Ability, AbilityDefinition } from '../components/Ability';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
-import { distance } from '@/utils/math';
+import { deterministicDistance as distance } from '@/utils/DeterministicMath';
 import { validateEntityAlive } from '@/utils/EntityValidator';
 
 interface AbilityCommand {

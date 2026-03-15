@@ -11,7 +11,7 @@
  */
 
 import { debugPathfinding } from '@/utils/debugLogger';
-import { deterministicMagnitude } from '@/utils/FixedPoint';
+import { deterministicMagnitude } from '@/utils/DeterministicMath';
 
 export interface LOSConfig {
   gridWidth: number;

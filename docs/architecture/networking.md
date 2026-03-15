@@ -1550,6 +1550,8 @@ Efficient O(log n) divergence detection using hierarchical state checksums.
 3. **Category Nodes**: Groups combined into categories (units, buildings, resources)
 4. **Root Node**: Hash of all categories - this is the checksum
 
+Simulation-side numeric determinism comes from `src/utils/DeterministicMath.ts`, which quantizes gameplay values and uses integer square roots in lockstep-critical code paths instead of a mixed float/fixed pipeline.
+
 ### Desync Detection Algorithm
 
 When checksums mismatch, binary search identifies divergent entities:

@@ -8,11 +8,11 @@ import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Projectile, ProjectileDefinition } from '../components/Projectile';
 import {
+  deterministicDistance as distance,
   snapValue,
   deterministicMagnitude3D,
   deterministicNormalize3DWithMagnitude,
-} from '@/utils/FixedPoint';
-import { distance } from '@/utils/math';
+} from '@/utils/DeterministicMath';
 import { getDamageMultiplier } from '@/data/combat/combat';
 import { debugCombat as debugProjectile } from '@/utils/debugLogger';
 import { AssetManager } from '@/assets/AssetManager';

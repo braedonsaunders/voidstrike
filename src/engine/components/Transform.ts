@@ -1,5 +1,5 @@
 import { Component } from '../ecs/Component';
-import { distance } from '@/utils/math';
+import { deterministicDistance } from '@/utils/DeterministicMath';
 
 export class Transform extends Component {
   public readonly type = 'Transform';
@@ -49,7 +49,7 @@ export class Transform extends Component {
   }
 
   public distanceTo(other: Transform): number {
-    return distance(this.x, this.y, other.x, other.y);
+    return deterministicDistance(this.x, this.y, other.x, other.y);
   }
 
   public setRotation(rotation: number): void {

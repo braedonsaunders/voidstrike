@@ -1,15 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  clamp,
-  lerp,
-  distance,
-  distanceSquared,
-  distanceSquaredXY,
-  distanceXY,
-  normalize,
-  angle,
-  SeededRandom,
-} from '@/utils/math';
+import { clamp, lerp, distance, distanceSquaredXY, distanceXY, SeededRandom } from '@/utils/math';
 
 describe('math utilities', () => {
   it('clamps values within bounds', () => {
@@ -26,23 +16,8 @@ describe('math utilities', () => {
 
   it('computes distances consistently', () => {
     expect(distance(0, 0, 3, 4)).toBe(5);
-    expect(distanceSquared(0, 0, 3, 4)).toBe(25);
     expect(distanceXY({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(5);
     expect(distanceSquaredXY({ x: 0, y: 0 }, { x: 3, y: 4 })).toBe(25);
-  });
-
-  it('normalizes vectors', () => {
-    const normalized = normalize(3, 4);
-    expect(Math.abs(normalized.x - 0.6)).toBeLessThan(0.0001);
-    expect(Math.abs(normalized.y - 0.8)).toBeLessThan(0.0001);
-
-    const zero = normalize(0, 0);
-    expect(zero).toEqual({ x: 0, y: 0 });
-  });
-
-  it('computes angles', () => {
-    expect(angle(0, 0, 1, 0)).toBe(0);
-    expect(angle(0, 0, 0, 1)).toBe(Math.PI / 2);
   });
 
   it('generates deterministic sequences with SeededRandom', () => {

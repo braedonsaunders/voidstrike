@@ -18,8 +18,12 @@ import { Building } from '../components/Building';
 import type { IGameInstance } from '../core/IGameInstance';
 import { RecastNavigation, getRecastNavigation, PathResult } from '../pathfinding/RecastNavigation';
 import { debugPathfinding, debugPerformance } from '@/utils/debugLogger';
-import { distance, clamp } from '@/utils/math';
-import { deterministicMagnitude, deterministicNormalizeWithMagnitude } from '@/utils/FixedPoint';
+import { clamp } from '@/utils/math';
+import {
+  deterministicDistance as distance,
+  deterministicMagnitude,
+  deterministicNormalizeWithMagnitude,
+} from '@/utils/DeterministicMath';
 
 // Path request batching - increased since worker handles computation off-thread
 const MAX_PATHS_PER_FRAME = 16; // Worker can handle more without blocking main thread

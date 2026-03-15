@@ -9,16 +9,17 @@ import { Resource } from '../components/Resource';
 import { debugCombat } from '@/utils/debugLogger';
 import {
   deterministicDamage,
+  deterministicDistance as distance,
   quantize,
   QUANT_DAMAGE,
   deterministicMagnitude,
-} from '@/utils/FixedPoint';
+} from '@/utils/DeterministicMath';
 import { getDamageMultiplier, COMBAT_CONFIG } from '@/data/combat/combat';
 import AssetManager from '@/assets/AssetManager';
 import { getProjectileType, DEFAULT_PROJECTILE, isInstantProjectile } from '@/data/projectiles';
 import { SpatialEntityData, SpatialUnitState } from '../core/SpatialGrid';
 import { findBestTarget as findBestTargetShared, isEnemy } from '../combat/TargetAcquisition';
-import { distance, clamp } from '@/utils/math';
+import { clamp } from '@/utils/math';
 import { ThrottledCache } from '@/utils/ThrottledCache';
 import { validateEntityAlive } from '@/utils/EntityValidator';
 
@@ -761,7 +762,7 @@ export class CombatSystem extends System {
                 );
                 const edgeDx = transform.x - clampedX;
                 const edgeDy = transform.y - clampedY;
-                distToTarget = Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy);
+                distToTarget = deterministicMagnitude(edgeDx, edgeDy);
               } else {
                 distToTarget = transform.distanceTo(candidateTransform);
               }
@@ -1393,7 +1394,7 @@ export class CombatSystem extends System {
     const projectileTypeId = attacker.projectileType ?? 'bullet_rifle';
     const projectileType = getProjectileType(projectileTypeId) ?? DEFAULT_PROJECTILE;
 
-    // DETERMINISM: Calculate damage using quantized fixed-point math
+    // DETERMINISM: Calculate damage on the quantized simulation grid
     // This ensures identical damage values across different platforms/browsers
     // Using data-driven damage multipliers from @/data/combat/combat.ts
     const multiplier = getDamageMultiplier(attacker.damageType, targetHealth.armorType);

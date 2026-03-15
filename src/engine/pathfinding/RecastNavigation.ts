@@ -24,7 +24,10 @@ import { generateTileCache, generateSoloNavMesh } from '@recast-navigation/gener
 import { threeToTileCache } from '@recast-navigation/three';
 import * as THREE from 'three';
 import { debugPathfinding, debugInitialization } from '@/utils/debugLogger';
-import { distance } from '@/utils/math';
+import {
+  deterministicDistance as distance,
+  deterministicMagnitude,
+} from '@/utils/DeterministicMath';
 
 // Import centralized pathfinding config - SINGLE SOURCE OF TRUTH
 // See src/data/pathfinding.config.ts for parameter documentation
@@ -632,7 +635,7 @@ export class RecastNavigation {
 
       if (!startOnMesh.success || !startOnMesh.point || !endOnMesh.success || !endOnMesh.point) {
         // Log detailed failure info for debugging ramp issues
-        const dist = Math.sqrt((endX - startX) ** 2 + (endY - startY) ** 2);
+        const dist = distance(startX, startY, endX, endY);
         if (dist > 20) {
           debugPathfinding.warn(
             `[RecastNavigation] findClosestPoint failed for long path (${dist.toFixed(1)} units): ` +
@@ -1380,9 +1383,9 @@ export class RecastNavigation {
         const target = agent.target();
 
         // Debug: Log zero velocity for agents with targets (indicates path corridor failure)
-        const velMag = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+        const velMag = deterministicMagnitude(vel.x, vel.z);
         if (velMag < 0.001 && target) {
-          const distToTarget = Math.sqrt((pos.x - target.x) ** 2 + (pos.z - target.z) ** 2);
+          const distToTarget = distance(pos.x, pos.z, target.x, target.z);
           // Only log if far from target and haven't logged this agent yet
           if (distToTarget > 2 && !this.zeroVelocityLoggedAgents.has(entityId)) {
             const heightDiff = Math.abs(pos.y - target.y);

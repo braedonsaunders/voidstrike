@@ -39,8 +39,10 @@ import {
 } from '@/data/ai/aiConfig';
 import type { BuildOrderStep } from '@/data/ai/buildOrders';
 import { getCounterRecommendation, analyzeThreatGaps } from '../AIMicroSystem';
-import { deterministicMagnitude } from '@/utils/FixedPoint';
-import { distance } from '@/utils/math';
+import {
+  deterministicDistance as distance,
+  deterministicMagnitude,
+} from '@/utils/DeterministicMath';
 
 // Build order index for when we've finished the build order
 const _BUILD_ORDER_COMPLETE = 999;

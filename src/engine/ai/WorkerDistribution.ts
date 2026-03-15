@@ -16,7 +16,7 @@ import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
-import { distance } from '@/utils/math';
+import { deterministicDistance as distance } from '@/utils/DeterministicMath';
 
 /**
  * Base saturation status
@@ -208,7 +208,10 @@ export class WorkerDistribution {
 
               if (resourceComp && resourceComp.resourceType === 'minerals') {
                 mineralWorkers++;
-              } else if (buildingComp && ['extractor', 'refinery', 'assimilator'].includes(buildingComp.buildingId)) {
+              } else if (
+                buildingComp &&
+                ['extractor', 'refinery', 'assimilator'].includes(buildingComp.buildingId)
+              ) {
                 gasWorkers++;
               } else {
                 mineralWorkers++; // Default to mineral
@@ -216,7 +219,11 @@ export class WorkerDistribution {
             } else {
               mineralWorkers++; // Target not found, count as mineral
             }
-          } else if (workerUnit.state === 'gathering' || workerUnit.carryingMinerals > 0 || workerUnit.carryingPlasma > 0) {
+          } else if (
+            workerUnit.state === 'gathering' ||
+            workerUnit.carryingMinerals > 0 ||
+            workerUnit.carryingPlasma > 0
+          ) {
             // Gathering but no target - probably returning
             if (workerUnit.carryingPlasma > 0) {
               gasWorkers++;
@@ -234,7 +241,8 @@ export class WorkerDistribution {
       const saturationRatio = optimalTotal > 0 ? totalWorkers / optimalTotal : 0;
 
       const isOversaturated = saturationRatio > this.config.oversaturationThreshold;
-      const isUndersaturated = saturationRatio < this.config.undersaturationThreshold && optimalTotal > 0;
+      const isUndersaturated =
+        saturationRatio < this.config.undersaturationThreshold && optimalTotal > 0;
       const workerNeed = optimalMineralWorkers - mineralWorkers + optimalGasWorkers - gasWorkers;
 
       saturations.push({
@@ -266,8 +274,12 @@ export class WorkerDistribution {
     const transfers: WorkerTransfer[] = [];
 
     // Find oversaturated and undersaturated bases
-    const oversaturated = saturations.filter(s => s.isOversaturated && s.workerNeed < -this.config.minTransferBatch);
-    const undersaturated = saturations.filter(s => s.isUndersaturated && s.workerNeed > this.config.minTransferBatch);
+    const oversaturated = saturations.filter(
+      (s) => s.isOversaturated && s.workerNeed < -this.config.minTransferBatch
+    );
+    const undersaturated = saturations.filter(
+      (s) => s.isUndersaturated && s.workerNeed > this.config.minTransferBatch
+    );
 
     if (oversaturated.length === 0 || undersaturated.length === 0) {
       return [];
@@ -278,10 +290,7 @@ export class WorkerDistribution {
 
     for (const fromBase of oversaturated) {
       // How many to transfer from this base
-      const toTransfer = Math.min(
-        Math.abs(fromBase.workerNeed),
-        this.config.minTransferBatch * 2
-      );
+      const toTransfer = Math.min(Math.abs(fromBase.workerNeed), this.config.minTransferBatch * 2);
 
       // Find best target base
       const toBase = undersaturated.reduce((best, current) => {
@@ -292,9 +301,12 @@ export class WorkerDistribution {
       if (!toBase) continue;
 
       // Find workers to transfer (prioritize idle workers, then those furthest from minerals)
-      const workersAtBase = workers.filter(w => {
+      const workersAtBase = workers.filter((w) => {
         const transform = w.get<Transform>('Transform')!;
-        return distance(transform.x, transform.y, fromBase.basePosition.x, fromBase.basePosition.y) <= this.config.baseRadius;
+        return (
+          distance(transform.x, transform.y, fromBase.basePosition.x, fromBase.basePosition.y) <=
+          this.config.baseRadius
+        );
       });
 
       // Sort: idle first, then by distance from return point (CC)
@@ -389,7 +401,14 @@ export class WorkerDistribution {
     const bases: Entity[] = [];
     const buildings = world.getEntitiesWith('Building', 'Transform', 'Selectable', 'Health');
 
-    const baseTypes = ['headquarters', 'orbital_station', 'command_center', 'nexus', 'hatchery', 'bastion'];
+    const baseTypes = [
+      'headquarters',
+      'orbital_station',
+      'command_center',
+      'nexus',
+      'hatchery',
+      'bastion',
+    ];
 
     for (const entity of buildings) {
       const building = entity.get<Building>('Building')!;
@@ -458,7 +477,7 @@ export class WorkerDistribution {
   public hasOversaturation(playerId: string): boolean {
     const saturations = this.saturationCache.get(playerId);
     if (!saturations) return false;
-    return saturations.some(s => s.isOversaturated);
+    return saturations.some((s) => s.isOversaturated);
   }
 
   /**
@@ -467,7 +486,7 @@ export class WorkerDistribution {
   public hasUndersaturation(playerId: string): boolean {
     const saturations = this.saturationCache.get(playerId);
     if (!saturations) return false;
-    return saturations.some(s => s.isUndersaturated);
+    return saturations.some((s) => s.isUndersaturated);
   }
 
   /**

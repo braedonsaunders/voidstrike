@@ -19,7 +19,7 @@ import {
   getFormation,
 } from '@/data/formations/formations';
 import { MAGIC_BOX_MARGIN, FORMATION_BUFFER_SIZE } from '@/data/movement.config';
-import { integerSqrt } from '@/utils/FixedPoint';
+import { integerSqrt } from '@/utils/DeterministicMath';
 import {
   RecastNavigation,
   getRecastNavigation,

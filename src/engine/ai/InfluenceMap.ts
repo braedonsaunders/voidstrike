@@ -14,7 +14,10 @@ import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
-import { distance } from '@/utils/math';
+import {
+  deterministicDistance as distance,
+  deterministicMagnitude,
+} from '@/utils/DeterministicMath';
 import { debugAI } from '@/utils/debugLogger';
 
 /**
@@ -511,7 +514,7 @@ export class InfluenceMap {
     }
 
     // Normalize
-    const mag = Math.sqrt(gradX * gradX + gradY * gradY);
+    const mag = deterministicMagnitude(gradX, gradY);
     if (mag > 0.01) {
       gradX /= mag;
       gradY /= mag;

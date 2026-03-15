@@ -97,3 +97,14 @@ Original prompt: cant get this app to start locally
 - Verified targeted ESLint on the touched files passes cleanly.
 - `npm run type-check` is still blocked by the pre-existing Vitest globals issue in `tests/launch/launch-voidstrike.test.ts`.
 - Ran the required Playwright smoke script against `http://localhost:3001/game/setup` and inspected `output/web-game-resource-sync/shot-0.png` plus `shot-1.png`; automation still stayed on the setup screen after the `Start Game` click, so live gameplay verification of mining remains blocked by the existing setup-flow automation limitation rather than this resource-sync fix.
+
+- Completed validation for the deterministic-math cutover and legacy fixed-point removal.
+- Verified `npm run type-check`, `npm run build`, and `npm test` pass after the cutover. `npm run lint` also passes with warnings only; the warnings are pre-existing and outside the cutover scope.
+- Browser validation against the production server on `127.0.0.1:3100` succeeded in the existing Playwright session:
+  - `/game/setup` renders correctly
+  - `Start Game` transitions into `/game`
+  - the loading screen advances into the live HUD
+  - the in-game `Idle` selector and command card still respond
+  - no new browser errors appeared; console output stayed at the existing `favicon.ico` 404, `audio/alert/not_enough_plasma.mp3` 404, and `[GPUTimestampProfiler] Already initialized` warning
+- Fresh headless Playwright launches in this environment fail before gameplay with `THREE.WebGLRenderer: Error creating WebGL context.` and the generic Next.js client error screen. That reproduces even without touching game state and is environment/WebGL related, not evidence of a regression from the deterministic-math refactor.
+- While validating command flow, confirmed an existing UX/code mismatch in `src/engine/input/handlers/CommandInputHandler.ts`: command-target mode executes `move` on left-click and cancels on right-click, while the UI tooltip still says `Move to location (right-click)`.

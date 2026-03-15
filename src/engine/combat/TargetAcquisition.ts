@@ -19,6 +19,7 @@ import { Unit } from '../components/Unit';
 import { Building } from '../components/Building';
 import { getDefaultTargetPriority } from '@/data/units/categories';
 import AssetManager from '@/assets/AssetManager';
+import { deterministicDistance, deterministicMagnitude } from '@/utils/DeterministicMath';
 
 /**
  * Configuration for target scoring algorithm.
@@ -169,9 +170,7 @@ export function findBestTarget(world: World, options: TargetQueryOptions): Targe
     if (!targetIsFlying && !targetIsNaval && !canAttackGround) continue;
 
     // Calculate edge-to-edge distance
-    const centerDistance = Math.sqrt(
-      (transform.x - options.x) ** 2 + (transform.y - options.y) ** 2
-    );
+    const centerDistance = deterministicDistance(transform.x, transform.y, options.x, options.y);
     const targetRadius = unit
       ? AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius)
       : 0.5;
@@ -227,7 +226,7 @@ export function findBestTarget(world: World, options: TargetQueryOptions): Targe
       const clampedY = Math.max(transform.y - halfH, Math.min(options.y, transform.y + halfH));
       const edgeDx = options.x - clampedX;
       const edgeDy = options.y - clampedY;
-      const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
+      const distance = Math.max(0, deterministicMagnitude(edgeDx, edgeDy) - attackerRadius);
 
       if (distance > options.range) continue;
 
@@ -305,9 +304,7 @@ export function findAllTargets(
     if (!targetIsFlying && targetIsNaval && !canAttackNaval) continue;
     if (!targetIsFlying && !targetIsNaval && !canAttackGround) continue;
 
-    const centerDistance = Math.sqrt(
-      (transform.x - options.x) ** 2 + (transform.y - options.y) ** 2
-    );
+    const centerDistance = deterministicDistance(transform.x, transform.y, options.x, options.y);
     const targetRadius = unit
       ? AssetManager.getCachedVisualRadius(unit.unitId, unit.collisionRadius)
       : 0.5;
@@ -366,7 +363,7 @@ export function findAllTargets(
       const clampedY = Math.max(transform.y - halfH, Math.min(options.y, transform.y + halfH));
       const edgeDx = options.x - clampedX;
       const edgeDy = options.y - clampedY;
-      const distance = Math.max(0, Math.sqrt(edgeDx * edgeDx + edgeDy * edgeDy) - attackerRadius);
+      const distance = Math.max(0, deterministicMagnitude(edgeDx, edgeDy) - attackerRadius);
 
       if (distance > options.range) continue;
 

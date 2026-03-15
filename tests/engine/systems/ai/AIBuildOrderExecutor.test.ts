@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deterministicMagnitude } from '@/utils/FixedPoint';
+import { deterministicMagnitude } from '@/utils/DeterministicMath';
 
 /**
  * AIBuildOrderExecutor Tests - Expansion Location Logic

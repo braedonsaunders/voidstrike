@@ -15,7 +15,7 @@ import { World } from '../ecs/World';
 import { Transform } from '../components/Transform';
 import { Building } from '../components/Building';
 import { Resource } from '../components/Resource';
-import { distance } from '@/utils/math';
+import { deterministicDistance as distance } from '@/utils/DeterministicMath';
 
 /**
  * Types of strategic positions
@@ -284,7 +284,7 @@ export class PositionalAnalysis {
             x: (col + 0.5) * this.cellSize,
             y: (row + 0.5) * this.cellSize,
             type: 'choke',
-            quality: 1 - (dist / this.maxChokeWidth), // Narrower = higher quality
+            quality: 1 - dist / this.maxChokeWidth, // Narrower = higher quality
             width: dist * this.cellSize,
             facing: { x: fx, y: fy },
             connections: [],
@@ -307,8 +307,10 @@ export class PositionalAnalysis {
     const { edgeDistance } = this.analysis;
 
     // Sample in 4 directions to find which axis is narrow
-    const horz = (edgeDistance[row * this.cols + (col - 1)] + edgeDistance[row * this.cols + (col + 1)]) / 2;
-    const vert = (edgeDistance[(row - 1) * this.cols + col] + edgeDistance[(row + 1) * this.cols + col]) / 2;
+    const horz =
+      (edgeDistance[row * this.cols + (col - 1)] + edgeDistance[row * this.cols + (col + 1)]) / 2;
+    const vert =
+      (edgeDistance[(row - 1) * this.cols + col] + edgeDistance[(row + 1) * this.cols + col]) / 2;
 
     // Facing perpendicular to narrow axis
     if (horz > vert) {
@@ -374,7 +376,11 @@ export class PositionalAnalysis {
   /**
    * Find a defensible spot near a position
    */
-  private findDefensibleSpotNear(x: number, y: number, radius: number): { x: number; y: number } | null {
+  private findDefensibleSpotNear(
+    x: number,
+    y: number,
+    radius: number
+  ): { x: number; y: number } | null {
     if (!this.analysis) return null;
 
     const { passable, edgeDistance } = this.analysis;
@@ -567,7 +573,7 @@ export class PositionalAnalysis {
    */
   public getChokePoints(): StrategicPosition[] {
     if (!this.analysis) return [];
-    return this.analysis.chokeIndices.map(i => this.analysis!.positions[i]);
+    return this.analysis.chokeIndices.map((i) => this.analysis!.positions[i]);
   }
 
   /**
@@ -575,7 +581,7 @@ export class PositionalAnalysis {
    */
   public getExpansionLocations(): StrategicPosition[] {
     if (!this.analysis) return [];
-    return this.analysis.expansionIndices.map(i => this.analysis!.positions[i]);
+    return this.analysis.expansionIndices.map((i) => this.analysis!.positions[i]);
   }
 
   /**
@@ -583,7 +589,7 @@ export class PositionalAnalysis {
    */
   public getDefensiblePositions(): StrategicPosition[] {
     if (!this.analysis) return [];
-    return this.analysis.defensibleIndices.map(i => this.analysis!.positions[i]);
+    return this.analysis.defensibleIndices.map((i) => this.analysis!.positions[i]);
   }
 
   /**

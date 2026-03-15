@@ -1,0 +1,20 @@
+- generic [ref=e1]:
+    - alert [ref=e136]
+    - generic [ref=e137]:
+        - generic:
+            - generic [ref=e167]:
+                - generic [ref=e168]:
+                    - generic [ref=e169]: 06:10
+                    - generic [ref=e173]: '50'
+                    - generic [ref=e176]: '0'
+                    - generic [ref=e177]:
+                        - img [ref=e178]
+                        - generic [ref=e181]: 6/11
+                - generic [ref=e182]:
+                    - button "! Idle (6)" [active] [ref=e183] [cursor=pointer]:
+                        - generic [ref=e184]: '!'
+                        - generic [ref=e185]: Idle (6)
+                    - button "Options" [ref=e187] [cursor=pointer]
+            - generic:
+                - generic [ref=e349]: Select units or buildings
+                - generic [ref=e350]: Select units or buildings

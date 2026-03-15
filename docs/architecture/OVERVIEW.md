@@ -507,7 +507,7 @@ voidstrike/
 │   │   ├── commandIcons.ts
 │   │   ├── debugLogger.ts
 │   │   ├── EntityValidator.ts
-│   │   ├── FixedPoint.ts
+│   │   ├── DeterministicMath.ts
 │   │   ├── math.ts
 │   │   ├── overlayCache.ts
 │   │   ├── storage.ts
@@ -682,7 +682,7 @@ voidstrike/
     ├── utils/ # Utility functions
     │   ├── BenchmarkRunner.ts
     │   ├── debugLogger.test.ts
-    │   ├── fixedPoint.test.ts
+    │   ├── deterministicMath.test.ts
     │   ├── math.test.ts
     │   ├── performanceTestHelpers.ts
     │   └── vectorPool.test.ts

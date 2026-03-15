@@ -35,7 +35,7 @@ import { Selectable } from '../components/Selectable';
 import { Building } from '../components/Building';
 import { findBestTarget as findBestTargetShared } from '../combat/TargetAcquisition';
 import AssetManager from '@/assets/AssetManager';
-import { distance } from '@/utils/math';
+import { deterministicDistance as distance } from '@/utils/DeterministicMath';
 
 // ==================== HELPER FUNCTIONS ====================
 

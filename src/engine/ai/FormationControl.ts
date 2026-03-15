@@ -13,7 +13,7 @@ import { Transform } from '../components/Transform';
 import { Unit } from '../components/Unit';
 import { Health } from '../components/Health';
 import { Selectable } from '../components/Selectable';
-import { distance } from '@/utils/math';
+import { deterministicDistance as distance, integerSqrt } from '@/utils/DeterministicMath';
 // UNIT_DEFINITIONS not needed - we use unit component data directly
 
 /**
@@ -77,6 +77,11 @@ const DEFAULT_CONFIG: FormationConfig = {
   splashSpread: 2.5,
   maxWidth: 30,
 };
+
+function integerSqrtCeil(value: number): number {
+  const sqrtFloor = integerSqrt(value);
+  return sqrtFloor * sqrtFloor === value ? sqrtFloor : sqrtFloor + 1;
+}
 
 /**
  * Formation Control - Manages army positioning
@@ -192,7 +197,10 @@ export class FormationControl {
     group.facing = facing;
 
     // Classify units by role
-    const unitsByRole: Map<UnitRole, Array<{ entityId: number; range: number; speed: number }>> = new Map();
+    const unitsByRole: Map<
+      UnitRole,
+      Array<{ entityId: number; range: number; speed: number }>
+    > = new Map();
 
     for (const entityId of group.units) {
       const entity = world.getEntity(entityId);
@@ -306,10 +314,12 @@ export class FormationControl {
   ): Array<{ x: number; y: number }> {
     if (count === 0) return [];
     if (count === 1) {
-      return [{
-        x: center.x + facing.x * distanceOffset,
-        y: center.y + facing.y * distanceOffset,
-      }];
+      return [
+        {
+          x: center.x + facing.x * distanceOffset,
+          y: center.y + facing.y * distanceOffset,
+        },
+      ];
     }
 
     const positions: Array<{ x: number; y: number }> = [];
@@ -423,10 +433,7 @@ export class FormationControl {
   /**
    * Calculate spread formation (anti-splash)
    */
-  public calculateSpreadFormation(
-    world: World,
-    groupId: string
-  ): FormationSlot[] {
+  public calculateSpreadFormation(world: World, groupId: string): FormationSlot[] {
     const group = this.groups.get(groupId);
     if (!group || group.units.length === 0) return [];
 
@@ -434,7 +441,7 @@ export class FormationControl {
     const count = group.units.length;
 
     // Arrange in a grid with extra spacing
-    const gridSize = Math.ceil(Math.sqrt(count));
+    const gridSize = integerSqrtCeil(count);
     const spacing = this.config.unitSpacing + this.config.splashSpread;
 
     const totalWidth = (gridSize - 1) * spacing;
@@ -471,10 +478,7 @@ export class FormationControl {
   /**
    * Calculate box formation (defensive)
    */
-  public calculateBoxFormation(
-    world: World,
-    groupId: string
-  ): FormationSlot[] {
+  public calculateBoxFormation(world: World, groupId: string): FormationSlot[] {
     const group = this.groups.get(groupId);
     if (!group || group.units.length === 0) return [];
 
@@ -504,7 +508,7 @@ export class FormationControl {
 
     // Melee units form the outer ring
     const outerRing = meleeUnits.length;
-    const ringRadius = Math.max(3, outerRing * this.config.unitSpacing / (2 * Math.PI));
+    const ringRadius = Math.max(3, (outerRing * this.config.unitSpacing) / (2 * Math.PI));
 
     for (let i = 0; i < outerRing; i++) {
       const angle = (i / outerRing) * 2 * Math.PI;
@@ -521,7 +525,7 @@ export class FormationControl {
 
     // Ranged units in center
     const innerCount = rangedUnits.length + otherUnits.length;
-    const innerGridSize = Math.ceil(Math.sqrt(innerCount));
+    const innerGridSize = integerSqrtCeil(innerCount);
     const innerSpacing = this.config.unitSpacing;
     const innerWidth = (innerGridSize - 1) * innerSpacing;
 
@@ -610,7 +614,9 @@ export class FormationControl {
       const transform = entity.get<Transform>('Transform');
       if (!transform) continue;
 
-      if (distance(transform.x, transform.y, slot.targetPosition.x, slot.targetPosition.y) > tolerance) {
+      if (
+        distance(transform.x, transform.y, slot.targetPosition.x, slot.targetPosition.y) > tolerance
+      ) {
         return false;
       }
     }

@@ -31,7 +31,7 @@ import type { AICoordinator, AIPlayer, EnemyRelation } from './AICoordinator';
 import { isEnemy } from '../../combat/TargetAcquisition';
 import type { ThreatAnalysis } from '../../ai/InfluenceMap';
 import type { FormationType } from '../../ai/FormationControl';
-import { deterministicMagnitude } from '@/utils/FixedPoint';
+import { deterministicMagnitude } from '@/utils/DeterministicMath';
 
 // Threat assessment constants
 const THREAT_WINDOW_TICKS = 100; // ~5 seconds at 20 ticks/sec (reduced from 200 to prevent defense lock)

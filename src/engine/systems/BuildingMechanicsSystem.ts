@@ -11,9 +11,8 @@ import {
   PRODUCTION_MODULE_UNITS,
 } from '@/data/buildings/dominion';
 import { findBuildingTarget } from '../combat/TargetAcquisition';
-import { distance } from '@/utils/math';
 import { validateEntityAlive } from '@/utils/EntityValidator';
-import { deterministicSqrt } from '@/utils/FixedPoint';
+import { deterministicDistance as distance, deterministicSqrt } from '@/utils/DeterministicMath';
 
 interface LiftOffCommand {
   buildingId: number;

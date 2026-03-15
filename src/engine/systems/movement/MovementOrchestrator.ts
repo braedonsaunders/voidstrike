@@ -29,7 +29,7 @@ import {
   QUANT_POSITION,
   deterministicMagnitude,
   deterministicNormalizeWithMagnitude,
-} from '@/utils/FixedPoint';
+} from '@/utils/DeterministicMath';
 import { WasmBoids, getWasmBoids, BoidsForces } from '../../wasm/WasmBoids';
 import { CROWD_MAX_AGENTS } from '@/data/pathfinding.config';
 import { stateToEnum } from '../../core/SpatialGrid';

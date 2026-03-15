@@ -1,6 +1,6 @@
 import { System } from '../ecs/System';
 import type { IGameInstance } from '../core/IGameInstance';
-import { distance, clamp } from '@/utils/math';
+import { clamp } from '@/utils/math';
 import type { IWorldProvider } from '../ecs/IWorldProvider';
 
 /**
@@ -341,7 +341,7 @@ export class SelectionSystem extends System {
       if (!screenPos) continue;
 
       // Calculate screen-space distance
-      const screenDistance = distance(screenX, screenY, screenPos.x, screenPos.y);
+      const screenDistance = Math.hypot(screenPos.x - screenX, screenPos.y - screenY);
 
       // Calculate screen-space selection radius
       const visualScale = selectable.visualScale ?? 1;

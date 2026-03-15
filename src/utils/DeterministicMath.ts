@@ -1,130 +1,10 @@
 /**
- * Fixed-Point Math Utilities for Deterministic Game Simulation
+ * Deterministic math utilities for lockstep simulation.
  *
- * This module provides fixed-point arithmetic to ensure deterministic
- * calculations across different platforms and browsers. Floating-point
- * operations can produce subtly different results on different CPUs,
- * which causes multiplayer desync.
- *
- * We use Q16.16 format (16 bits integer, 16 bits fractional)
- * Range: -32768.0 to 32767.99998 with precision of ~0.00001
+ * The simulation uses quantization plus integer square roots instead of a
+ * mixed fixed-point/float pipeline. This keeps the runtime math path explicit
+ * and avoids the old Q16.16 helpers that were no longer used by gameplay code.
  */
-
-// Fixed-point configuration
-export const FP_SHIFT = 16;
-export const FP_SCALE = 1 << FP_SHIFT; // 65536
-export const FP_HALF = FP_SCALE >> 1; // 32768 (for rounding)
-export const FP_MASK = FP_SCALE - 1; // 65535 (fractional mask)
-
-// Precomputed constants
-export const FP_ONE = FP_SCALE;
-
-// Maximum safe value to prevent overflow in multiplication
-export const FP_MAX_SAFE = 0x7fff0000; // ~32767
-export const FP_MIN_SAFE = -0x7fff0000;
-
-/**
- * Convert a floating-point number to fixed-point
- */
-export function fpFromFloat(value: number): number {
-  return Math.round(value * FP_SCALE) | 0;
-}
-
-/**
- * Convert a fixed-point number to floating-point
- * Use sparingly - only for rendering/display purposes
- */
-export function fpToFloat(fp: number): number {
-  return fp / FP_SCALE;
-}
-
-/**
- * Convert an integer to fixed-point
- */
-export function fpFromInt(value: number): number {
-  return (value << FP_SHIFT) | 0;
-}
-
-/**
- * Convert a fixed-point number to integer (truncates fractional part)
- */
-export function fpToInt(fp: number): number {
-  return (fp >> FP_SHIFT) | 0;
-}
-
-/**
- * Add two fixed-point numbers
- */
-export function fpAdd(a: number, b: number): number {
-  return (a + b) | 0;
-}
-
-/**
- * Subtract two fixed-point numbers
- */
-export function fpSub(a: number, b: number): number {
-  return (a - b) | 0;
-}
-
-/**
- * Multiply two fixed-point numbers
- * Uses BigInt for intermediate calculation to prevent overflow
- * FIX: Previous implementation had overflow bug in mid = lh + hl
- */
-export function fpMul(a: number, b: number): number {
-  // Use BigInt for full 64-bit precision to avoid overflow
-  const aBig = BigInt(a);
-  const bBig = BigInt(b);
-
-  // Full 64-bit multiplication, then shift right by FP_SHIFT
-  const result = (aBig * bBig) >> BigInt(FP_SHIFT);
-
-  // Convert back to number, truncating to 32-bit integer
-  return Number(result) | 0;
-}
-
-/**
- * Divide two fixed-point numbers
- */
-export function fpDiv(a: number, b: number): number {
-  if (b === 0) return a >= 0 ? FP_MAX_SAFE : FP_MIN_SAFE;
-
-  // Shift numerator left before division for precision
-  // Need to handle potential overflow for large numerators
-  const sign = (a ^ b) < 0 ? -1 : 1;
-  const absA = Math.abs(a);
-  const absB = Math.abs(b);
-
-  // Use JavaScript's safe integer range for the intermediate calculation
-  const result = Math.floor((absA * FP_SCALE) / absB);
-
-  return (sign * result) | 0;
-}
-
-/**
- * Fixed-point square root using Newton-Raphson iteration
- * Input and output are in fixed-point format
- */
-export function fpSqrt(fp: number): number {
-  if (fp <= 0) return 0;
-
-  // Initial guess using floating point (acceptable for initialization)
-  let x = fpFromFloat(Math.sqrt(fpToFloat(fp)));
-
-  // Newton-Raphson iterations for refinement
-  // x_new = (x + fp/x) / 2
-  for (let i = 0; i < 4; i++) {
-    if (x === 0) break;
-    const div = fpDiv(fp, x);
-    x = (x + div) >> 1;
-  }
-
-  return x;
-}
-
-// =============================================================================
-// Quantization Layer for Snapping Floating-Point to Deterministic Grid
-// =============================================================================
 
 /**
  * Quantization precision levels
@@ -132,7 +12,6 @@ export function fpSqrt(fp: number): number {
 export const QUANT_POSITION = 1000; // 0.001 unit precision for positions
 export const QUANT_DAMAGE = 100; // 0.01 precision for damage
 export const QUANT_COOLDOWN = 1000; // 0.001 second precision for cooldowns
-export const QUANT_VELOCITY = 1000; // 0.001 precision for velocity
 
 /**
  * Quantize a floating-point value to a deterministic grid
@@ -180,10 +59,6 @@ export function snapPosition(x: number, y: number): { x: number; y: number } {
 export function snapValue(value: number, precision: number = QUANT_POSITION): number {
   return Math.round(value * precision) / precision;
 }
-
-// =============================================================================
-// Deterministic Math Wrappers
-// =============================================================================
 
 /**
  * Integer square root using binary search

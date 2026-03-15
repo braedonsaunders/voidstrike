@@ -2,6 +2,15 @@ import nextConfig from 'eslint-config-next';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import tseslint from 'typescript-eslint';
 
+const deterministicEngineFiles = [
+  'src/engine/ai/**/*.ts',
+  'src/engine/combat/**/*.ts',
+  'src/engine/pathfinding/**/*.ts',
+  'src/engine/systems/**/*.ts',
+  'src/engine/components/Transform.ts',
+  'src/engine/components/Velocity.ts',
+];
+
 const eslintConfig = [
   // Global ignores (must be first)
   {
@@ -11,6 +20,8 @@ const eslintConfig = [
       'public/',
       'wasm/',
       '.next/',
+      '.next.old/',
+      '.next.codex-backup-*',
       'out/',
     ],
   },
@@ -39,6 +50,37 @@ const eslintConfig = [
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       'prefer-const': 'error',
       eqeqeq: ['error', 'always'],
+    },
+  },
+
+  {
+    files: deterministicEngineFiles,
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '@/utils/math',
+              importNames: ['angle', 'distance', 'distanceSquared', 'normalize'],
+              message: 'Use DeterministicMath utilities in simulation code.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-properties': [
+        'error',
+        {
+          object: 'Math',
+          property: 'random',
+          message: 'Use SeededRandom in simulation code.',
+        },
+        {
+          object: 'Math',
+          property: 'sqrt',
+          message: 'Use DeterministicMath utilities in simulation code.',
+        },
+      ],
     },
   },
 

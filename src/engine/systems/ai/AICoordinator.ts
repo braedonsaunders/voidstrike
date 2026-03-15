@@ -29,7 +29,7 @@ import type { IGameInstance } from '../../core/IGameInstance';
 import type { GameCommand } from '../../core/GameCommand';
 import { UNIT_DEFINITIONS } from '@/data/units/dominion';
 import { debugAI } from '@/utils/debugLogger';
-import { deterministicMagnitude } from '@/utils/FixedPoint';
+import { deterministicMagnitude } from '@/utils/DeterministicMath';
 import { SeededRandom } from '@/utils/math';
 import {
   getRandomBuildOrderForPersonality,

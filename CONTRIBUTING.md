@@ -71,6 +71,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 - `chore:` - Build process, dependencies, etc.
 
 Examples:
+
 ```
 feat: add siege mode to Dominion tanks
 fix: prevent units from clumping at rally points
@@ -94,7 +95,7 @@ src/
 
 ### High Priority
 
-- **Unit tests** for ECS core, fixed-point math, and networking
+- **Unit tests** for ECS core, deterministic math, and networking
 - **Performance benchmarks** with reproducible metrics
 - **Bug fixes** with clear reproduction steps
 
@@ -120,6 +121,7 @@ src/
 ## Questions?
 
 Open an issue for:
+
 - Bug reports (include reproduction steps)
 - Feature proposals (describe the use case)
 - Architecture questions

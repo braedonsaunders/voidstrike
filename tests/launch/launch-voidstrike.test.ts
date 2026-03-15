@@ -1,5 +1,6 @@
 import { createServer } from 'node:net';
 import type { Server } from 'node:net';
+import { afterEach, describe, expect, it } from 'vitest';
 
 const {
   createDisplayUrl,
