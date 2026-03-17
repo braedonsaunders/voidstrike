@@ -1,6 +1,6 @@
 <div align="center">
 
-# VOIDSTRIKE
+<img src="docs/voidstrike-social.png" alt="VOIDSTRIKE gameplay" width="900" />
 
 **The browser RTS that makes people ask how this is running in a tab.**
 
@@ -8,8 +8,6 @@
 [![Three.js](https://img.shields.io/badge/Three.js-r182-black?logo=three.js)](https://threejs.org/)
 [![WebGPU](https://img.shields.io/badge/WebGPU-First-green)](https://www.w3.org/TR/webgpu/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-<img src="docs/voidstrike-social.png" alt="VOIDSTRIKE gameplay" width="900" />
 
 [Quick Start](#quick-start) · [Technical Achievements](#technical-achievements)
 
