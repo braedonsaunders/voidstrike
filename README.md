@@ -9,7 +9,7 @@
 [![WebGPU](https://img.shields.io/badge/WebGPU-First-green)](https://www.w3.org/TR/webgpu/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-<img src="docs/voidstrike.gif" alt="VOIDSTRIKE gameplay" width="900" />
+<img src="docs/voidstrike-social.png" alt="VOIDSTRIKE gameplay" width="900" />
 
 [Quick Start](#quick-start) · [Technical Achievements](#technical-achievements)
 
