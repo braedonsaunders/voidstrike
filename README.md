@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/voidstrike-social.png" alt="VOIDSTRIKE gameplay" width="900" />
+<img src="docs/voidstrike-social.png" alt="VOIDSTRIKE" width="900" />
 
 **The browser RTS that makes people ask how this is running in a tab.**
 
@@ -15,7 +15,7 @@
 
 VOIDSTRIKE is a browser-native sci-fi RTS built to feel bigger than the browser it runs in. It is chasing the feeling of a full desktop strategy game: heavy atmosphere, big 3D battles, strong visual identity, and real systems depth instead of a stripped-down web prototype.
 
-<p align="center"><em>[ Generic Screenshot Slot ]</em></p>
+<img src="docs/screenshot1.png" alt="" width="900" />
 
 ## Why People Notice It
 
@@ -24,7 +24,7 @@ VOIDSTRIKE is a browser-native sci-fi RTS built to feel bigger than the browser 
 - **It is more than a render demo.** The project already includes bundled maps, AI opponents, a battle simulator, and an in-browser map editor.
 - **It is honest about what exists today.** Dominion is the playable faction right now; Synthesis and Swarm are planned, but not complete.
 
-<p align="center"><em>[ Generic Screenshot Slot ]</em></p>
+<img src="docs/screenshot2.png" alt="" width="900" />
 
 ## Current State
 
@@ -32,7 +32,7 @@ VOIDSTRIKE is a browser-native sci-fi RTS built to feel bigger than the browser 
 - **Still in progress:** additional faction content, more audio and content polish, and broader multiplayer integration.
 - **Best browser path:** Chrome or another Chromium browser for WebGPU; modern browsers can fall back to WebGL2.
 
-<p align="center"><em>[ Generic Screenshot Slot ]</em></p>
+<img src="docs/screenshot3.png" alt="" width="900" />
 
 ## Quick Start
 
@@ -42,7 +42,7 @@ VOIDSTRIKE is a browser-native sci-fi RTS built to feel bigger than the browser 
 - For development, run `npm install` and then `npm run dev`.
 - The launcher is the easiest local path; it installs dependencies if needed, builds the game, starts the production server, and opens the browser.
 
-<p align="center"><em>[ Generic Screenshot Slot ]</em></p>
+<img src="docs/screenshot4.png" alt="" width="900" />
 
 ## Technical Achievements
 
