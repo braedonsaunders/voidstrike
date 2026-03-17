@@ -17,22 +17,8 @@ VOIDSTRIKE is a browser-native sci-fi RTS built to feel bigger than the browser 
 
 <img src="docs/screenshot1.png" alt="" width="900" />
 
-## Why People Notice It
-
-- **It looks wrong for the browser.** VOIDSTRIKE leans into cinematic lighting, fog, scale, and readable battlefield silhouettes instead of settling for "good enough for web."
-- **It plays like an RTS.** Economy, production, scouting, terrain, army control, and AI skirmishes are already in the playable game.
-- **It is more than a render demo.** The project already includes bundled maps, AI opponents, a battle simulator, and an in-browser map editor.
-- **It is honest about what exists today.** Dominion is the playable faction right now; Synthesis and Swarm are planned, but not complete.
 
 <img src="docs/screenshot2.png" alt="" width="900" />
-
-## Current State
-
-- **Playable now:** a Dominion-first browser RTS with AI matches, multiple bundled maps, a battle simulator, and a built-in map editor.
-- **Still in progress:** additional faction content, more audio and content polish, and broader multiplayer integration.
-- **Best browser path:** Chrome or another Chromium browser for WebGPU; modern browsers can fall back to WebGL2.
-
-<img src="docs/screenshot3.png" alt="" width="900" />
 
 ## Quick Start
 
