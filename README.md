@@ -2,359 +2,54 @@
 
 # VOIDSTRIKE
 
-**Browser-native RTS.**
+**The browser RTS that makes people ask how this is running in a tab.**
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-r182-black?logo=three.js)](https://threejs.org/)
 [![WebGPU](https://img.shields.io/badge/WebGPU-First-green)](https://www.w3.org/TR/webgpu/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-<img src="docs/voidstrike.gif" alt="VOIDSTRIKE gameplay" width="800" />
+<img src="docs/voidstrike.gif" alt="VOIDSTRIKE gameplay" width="900" />
 
-[Play](#quick-start) · [Technical Architecture](#technical-architecture) · [Extractable Libraries](#extractable-libraries) · [For Players](#for-rts-players)
+[Quick Start](#quick-start) · [Technical Achievements](#technical-achievements)
 
 </div>
 
----
+VOIDSTRIKE is a browser-native sci-fi RTS built to feel bigger than the browser it runs in. It is chasing the feeling of a full desktop strategy game: heavy atmosphere, big 3D battles, strong visual identity, and real systems depth instead of a stripped-down web prototype.
 
-## Technical Architecture
+<p align="center"><em>[ Generic Screenshot Slot ]</em></p>
 
-Browser games typically compromise on one or more axes: graphics fidelity, networking architecture, or simulation determinism. This project attempts to avoid those tradeoffs. Here's what's under the hood.
+## Why People Notice It
 
-### Serverless P2P Multiplayer
+- **It looks wrong for the browser.** VOIDSTRIKE leans into cinematic lighting, fog, scale, and readable battlefield silhouettes instead of settling for "good enough for web."
+- **It plays like an RTS.** Economy, production, scouting, terrain, army control, and AI skirmishes are already in the playable game.
+- **It is more than a render demo.** The project already includes bundled maps, AI opponents, a battle simulator, and an in-browser map editor.
+- **It is honest about what exists today.** Dominion is the playable faction right now; Synthesis and Swarm are planned, but not complete.
 
-No game servers. No matchmaking backend. No infrastructure costs. Players connect directly via WebRTC, with signaling handled through the [Nostr protocol](https://nostr.com/) - a decentralized network with hundreds of public relays and zero single point of failure.
+<p align="center"><em>[ Generic Screenshot Slot ]</em></p>
 
-```
-Host creates lobby → 4-character code published to Nostr relays
-Guest enters code  → Nostr locates lobby, facilitates WebRTC handshake
-Connection made    → Direct peer-to-peer, Nostr disconnected
-```
+## Current State
 
-If Nostr becomes unavailable, players can fall back to manual connection code exchange. The game continues to function regardless of external infrastructure.
+- **Playable now:** a Dominion-first browser RTS with AI matches, multiple bundled maps, a battle simulator, and a built-in map editor.
+- **Still in progress:** additional faction content, more audio and content polish, and broader multiplayer integration.
+- **Best browser path:** Chrome or another Chromium browser for WebGPU; modern browsers can fall back to WebGL2.
 
-**Implementation:** `src/hooks/useMultiplayer.ts`, `src/store/multiplayerStore.ts`
-
----
-
-### Deterministic Lockstep with Quantized Math
-
-Multiplayer RTS requires identical simulation across all clients. The challenge: IEEE 754 floating-point arithmetic isn't guaranteed to produce identical results across different CPUs, browsers, or optimization levels. The differences are small, but they accumulate.
-
-The solution is explicit quantization plus integer square roots for gameplay-critical calculations:
-
-```typescript
-// src/utils/DeterministicMath.ts
-export const QUANT_POSITION = 1000; // 0.001 unit precision
-
-export function deterministicDistance(x1: number, y1: number, x2: number, y2: number): number {
-  const dx = quantize(x2, QUANT_POSITION) - quantize(x1, QUANT_POSITION);
-  const dy = quantize(y2, QUANT_POSITION) - quantize(y1, QUANT_POSITION);
-  return integerSqrt(dx * dx + dy * dy) / QUANT_POSITION;
-}
-```
-
-When desyncs do occur, Merkle tree comparison identifies the divergent entities in O(log n) time rather than requiring a full state diff.
-
-**Implementation:** `src/utils/DeterministicMath.ts`, `src/engine/network/MerkleTree.ts`
-
----
-
-### Archetype-Based ECS with Composition-Aware Caching
-
-Most Entity Component System implementations rebuild query caches every frame. This implementation only invalidates when an entity's component composition actually changes:
-
-```typescript
-// Entities grouped by component signature (archetype)
-// "Health,Transform,Unit,Velocity" → Set<EntityId> containing 200 units
-// "Building,Health,Selectable"     → Set<EntityId> containing 50 buildings
-
-getEntitiesWith(Transform, Unit) {
-  // Cache invalidates on composition change, not every tick
-  if (this.queryCacheVersion === this.archetypeCacheVersion) {
-    return this.queryCache.get(key); // O(1)
-  }
-  // Rebuild: iterate archetypes, not entities
-}
-```
-
-For typical entity distributions (500 entities across 10 archetypes), this provides roughly 50x improvement over naive set intersection.
-
-**Implementation:** `src/engine/ecs/World.ts` (~350 lines, zero dependencies)
-
----
-
-### Background Tab Timing
-
-Browsers throttle `requestAnimationFrame` to approximately 1Hz when a tab is backgrounded. In a multiplayer context, this causes the backgrounded player to fall behind on simulation ticks, leading to desync.
-
-Web Workers are not subject to the same throttling:
-
-```typescript
-// src/engine/core/GameLoop.ts
-const workerCode = `
-  setInterval(() => {
-    self.postMessage({ type: 'tick', time: performance.now() });
-  }, ${tickMs});
-`;
-this.worker = new Worker(URL.createObjectURL(new Blob([workerCode])));
-```
-
-The game maintains its 20Hz tick rate even when minimized or in a background tab.
-
-**Implementation:** `src/engine/core/GameLoop.ts` (~180 lines)
-
----
-
-### Per-Instance Velocity for Temporal Anti-Aliasing
-
-Three.js provides a built-in `VelocityNode` for motion vector generation, but it operates at the object level. When using `InstancedMesh` to batch hundreds of units into a single draw call, the velocity node sees one stationary object - every instance reports zero motion.
-
-The result: temporal anti-aliasing produces ghosting artifacts on all moving units, as the TAA algorithm incorrectly assumes static geometry.
-
-The fix stores both current and previous frame transformation matrices as per-instance vertex attributes:
-
-```typescript
-// 8 vec4 attributes per instance (4 for current matrix, 4 for previous)
-const currInstanceMatrix = mat4(
-  attribute('currInstanceMatrix0'),
-  attribute('currInstanceMatrix1'),
-  attribute('currInstanceMatrix2'),
-  attribute('currInstanceMatrix3')
-);
-const prevInstanceMatrix = mat4(
-  attribute('prevInstanceMatrix0')
-  // ...
-);
-// Velocity = project(current) - project(previous)
-```
-
-A subtle issue: floating-point precision differences between the code paths that compute current vs. previous positions caused micro-jitter. Using identical attribute reads for both matrices eliminated the problem.
-
-**Implementation:** `src/rendering/tsl/InstancedVelocity.ts` (~280 lines)
-
----
-
-### Dual-Pipeline Resolution Scaling
-
-Combining temporal anti-aliasing with resolution upscaling is architecturally tricky. Depth-dependent post-processing effects (GTAO, SSR) require matching depth buffer dimensions. Attempting to mix render targets at different resolutions triggers WebGPU validation errors.
-
-The solution: two completely separate post-processing pipelines.
-
-```
-INTERNAL PIPELINE @ Render Resolution (e.g., 1440p)
-├── Scene Pass (with MRT: color, normals, velocity)
-├── GTAO (ambient occlusion)
-├── SSR (screen-space reflections)
-├── Bloom
-├── Volumetric Fog
-├── Color Grading
-└── TAA → outputs to texture
-
-DISPLAY PIPELINE @ Native Resolution (e.g., 2160p)
-└── FSR EASU (edge-adaptive upscaling) → canvas
-```
-
-All depth-dependent effects execute at render resolution. Upscaling happens in a separate pass with no depth buffer involvement.
-
-**Implementation:** `src/rendering/tsl/PostProcessing.ts`, `src/rendering/tsl/effects/EffectPasses.ts`
-
----
-
-### AAA-Style Fog of War
-
-Not a simple darkness overlay. The full implementation includes:
-
-- Gaussian blur on visibility edges (eliminates blocky cell boundaries)
-- Explored but non-visible areas rendered desaturated with cool color shift
-- Animated procedural cloud layer over unexplored regions
-- GPU compute shader for vision calculation (supports 1000+ vision sources at 60fps)
-- Temporal smoothing for visibility state transitions
-
-```
-VisionCompute (GPU) → StorageTexture (R=explored, G=visible, A=smoothed)
-                              ↓
-              FogOfWarPass (post-processing)
-              ├── Sample vision texture
-              ├── Apply desaturation + color shift to explored areas
-              ├── Blend cloud noise over unexplored
-              └── Output modified scene color
-```
-
-**Implementation:** `src/rendering/compute/VisionCompute.ts`, `src/rendering/tsl/effects/EffectPasses.ts`
-
----
-
-## Extractable Libraries
-
-These modules have minimal coupling and could be extracted as standalone packages:
-
-| Module                 | Size       | Dependencies | Purpose                                                 |
-| ---------------------- | ---------- | ------------ | ------------------------------------------------------- |
-| **Archetype ECS**      | ~350 lines | None         | Fast queries with composition-based cache invalidation  |
-| **Deterministic Math** | ~300 lines | None         | Quantized deterministic arithmetic for lockstep netcode |
-| **EventBus**           | ~110 lines | None         | Typed pub/sub with O(1) unsubscribe via swap-and-pop    |
-| **Game Loop**          | ~180 lines | None         | Worker-based timing, survives background tabs           |
-| **Behavior Trees**     | ~300 lines | None         | Async-compatible BT implementation for game AI          |
-| **Nostr Matchmaking**  | ~450 lines | nostr-tools  | Decentralized lobby system over Nostr protocol          |
-| **Connection Codes**   | ~450 lines | pako         | Encode WebRTC SDP as shareable codes                    |
-| **Instanced Velocity** | ~280 lines | Three.js     | Per-instance motion vectors for TAA                     |
-| **Merkle Sync**        | ~200 lines | None         | O(log n) state divergence detection                     |
-
----
-
-## For RTS Players
-
-### Factions
-
-| Faction       | Theme                       | Playstyle                         |
-| ------------- | --------------------------- | --------------------------------- |
-| **Dominion**  | Military industrial complex | Defensive, siege-oriented         |
-| **Synthesis** | Transcendent AI collective  | Shield-based, psionic abilities   |
-| **Swarm**     | Adaptive biological horror  | Cheap units, overwhelming numbers |
-
-**Dominion** builds bunkers, sieges tanks, and turtles until ready to push with superior firepower.
-
-**Synthesis** warps in units instantly, relies on regenerating shields, and deploys devastating psionic abilities.
-
-**Swarm** spreads creep across the map, morphs cheap units into specialized forms, and wins through attrition.
-
-### Why Play This
-
-- **Zero installation.** Runs in browser. Click and play.
-- **Real graphics pipeline.** GTAO, SSR, volumetric fog, temporal AA. Not a 2D sprite game.
-- **Peer-to-peer.** No central servers means the game can't be "sunset."
-- **Deterministic replays.** Every match can be rewatched or shared.
-- **Tiered AI.** Five difficulty levels, from beginner-friendly to competitive practice.
-
-### Controls
-
-| Input         | Action                   |
-| ------------- | ------------------------ |
-| Left click    | Select                   |
-| Right click   | Move / Attack / Interact |
-| Shift + click | Queue commands           |
-| Ctrl + 1-9    | Create control group     |
-| 1-9           | Select control group     |
-| A + click     | Attack-move              |
-| H             | Hold position            |
-| P             | Patrol                   |
-
----
+<p align="center"><em>[ Generic Screenshot Slot ]</em></p>
 
 ## Quick Start
 
-```bash
-git clone https://github.com/braedonsaunders/voidstrike.git
-cd voidstrike
-```
+- `git clone https://github.com/braedonsaunders/voidstrike.git`
+- `cd voidstrike`
+- Launch locally with `launch/launch-voidstrike.command` on macOS, `launch/launch-voidstrike.bat` on Windows, or `launch/launch-voidstrike.desktop` on Linux.
+- For development, run `npm install` and then `npm run dev`.
+- The launcher is the easiest local path; it installs dependencies if needed, builds the game, starts the production server, and opens the browser.
 
-Start the game with the launcher for your platform:
+<p align="center"><em>[ Generic Screenshot Slot ]</em></p>
 
-- macOS: `launch/launch-voidstrike.command`
-- Windows: `launch/launch-voidstrike.bat`
-- Linux: `launch/launch-voidstrike.desktop`
+## Technical Achievements
 
-The launcher is the recommended way to run VOIDSTRIKE locally. It installs dependencies if needed, builds the game, starts the production server, opens the browser automatically, and moves to the next open port starting at `3000` when necessary.
-
-Chrome 113+ is recommended for WebGPU; other modern browsers fall back to WebGL2.
-
----
-
-## Technology Stack
-
-| Layer       | Technology                                                   |
-| ----------- | ------------------------------------------------------------ |
-| Framework   | Next.js 16, React 19                                         |
-| Language    | TypeScript 5 (strict mode, no implicit any)                  |
-| Graphics    | Three.js r182 (WebGPU primary, WebGL2 fallback)              |
-| Shaders     | TSL (Three.js Shading Language)                              |
-| Pathfinding | recast-navigation (WASM, same library as Unity/Godot/Unreal) |
-| State       | Zustand                                                      |
-| Networking  | WebRTC + Nostr                                               |
-| Styling     | Tailwind CSS                                                 |
-
----
-
-## Performance Targets
-
-| Metric     | Target   | Measured             |
-| ---------- | -------- | -------------------- |
-| Frame rate | 60 FPS   | 60 FPS @ 200 units   |
-| Tick rate  | 20 Hz    | 20 Hz fixed timestep |
-| Memory     | < 500 MB | ~300 MB              |
-| Cold start | < 5s     | ~3s                  |
-
-Key optimizations: instanced rendering, spatial hashing for O(1) range queries, archetype query caching, object pooling, vector pooling to minimize GC pressure.
-
----
-
-## Project Structure
-
-```
-src/
-├── engine/               # Reusable game engine
-│   ├── ecs/             # Entity-Component-System
-│   ├── core/            # Game loop, EventBus, performance monitoring
-│   ├── systems/         # Combat, movement, production, AI
-│   ├── pathfinding/     # Recast Navigation WASM integration
-│   └── network/         # P2P, lockstep, desync detection
-│
-├── rendering/           # Three.js rendering layer
-│   ├── tsl/            # WebGPU shaders, post-processing pipeline
-│   ├── compute/        # GPU compute (vision, frustum culling)
-│   └── effects/        # Battle effects, particle systems
-│
-├── data/               # Game content (swap to reskin the game)
-│   ├── units/          # Unit definitions per faction
-│   ├── buildings/      # Building definitions
-│   └── abilities/      # Ability definitions
-│
-└── components/         # React UI layer
-```
-
-The engine (`src/engine/`) is game-agnostic. The content (`src/data/`) defines VOIDSTRIKE specifically. Swap the data layer to build a different RTS.
-
----
-
-## Documentation
-
-| Document                          | Contents                                                |
-| --------------------------------- | ------------------------------------------------------- |
-| `docs/architecture/OVERVIEW.md`   | System architecture, data flow, ECS patterns            |
-| `docs/architecture/rendering.md`  | Graphics pipeline, shader architecture, post-processing |
-| `docs/architecture/networking.md` | P2P protocol, determinism requirements, desync handling |
-| `docs/design/GAME_DESIGN.md`      | Game mechanics, faction design, balance considerations  |
-
----
-
-## Contributing
-
-Areas where contributions would be valuable:
-
-- Test coverage for deterministic math edge cases
-- Additional TSL shader effects
-- AI improvements (current implementation is functional but predictable at higher levels)
-- Accessibility features
-
-```bash
-npm run type-check  # TypeScript validation
-npm run lint        # ESLint
-npm run test        # Unit tests
-```
-
-Use the platform launcher in [Quick Start](#quick-start) to run the game locally.
-
----
-
-## License
-
-MIT License. See [LICENSE](LICENSE) for details.
-
----
-
-<div align="center">
-
-_Demonstrating that browser games don't require architectural compromise._
-
-</div>
+- **WebGPU-first 3D rendering with fallback.** VOIDSTRIKE targets a modern Three.js r182 + TSL pipeline with post-processing, atmosphere, and high-end rendering features that are rare in browser RTS projects. When WebGPU is unavailable, the game can still run through WebGL2 instead of failing outright.
+- **Deterministic RTS simulation.** The engine is built around ECS systems, quantized math, and simulation rules designed for consistency rather than loose browser-game state updates. That makes the current game more reliable and lays the groundwork for lockstep-style networking and replay correctness.
+- **Worker-heavy architecture for real browser constraints.** Timing, pathfinding, and other expensive work are pushed off the main thread so the game is not built around the assumption that the tab always has perfect foreground priority. This is the kind of engineering a browser RTS needs if it wants to survive outside controlled demos.
+- **Rendering and fog systems built for battlefield scale.** The project uses instancing, GPU-oriented rendering paths, and advanced fog-of-war/post-processing work to keep large fights readable without flattening the look. The result is a game that tries to sell spectacle and information density at the same time.
+- **A full game pipeline, not just a graphics experiment.** The repo includes maps, AI, launch tooling, asset workflows, automated tests, and an in-browser editor alongside the runtime. That gives VOIDSTRIKE the structure to keep growing as a game instead of stopping at a cool technical prototype.
