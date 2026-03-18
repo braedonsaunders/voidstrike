@@ -10,8 +10,7 @@ voidstrike/
 │   │   ├── feature.md
 │   │   ├── system.md
 │   │   └── tool.md
-│   ├── CLAUDE.md # Main instructions file
-│   └── TODO.md # Development roadmap
+│   └── CLAUDE.md # Main instructions file
 ├── docs/
 │   ├── architecture/ # Architecture docs (this file)
 │   │   ├── networking.md # P2P multiplayer
