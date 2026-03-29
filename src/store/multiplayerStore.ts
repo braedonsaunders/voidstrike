@@ -104,6 +104,7 @@ export interface MultiplayerState {
 
   // Reconnection callback (set by lobby hook)
   reconnectCallback: (() => Promise<boolean>) | null;
+  sessionCleanupCallback: (() => void) | null;
 
   // Called after successful reconnection to trigger game-level sync
   onReconnectedCallback: (() => void) | null;
@@ -127,6 +128,7 @@ export interface MultiplayerState {
   setRemotePeerId: (id: string | null) => void;
   setDataChannel: (channel: RTCDataChannel | null) => void;
   setReconnectCallback: (callback: (() => Promise<boolean>) | null) => void;
+  setSessionCleanupCallback: (callback: (() => void) | null) => void;
   setOnReconnectedCallback: (callback: (() => void) | null) => void;
 
   // Multi-peer actions
@@ -216,6 +218,7 @@ const initialState = {
   dataChannel: null,
   peerChannels: new Map<string, PeerConnection>(),
   reconnectCallback: null,
+  sessionCleanupCallback: null,
   onReconnectedCallback: null,
   messageHandlers: [] as ((data: unknown) => void)[],
   // Latency measurement
@@ -255,6 +258,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
     }
   },
   setReconnectCallback: (callback) => set({ reconnectCallback: callback }),
+  setSessionCleanupCallback: (callback) => set({ sessionCleanupCallback: callback }),
   setOnReconnectedCallback: (callback) => set({ onReconnectedCallback: callback }),
 
   // Multi-peer management for 8-player support
@@ -1021,7 +1025,7 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
   },
 
   reset: () => {
-    const { dataChannel, pingInterval, peerChannels } = get();
+    const { dataChannel, pingInterval, peerChannels, sessionCleanupCallback } = get();
 
     // Close all peer channels with proper cleanup
     for (const peer of peerChannels.values()) {
@@ -1051,6 +1055,12 @@ export const useMultiplayerStore = create<MultiplayerState>((set, get) => ({
 
     if (pingInterval) {
       clearInterval(pingInterval);
+    }
+
+    try {
+      sessionCleanupCallback?.();
+    } catch (e) {
+      debugNetworking.error('[Multiplayer] Failed to clean up preserved lobby session:', e);
     }
 
     set({

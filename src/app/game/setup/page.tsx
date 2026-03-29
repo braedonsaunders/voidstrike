@@ -189,19 +189,23 @@ export default function GameSetupPage() {
 
             {/* Header actions */}
             <div className="flex items-center gap-3">
-              {isHost && lobbyStatus === 'hosting' && (
+              {!isGuestMode && (
                 <>
                   <button
                     onClick={() => setShowLobbyBrowser(true)}
+                    disabled={lobbyStatus === 'joining'}
                     className="px-4 py-2 bg-plasma-700 hover:bg-plasma-600 text-white text-sm rounded-lg
-                               border border-plasma-600 transition-colors"
+                               border border-plasma-600 transition-colors disabled:opacity-50
+                               disabled:cursor-not-allowed"
                   >
                     Browse Lobbies
                   </button>
                   <button
                     onClick={() => setShowJoinModal(true)}
+                    disabled={lobbyStatus === 'joining'}
                     className="px-4 py-2 bg-void-700 hover:bg-void-600 text-white text-sm rounded-lg
-                               border border-void-600 transition-colors"
+                               border border-void-600 transition-colors disabled:opacity-50
+                               disabled:cursor-not-allowed"
                   >
                     Join Game
                   </button>

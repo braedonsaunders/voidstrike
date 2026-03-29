@@ -56,6 +56,12 @@ export interface GameConfig {
   mapHeight: number;
   tickRate: number;
   isMultiplayer: boolean;
+  /**
+   * Selects which runtime owns inbound multiplayer command handling.
+   * - `main-thread`: direct Game instance handles lockstep networking
+   * - `worker`: WorkerBridge/GameWorker handle multiplayer, main thread stays UI-only
+   */
+  multiplayerMessageHandling: 'main-thread' | 'worker';
   playerId: string;
   aiEnabled: boolean;
   aiDifficulty: 'easy' | 'medium' | 'hard' | 'insane';
@@ -67,6 +73,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   mapHeight: 128,
   tickRate: 20,
   isMultiplayer: false,
+  multiplayerMessageHandling: 'main-thread',
   playerId: 'player1',
   aiEnabled: true,
   aiDifficulty: 'medium',

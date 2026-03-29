@@ -76,6 +76,13 @@ Lockstep simulation now treats economy state as player-scoped engine data. Synch
 | **Lobby Discovery** | Nostr subscriptions             |
 | **Player Identity** | Ed25519 keypairs (nostr-tools)  |
 
+### Lobby Session Lifecycle
+
+- Lobby networking stays enabled while a guest occupies a formerly `Open` slot, so private code-join games do not tear down their signaling session as soon as the last slot is filled.
+- Active lobby sessions are preserved across the `/game/setup` to `/game` route transition and only torn down when the actual game page exits, preventing false disconnects during match start.
+- Guest-side peer mapping uses the host's real signaling pubkey, which keeps signed lockstep commands verifiable after the match begins.
+- In browser worker mode, `WorkerBridge` is the only main-thread consumer for inbound multiplayer commands. The UI-side `Game` instance stays in proxy mode, which prevents duplicate command validation against a stale `currentTick === 0` shadow instance.
+
 ---
 
 ## Architecture Overview

@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { HUD } from '@/components/game/HUD';
 import { MultiplayerOverlay } from '@/components/game/MultiplayerOverlay';
 import { useGameSetupStore } from '@/store/gameSetupStore';
+import { useMultiplayerStore } from '@/store/multiplayerStore';
+import { GameLoadingFallback } from './GameLoadingFallback';
 import { registerGamePageUnmount } from './gamePageLifecycle';
 
 // Dynamic import for WebGPU game canvas (Three.js + Phaser overlay)
@@ -13,7 +15,7 @@ import { registerGamePageUnmount } from './gamePageLifecycle';
 // No SSR - both Three.js and Phaser require browser
 const WebGPUGameCanvas = dynamic(
   () => import('@/components/game/WebGPUGameCanvas').then((mod) => mod.WebGPUGameCanvas),
-  { ssr: false, loading: () => null }
+  { ssr: false, loading: () => <GameLoadingFallback /> }
 );
 
 // Simple black screen fallback - no content to prevent flash
@@ -25,6 +27,7 @@ export default function GamePage() {
   const router = useRouter();
   const { gameStarted, endGame } = useGameSetupStore();
   const [mounted, setMounted] = useState(false);
+  const routeFallback = gameStarted ? <GameLoadingFallback /> : <BlackScreen />;
 
   // Hydration mount pattern: intentionally triggers re-render after client hydration
   // to avoid SSR/client mismatch when rendering browser-only content
@@ -40,18 +43,19 @@ export default function GamePage() {
     }
 
     return registerGamePageUnmount(() => {
+      useMultiplayerStore.getState().reset();
       endGame();
     });
   }, [gameStarted, router, endGame]);
 
-  // Start with black screen, prevent any flash
+  // Keep an immediate route-level fallback visible while the game page hydrates
   if (!mounted || !gameStarted) {
-    return <BlackScreen />;
+    return routeFallback;
   }
 
   return (
     <div className="game-container fixed inset-0 bg-black overflow-hidden">
-      <Suspense fallback={<BlackScreen />}>
+      <Suspense fallback={routeFallback}>
         <WebGPUGameCanvas />
         <HUD />
         <MultiplayerOverlay />

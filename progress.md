@@ -218,6 +218,31 @@ Original prompt: cant get this app to start locally
   - regenerated the older script as well; shipped `contested_frontier` matches the older generator, while the other ranked maps do not
 - Implication:
   - the current 4-player `Scorched Basin` issue is unlikely to be caused by stale/legacy map JSON, because the shipped `scorched_basin.json` already aligns with the LLM-generated structure and bundled pathfinding connectivity tests pass
+
+- Investigated and fixed the multiplayer lobby-start regression reported on 2026-03-28 where guests could join but then got stuck loading or hit `Connection Lost`, while the host saw the remote player as immediately defeated.
+- Root causes confirmed in live two-browser repros:
+  - `Join Game` was only reachable from a fresh setup page after enabling public-host mode because the header action was incorrectly gated on `lobbyStatus === 'hosting'`
+  - private code-join lobbies tore themselves down as soon as the last `Open` slot was filled because networking enablement only looked for remaining `open` slots or a public lobby flag
+  - the `/game/setup` lobby hook closed active peer/signing state during the `/game/setup -> /game` navigation, disconnecting the guest right after `Start Game`
+  - guest-side multiplayer store wiring used a synthetic host peer ID instead of the host's real signaling pubkey, which would break signed command verification once the match was running
+- Applied fixes:
+  - added `src/app/game/setup/lobbySessionPolicy.ts` and switched `useLobbySync` to keep networking alive for connected guest slots
+  - updated `src/hooks/useMultiplayer.ts` to preserve active lobby sessions and reconnect callbacks across the setup-to-game transition, defer real teardown to game exit, and map the guest's host peer to the real host pubkey
+  - updated `src/store/multiplayerStore.ts` and `src/app/game/page.tsx` so real multiplayer cleanup runs on actual `/game` exit instead of on setup-page unmount
+  - updated `src/app/game/setup/page.tsx` so `Join Game` and `Browse Lobbies` are available from a fresh setup page without requiring public-host mode
+- Added regressions:
+  - `tests/app/game/setup/lobbySessionPolicy.test.ts`
+  - `tests/store/multiplayerStore.test.ts`
+- Verified:
+  - `npm test -- tests/app/game/setup/lobbySessionPolicy.test.ts tests/app/game/setup/getStartGameButtonState.test.ts tests/app/game/gamePageLifecycle.test.ts tests/store/multiplayerStore.test.ts`
+  - `npx eslint src/app/game/setup/lobbySessionPolicy.ts src/hooks/useLobbySync.ts src/hooks/useMultiplayer.ts src/store/multiplayerStore.ts src/app/game/page.tsx src/app/game/setup/page.tsx tests/app/game/setup/lobbySessionPolicy.test.ts tests/store/multiplayerStore.test.ts`
+  - `npm run build`
+  - live headed Playwright two-browser verification in `next dev`:
+    - private code join: `output/playwright/multiplayer-verify-private-1774741115339/result.json`
+    - public-host code join: `output/playwright/multiplayer-verify-public-1774741179155/result.json`
+  - live headed Playwright two-browser verification in production (`next start`):
+    - private code join: `output/playwright/multiplayer-verify-private-prod-1774741262397/result.json`
+- `npm run type-check` is still blocked by pre-existing unrelated test-harness errors in `tests/engine/input/handlers/buildingInputHandler.test.ts` and `tests/engine/workers/gameWorker.test.ts`; the multiplayer changes themselves build and lint cleanly.
   - `contested_frontier` is the only ranked shipped map that still appears to be on the older non-LLM layout
 - Additional catalog note:
   - `battle_arena` is correctly hidden from the regular lobby via `isSpecialMode: true`
@@ -232,3 +257,49 @@ Original prompt: cant get this app to start locally
   - the validator now reports all six spawn cells as `terrain=ramp elev=220` rather than `ground`, though they remain walkable and the existing connectivity regression still passes
 - Follow-up worth doing in a live match:
   - spectate a `Contested Frontier` game after the swap to confirm AI movement around main-base exits and initial worker behavior still looks sane with spawn cells marked as ramp terrain
+
+- Investigated multiplayer command transmission and determinism under sustained live play on 2026-03-28 after the earlier lobby-start regression fix.
+- Additional root cause found during deeper multiplayer tracing:
+  - the UI-thread proxy `Game` instance could still register inbound multiplayer handlers even when the worker-owned simulation was already handling them, which produced duplicate verification paths and false `[Game] SECURITY:` rejections for otherwise valid remote commands
+- Applied follow-up multiplayer determinism fixes:
+  - added `src/engine/core/multiplayerMessageHandling.ts` plus a `multiplayerMessageHandling` ownership flag in `src/engine/core/GameCore.ts`
+  - updated `src/engine/core/Game.ts` and `src/components/game/hooks/useWorkerBridge.ts` so multiplayer inbound message handling is owned by the worker in worker-bridge matches and only by the main thread in direct-mode matches
+  - added a browser debug hook in `src/components/game/hooks/useWorkerBridge.ts` exposing `globalThis.__voidstrikeMultiplayerDebug__` so live browser automation can request authoritative simulation checksums and read multiplayer sync state from the running worker
+  - added `scripts/verify-multiplayer-checksum.js` to spin up a real 2-human + 2-AI match, issue commands from both humans, and verify remote action visibility plus checksum parity over time
+  - added `tests/engine/core/multiplayerMessageHandling.test.ts` to lock the ownership split between main-thread and worker-managed multiplayer sessions
+- Sustained production verification passed on `http://127.0.0.1:3308`:
+  - scenario: `Scorched Basin`, 2 humans + 2 AI, `High` resources, `Fastest` speed, fog disabled
+  - host created a private lobby, guest joined by code, and both human players issued live commands including move/hold/stop plus repeated move orders during the five-minute run
+  - command visibility checks showed the same commanded remote unit state on both clients for host-issued and guest-issued actions, confirming network transmission and remote render-state updates
+  - authoritative checksum checkpoints matched on both clients throughout the run:
+    - initial: tick `20`, checksum `767486150`
+    - minute 1: tick `1285`, checksum `282837654`
+    - minute 2: tick `2495`, checksum `1162993385`
+    - minute 3: tick `3700`, checksum `3528400692`
+    - minute 4: tick `4885`, checksum `3938796473`
+    - final: tick `6085`, checksum `2918746334`
+  - final multiplayer state on both clients remained `connectionStatus: connected` and `desyncState: synced`, with the host still bound to `player1` and the guest still bound to `player2`
+  - no `Connection Lost`, no `Game Desynchronized`, and no `[Game] SECURITY:` / `CRITICAL` log entries were emitted during the run
+- Verification artifacts:
+  - result bundle: `output/playwright/multiplayer-checksum-five-minute-1774744461322/`
+  - summary JSON: `output/playwright/multiplayer-checksum-five-minute-1774744461322/result.json`
+  - logs: `output/playwright/multiplayer-checksum-five-minute-1774744461322/host.log` and `output/playwright/multiplayer-checksum-five-minute-1774744461322/guest.log`
+  - captured end-state visuals/text: `host-final.png`, `guest-final.png`, `host-final.txt`, `guest-final.txt`
+
+- Investigated the follow-up report that the guest seemed to start a multiplayer match without a loading progress bar on 2026-03-28.
+- Findings from live two-browser production captures:
+  - the in-canvas `LoadingScreen` already rendered correctly for the guest once `WebGPUGameCanvas` mounted
+  - the real UX gap was earlier in the `/game` route handoff: both host and guest could briefly show the plain route-level black fallback before the game canvas chunk mounted, making the guest transition look like “no progress bar” if the black frame happened to last longer on that machine
+- Applied fix:
+  - added `src/app/game/GameLoadingFallback.tsx`, a lightweight route-level loading shell with an immediate visible progress bar
+  - updated `src/app/game/page.tsx` so both the pre-hydration state and the dynamic import fallback use `GameLoadingFallback` instead of the blank black screen whenever `gameStarted` is true
+  - added `tests/app/game/GameLoadingFallback.test.ts` to lock the presence of the immediate loading shell and progress bar markup
+  - updated `docs/architecture/OVERVIEW.md` to document that `/game` now shows a lightweight loading shell during the route-to-canvas handoff
+- Verified:
+  - `npm test -- tests/app/game/GameLoadingFallback.test.ts tests/app/game/setup/lobbySessionPolicy.test.ts tests/app/game/setup/getStartGameButtonState.test.ts tests/app/game/gamePageLifecycle.test.ts tests/store/multiplayerStore.test.ts tests/engine/core/multiplayerMessageHandling.test.ts`
+  - `npx eslint src/app/game/page.tsx src/app/game/GameLoadingFallback.tsx src/app/game/setup/lobbySessionPolicy.ts src/hooks/useLobbySync.ts src/hooks/useMultiplayer.ts src/store/multiplayerStore.ts src/components/game/hooks/useWorkerBridge.ts src/engine/core/Game.ts src/engine/core/GameCore.ts src/engine/core/multiplayerMessageHandling.ts tests/app/game/GameLoadingFallback.test.ts tests/app/game/setup/lobbySessionPolicy.test.ts tests/store/multiplayerStore.test.ts tests/engine/core/multiplayerMessageHandling.test.ts`
+  - `npm run build`
+  - fresh production (`next start`) two-browser loading-handoff capture on `http://127.0.0.1:3309`:
+    - artifact bundle: `output/playwright/host-guest-loading-compare-fixed-1774745792096/`
+    - both `host-100ms.png` and `guest-100ms.png` now show the new immediate loading shell instead of a blank screen
+    - by `200ms`, the regular in-canvas loading screen is already visible and progressing on both clients
