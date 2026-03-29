@@ -51,7 +51,9 @@ voidstrike/
 │   │   │   │   ├── editor/ # 3D Map Editor
 │   │   │   │   │   └── ...
 │   │   │   │   ├── getStartGameButtonState.ts
+│   │   │   │   ├── lobbySessionPolicy.ts
 │   │   │   │   └── page.tsx
+│   │   │   ├── GameLoadingFallback.tsx
 │   │   │   ├── gamePageLifecycle.ts
 │   │   │   └── page.tsx
 │   │   ├── globals.css
@@ -313,6 +315,7 @@ voidstrike/
 │   │   │   ├── GPUMemoryTracker.ts
 │   │   │   ├── GPUTimestampProfiler.ts
 │   │   │   ├── IGameInstance.ts
+│   │   │   ├── multiplayerMessageHandling.ts
 │   │   │   ├── PerformanceMonitor.ts
 │   │   │   ├── SpatialGrid.ts
 │   │   │   └── SystemRegistry.ts
@@ -590,7 +593,9 @@ voidstrike/
     ├── app/ # Next.js App Router
     │   ├── game/
     │   │   ├── setup/
-    │   │   │   └── getStartGameButtonState.test.ts
+    │   │   │   ├── getStartGameButtonState.test.ts
+    │   │   │   └── lobbySessionPolicy.test.ts
+    │   │   ├── GameLoadingFallback.test.ts
     │   │   └── gamePageLifecycle.test.ts
     │   └── serviceWorkerRouting.test.ts
     ├── components/ # React components
@@ -635,6 +640,7 @@ voidstrike/
     │   │   ├── eventBus.test.ts
     │   │   ├── gameCommandDispatch.test.ts
     │   │   ├── gameLoop.test.ts
+    │   │   ├── multiplayerMessageHandling.test.ts
     │   │   ├── performanceMonitor.test.ts
     │   │   ├── spatialGrid.test.ts
     │   │   └── systemRegistry.test.ts
@@ -692,6 +698,8 @@ voidstrike/
     │   │   └── BattleEffectsRenderer.test.ts
     │   └── vision/
     │       └── VisionCoordinates.test.ts
+    ├── store/ # State management
+    │   └── multiplayerStore.test.ts
     ├── utils/ # Utility functions
     │   ├── BenchmarkRunner.ts
     │   ├── debugLogger.test.ts
