@@ -29,7 +29,7 @@ import {
 } from '@/store/gameSetupStore';
 import { useUIStore } from '@/store/uiStore';
 import { useGameStore } from '@/store/gameStore';
-import { isMultiplayerMode } from '@/store/multiplayerStore';
+import { isMultiplayerMode, useMultiplayerStore } from '@/store/multiplayerStore';
 import { MapData } from '@/data/maps';
 import { debugInitialization, debugNetworking } from '@/utils/debugLogger';
 import { syncWorkerPlayerResources } from './syncWorkerPlayerResources';
@@ -62,6 +62,23 @@ export interface UseWorkerBridgeReturn {
   getGameTime: () => number;
 }
 
+type VoidstrikeMultiplayerDebug = {
+  requestChecksum: () => Promise<{ tick: number; checksum: string }>;
+  getStatus: () => {
+    connectionStatus: ReturnType<typeof useMultiplayerStore.getState>['connectionStatus'];
+    desyncState: ReturnType<typeof useMultiplayerStore.getState>['desyncState'];
+    desyncTick: ReturnType<typeof useMultiplayerStore.getState>['desyncTick'];
+    localPlayerId: string | null;
+    fogOfWar: boolean;
+    renderTick: number;
+    renderGameTime: number;
+  };
+};
+
+type VoidstrikeGlobal = typeof globalThis & {
+  __voidstrikeMultiplayerDebug__?: VoidstrikeMultiplayerDebug;
+};
+
 export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseWorkerBridgeReturn {
   // Refs
   const workerBridgeRef = useRef<WorkerBridge | null>(null);
@@ -81,6 +98,45 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
   // Store map in a ref so we always get the latest value
   const mapRef = useRef<MapData>(map);
   mapRef.current = map;
+
+  const installMultiplayerDebugApi = useCallback((bridge: WorkerBridge) => {
+    const debugTarget = globalThis as VoidstrikeGlobal;
+    debugTarget.__voidstrikeMultiplayerDebug__ = {
+      requestChecksum: () =>
+        new Promise((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            unsubscribe();
+            reject(new Error('Checksum request timed out'));
+          }, 5000);
+
+          const unsubscribe = bridge.eventBus.on<{ tick: number; checksum: string }>(
+            'checksum',
+            ({ tick, checksum }) => {
+              window.clearTimeout(timeout);
+              unsubscribe();
+              resolve({ tick, checksum });
+            }
+          );
+
+          bridge.requestChecksum();
+        }),
+      getStatus: () => {
+        const multiplayerState = useMultiplayerStore.getState();
+        const gameSetupState = useGameSetupStore.getState();
+        const adapter = RenderStateWorldAdapter.getInstance();
+
+        return {
+          connectionStatus: multiplayerState.connectionStatus,
+          desyncState: multiplayerState.desyncState,
+          desyncTick: multiplayerState.desyncTick,
+          localPlayerId: gameSetupState.localPlayerId,
+          fogOfWar: gameSetupState.fogOfWar,
+          renderTick: adapter.getTick(),
+          renderGameTime: adapter.getGameTime(),
+        };
+      },
+    };
+  }, []);
 
   // Handle render state updates from worker
   const handleRenderState = useCallback((state: RenderState) => {
@@ -166,6 +222,7 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
             mapHeight,
             tickRate: 20,
             isMultiplayer,
+            multiplayerMessageHandling: isMultiplayer ? 'worker' : 'main-thread',
             playerId: localPlayerId ?? 'spectator',
             aiEnabled: !isMultiplayer,
             aiDifficulty: 'medium',
@@ -195,6 +252,7 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
         eventUnsubscribersRef.current.push(unsubscribeLocalPlayer);
 
         await bridge.initialize();
+        installMultiplayerDebugApi(bridge);
 
         bridge.setDebugSettings(useUIStore.getState().debugSettings);
         bridge.setTerrainGrid(currentMap.terrain);
@@ -213,6 +271,7 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
           mapHeight,
           tickRate: 20,
           isMultiplayer,
+          multiplayerMessageHandling: 'worker',
           playerId: localPlayerId ?? 'spectator',
           aiEnabled: false,
         });
@@ -251,7 +310,13 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
 
     initializePromiseRef.current = initPromise;
     return initPromise;
-  }, [handleRenderState, handleGameEvent, handleGameOver, handleWorkerError]);
+  }, [
+    handleRenderState,
+    handleGameEvent,
+    handleGameOver,
+    handleWorkerError,
+    installMultiplayerDebugApi,
+  ]);
 
   // Spawn initial entities
   const spawnEntities = useCallback(async () => {
@@ -294,6 +359,7 @@ export function useWorkerBridge({ map, onGameOver }: UseWorkerBridgeProps): UseW
         WorkerBridge.resetInstance();
         workerBridgeRef.current = null;
       }
+      delete (globalThis as VoidstrikeGlobal).__voidstrikeMultiplayerDebug__;
       RenderStateWorldAdapter.resetInstance();
       worldProviderRef.current = null;
       eventBusRef.current = null;

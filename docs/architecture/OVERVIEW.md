@@ -939,6 +939,8 @@ Debug categories are toggled in the Options menu and forwarded to the game worke
 
 `useWorkerBridge` also mirrors the local player's authoritative `renderState.playerResources` snapshot into the main-thread Zustand store on each worker update, so the HUD and command-cost checks stay in sync with worker-side gathering, refunds, supply, and spend events.
 
+When worker mode is active in multiplayer, `useWorkerBridge` creates the main-thread `Game` in a UI-only proxy configuration. `WorkerBridge` remains the sole ingress for inbound peer commands, while the worker-owned simulation performs lockstep validation and checksum tracking. This avoids duplicate command processing on a non-authoritative main-thread shadow game.
+
 For live pathfinding investigations on a local build, the browser can also stream structured movement telemetry into `output/live-pathfinding.jsonl` through `POST /api/debug/pathfinding`. `GameplayInputHandler` logs the clicked screen/world target, `PathfindingSystem` logs path requests/results, and `WorkerGame` emits short-lived per-unit snapshots plus stall events back through `WorkerBridge`, so local reproductions can be inspected after the fact without relying on browser DevTools history.
 
 ### Performance Workers
@@ -1203,7 +1205,7 @@ The game uses Three.js WebGPU Renderer with automatic WebGL fallback, powered by
 Key Components:
 
 - `src/app/game/setup/page.tsx` - Pregame lobby UI; the `Start Game` control now stays disabled until the client hydrates so the first click cannot be dropped before the page becomes interactive
-- `src/app/game/page.tsx` - App Router entry for gameplay; gates `/game` on `gameStarted` and defers teardown through `gamePageLifecycle.ts` so React Strict Mode remount probes do not immediately clear the active session during the first lobby start in development
+- `src/app/game/page.tsx` - App Router entry for gameplay; gates `/game` on `gameStarted`, shows an immediate lightweight loading shell during hydration/dynamic import handoff, and defers teardown through `gamePageLifecycle.ts` so React Strict Mode remount probes do not immediately clear the active session during the first lobby start in development
 - `public/sw.js` / `src/components/pwa/ServiceWorkerRegistrar.tsx` - PWA shell caching; navigation HTML now uses a network-first strategy with cache fallback so regular browser sessions do not stay pinned to stale lobby bundles after a deploy
 - `WebGPUGameCanvas.tsx` - Main game canvas (WebGPU with WebGL fallback)
 - `OverlayScene.ts` - Phaser 4 scene for 2D effects overlay and transient `ui:error` alerts emitted by command-card and gameplay validation

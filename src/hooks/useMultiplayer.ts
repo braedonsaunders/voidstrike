@@ -18,13 +18,19 @@ import { SimplePool, finalizeEvent, generateSecretKey, getPublicKey } from 'nost
 import { debugNetworking } from '@/utils/debugLogger';
 import type { Filter, NostrEvent } from 'nostr-tools';
 import { getRelays } from '@/engine/network/p2p/NostrRelays';
-import type { PlayerSlot, StartingResources, GameSpeed } from '@/store/gameSetupStore';
+import {
+  useGameSetupStore,
+  type PlayerSlot,
+  type StartingResources,
+  type GameSpeed,
+} from '@/store/gameSetupStore';
 import { useMultiplayerStore } from '@/store/multiplayerStore';
 import {
   CommandSigningManager,
   getCommandSigningManager,
   resetCommandSigningManager,
 } from '@/engine/network/CommandSigning';
+import { shouldPreserveLobbySessionOnUnmount } from '@/app/game/setup/lobbySessionPolicy';
 
 // Short code alphabet (no confusing chars)
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -248,6 +254,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
   // Store joined lobby info for reconnection
   const joinedCodeRef = useRef<string | null>(null);
   const joinedNameRef = useRef<string | null>(null);
+  const hostPeerIdRef = useRef<string | null>(null);
   // Track when reconnection is in progress to prevent state conflicts with multiplayerStore
   const isReconnectingRef = useRef<boolean>(false);
   const [mySlotId, setMySlotId] = useState<string | null>(null);
@@ -267,6 +274,62 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
   guestsRef.current = guests;
   const onGuestLeaveRef = useRef(onGuestLeave);
   onGuestLeaveRef.current = onGuestLeave;
+
+  const cleanupLobbySession = useCallback(() => {
+    try {
+      subRef.current?.close();
+      subRef.current = null;
+    } catch {
+      /* ignore */
+    }
+
+    if (joinTimeoutRef.current) {
+      clearTimeout(joinTimeoutRef.current);
+      joinTimeoutRef.current = null;
+    }
+
+    if (pcRef.current) {
+      try {
+        pcRef.current.close();
+      } catch {
+        /* ignore */
+      }
+      pcRef.current = null;
+    }
+
+    guestsRef.current.forEach((guest) => {
+      try {
+        guest.pc.close();
+      } catch {
+        /* ignore */
+      }
+    });
+
+    // Don't explicitly close the pool - nostr-tools throws unhandled errors
+    // when websockets are already closing. Let browser garbage collect instead.
+    poolRef.current = null;
+    secretKeyRef.current = null;
+    pubkeyRef.current = null;
+    relaysRef.current = [];
+    joinedCodeRef.current = null;
+    joinedNameRef.current = null;
+    hostPeerIdRef.current = null;
+    gameStartCallbackRef.current = null;
+    isReconnectingRef.current = false;
+
+    resetCommandSigningManager();
+    signingManagerRef.current = null;
+  }, []);
+
+  const cleanupLobbyForEffectExit = useCallback(() => {
+    if (shouldPreserveLobbySessionOnUnmount(useGameSetupStore.getState().gameStarted)) {
+      debugNetworking.log('[Lobby] Preserving active session across route transition to /game');
+      return;
+    }
+
+    useMultiplayerStore.getState().setSessionCleanupCallback(null);
+    cleanupLobbySession();
+  }, [cleanupLobbySession]);
 
   // Handle incoming messages on the host connection (guest mode)
   useEffect(() => {
@@ -303,11 +366,13 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
 
   // Initialize lobby (host mode) - only when enabled
   useEffect(() => {
+    useMultiplayerStore.getState().setSessionCleanupCallback(cleanupLobbySession);
+
     // Skip initialization in single-player mode
     if (!enabled) {
       setStatus('disabled');
       setLobbyCode(null);
-      return;
+      return cleanupLobbyForEffectExit;
     }
 
     let mounted = true;
@@ -546,38 +611,9 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
 
     return () => {
       mounted = false;
-      // Cleanup subscriptions - close quietly
-      try {
-        subRef.current?.close();
-        subRef.current = null;
-      } catch {
-        /* ignore */
-      }
-      // Clear any pending join timeout to prevent stale state updates
-      if (joinTimeoutRef.current) {
-        clearTimeout(joinTimeoutRef.current);
-        joinTimeoutRef.current = null;
-      }
-      // Don't explicitly close the pool - nostr-tools throws unhandled errors
-      // when websockets are already closing. Let browser garbage collect instead.
-      poolRef.current = null;
-      // Clear refs
-      secretKeyRef.current = null;
-      pubkeyRef.current = null;
-      relaysRef.current = [];
-      // Close peer connections
-      guestsRef.current.forEach((g) => {
-        try {
-          g.pc.close();
-        } catch {
-          /* ignore */
-        }
-      });
-      // Reset command signing manager
-      resetCommandSigningManager();
-      signingManagerRef.current = null;
+      cleanupLobbyForEffectExit();
     };
-  }, [enabled, onGuestJoin]); // Re-initialize when enabled changes or guest handler changes
+  }, [enabled, onGuestJoin, cleanupLobbySession, cleanupLobbyForEffectExit]); // Re-initialize when enabled changes or guest handler changes
 
   const joinLobby = useCallback(async (code: string, playerName: string) => {
     try {
@@ -643,6 +679,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
           try {
             const data = JSON.parse(event.content);
             const hostPubkey = event.pubkey;
+            hostPeerIdRef.current = hostPubkey;
 
             // Create peer connection
             const pc = new RTCPeerConnection({ iceServers: getIceServersSync() });
@@ -969,7 +1006,10 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     }
 
     return () => {
-      // Clean up on unmount
+      if (shouldPreserveLobbySessionOnUnmount(useGameSetupStore.getState().gameStarted)) {
+        return;
+      }
+
       useMultiplayerStore.getState().setReconnectCallback(null);
       isReconnectingRef.current = false;
     };
@@ -979,12 +1019,12 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
   useEffect(() => {
     if (hostConnection && hostConnection.readyState === 'open') {
       const store = useMultiplayerStore.getState();
-      const hostPubkey = pubkeyRef.current ? `host-${pubkeyRef.current.slice(0, 8)}` : 'host';
+      const hostPeerId = hostPeerIdRef.current ?? 'host';
 
       debugNetworking.log('[Lobby] Syncing host connection to multiplayerStore');
 
       // Use addPeer for consistency with multi-peer architecture
-      store.addPeer(hostPubkey, hostConnection);
+      store.addPeer(hostPeerId, hostConnection);
       store.setMultiplayer(true);
       store.setHost(false);
     }
@@ -997,7 +1037,7 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     }
 
     const store = useMultiplayerStore.getState();
-    const hostPubkey = pubkeyRef.current ? `host-${pubkeyRef.current.slice(0, 8)}` : 'host';
+    const hostPeerId = hostPeerIdRef.current ?? 'host';
 
     // Find the host's slot - the first human player that isn't a guest
     const hostSlot = receivedLobbyState.playerSlots.find(
@@ -1005,8 +1045,8 @@ export function useLobby(options: UseLobbyOptions = {}): UseLobbyReturn {
     );
 
     if (hostSlot) {
-      debugNetworking.log(`[Lobby] Setting peer-slot mapping: ${hostPubkey} -> ${hostSlot.id}`);
-      store.setPeerSlotMapping(hostPubkey, hostSlot.id);
+      debugNetworking.log(`[Lobby] Setting peer-slot mapping: ${hostPeerId} -> ${hostSlot.id}`);
+      store.setPeerSlotMapping(hostPeerId, hostSlot.id);
     }
   }, [hostConnection, receivedLobbyState]);
 

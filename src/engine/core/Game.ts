@@ -52,6 +52,7 @@ import { commandIdGenerator } from '../network/types';
 import type { GameStatePort } from './GameStatePort';
 import { ZustandStateAdapter } from '@/adapters/ZustandStateAdapter';
 import { getCommandSigningManager, resetCommandSigningManager } from '../network/CommandSigning';
+import { shouldHandleMultiplayerMessagesOnMainThread } from './multiplayerMessageHandling';
 
 // Re-export types for backwards compatibility
 export type { GameState, TerrainCell, GameConfig } from './GameCore';
@@ -132,7 +133,7 @@ export class Game extends GameCore {
     this.audioSystem = new AudioSystem(this as IGameInstance);
 
     // Initialize desync detection for multiplayer
-    if (this.config.isMultiplayer) {
+    if (shouldHandleMultiplayerMessagesOnMainThread(this.config)) {
       this.desyncDetection = new DesyncDetectionManager(this as IGameInstance, {
         enabled: true,
         pauseOnDesync: false,

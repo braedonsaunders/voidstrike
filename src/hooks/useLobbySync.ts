@@ -4,10 +4,16 @@ import { useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLobby, LobbyState } from '@/hooks/useMultiplayer';
 import { useMultiplayerStore } from '@/store/multiplayerStore';
-import { useGameSetupStore, PlayerSlot, StartingResources, GameSpeed } from '@/store/gameSetupStore';
+import {
+  useGameSetupStore,
+  PlayerSlot,
+  StartingResources,
+  GameSpeed,
+} from '@/store/gameSetupStore';
 import { ALL_MAPS } from '@/data/maps';
 import { Game } from '@/engine/core/Game';
 import { debugInitialization } from '@/utils/debugLogger';
+import { shouldEnableLobbyNetworking } from '@/app/game/setup/lobbySessionPolicy';
 
 export interface UseLobbyOptions {
   playerName: string;
@@ -75,16 +81,22 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
   } = useGameSetupStore();
 
   // Lobby hook callbacks
-  const handleGuestJoin = useCallback((guestName: string) => {
-    return fillOpenSlotWithGuest(guestName);
-  }, [fillOpenSlotWithGuest]);
+  const handleGuestJoin = useCallback(
+    (guestName: string) => {
+      return fillOpenSlotWithGuest(guestName);
+    },
+    [fillOpenSlotWithGuest]
+  );
 
-  const handleGuestLeave = useCallback((slotId: string) => {
-    removeGuest(slotId);
-  }, [removeGuest]);
+  const handleGuestLeave = useCallback(
+    (slotId: string) => {
+      removeGuest(slotId);
+    },
+    [removeGuest]
+  );
 
   // Only enable Nostr when multiplayer is needed
-  const needsMultiplayer = playerSlots.some(s => s.type === 'open') || isPublicLobby;
+  const needsMultiplayer = shouldEnableLobbyNetworking(playerSlots, isPublicLobby);
 
   const {
     status: lobbyStatus,
@@ -110,16 +122,12 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
   });
 
   // Multiplayer store
-  const {
-    setMultiplayer,
-    setConnected,
-    setHost,
-  } = useMultiplayerStore();
+  const { setMultiplayer, setConnected, setHost } = useMultiplayerStore();
 
   // Derived state
-  const hasOpenSlot = playerSlots.some(s => s.type === 'open');
+  const hasOpenSlot = playerSlots.some((s) => s.type === 'open');
   const hasGuests = guests.length > 0;
-  const guestSlotCount = playerSlots.filter(s => s.isGuest).length;
+  const guestSlotCount = playerSlots.filter((s) => s.isGuest).length;
   const isGuestMode = lobbyStatus === 'connected' && !isHost;
 
   // When connected as guest, set up multiplayer store
@@ -135,7 +143,7 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
   // When hosting with connected guests, set up multiplayer
   // Note: Data channels are set up via addPeer() in useMultiplayer.ts
   useEffect(() => {
-    if (isHost && guests.some(g => g.dataChannel)) {
+    if (isHost && guests.some((g) => g.dataChannel)) {
       setMultiplayer(true);
       setConnected(true);
       setHost(true);
@@ -145,7 +153,7 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
   // Send lobby state to guests whenever it changes (host only)
   useEffect(() => {
     if (!isHost) return;
-    const hasConnectedGuests = guests.some(g => g.dataChannel?.readyState === 'open');
+    const hasConnectedGuests = guests.some((g) => g.dataChannel?.readyState === 'open');
     if (!hasConnectedGuests) return;
 
     const lobbyState: LobbyState = {
@@ -157,7 +165,16 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
     };
 
     sendLobbyState(lobbyState);
-  }, [isHost, guests, playerSlots, selectedMapId, startingResources, gameSpeed, fogOfWar, sendLobbyState]);
+  }, [
+    isHost,
+    guests,
+    playerSlots,
+    selectedMapId,
+    startingResources,
+    gameSpeed,
+    fogOfWar,
+    sendLobbyState,
+  ]);
 
   // Publish public lobby listing when checkbox is enabled (host only)
   useEffect(() => {
@@ -167,8 +184,8 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
       const map = ALL_MAPS[selectedMapId];
       if (!map) return;
 
-      const openSlots = playerSlots.filter(s => s.type === 'open').length;
-      const activeSlots = playerSlots.filter(s => s.type === 'human' || s.type === 'ai').length;
+      const openSlots = playerSlots.filter((s) => s.type === 'open').length;
+      const activeSlots = playerSlots.filter((s) => s.type === 'human' || s.type === 'ai').length;
 
       publishPublicListing({
         hostName: playerName || 'Unknown Host',
@@ -187,7 +204,16 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
     const interval = setInterval(publish, 60000);
 
     return () => clearInterval(interval);
-  }, [isHost, isPublicLobby, lobbyStatus, lobbyCode, playerSlots, playerName, selectedMapId, publishPublicListing]);
+  }, [
+    isHost,
+    isPublicLobby,
+    lobbyStatus,
+    lobbyCode,
+    playerSlots,
+    playerName,
+    selectedMapId,
+    publishPublicListing,
+  ]);
 
   // Register game start callback (guest only)
   useEffect(() => {
@@ -215,14 +241,20 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
     });
   }, [isHost, onGameStart, receivedLobbyState, mySlotId, startGame, router]);
 
-
   // Compute display values based on mode
-  const displayPlayerSlots = isGuestMode && receivedLobbyState ? receivedLobbyState.playerSlots : playerSlots;
-  const displayMapId = isGuestMode && receivedLobbyState ? receivedLobbyState.selectedMapId : selectedMapId;
-  const displayStartingResources = isGuestMode && receivedLobbyState ? receivedLobbyState.startingResources : startingResources;
-  const displayGameSpeed = isGuestMode && receivedLobbyState ? receivedLobbyState.gameSpeed : gameSpeed;
-  const displayFogOfWar = isGuestMode && receivedLobbyState ? receivedLobbyState.fogOfWar : fogOfWar;
-  const displayActivePlayerCount = displayPlayerSlots.filter(s => s.type === 'human' || s.type === 'ai').length;
+  const displayPlayerSlots =
+    isGuestMode && receivedLobbyState ? receivedLobbyState.playerSlots : playerSlots;
+  const displayMapId =
+    isGuestMode && receivedLobbyState ? receivedLobbyState.selectedMapId : selectedMapId;
+  const displayStartingResources =
+    isGuestMode && receivedLobbyState ? receivedLobbyState.startingResources : startingResources;
+  const displayGameSpeed =
+    isGuestMode && receivedLobbyState ? receivedLobbyState.gameSpeed : gameSpeed;
+  const displayFogOfWar =
+    isGuestMode && receivedLobbyState ? receivedLobbyState.fogOfWar : fogOfWar;
+  const displayActivePlayerCount = displayPlayerSlots.filter(
+    (s) => s.type === 'human' || s.type === 'ai'
+  ).length;
 
   return {
     displayPlayerSlots,
@@ -239,7 +271,7 @@ export function useLobbySync({ playerName, isPublicLobby }: UseLobbyOptions): Lo
     lobbyCode,
     lobbyError,
 
-    guests: guests.map(g => ({ pubkey: g.pubkey, name: g.name, slotId: g.slotId })),
+    guests: guests.map((g) => ({ pubkey: g.pubkey, name: g.name, slotId: g.slotId })),
     hasOpenSlot,
     hasGuests,
     guestSlotCount,
