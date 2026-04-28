@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "runs": [
+    {
+      "at": "2026-04-28T19:18:51.124Z",
+      "sha": "e494625ac7fa7d15611e713b1d143d45fd5a10d1",
+      "pr": null,
+      "actor": "braedonsaunders",
+      "files": 561,
+      "functions": 4126,
+      "loc": 919648,
+      "languages": 15,
+      "topLanguages": [
+        {
+          "ext": "json",
+          "pct": 76,
+          "lines": 697509
+        },
+        {
+          "ext": "ts",
+          "pct": 20,
+          "lines": 180988
+        },
+        {
+          "ext": "tsx",
+          "pct": 2,
+          "lines": 20585
+        },
+        {
+          "ext": "md",
+          "pct": 1,
+          "lines": 13372
+        },
+        {
+          "ext": "js",
+          "pct": 0,
+          "lines": 2784
+        }
+      ],
+      "dead": 112,
+      "deadPct": 2.7,
+      "circular": 1,
+      "godObjects": 1,
+      "avgCoupling": 13.1,
+      "securityIssues": 16,
+      "patterns": 9,
+      "duplicates": 44,
+      "layerViolations": 1019,
+      "connections": 7352,
+      "avgFnLines": 15.7,
+      "longestFn": 16,
+      "testFiles": 87,
+      "testRatio": 15.5,
+      "topFolders": [
+        {
+          "name": "src",
+          "count": 395
+        },
+        {
+          "name": "tests",
+          "count": 89
+        },
+        {
+          "name": "public",
+          "count": 23
+        },
+        {
+          "name": "root",
+          "count": 17
+        },
+        {
+          "name": "docs",
+          "count": 15
+        }
+      ],
+      "folders": 5,
+      "grade": "F",
+      "score": 54,
+      "topBlast": {
+        "path": "docs/tools/debug/effect-placer.html",
+        "direct": 353,
+        "transitive": 483,
+        "total": 836
+      },
+      "fragility": [
+        {
+          "path": "docs/tools/debug/effect-placer.html",
+          "direct": 353,
+          "transitive": 483,
+          "total": 836
+        },
+        {
+          "path": "src/engine/ecs/World.ts",
+          "direct": 253,
+          "transitive": 483,
+          "total": 736
+        },
+        {
+          "path": "src/engine/ai/BehaviorTree.ts",
+          "direct": 251,
+          "transitive": 483,
+          "total": 734
+        }
+      ]
+    }
+  ]
+}
