@@ -13,6 +13,10 @@
 
 </div>
 
+<p align="center">
+  <a href="https://github.com/braedonsaunders/codeflow"><img src=".github/codeflow-card.svg" alt="VOIDSTRIKE codebase stats — powered by codeflow" width="100%" /></a>
+</p>
+
 VOIDSTRIKE is a browser-native sci-fi RTS built to feel bigger than the browser it runs in. It is chasing the feeling of a full desktop strategy game: heavy atmosphere, big 3D battles, strong visual identity, and real systems depth instead of a stripped-down web prototype.
 
 <img src="docs/screenshot1.png" alt="" width="900" />
